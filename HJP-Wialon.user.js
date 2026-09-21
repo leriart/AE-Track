@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.5.0
+// @version      4.6.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.5.0';
+    const VER = '4.6.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
         const m = text.match(/@version\s+(\S+)/);
@@ -155,7 +155,9 @@
         fullscreen: false,
         theme: 'oscuro',
         density: 'normal',
-        acento: '#1565c0',
+        acento: '#850D22',
+        contornos: true,
+        contornoHoras: 24,
         mostrarCoords: false,
         panelMode: 'flotante',
         panelLado: 'derecha',
@@ -1306,6 +1308,7 @@
             writeJSON(LS.kpi, APP.kpi);
 
             paintPanel();
+            revalidarContornos();
         } catch (e) {
             if (APP.unlocked) { try { console.warn('[HJP] refresh', e && e.message); } catch (_) { /* noop */ } }
         } finally {
@@ -1559,6 +1562,7 @@
         const target = fila.querySelector('.name-container') || fila.querySelector('.monitoring-unit-name-cell') || fila;
         doubleClick(target);
         await waitForWindow(eco, 6000);
+        revalidarContornos();
         return true;
     }
     function closeContainer(cont) {
@@ -1574,11 +1578,44 @@
             b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
         });
     }
+    function aplicarContorno(cont, color) {
+        if (!cont) return;
+        if (!color) { cont.style.border = ''; cont.style.boxShadow = ''; return; }
+        cont.style.border = '3px solid ' + color;
+        cont.style.boxShadow = '0 0 20px ' + color;
+    }
     function highlightUnitWindow(eco, color) {
         const w = findUnitWindow(eco);
         if (!w) return;
-        w.style.border = '4px solid ' + color;
-        w.style.boxShadow = '0 0 22px ' + color;
+        aplicarContorno(w, color);
+    }
+    function colorContorno(info) {
+        const limite = Date.now() - (Number(APP.config.contornoHoras) || 24) * 3600000;
+        for (let i = 0; i < APP.historial.length; i++) {
+            const a = APP.historial[i];
+            if (a.ts && a.ts < limite) continue;
+            if (a.eco && (a.eco === info.eco || a.eco === info.placa)) return COL[a.sev] || null;
+        }
+        return null;
+    }
+    // Reaplica el contorno a las ventanas de unidad que ya estan abiertas
+    // (por ejemplo, despues de recargar la pagina o al abrir una ventana).
+    function revalidarContornos() {
+        if (!APP.config.contornos) return;
+        const list = openWindows();
+        if (!list.length) return;
+        for (let i = 0; i < list.length; i++) {
+            const eco = list[i].eco;
+            if (!eco) continue;
+            const it = unitByEco(eco);
+            if (it && APP.dismissed.has(it.info.clave)) { aplicarContorno(list[i].cont, null); continue; }
+            let color = it ? colorContorno(it.info) : null;
+            if (!color && it) {
+                if (!it.st.online) color = COL.critico;
+                else if (it.st.estado === 'detenida') color = COL.medio;
+            }
+            aplicarContorno(list[i].cont, color);
+        }
     }
 
     /* ====================== LISTA UNIFICADA (eco + destino) ====================== */
@@ -1727,8 +1764,8 @@
         for (let i = 0; i < ecos.length; i++) {
             const b = byId('hjp-btn-main');
             if (b) {
-                b.innerText = ICO.automatizar + ' Buscando (' + (i + 1) + '/' + ecos.length + ')...';
-                b.style.background = '#f57c00';
+                b.innerHTML = '<span class="hjp-mi">' + ICO.automatizar + '</span> Buscando (' + (i + 1) + '/' + ecos.length + ')...';
+                b.style.background = 'linear-gradient(135deg,#f57c00,#ff9800)';
             }
             await openUnitWindow(ecos[i]);
             await sleep(250);
@@ -1736,18 +1773,29 @@
         const inp = findSearchInput();
         if (inp) clearInput(inp);
         const b = byId('hjp-btn-main');
-        if (b) { b.innerText = ICO.panel + ' Organizando...'; b.style.background = '#1565c0'; }
+        if (b) {
+            b.innerHTML = '<span class="hjp-mi">' + ICO.panel + '</span> Organizando...';
+            b.style.background = 'var(--hjp-accent-grad)';
+        }
         await sleep(400);
         await organizeWindows();
         await verifyWindows(true);
         resetMainBtn();
     }
     function resetMainBtn() {
-        mainBtn.innerText = ICO.automatizar + ' Automatizar Unidades';
-        mainBtn.style.background = '#d32f2f';
+        mainBtn.innerHTML = '<span class="hjp-mi">' + ICO.automatizar + '</span> Automatizar Unidades';
+        mainBtn.style.background = '';
     }
 
     /* ====================== TEMA / NO MOLESTAR ====================== */
+    function aclarar(hex, f) {
+        const h = String(hex || '').replace('#', '');
+        if (h.length !== 6) return hex;
+        const n = parseInt(h, 16);
+        const mix = (x) => Math.round(x + (255 - x) * f);
+        return '#' + [mix((n >> 16) & 255), mix((n >> 8) & 255), mix(n & 255)]
+            .map((x) => x.toString(16).padStart(2, '0')).join('');
+    }
     function applyTheme() {
         const c = APP.config;
         const theme = (c.theme === 'auto')
@@ -1755,11 +1803,15 @@
             : c.theme;
         if (theme === 'claro') document.body.setAttribute('data-hjp-theme', 'claro');
         else document.body.removeAttribute('data-hjp-theme');
-        const b = byId('hjp-tema');
-        if (b) b.innerText = (theme === 'claro') ? ICO.sol : ICO.luna;
+        const ti = document.querySelector('#hjp-tema .hjp-mi');
+        if (ti) ti.textContent = (theme === 'claro') ? ICO.sol : ICO.luna;
+        const btnTema = byId('hjp-tema');
+        if (btnTema) btnTema.title = 'Tema: ' + theme;
         if (c.acento) {
+            const a2 = aclarar(c.acento, 0.28);
             document.documentElement.style.setProperty('--hjp-accent', c.acento);
-            document.documentElement.style.setProperty('--hjp-accent-2', c.acento);
+            document.documentElement.style.setProperty('--hjp-accent-2', a2);
+            document.documentElement.style.setProperty('--hjp-accent-grad', 'linear-gradient(135deg,' + c.acento + ',' + a2 + ')');
         }
         const p = byId('hjp-panel');
         if (p) p.classList.toggle('density-compact', c.density === 'compact');
@@ -1804,7 +1856,10 @@
             "  --hjp-warn:#f9a825; --hjp-warn-fg:#ffe082; --hjp-warn-bg:#33270e;\n" +
             "  --hjp-bad:#e53935; --hjp-bad-fg:#ef9a9a; --hjp-bad-bg:#2b1010;\n" +
             "  --hjp-shadow:0 4px 14px rgba(0,0,0,.32);\n" +
-            "  --hjp-radius:8px;\n" +
+            "  --hjp-radius:10px;\n" +
+            "  --hjp-radius-sm:7px;\n" +
+            "  --hjp-accent-grad:linear-gradient(135deg,#950f27,#B52C44);\n" +
+            "  --hjp-elev:0 10px 26px rgba(0,0,0,.42);\n" +
             "  --hjp-font:'Inter','Roboto','Segoe UI','Helvetica Neue',Arial,sans-serif;\n" +
             "  --hjp-easing:cubic-bezier(.4,0,.2,1);\n" +
             "}\n" +
@@ -1817,6 +1872,7 @@
             "  --hjp-warn:#f9a825; --hjp-warn-fg:#8d6b00; --hjp-warn-bg:#fff4d4;\n" +
             "  --hjp-bad:#c62828; --hjp-bad-fg:#b71c1c; --hjp-bad-bg:#fde2e2;\n" +
             "  --hjp-shadow:0 2px 8px rgba(20,30,50,.10);\n" +
+            "  --hjp-elev:0 8px 22px rgba(20,30,50,.16);\n" +
             "}\n" +
             "#hjp-toasts{position:fixed;bottom:20px;right:15px;z-index:1000002;display:flex;flex-direction:column;gap:8px;width:330px;pointer-events:none;transition:opacity .2s}\n" +
             ".hjp-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:9px;background:var(--hjp-bg-soft);color:var(--hjp-fg);\n" +
@@ -1836,18 +1892,18 @@
             "#hjp-barra.vertical{flex-direction:column;align-items:stretch}\n" +
             "#hjp-barra .hjp-grip{cursor:grab;color:var(--hjp-fg-mute);padding:0 3px;font-size:15px;line-height:1;letter-spacing:-2px;user-select:none}\n" +
             "#hjp-barra .hjp-grip:active{cursor:grabbing}\n" +
-            "#hjp-barra .hjp-btn{background:#33373f;color:#fff;border:none;border-radius:7px;padding:7px 11px;\n" +
-            "  cursor:pointer;font:12px var(--hjp-font);font-weight:bold;white-space:nowrap;transition:filter .12s,transform .08s}\n" +
-            "#hjp-barra .hjp-btn:hover{filter:brightness(1.18)}\n" +
-            "#hjp-barra .hjp-btn:active{transform:translateY(1px)}\n" +
-            "#hjp-barra .hjp-fold{background:#22242a;color:#9aa2b1;padding:4px 9px}\n" +
+            "#hjp-barra .hjp-btn{display:inline-flex;align-items:center;gap:4px;background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border-soft);border-radius:var(--hjp-radius-sm);padding:7px 11px;\n" +
+            "  cursor:pointer;font:600 12px var(--hjp-font);white-space:nowrap;transition:filter .15s,transform .1s,box-shadow .15s}\n" +
+            "#hjp-barra .hjp-btn:hover{filter:brightness(1.15);transform:translateY(-1px);box-shadow:var(--hjp-shadow)}\n" +
+            "#hjp-barra .hjp-btn:active{transform:translateY(0)}\n" +
+            "#hjp-barra .hjp-fold{background:var(--hjp-bg);color:var(--hjp-fg-dim);padding:4px 9px}\n" +
             "#hjp-barra.plegada .hjp-btn:not(.hjp-fold){display:none}\n" +
-            "#hjp-btn-main,#hjp-btn-panel,#hjp-btn-modo{background:#850D22}\n" +
-            "#hjp-btn-close{background:#5b6b7a}\n" +
+            "#hjp-btn-main,#hjp-btn-panel,#hjp-btn-modo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#hjp-btn-close{background:var(--hjp-bg-strong);color:var(--hjp-fg-dim)}\n" +
             "#hjp-panel{position:fixed;left:10px;bottom:10px;width:470px;height:440px;display:none;flex-direction:column;\n" +
             "  background:var(--hjp-bg);color:var(--hjp-fg);font:12.5px/1.4 var(--hjp-font);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius);\n" +
-            "  box-shadow:var(--hjp-shadow);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh;\n" +
-            "  transition:transform .28s var(--hjp-easing),opacity .2s ease}\n" +
+            "  box-shadow:var(--hjp-elev);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh;\n" +
+            "  transition:transform .3s var(--hjp-easing),opacity .2s ease,border-color .2s}\n" +
             "#hjp-panel.visible{opacity:1}\n" +
             "#hjp-panel.lateral{left:auto;right:0;top:0;bottom:0;height:100vh;max-height:100vh;border-radius:0;resize:none;\n" +
             "  box-shadow:-14px 0 34px rgba(0,0,0,.35);border-top:none;border-bottom:none;border-right:none;will-change:transform}\n" +
@@ -1856,33 +1912,36 @@
             "#hjp-panel.lateral.oculto{transform:translateX(100%);opacity:0;pointer-events:none}\n" +
             "#hjp-panel.lateral.izquierda.oculto{transform:translateX(-100%)}\n" +
             "#hjp-panel.dragging{transition:none;opacity:1}\n" +
-            "#hjp-rail{position:fixed;top:50%;transform:translateY(-50%);width:32px;height:96px;background:var(--hjp-bg-soft);\n" +
-            "  border:1px solid var(--hjp-border);border-radius:16px;display:none;align-items:center;justify-content:center;\n" +
-            "  cursor:pointer;z-index:999999;box-shadow:var(--hjp-shadow);color:var(--hjp-accent-2);font:600 16px var(--hjp-font);\n" +
-            "  transition:transform .2s var(--hjp-easing),background .15s}\n" +
-            "#hjp-rail:hover{background:var(--hjp-bg-strong);transform:translateY(-50%) scale(1.05)}\n" +
-            "#hjp-rail.derecha{right:6px}\n" +
-            "#hjp-rail.izquierda{left:6px}\n" +
-            "#hjp-rail.mostrar{display:flex}\n" +
+            "#hjp-rail{position:fixed;top:50%;transform:translateY(-50%);width:34px;height:104px;background:var(--hjp-accent-grad);\n" +
+            "  border:none;border-radius:17px;display:none;align-items:center;justify-content:center;flex-direction:column;gap:2px;\n" +
+            "  cursor:pointer;z-index:999999;box-shadow:var(--hjp-elev);color:#fff;font:600 15px var(--hjp-font);\n" +
+            "  opacity:0;transition:transform .25s var(--hjp-easing),opacity .25s ease,filter .15s}\n" +
+            "#hjp-rail:hover{transform:translateY(-50%) scale(1.08);filter:brightness(1.12)}\n" +
+            "#hjp-rail.mostrar{display:flex;opacity:1;animation:hjpRailIn .3s var(--hjp-easing)}\n" +
+            "#hjp-rail .hjp-rail-txt{writing-mode:vertical-rl;text-orientation:mixed;font-size:9px;letter-spacing:1.5px;opacity:.85}\n" +
+            "#hjp-rail.derecha{right:0;border-radius:17px 0 0 17px;padding-right:2px}\n" +
+            "#hjp-rail.izquierda{left:0;border-radius:0 17px 17px 0;padding-left:2px}\n" +
+            "@keyframes hjpRailIn{from{opacity:0;transform:translateY(-50%) scale(.8)}to{opacity:1;transform:translateY(-50%) scale(1)}}\n" +
             ".hjp-mi{font-family:'Material Icons','Material Symbols Outlined';font-weight:normal;font-style:normal;font-size:1.1em;line-height:1;vertical-align:-2px;display:inline-block;text-transform:none;letter-spacing:normal;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}\n" +
             "#hjp-barra .hjp-btn .hjp-mi{font-size:1.05em;vertical-align:-2px;margin-right:1px}\n" +
-            "#hjp-panel header{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--hjp-bg-soft);cursor:move;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap}\n" +
-            "#hjp-panel header h3{min-width:110px}\n" +
-            "#hjp-panel header h3{margin:0;font-size:13px;flex:1;letter-spacing:.2px}\n" +
-            "#hjp-panel .hjp-iconbtn{background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1;transition:all .12s}\n" +
-            "#hjp-panel .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
-            "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent);color:#fff;border-color:var(--hjp-accent-2)}\n" +
-            "#hjp-panel .tabs{display:flex;background:var(--hjp-bg-soft);padding:0 4px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;border:none;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--hjp-font);border-bottom:2px solid transparent;letter-spacing:.3px;transition:color .12s}\n" +
+            "#hjp-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--hjp-bg-strong),var(--hjp-bg-soft));cursor:move;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
+            "#hjp-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px}\n" +
+            "#hjp-panel .hjp-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:var(--hjp-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--hjp-easing),color .15s,transform .1s,box-shadow .15s}\n" +
+            "#hjp-panel .hjp-iconbtn:hover{background:var(--hjp-bg);border-color:var(--hjp-border);color:var(--hjp-fg);transform:translateY(-1px);box-shadow:var(--hjp-shadow)}\n" +
+            "#hjp-panel .hjp-iconbtn:active{transform:translateY(0)}\n" +
+            "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(133,13,34,.4)}\n" +
+            "#hjp-panel .tabs{display:flex;gap:4px;background:var(--hjp-bg-soft);padding:6px 8px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-panel .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--hjp-font);border-radius:var(--hjp-radius-sm);letter-spacing:.2px;transition:background .18s var(--hjp-easing),color .18s,box-shadow .18s,transform .1s}\n" +
             "#hjp-panel .tab .etqt{font-size:11px;letter-spacing:.2px}\n" +
-            "#hjp-panel .tab:hover{color:var(--hjp-fg)}\n" +
-            "#hjp-panel .tab.activo{color:var(--hjp-fg);border-bottom-color:var(--hjp-accent-2)}\n" +
-            "#hjp-panel .tab .contador{font-size:10px;background:var(--hjp-bg-strong);color:var(--hjp-fg-dim);padding:1px 5px;border-radius:8px;margin-left:4px;display:inline-block}\n" +
-            "#hjp-panel .tab.activo .contador{background:var(--hjp-accent);color:#fff}\n" +
-            "#hjp-panel .tools{display:flex;gap:6px;padding:6px 9px;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap;align-items:center;background:var(--hjp-bg-soft)}\n" +
-            "#hjp-panel .tools button{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid transparent;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;transition:all .12s}\n" +
-            "#hjp-panel .tools button:hover{background:var(--hjp-border);border-color:var(--hjp-fg-mute)}\n" +
-            "#hjp-panel .tools button.activo{background:var(--hjp-accent);color:#fff;border-color:var(--hjp-accent-2)}\n" +
+            "#hjp-panel .tab:hover{color:var(--hjp-fg);background:var(--hjp-bg-strong);transform:translateY(-1px)}\n" +
+            "#hjp-panel .tab.activo{color:#fff;background:var(--hjp-accent-grad);box-shadow:0 3px 10px rgba(133,13,34,.35)}\n" +
+            "#hjp-panel .tab .contador{font-size:10px;background:var(--hjp-bg-strong);color:var(--hjp-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
+            "#hjp-panel .tab.activo .contador{background:rgba(255,255,255,.25);color:#fff}\n" +
+            "#hjp-panel .tools{display:flex;gap:6px;padding:7px 9px;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap;align-items:center;background:var(--hjp-bg-soft)}\n" +
+            "#hjp-panel .tools button{display:inline-flex;align-items:center;gap:4px;background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border-soft);border-radius:var(--hjp-radius-sm);padding:5px 9px;cursor:pointer;font-size:11px;font-weight:600;transition:background .15s,transform .1s,box-shadow .15s,border-color .15s}\n" +
+            "#hjp-panel .tools button:hover{background:var(--hjp-bg);border-color:var(--hjp-fg-mute);transform:translateY(-1px);box-shadow:var(--hjp-shadow)}\n" +
+            "#hjp-panel .tools button:active{transform:translateY(0)}\n" +
+            "#hjp-panel .tools button.activo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent}\n" +
             "#hjp-panel input.filtro{flex:1;min-width:90px;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
             "#hjp-panel input.filtro:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
             "#hjp-panel select.filtro{flex:0 0 auto;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
@@ -1904,8 +1963,8 @@
             "#hjp-panel .estadoicon.off{color:var(--hjp-bad-fg)}\n" +
             "#hjp-panel .estadoicon.det{color:var(--hjp-warn-fg)}\n" +
             "#hjp-panel .estadoicon.on{color:var(--hjp-ok-fg)}\n" +
-            "#hjp-panel .mini{background:var(--hjp-bg-strong);border:none;color:var(--hjp-fg-dim);border-radius:5px;cursor:pointer;padding:2px 7px;font-size:11px;transition:all .12s}\n" +
-            "#hjp-panel .mini:hover{background:var(--hjp-border);color:var(--hjp-fg)}\n" +
+            "#hjp-panel .mini{display:inline-flex;align-items:center;justify-content:center;gap:3px;background:var(--hjp-bg-strong);border:1px solid var(--hjp-border-soft);color:var(--hjp-fg-dim);border-radius:var(--hjp-radius-sm);cursor:pointer;padding:3px 8px;font-size:11px;transition:background .15s,color .15s,transform .1s,border-color .15s}\n" +
+            "#hjp-panel .mini:hover{background:var(--hjp-bg);color:var(--hjp-fg);border-color:var(--hjp-fg-mute);transform:translateY(-1px)}\n" +
             "#hjp-panel .minusil.on{background:var(--hjp-warn-bg);color:var(--hjp-warn-fg)}\n" +
             "#hjp-panel .alerta{display:flex;gap:9px;padding:8px 10px;border-bottom:1px solid var(--hjp-border-soft);align-items:flex-start;transition:background .1s}\n" +
             "#hjp-panel .alerta:hover{background:var(--hjp-bg-soft)}\n" +
@@ -1976,8 +2035,10 @@
             "#hjp-ayuda .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft);border-radius:0 0 10px 10px}\n" +
             "#hjp-ayuda .hjp-iconbtn{background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1}\n" +
             "#hjp-ayuda .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
-            "#hjp-ayuda button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px var(--hjp-font)}\n" +
-            "#hjp-ayuda button.cancel{background:#555;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px var(--hjp-font)}\n" +
+            "#hjp-ayuda button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
+            "#hjp-ayuda button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(133,13,34,.4);filter:brightness(1.05)}\n" +
+            "#hjp-ayuda button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
+            "#hjp-ayuda button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
             "#hjp-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--hjp-bg);border-bottom:1px solid var(--hjp-border-soft);border-radius:10px 10px 0 0}\n" +
             "#hjp-config .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
             "#hjp-config .cfg-tabs{display:flex;background:var(--hjp-bg);padding:0 10px;border-bottom:1px solid var(--hjp-border-soft);gap:6px;flex-wrap:wrap}\n" +
@@ -1996,12 +2057,16 @@
             "#hjp-config .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft);border-radius:0 0 10px 10px}\n" +
             "#hjp-config .row-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}\n" +
             "#hjp-config .row-grid label{padding:1px 0}\n" +
-            "#hjp-config button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:bold;font:12px var(--hjp-font)}\n" +
-            "#hjp-config button.cancel{background:#555;color:#fff}\n" +
+            "#hjp-config button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
+            "#hjp-config button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(133,13,34,.4);filter:brightness(1.05)}\n" +
+            "#hjp-config button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
+            "#hjp-config button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
             "#hjp-modal textarea{width:100%;height:160px;resize:none;padding:10px;border-radius:6px;border:1px solid var(--hjp-border);background:var(--hjp-bg);color:var(--hjp-fg);box-sizing:border-box;font:12px monospace}\n" +
             "#hjp-modal h3{margin:0;text-align:center;font-size:13px;color:var(--hjp-fg)}\n" +
-            "#hjp-modal button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-weight:bold;font:12px var(--hjp-font)}\n" +
-            "#hjp-modal button.cancel{background:#555;color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-weight:bold;font:12px var(--hjp-font)}\n" +
+            "#hjp-modal button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
+            "#hjp-modal button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(133,13,34,.4);filter:brightness(1.05)}\n" +
+            "#hjp-modal button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
+            "#hjp-modal button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
             "#hjp-contexto{padding:4px;gap:0;width:auto;min-width:170px}\n" +
             "#hjp-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--hjp-border-soft);display:flex;align-items:center;gap:8px}\n" +
             "#hjp-contexto .op .hjp-mi{color:var(--hjp-accent-2);font-size:1.15em}\n" +
@@ -2012,9 +2077,15 @@
             "#hjp-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--hjp-bad);color:#fff;padding:6px 16px;\n" +
             "  border-radius:5px;z-index:1000002;font:12px var(--hjp-font);display:none;box-shadow:var(--hjp-shadow)}\n" +
             "body.hjp-lateral #hjp-barra{display:none}\n" +
-            "#hjp-panel .hjp-sidebar-tools{display:none;gap:6px;padding:8px 10px;background:linear-gradient(180deg,var(--hjp-bg-soft),var(--hjp-bg));border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap}\n" +
-            "#hjp-panel.lateral .hjp-sidebar-tools{display:flex;box-shadow:inset 0 -1px 0 var(--hjp-border-soft)}\n" +
-            "#hjp-panel .hjp-sidebar-tools .hjp-btn{flex:1;min-width:120px;justify-content:center;padding:9px 10px;font-size:12px}\n" +
+            "#hjp-panel .hjp-sidebar-tools{display:none;gap:8px;padding:10px;background:linear-gradient(180deg,var(--hjp-bg-strong),var(--hjp-bg-soft));border-bottom:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-panel.lateral .hjp-sidebar-tools{display:grid;grid-template-columns:repeat(4,1fr)}\n" +
+            "#hjp-panel .hjp-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:0;padding:10px 4px;border-radius:var(--hjp-radius);background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);color:var(--hjp-fg);cursor:pointer;font:600 10.5px var(--hjp-font);transition:background .16s var(--hjp-easing),transform .12s,box-shadow .16s,border-color .16s}\n" +
+            "#hjp-panel .hjp-tile:hover{background:var(--hjp-bg);border-color:var(--hjp-fg-mute);transform:translateY(-2px);box-shadow:var(--hjp-shadow)}\n" +
+            "#hjp-panel .hjp-tile:active{transform:translateY(0)}\n" +
+            "#hjp-panel .hjp-tile .hjp-mi{font-size:20px;color:var(--hjp-accent-2)}\n" +
+            "#hjp-panel .hjp-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}\n" +
+            "#hjp-panel .hjp-tile.primary{background:var(--hjp-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(133,13,34,.35)}\n" +
+            "#hjp-panel .hjp-tile.primary .hjp-mi{color:#fff}\n" +
             "#hjp-barra .hjp-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#hjp-barra .hjp-badge-estado.ok{background:var(--hjp-ok)}\n" +
             "#hjp-barra .hjp-badge-estado.warn{background:var(--hjp-warn)}\n" +
@@ -2028,7 +2099,23 @@
             "#hjp-panel table .hjp-sel{accent-color:var(--hjp-accent);cursor:pointer;width:14px;height:14px}\n" +
             "#hjp-panel tr.sel-row td{background:var(--hjp-ok-bg)}\n" +
             "#hjp-panel tr.sel-row:hover td{background:linear-gradient(0deg,var(--hjp-ok-bg),var(--hjp-bg-soft))}\n" +
-            "#hjp-panel table th:first-child{padding-left:10px}\n";
+            "#hjp-panel table th:first-child{padding-left:10px}\n" +
+            "#hjp-panel ::-webkit-scrollbar,#hjp-config ::-webkit-scrollbar,#hjp-modal ::-webkit-scrollbar,#hjp-ayuda ::-webkit-scrollbar{width:9px;height:9px}\n" +
+            "#hjp-panel ::-webkit-scrollbar-thumb,#hjp-config ::-webkit-scrollbar-thumb,#hjp-modal ::-webkit-scrollbar-thumb,#hjp-ayuda ::-webkit-scrollbar-thumb{background:var(--hjp-border);border-radius:8px;border:2px solid transparent;background-clip:content-box}\n" +
+            "#hjp-panel ::-webkit-scrollbar-thumb:hover,#hjp-config ::-webkit-scrollbar-thumb:hover,#hjp-modal ::-webkit-scrollbar-thumb:hover,#hjp-ayuda ::-webkit-scrollbar-thumb:hover{background:var(--hjp-fg-mute);background-clip:content-box}\n" +
+            "#hjp-panel ::-webkit-scrollbar-track{background:transparent}\n" +
+            "#hjp-panel .hjp-sidebar-tools .hjp-tile:focus-visible,#hjp-panel .mini:focus-visible{outline:2px solid var(--hjp-accent-2);outline-offset:1px}\n" +
+            "@keyframes hjpFadeUp{from{opacity:0}to{opacity:1}}\n" +
+            "#hjp-panel .kpi,#hjp-panel .recent,#hjp-panel .hjp-tile{animation:hjpFadeUp .3s var(--hjp-easing) both}\n" +
+            "#hjp-panel .kpi{position:relative;overflow:hidden}\n" +
+            "#hjp-panel .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--hjp-accent-grad);opacity:.7}\n" +
+            "#hjp-panel .kpi.ok::before{background:var(--hjp-ok)}\n" +
+            "#hjp-panel .kpi.warn::before{background:var(--hjp-warn)}\n" +
+            "#hjp-panel .kpi.bad::before{background:var(--hjp-bad)}\n" +
+            "#hjp-panel .kpi:hover{transform:translateY(-2px);box-shadow:var(--hjp-shadow)}\n" +
+            "#hjp-panel .kpi{transition:transform .15s var(--hjp-easing),box-shadow .15s}\n" +
+            "#hjp-barra{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
+            "#hjp-panel header{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n";
 
         const style = makeEl('style');
         style.textContent = css;
@@ -2066,10 +2153,10 @@
         panelEl = makeEl('div', { id: 'hjp-panel' });
         panelEl.innerHTML = (
             '<div class="hjp-sidebar-tools" id="hjp-sidebar-tools">' +
-            '<button class="hjp-btn" id="hjp-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="hjp-mi">' + ICO.automatizar + '</span> Automatizar</button>' +
-            '<button class="hjp-btn" id="hjp-sb-panel" title="Ocultar el panel (Alt+P)"><span class="hjp-mi">' + ICO.colapsar + '</span> Panel</button>' +
-            '<button class="hjp-btn" id="hjp-sb-modo" title="Volver al modo flotante"><span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-sb-modo-label">Flotante</span></button>' +
-            '<button class="hjp-btn" id="hjp-sb-close" title="Cerrar todas las ventanas de unidades"><span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar todas</button>' +
+            '<button class="hjp-tile primary" id="hjp-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="hjp-mi">' + ICO.automatizar + '</span><span class="tile-lbl">Automatizar</span></button>' +
+            '<button class="hjp-tile" id="hjp-sb-panel" title="Ocultar el panel (Alt+P)"><span class="hjp-mi">' + ICO.colapsar + '</span><span class="tile-lbl">Ocultar</span></button>' +
+            '<button class="hjp-tile" id="hjp-sb-modo" title="Volver al modo flotante"><span class="hjp-mi">' + ICO.expandir + '</span><span class="tile-lbl hjp-sb-modo-label">Flotante</span></button>' +
+            '<button class="hjp-tile" id="hjp-sb-close" title="Cerrar todas las ventanas de unidades"><span class="hjp-mi">' + ICO.cerrar + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
             '<header id="hjp-drag">' +
             '<span id="hjp-estado-barra" class="hjp-badge-estado"></span>' +
@@ -2263,6 +2350,8 @@
             '</select></label>' +
             '<label>Color de acento <input type="color" id="c-acento"></label>' +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
+            checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
+            numRow('c-contorno-horas', 'Antiguedad de contornos (h)') +
             '<h4>Informacion</h4>' +
             '<span style="font-size:11.5px;color:var(--hjp-fg-dim)">Atajos: <b>Alt+1..4</b> cambia pestanas · <b>Alt+P</b> panel · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra modales</span>' +
             '</div>' +
@@ -2497,7 +2586,8 @@
         const lado = APP.config.panelLado || 'derecha';
         railEl.classList.toggle('izquierda', lado === 'izquierda');
         railEl.classList.toggle('derecha', lado !== 'izquierda');
-        railEl.innerHTML = '<span class="hjp-mi">' + (lado === 'izquierda' ? ICO.arrowRight : ICO.arrowLeft) + '</span>';
+        railEl.innerHTML = '<span class="hjp-mi">' + (lado === 'izquierda' ? ICO.arrowRight : ICO.arrowLeft) + '</span>' +
+            '<span class="hjp-rail-txt">PANEL</span>';
         const show = esLateral() && APP.panelHidden;
         railEl.classList.toggle('mostrar', show);
     }
@@ -3560,6 +3650,8 @@
             g('c-dens').value = APP.config.density;
             g('c-acento').value = APP.config.acento || '#1565c0';
             g('c-coords').checked = !!APP.config.mostrarCoords;
+            g('c-contornos').checked = !!APP.config.contornos;
+            g('c-contorno-horas').value = APP.config.contornoHoras;
             g('c-panel-modo').value = APP.config.panelMode || 'flotante';
             g('c-panel-lado').value = APP.config.panelLado || 'derecha';
             g('c-panel-ancho').value = APP.config.panelAncho || 420;
@@ -3638,6 +3730,8 @@
             cf.density = g('c-dens').value;
             cf.acento = g('c-acento').value;
             cf.mostrarCoords = g('c-coords').checked;
+            cf.contornos = g('c-contornos').checked;
+            cf.contornoHoras = Math.max(1, isoNum(g('c-contorno-horas').value, cf.contornoHoras));
             cf.reglas.offline = g('c-r-off').checked;
             cf.reglas.gpsPerdido = g('c-r-gps').checked;
             cf.reglas.detenido = g('c-r-det').checked;
@@ -3783,6 +3877,9 @@
         }
         setTimeout(comprobarActualizacion, 5000);
         setInterval(comprobarActualizacion, 30 * 60 * 1000);
+        // Las ventanas de unidad pueden restaurarse despues de cargar la pagina;
+        // revalidamos el contorno varias veces al inicio.
+        [1500, 4000, 8000, 15000].forEach((t) => setTimeout(revalidarContornos, t));
     }
     function log() { try { console.log.apply(console, ['[HJP]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 

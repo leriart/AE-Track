@@ -133,6 +133,18 @@ Pulsa **Automatizar Unidades** en la barra. Se abre la lista, donde puedes:
 Tambien puedes marcar y desmarcar unidades directamente con la casilla de la
 columna **Sel** en la pestana Unidades.
 
+### Contornos de las ventanas
+
+Cada vez que una regla genera una alerta, la ventana de esa unidad se resalta
+con un contorno del color de la severidad. Al recargar la pagina, el script
+vuelve a detectar las ventanas de unidad que ya estan abiertas y **re marca su
+contorno**: usa el color de la ultima alerta de la unidad (de las ultimas 24
+horas) o, si no hay alerta reciente, rojo si esta sin senal y ambar si esta
+detenida. Las unidades silenciadas no se resaltan.
+
+Puedes desactivarlo o cambiar la antiguedad de los contornos en Ajustes,
+pestana **Visual**.
+
 ## Reglas de alerta
 
 Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
