@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.4.0
+// @version      4.5.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -53,7 +53,8 @@
         selAll: 'E834',
         selClear: 'E14A',
         arrowLeft: 'E314',
-        arrowRight: 'E315'
+        arrowRight: 'E315',
+        actualizar: 'E8BB'
     });
     function ico(name) {
         const h = MAT[name];
@@ -84,6 +85,26 @@
         guardado: 'Configuración guardada',
         importar: 'Configuración importada'
     });
+
+    /* ====================== VERSION Y ACTUALIZACIONES ====================== */
+    const VER = '4.5.0';
+    const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
+    function parseVersionHeader(text) {
+        const m = text.match(/@version\s+(\S+)/);
+        return m ? m[1] : null;
+    }
+    function cmpVersion(a, b) {
+        if (!a || !b) return 0;
+        const pa = String(a).split('.').map(Number);
+        const pb = String(b).split('.').map(Number);
+        const len = Math.max(pa.length, pb.length);
+        for (let i = 0; i < len; i++) {
+            const x = pa[i] || 0, y = pb[i] || 0;
+            if (x > y) return 1;
+            if (x < y) return -1;
+        }
+        return 0;
+    }
 
     /* ============================ LOCALSTORAGE ============================ */
     const LS = Object.freeze({
@@ -264,6 +285,7 @@
         filtro: '',
         filtEstado: readJSON(LS.filtEstado, 'todas'),
         panelHidden: true,
+        update: { state: 'idle', remote: null, local: VER },
         unlocked: false,
         consultaRestante: 0
     };
@@ -1796,7 +1818,7 @@
             "  --hjp-bad:#c62828; --hjp-bad-fg:#b71c1c; --hjp-bad-bg:#fde2e2;\n" +
             "  --hjp-shadow:0 2px 8px rgba(20,30,50,.10);\n" +
             "}\n" +
-            "#hjp-toasts{position:fixed;top:210px;right:15px;z-index:1000002;display:flex;flex-direction:column;gap:8px;width:330px;pointer-events:none;transition:opacity .2s}\n" +
+            "#hjp-toasts{position:fixed;bottom:20px;right:15px;z-index:1000002;display:flex;flex-direction:column;gap:8px;width:330px;pointer-events:none;transition:opacity .2s}\n" +
             ".hjp-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:9px;background:var(--hjp-bg-soft);color:var(--hjp-fg);\n" +
             "  border-left:4px solid var(--hjp-accent);border-radius:var(--hjp-radius);padding:10px 12px;box-shadow:var(--hjp-shadow);\n" +
             "  font:12.5px/1.35 var(--hjp-font);animation:hjpIn .28s var(--hjp-easing) both}\n" +
@@ -1989,7 +2011,10 @@
             ".hjp-acciones{display:flex;justify-content:space-between;gap:8px}\n" +
             "#hjp-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--hjp-bad);color:#fff;padding:6px 16px;\n" +
             "  border-radius:5px;z-index:1000002;font:12px var(--hjp-font);display:none;box-shadow:var(--hjp-shadow)}\n" +
-            "body.hjp-lateral #hjp-barra{z-index:1000004}\n" +
+            "body.hjp-lateral #hjp-barra{display:none}\n" +
+            "#hjp-panel .hjp-sidebar-tools{display:none;gap:6px;padding:8px 10px;background:linear-gradient(180deg,var(--hjp-bg-soft),var(--hjp-bg));border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap}\n" +
+            "#hjp-panel.lateral .hjp-sidebar-tools{display:flex;box-shadow:inset 0 -1px 0 var(--hjp-border-soft)}\n" +
+            "#hjp-panel .hjp-sidebar-tools .hjp-btn{flex:1;min-width:120px;justify-content:center;padding:9px 10px;font-size:12px}\n" +
             "#hjp-barra .hjp-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#hjp-barra .hjp-badge-estado.ok{background:var(--hjp-ok)}\n" +
             "#hjp-barra .hjp-badge-estado.warn{background:var(--hjp-warn)}\n" +
@@ -2040,9 +2065,16 @@
 
         panelEl = makeEl('div', { id: 'hjp-panel' });
         panelEl.innerHTML = (
+            '<div class="hjp-sidebar-tools" id="hjp-sidebar-tools">' +
+            '<button class="hjp-btn" id="hjp-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="hjp-mi">' + ICO.automatizar + '</span> Automatizar</button>' +
+            '<button class="hjp-btn" id="hjp-sb-panel" title="Ocultar el panel (Alt+P)"><span class="hjp-mi">' + ICO.colapsar + '</span> Panel</button>' +
+            '<button class="hjp-btn" id="hjp-sb-modo" title="Volver al modo flotante"><span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-sb-modo-label">Flotante</span></button>' +
+            '<button class="hjp-btn" id="hjp-sb-close" title="Cerrar todas las ventanas de unidades"><span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar todas</button>' +
+            '</div>' +
             '<header id="hjp-drag">' +
             '<span id="hjp-estado-barra" class="hjp-badge-estado"></span>' +
             '<h3>' + esc(LANG.titlePanel) + '</h3>' +
+            '<button class="hjp-iconbtn" id="hjp-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--hjp-accent-2)"><span class="hjp-mi">' + ICO.actualizar + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-tema" title="Tema"><span class="hjp-mi">' + ICO.luna + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-nmolestar" title="No molestar"><span class="hjp-mi">' + ICO.silencioTotal + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-test" title="Probar avisos"><span class="hjp-mi">' + ICO.senal + '</span></button>' +
@@ -2278,6 +2310,9 @@
             numRow('c-giro-min', 'Giro sostenido (min)') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
+            '<h4>Actualizaciones</h4>' +
+            '<div id="hjp-update-info" style="font-size:11.5px;color:var(--hjp-fg-dim);margin-bottom:6px">Version instalada: <b>' + VER + '</b></div>' +
+            '<button class="accbtn" id="hjp-check-update" style="width:100%"><span class="hjp-mi">' + ICO.refrescar + '</span> Buscar actualizaciones</button>' +
             '<h4>Perfiles de configuracion</h4>' +
             '<label>Perfil <select id="hjp-perfil-sel" style="flex:1"></select></label>' +
             '<div class="hjp-acciones" style="margin-top:6px">' +
@@ -2329,6 +2364,8 @@
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
             '<li><kbd>Esc</kbd>: cerrar ventanas emergentes.</li>' +
             '</ul>' +
+            '<h4>Actualizaciones</h4>' +
+            '<p>El script revisa si hay una version nueva al iniciar y cada 30 minutos. Si la hay, aparece un indicador en la cabecera del panel; al pulsarlo se abre la URL para que Tampermonkey actualice el script.</p>' +
             '<h4>Consejo</h4>' +
             '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestana en el borde (rail) que la trae de vuelta con un clic.</p>' +
             '</div>' +
@@ -2431,6 +2468,12 @@
         if (lbl) lbl.textContent = esLateral() ? 'Lateral' : 'Flotante';
         const icon = document.querySelector('#hjp-btn-modo .hjp-mi');
         if (icon) icon.textContent = esLateral() ? ICO.colapsar : ICO.expandir;
+        const sbLbl = document.querySelector('#hjp-sb-modo .hjp-sb-modo-label');
+        if (sbLbl) sbLbl.textContent = esLateral() ? 'Flotante' : 'Lateral';
+        const sbIcon = document.querySelector('#hjp-sb-modo .hjp-mi');
+        if (sbIcon) sbIcon.textContent = esLateral() ? ICO.expandir : ICO.colapsar;
+        const sbModo = byId('hjp-sb-modo');
+        if (sbModo) sbModo.title = esLateral() ? 'Volver al modo flotante' : 'Pasar a barra lateral';
         const panelLbl = byId('hjp-btn-panel');
         if (panelLbl) panelLbl.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
     }
@@ -2939,6 +2982,86 @@
         URL.revokeObjectURL(a.href);
         advice('Informe generado', hoy.length + ' alertas hoy');
     }
+
+    /* ====================== ACTUALIZACIONES ====================== */
+    function pintarActualizacion() {
+        const b = byId('hjp-actualizar');
+        if (!b) return;
+        const u = APP.update;
+        if (u.state === 'available') {
+            b.style.display = '';
+            b.classList.add('activo');
+            const icon = b.querySelector('.hjp-mi');
+            if (icon) icon.textContent = ICO.actualizar;
+            b.title = 'Actualizar a la version ' + u.remote + ' (instalada ' + u.local + ')';
+        } else if (u.state === 'installed') {
+            b.style.display = '';
+            b.classList.add('activo');
+            const icon = b.querySelector('.hjp-mi');
+            if (icon) icon.textContent = ICO.refrescar;
+            b.title = 'Actualizacion instalada · recarga para aplicar';
+        } else {
+            b.style.display = 'none';
+            b.classList.remove('activo');
+        }
+        pintarInfoUpdate();
+    }
+    function pintarInfoUpdate() {
+        const el = byId('hjp-update-info');
+        if (!el) return;
+        const u = APP.update;
+        let html = 'Version instalada: <b>' + VER + '</b>';
+        if (u.state === 'checking') html += ' · comprobando...';
+        else if (u.state === 'current' && u.lastCheck) html += ' · al dia (revisado ' + new Date(u.lastCheck).toLocaleTimeString() + ')';
+        else if (u.state === 'available') html += ' · <b style="color:var(--hjp-accent-2)">disponible ' + u.remote + '</b>';
+        else if (u.state === 'installed') html += ' · <b style="color:var(--hjp-accent-2)">actualizada · recarga</b>';
+        else if (u.state === 'error') html += ' · error: ' + esc(u.lastError || '');
+        el.innerHTML = html;
+    }
+    async function comprobarActualizacion() {
+        APP.update.state = 'checking';
+        pintarActualizacion();
+        try {
+            const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            const tmo = ctl ? setTimeout(() => ctl.abort(), 15000) : null;
+            const res = await fetch(UPDATE_URL + '?t=' + Date.now(), { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
+            if (tmo) clearTimeout(tmo);
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const text = await res.text();
+            const remote = parseVersionHeader(text);
+            if (!remote) throw new Error('version no encontrada');
+            APP.update.remote = remote;
+            APP.update.local = VER;
+            if (cmpVersion(remote, VER) > 0) {
+                APP.update.state = 'available';
+                APP.update.lastCheck = Date.now();
+                pintarActualizacion();
+                if (!APP.update.notificado) {
+                    APP.update.notificado = true;
+                    advice('Nueva version disponible', remote + ' (instalada ' + VER + ')');
+                }
+            } else {
+                APP.update.state = 'current';
+                APP.update.lastCheck = Date.now();
+                pintarActualizacion();
+            }
+        } catch (e) {
+            APP.update.state = 'error';
+            APP.update.lastError = (e && e.message) || 'sin conexion';
+            pintarActualizacion();
+        }
+    }
+    function aplicarActualizacion() {
+        if (APP.update.state === 'available') {
+            APP.update.state = 'installed';
+            pintarActualizacion();
+            try { window.open(UPDATE_URL, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+            advice('Actualizacion iniciada', 'recarga esta pagina para aplicar la nueva version');
+        } else if (APP.update.state === 'installed') {
+            try { location.reload(); } catch (_) { /* noop */ }
+        }
+    }
+
     function exportConfig() {
         const data = {
             version: 6, ts: Date.now(),
@@ -3197,6 +3320,10 @@
         });
         modoBtn.addEventListener('click', toggleSidebar);
         if (railEl) railEl.addEventListener('click', togglePanel);
+        byId('hjp-sb-main').addEventListener('click', () => mainBtn.click());
+        byId('hjp-sb-close').addEventListener('click', () => closeBtn.click());
+        byId('hjp-sb-modo').addEventListener('click', toggleSidebar);
+        byId('hjp-sb-panel').addEventListener('click', togglePanel);
         byId('hjp-cerrar-panel').addEventListener('click', () => { if (!APP.panelHidden) togglePanel(); });
         byId('hjp-collapse').addEventListener('click', togglePanel);
         byId('hjp-ayuda-btn').addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
@@ -3264,6 +3391,7 @@
             applyTheme();
             advice('Tema', APP.config.theme);
         });
+        byId('hjp-actualizar').addEventListener('click', aplicarActualizacion);
         byId('hjp-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
         byId('hjp-test').addEventListener('click', testNotify);
         byId('hjp-exportar-todo').addEventListener('click', exportConfig);
@@ -3465,6 +3593,7 @@
             g('c-hor-a').value = APP.config.horario.desde;
             g('c-hor-b').value = APP.config.horario.hasta;
             pintarPerfiles();
+            pintarInfoUpdate();
             if (APP.config.desktop && typeof Notification !== 'undefined' && Notification.permission === 'default') {
                 Notification.requestPermission();
             }
@@ -3592,6 +3721,10 @@
             borrarPerfil(n);
             advice('Perfil borrado', n);
         });
+        byId('hjp-check-update').addEventListener('click', () => {
+            comprobarActualizacion();
+            setTimeout(pintarInfoUpdate, 1200);
+        });
         byId('hjp-limpiar-hist').addEventListener('click', () => {
             if (!APP.historial.length) { advice('Bitacora vacia', ''); return; }
             if (!window.confirm('¿Borrar toda la bitacora de avisos?')) return;
@@ -3648,6 +3781,8 @@
         if (primerUso) {
             setTimeout(() => advice('Bienvenido a HJP · Wialon', 'Pulsa ? en la cabecera para la ayuda rapida'), 900);
         }
+        setTimeout(comprobarActualizacion, 5000);
+        setInterval(comprobarActualizacion, 30 * 60 * 1000);
     }
     function log() { try { console.log.apply(console, ['[HJP]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 
