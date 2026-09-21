@@ -146,12 +146,16 @@ de los vehiculos. Puedes cambiarlo de dos formas:
 
 - Con los botones de la parte superior de la lista: **Pegado** (orden en que las
   pegaste), **Numero** (de menor a mayor), **Numero inverso**, **A-Z** e
-  **Invertir**.
+  **Invertir**. El boton del modo activo se resalta.
 - **Arrastrando** el asa (⠿) de cada fila para colocarla donde quieras. El
   numero a la izquierda indica la posicion actual.
+- Con el selector **Orden de ventanas** de la barra de herramientas de la
+  pestana Unidades, sin abrir la lista. Asi puedes ver como se reacomodan las
+  ventanas en el momento.
 
-El orden se guarda por pestaña y se aplica al pulsar **Ejecutar (abrir
-ventanas)**.
+Al cambiar el orden, las ventanas que ya estan abiertas se **reacomodan al
+instante**; no hace falta volver a pulsar Ejecutar. El orden se guarda por
+pestaña y se aplica tambien al pulsar **Ejecutar (abrir ventanas)**.
 
 Tambien puedes marcar y desmarcar unidades directamente con la casilla de la
 columna **Sel** en la pestana Unidades.
