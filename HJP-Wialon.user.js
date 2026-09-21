@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.8.0
+// @version      4.8.1
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.8.0';
+    const VER = '4.8.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -1935,7 +1935,7 @@
             ".hjp-toast .cuerpo span{color:var(--hjp-fg-dim);font-size:11.5px;margin-top:2px}\n" +
             ".hjp-toast .hora{color:var(--hjp-fg-mute);font-size:10px}\n" +
             ".hjp-toast .mini{background:transparent;border:none;color:var(--hjp-fg-mute);cursor:pointer;font-size:11px}\n" +
-            "#hjp-barra{position:fixed;top:80px;right:15px;z-index:999999;display:flex;align-items:center;gap:6px;\n" +
+            "#hjp-barra{position:fixed;top:80px;right:15px;z-index:999999;display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:6px;\n" +
             "  background:rgba(28,30,36,.94);border:1px solid var(--hjp-border);border-radius:10px;padding:5px;\n" +
             "  box-shadow:var(--hjp-shadow);font:12px var(--hjp-font);user-select:none;touch-action:none;max-width:95vw}\n" +
             "#hjp-barra.vertical{flex-direction:column;align-items:stretch}\n" +
@@ -2177,7 +2177,7 @@
     }
 
     /* ====================== UI BUILD ====================== */
-    let mainBtn, panelBtn, modoBtn, closeBtn, updateBtn, foldBtn, gripEl, barraEl,
+    let mainBtn, panelBtn, modoBtn, helpBtn, closeBtn, updateBtn, foldBtn, gripEl, barraEl,
         panelEl, modalEl, cfgWinEl, ayudaEl, ctxEl, toastsEl, avisoEl, railEl;
 
     function checkRow(id, txt) {
@@ -2198,11 +2198,12 @@
         panelBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.panel + '</span> Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
         modoBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-modo-label">Flotante</span>', id: 'hjp-btn-modo', className: 'hjp-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
         closeBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
+        helpBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.ayuda + '</span>', id: 'hjp-btn-help', className: 'hjp-btn', title: 'Ayuda rapida (?)' });
         updateBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.actualizar + '</span> Actualizar', id: 'hjp-btn-update', className: 'hjp-btn hjp-update', title: 'Nueva version disponible', style: 'display:none' });
         foldBtn = makeEl('button', { innerText: '▾', id: 'hjp-btn-fold', className: 'hjp-btn hjp-fold', title: 'Plegar barra' });
         gripEl = makeEl('span', { innerText: '⠿', id: 'hjp-grip', className: 'hjp-grip', title: 'Arrastrar barra · doble clic para orientar' });
         barraEl = makeEl('div', { id: 'hjp-barra' });
-        barraEl.append(gripEl, updateBtn, mainBtn, panelBtn, modoBtn, closeBtn, foldBtn);
+        barraEl.append(gripEl, updateBtn, mainBtn, panelBtn, modoBtn, helpBtn, closeBtn, foldBtn);
         if (APP.barra.vertical) barraEl.classList.add('vertical');
 
         panelEl = makeEl('div', { id: 'hjp-panel' });
@@ -3542,6 +3543,7 @@
         byId('hjp-cerrar-panel').addEventListener('click', () => { if (!APP.panelHidden) togglePanel(); });
         byId('hjp-collapse').addEventListener('click', togglePanel);
         byId('hjp-ayuda-btn').addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
+        helpBtn.addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
         byId('hjp-ayuda-x').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
         byId('hjp-ayuda-cerrar').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
         byId('hjp-ayuda-config').addEventListener('click', () => {
@@ -4006,7 +4008,7 @@
         await refresh();
         restartTimers();
         if (primerUso) {
-            setTimeout(() => advice('Bienvenido a HJP · Wialon', 'Pulsa ? en la cabecera para la ayuda rapida'), 900);
+            setTimeout(() => advice('Bienvenido a HJP · Wialon', 'Pulsa ? (en la barra o en la cabecera del panel) para la ayuda rapida'), 900);
         }
         setTimeout(comprobarActualizacion, 5000);
         setInterval(comprobarActualizacion, 30 * 60 * 1000);
