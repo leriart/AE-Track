@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.1.0
-// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora y Geocercas. Límite de velocidad por unidad, perfiles de configuración, filtros, tema oscuro/claro y backup JSON. Sin emojis.
+// @version      4.2.0
+// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro y backup JSON. Sin emojis.
 // @author       lerit
 // @homepageURL  https://github.com/leriart/AE-Track
 // @supportURL   https://github.com/leriart/AE-Track/issues
@@ -86,7 +86,8 @@
         fullscreen: 'hjp.api.fullscreen',
         limites: 'hjp.api.limites',
         perfiles: 'hjp.api.perfiles',
-        filtEstado: 'hjp.api.filtEstado'
+        filtEstado: 'hjp.api.filtEstado',
+        rutas: 'hjp.api.rutas'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -118,6 +119,16 @@
         density: 'normal',
         acento: '#1565c0',
         mostrarCoords: false,
+        osrm: true,
+        overpass: false,
+        desvioM: 250,
+        desvioMin: 5,
+        retornoM: 400,
+        retornoPct: 25,
+        giroGrados: 130,
+        giroMin: 3,
+        trazado: true,
+        trazadoMax: 500,
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -127,7 +138,10 @@
             geocerca: true,
             destino: false,
             desconexion: true,
-            velocidad: false
+            velocidad: false,
+            desvio: false,
+            retorno: false,
+            giroU: false
         })
     });
 
@@ -203,6 +217,9 @@
         geoCache: readObject(LS.geo, {}),
         limites: readObject(LS.limites, {}),
         perfiles: readObject(LS.perfiles, {}),
+        rutas: readObject(LS.rutas, {}),
+        trazas: {},
+        grafoCache: {},
         barra: readObject(LS.barra, {
             x: null, y: null, plegada: false, vertical: false,
             botones: { main: true, panel: true, close: true }
@@ -364,6 +381,356 @@
             writeJSON(LS.geo, APP.geoCache);
             return info;
         } catch (_) { return null; }
+    }
+
+    /* ====================== ALGORITMOS GEO / RUTAS (OSM + A*) ====================== */
+    const RADIO_TIERRA = 6371008.8;
+    function rad(d) { return d * Math.PI / 180; }
+    function grad(r) { return r * 180 / Math.PI; }
+    function haversine(lat1, lon1, lat2, lon2) {
+        const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+        const s = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 2 * RADIO_TIERRA * Math.asin(Math.min(1, Math.sqrt(s)));
+    }
+    function bearing(lat1, lon1, lat2, lon2) {
+        const p1 = rad(lat1), p2 = rad(lat2), dl = rad(lon2 - lon1);
+        const y = Math.sin(dl) * Math.cos(p2);
+        const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl);
+        return (grad(Math.atan2(y, x)) + 360) % 360;
+    }
+    function difAngulo(a, b) { return Math.abs(((a - b + 540) % 360) - 180); }
+
+    // Distancia punto->segmento en metros con proyeccion equirectangular local.
+    function distPuntoSegmento(lat, lon, aLat, aLon, bLat, bLon) {
+        const lat0 = (aLat + bLat) / 2;
+        const mx = 111320 * Math.cos(rad(lat0)), my = 110540;
+        const px = (lon - aLon) * mx, py = (lat - aLat) * my;
+        const bx = (bLon - aLon) * mx, by = (bLat - aLat) * my;
+        const len2 = bx * bx + by * by;
+        let t = len2 > 0 ? (px * bx + py * by) / len2 : 0;
+        t = clamp(t, 0, 1);
+        const dx = px - bx * t, dy = py - by * t;
+        return { dist: Math.sqrt(dx * dx + dy * dy), t };
+    }
+    // Reduce una polilinea conservando puntos separados al menos minM metros.
+    function simplificarRuta(coords, minM) {
+        if (!coords || coords.length < 3) return coords ? coords.slice() : [];
+        const sep = minM || 40;
+        const out = [coords[0]];
+        let last = coords[0];
+        for (let i = 1; i < coords.length - 1; i++) {
+            if (haversine(last[1], last[0], coords[i][1], coords[i][0]) >= sep) { out.push(coords[i]); last = coords[i]; }
+        }
+        out.push(coords[coords.length - 1]);
+        return out;
+    }
+    function precomputarRuta(coords) {
+        const acum = [0];
+        let total = 0;
+        for (let i = 1; i < coords.length; i++) {
+            total += haversine(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
+            acum.push(total);
+        }
+        return { acum, total };
+    }
+    // Proyecta un punto sobre la polilinea de una ruta y calcula progreso y rumbo.
+    function snapRuta(lat, lon, ruta) {
+        if (!ruta || !ruta.coords || ruta.coords.length < 2 || lat == null || lon == null) return null;
+        const c = ruta.coords;
+        let mejor = { dist: Infinity, idx: 0, t: 0 };
+        for (let i = 0; i < c.length - 1; i++) {
+            const d = distPuntoSegmento(lat, lon, c[i][1], c[i][0], c[i + 1][1], c[i + 1][0]);
+            if (d.dist < mejor.dist) mejor = { dist: d.dist, idx: i, t: d.t };
+        }
+        const acum = ruta.acum || [0, ruta.total || 1];
+        const segLen = (acum[mejor.idx + 1] || 0) - (acum[mejor.idx] || 0);
+        const recorrido = (acum[mejor.idx] || 0) + mejor.t * segLen;
+        const total = ruta.total || 1;
+        const a = c[mejor.idx], b = c[mejor.idx + 1];
+        return {
+            dist: mejor.dist, idx: mejor.idx, t: mejor.t,
+            progreso: clamp(recorrido / total, 0, 1),
+            recorrido, total,
+            rumbo: bearing(a[1], a[0], b[1], b[0])
+        };
+    }
+
+    // Cola de prioridad binaria para A*.
+    function MinHeap() { this.a = []; }
+    MinHeap.prototype.push = function (item) {
+        const a = this.a; a.push(item);
+        let i = a.length - 1;
+        while (i > 0) {
+            const p = (i - 1) >> 1;
+            if (a[p].f <= a[i].f) break;
+            const t = a[p]; a[p] = a[i]; a[i] = t; i = p;
+        }
+    };
+    MinHeap.prototype.pop = function () {
+        const a = this.a;
+        if (!a.length) return null;
+        const top = a[0], last = a.pop();
+        if (a.length) {
+            a[0] = last;
+            let i = 0;
+            for (;;) {
+                const l = 2 * i + 1, r = l + 1;
+                let m = i;
+                if (l < a.length && a[l].f < a[m].f) m = l;
+                if (r < a.length && a[r].f < a[m].f) m = r;
+                if (m === i) break;
+                const t = a[m]; a[m] = a[i]; a[i] = t; i = m;
+            }
+        }
+        return top;
+    };
+    MinHeap.prototype.size = function () { return this.a.length; };
+
+    // A* generico sobre un grafo de nodos { id: { lat, lon } } y adyacencia { id: [id] }.
+    // Heuristica: distancia haversine al objetivo (admisible para grafos viales).
+    function aEstrella(nodos, adyacencia, inicio, meta) {
+        if (!nodos.has(inicio) || !nodos.has(meta)) return null;
+        const metaN = nodos.get(meta);
+        const h = (id) => { const n = nodos.get(id); return haversine(n.lat, n.lon, metaN.lat, metaN.lon); };
+        const abiertos = new MinHeap();
+        const g = new Map(), padre = new Map(), cerrados = new Set();
+        g.set(inicio, 0);
+        abiertos.push({ id: inicio, f: h(inicio) });
+        let iter = 0;
+        while (abiertos.size() && iter < 300000) {
+            iter++;
+            const actual = abiertos.pop().id;
+            if (actual === meta) {
+                const camino = [actual];
+                let c = actual;
+                while (padre.has(c)) { c = padre.get(c); camino.push(c); }
+                camino.reverse();
+                return { camino, costo: g.get(meta), iteraciones: iter };
+            }
+            if (cerrados.has(actual)) continue;
+            cerrados.add(actual);
+            const vecinos = adyacencia.get(actual) || [];
+            const nActual = nodos.get(actual);
+            const gActual = g.get(actual);
+            for (let i = 0; i < vecinos.length; i++) {
+                const v = vecinos[i];
+                if (cerrados.has(v)) continue;
+                const nv = nodos.get(v);
+                if (!nv) continue;
+                const ng = gActual + haversine(nActual.lat, nActual.lon, nv.lat, nv.lon);
+                if (g.has(v) && ng >= g.get(v)) continue;
+                g.set(v, ng); padre.set(v, actual);
+                abiertos.push({ id: v, f: ng + h(v) });
+            }
+        }
+        return null;
+    }
+
+    // OSRM publico (OpenStreetMap): ruta de conduccion entre dos puntos.
+    async function osrmRoute(origen, destino) {
+        const url = 'https://router.project-osrm.org/route/v1/driving/' +
+            origen.lon + ',' + origen.lat + ';' + destino.lon + ',' + destino.lat +
+            '?overview=full&geometries=geojson&alternatives=false&steps=false';
+        const res = await fetch(url);
+        if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
+        const d = await res.json();
+        if (!d.routes || !d.routes.length) throw new Error('OSRM sin ruta');
+        const r = d.routes[0];
+        return { coords: r.geometry.coordinates, distancia: r.distance, duracion: r.duration, modo: 'osrm' };
+    }
+
+    // Overpass (OpenStreetMap): descarga el grafo vial de una caja y lo cachea.
+    async function overpassGrafo(minLat, minLon, maxLat, maxLon) {
+        const clave = [minLat, minLon, maxLat, maxLon].map((v) => v.toFixed(2)).join(',');
+        if (APP.grafoCache[clave]) return APP.grafoCache[clave];
+        const q = '[out:json][timeout:30];way["highway"~"motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street"](' +
+            minLat + ',' + minLon + ',' + maxLat + ',' + maxLon + ');(._;>;);out body;';
+        const res = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(q)
+        });
+        if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
+        const d = await res.json();
+        const nodos = new Map(), ady = new Map();
+        (d.elements || []).forEach((el) => {
+            if (el.type === 'node') nodos.set(el.id, { lat: el.lat, lon: el.lon });
+        });
+        (d.elements || []).forEach((el) => {
+            if (el.type !== 'way' || !el.nodes) return;
+            for (let i = 0; i < el.nodes.length - 1; i++) {
+                const a = el.nodes[i], b = el.nodes[i + 1];
+                if (!nodos.has(a) || !nodos.has(b)) continue;
+                if (!ady.has(a)) ady.set(a, []);
+                if (!ady.has(b)) ady.set(b, []);
+                ady.get(a).push(b); ady.get(b).push(a);
+            }
+        });
+        const grafo = { nodos, ady };
+        const claves = Object.keys(APP.grafoCache);
+        if (claves.length > 5) claves.forEach((k) => { delete APP.grafoCache[k]; });
+        APP.grafoCache[clave] = grafo;
+        return grafo;
+    }
+    function nodoCercano(nodos, lat, lon) {
+        let mejor = null, mejorD = Infinity;
+        nodos.forEach((n, id) => {
+            const d = haversine(lat, lon, n.lat, n.lon);
+            if (d < mejorD) { mejorD = d; mejor = id; }
+        });
+        return mejor;
+    }
+    // Ruta con A* sobre el grafo vial de OpenStreetMap.
+    async function astarRoute(origen, destino) {
+        const spanLat = Math.abs(origen.lat - destino.lat);
+        const spanLon = Math.abs(origen.lon - destino.lon);
+        if (spanLat > 1.5 || spanLon > 1.5) throw new Error('Ruta demasiado larga para A* (limite ~150 km)');
+        const pad = 0.015;
+        const grafo = await overpassGrafo(
+            Math.min(origen.lat, destino.lat) - pad, Math.min(origen.lon, destino.lon) - pad,
+            Math.max(origen.lat, destino.lat) + pad, Math.max(origen.lon, destino.lon) + pad
+        );
+        if (!grafo.nodos.size) throw new Error('Grafo OSM vacio');
+        const ini = nodoCercano(grafo.nodos, origen.lat, origen.lon);
+        const fin = nodoCercano(grafo.nodos, destino.lat, destino.lon);
+        if (ini == null || fin == null) throw new Error('Sin nodos cercanos');
+        const r = aEstrella(grafo.nodos, grafo.ady, ini, fin);
+        if (!r || !r.camino.length) throw new Error('A* sin camino');
+        const coords = r.camino.map((id) => { const n = grafo.nodos.get(id); return [n.lon, n.lat]; });
+        return { coords, distancia: precomputarRuta(coords).total, duracion: null, modo: 'astar', nodos: coords.length };
+    }
+
+    async function geocodificarLugar(texto) {
+        const espera = 1100 - (Date.now() - APP.geoLast);
+        if (espera > 0) await sleep(espera);
+        APP.geoLast = Date.now();
+        try {
+            const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(texto));
+            const d = await res.json();
+            if (!d || !d.length) return null;
+            return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
+        } catch (_) { return null; }
+    }
+
+    /* ====================== RUTAS (almacenamiento y planificacion) ====================== */
+    function rutaDe(info) {
+        if (!info) return null;
+        return APP.rutas[info.clave] || APP.rutas[info.eco] || APP.rutas[info.placa] || APP.rutas[String(info.id)] || null;
+    }
+    function guardarRutas() { writeJSON(LS.rutas, APP.rutas); }
+    function resetEstadoRuta(clave) {
+        const m = APP.memo[clave];
+        if (!m) return;
+        m.progMax = 0; m.retornoAlerta = false; m.llego = false;
+        m.desviadoDesde = null; m.rumboOpDesde = null;
+        writeJSON(LS.memo, APP.memo);
+    }
+    async function planearRuta(eco, destinoTexto, origenOv, modo) {
+        const it = unitByEco(eco);
+        if (!it) { advice('Unidad no encontrada', eco); return null; }
+        const origen = origenOv || (it.st.lat != null ? { lat: it.st.lat, lon: it.st.lon } : null);
+        if (!origen) { advice('Sin origen', 'La unidad no reporta posicion actual'); return null; }
+        let destino = null;
+        const txt = String(destinoTexto || '').trim();
+        if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(txt)) {
+            const p = txt.split(',').map(Number);
+            destino = { lat: p[0], lon: p[1] };
+        } else if (txt) {
+            destino = await geocodificarLugar(txt);
+        }
+        if (!destino) { advice('Destino no resuelto', 'Escribe un lugar o "lat,lon"'); return null; }
+        advice('Calculando ruta', (modo === 'astar' ? 'A* sobre OSM' : 'OSRM') + '...');
+        try {
+            const calc = (modo === 'astar') ? await astarRoute(origen, destino) : await osrmRoute(origen, destino);
+            const coords = simplificarRuta(calc.coords, 40);
+            const pre = precomputarRuta(coords);
+            const clave = it.info.clave;
+            const ruta = {
+                eco: it.info.eco || clave, origen, destino, destinoTexto: txt,
+                coords, acum: pre.acum, total: pre.total,
+                distancia: calc.distancia || pre.total, duracion: calc.duracion || null,
+                modo: calc.modo, creada: Date.now()
+            };
+            APP.rutas[clave] = ruta;
+            guardarRutas();
+            resetEstadoRuta(clave);
+            advice('Ruta creada', Math.round(ruta.total / 1000) + ' km · ' + ruta.modo);
+            if (APP.tab === 'rutas') paintRutas();
+            return ruta;
+        } catch (e) {
+            advice('Error de ruta', (e && e.message) || 'sin conexion');
+            return null;
+        }
+    }
+    function eliminarRuta(eco) {
+        if (!eco) return false;
+        const it = unitByEco(eco);
+        const clave = it ? it.info.clave : eco;
+        if (APP.rutas[clave] || APP.rutas[eco]) {
+            delete APP.rutas[clave];
+            delete APP.rutas[eco];
+            guardarRutas();
+            if (it) resetEstadoRuta(clave);
+            if (APP.tab === 'rutas') paintRutas();
+            return true;
+        }
+        return false;
+    }
+    function descargarJSON(obj, nombre, tipo) {
+        const a = makeEl('a', { href: URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: tipo || 'application/geo+json;charset=utf-8;' })) });
+        a.download = nombre;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    }
+    function exportRutaGeoJSON(eco) {
+        const it = unitByEco(eco);
+        const r = it ? rutaDe(it.info) : null;
+        if (!r) { advice('Sin ruta', eco); return; }
+        const geojson = {
+            type: 'FeatureCollection',
+            features: [
+                { type: 'Feature', properties: { tipo: 'ruta', eco, modo: r.modo, distancia_m: Math.round(r.total) }, geometry: { type: 'LineString', coordinates: r.coords } },
+                { type: 'Feature', properties: { tipo: 'origen' }, geometry: { type: 'Point', coordinates: [r.origen.lon, r.origen.lat] } },
+                { type: 'Feature', properties: { tipo: 'destino', texto: r.destinoTexto || '' }, geometry: { type: 'Point', coordinates: [r.destino.lon, r.destino.lat] } }
+            ]
+        };
+        descargarJSON(geojson, 'hjp_ruta_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
+        advice('Ruta exportada', Math.round(r.total / 1000) + ' km');
+    }
+    function registrarTraza(info, st) {
+        if (!APP.config.trazado || !st.online || st.lat == null) return;
+        const k = info.eco || info.placa || String(info.id);
+        if (!k) return;
+        const arr = APP.trazas[k] || (APP.trazas[k] = []);
+        const ult = arr[arr.length - 1];
+        if (ult && haversine(ult.lat, ult.lon, st.lat, st.lon) < 20) return;
+        arr.push({ t: st.t || Math.floor(Date.now() / 1000), lat: st.lat, lon: st.lon, v: Math.round(st.vel) });
+        const max = Math.max(50, APP.config.trazadoMax || 500);
+        if (arr.length > max) arr.splice(0, arr.length - max);
+    }
+    function trazaDe(info) {
+        const k = info && (info.eco || info.placa || String(info.id));
+        return (k && APP.trazas[k]) || [];
+    }
+    function exportTraza(eco) {
+        const it = unitByEco(eco);
+        const arr = it ? trazaDe(it.info) : [];
+        if (!arr.length) { advice('Sin traza', 'Aun no hay puntos registrados'); return; }
+        const geojson = {
+            type: 'FeatureCollection',
+            features: [{
+                type: 'Feature',
+                properties: {
+                    eco, puntos: arr.length,
+                    desde: new Date(arr[0].t * 1000).toISOString(),
+                    hasta: new Date(arr[arr.length - 1].t * 1000).toISOString()
+                },
+                geometry: { type: 'LineString', coordinates: arr.map((p) => [p.lon, p.lat]) }
+            }]
+        };
+        descargarJSON(geojson, 'hjp_traza_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
+        advice('Traza exportada', arr.length + ' puntos');
     }
 
     /* ====================== NOMBRE + ESTADO ====================== */
@@ -605,7 +972,12 @@
             detenidoDesde: prev ? prev.detenidoDesde : null,
             zonaExt: prev ? prev.zonaExt : null,
             enDestino: prev ? prev.enDestino : false,
-            descoAlerta: prev ? prev.descoAlerta : false
+            descoAlerta: prev ? prev.descoAlerta : false,
+            desviadoDesde: prev ? prev.desviadoDesde : null,
+            progMax: prev ? prev.progMax : 0,
+            retornoAlerta: prev ? prev.retornoAlerta : false,
+            rumboOpDesde: prev ? prev.rumboOpDesde : null,
+            llego: prev ? prev.llego : false
         };
 
         // a) sin senal
@@ -770,6 +1142,82 @@
             }
         }
 
+        // i) Ruta: desvio, retorno/viaje cancelado y giro en U
+        const ruta = rutaDe(info);
+        const sigueRuta = APP.config.reglas.desvio || APP.config.reglas.retorno || APP.config.reglas.giroU;
+        if (ruta && sigueRuta && st.online && st.lat != null) {
+            const s = snapRuta(st.lat, st.lon, ruta);
+            if (s) {
+                R.rutaDist = Math.round(s.dist);
+                R.rutaProg = s.progreso;
+
+                if (APP.config.reglas.desvio) {
+                    if (s.dist > APP.config.desvioM) {
+                        if (!R.desviadoDesde) R.desviadoDesde = Date.now() / 1000;
+                        const m = (Date.now() / 1000 - R.desviadoDesde) / 60;
+                        if (m >= APP.config.desvioMin) {
+                            pushAlert({
+                                regla: 'desvio', sev: 'alto', clave, eco: info.eco,
+                                titulo: 'DESVIO DE RUTA · ' + etq,
+                                detalle: Math.round(s.dist) + ' m de la ruta · ' + Math.round(m) + ' min',
+                                hablar: 'Atencion, la unidad ' + etq + ' se ha desviado de la ruta'
+                            });
+                        }
+                    } else {
+                        R.desviadoDesde = null;
+                    }
+                }
+
+                if (APP.config.reglas.retorno) {
+                    if (s.progreso > (R.progMax || 0)) R.progMax = s.progreso;
+                    const dOrigen = haversine(st.lat, st.lon, ruta.origen.lat, ruta.origen.lon);
+                    const dDestino = haversine(st.lat, st.lon, ruta.destino.lat, ruta.destino.lon);
+                    const retrocedio = (R.progMax - s.progreso) >= (APP.config.retornoPct / 100);
+                    const enOrigen = dOrigen <= APP.config.retornoM && R.progMax >= 0.2;
+                    if (dDestino <= APP.config.retornoM && s.progreso >= 0.85) {
+                        if (!R.llego) {
+                            R.llego = true;
+                            R.retornoAlerta = false;
+                            pushAlert({
+                                regla: 'destino', sev: 'ok', clave, eco: info.eco,
+                                titulo: 'LLEGO A DESTINO · ' + etq,
+                                detalle: ruta.destinoTexto ? 'en ' + ruta.destinoTexto : 'en el punto de destino',
+                                hablar: 'La unidad ' + etq + ' llego a su destino'
+                            });
+                        }
+                    }
+                    if (!R.retornoAlerta && !R.llego && R.progMax >= 0.15 && (enOrigen || retrocedio)) {
+                        R.retornoAlerta = true;
+                        pushAlert({
+                            regla: 'retorno', sev: 'critico', clave, eco: info.eco,
+                            titulo: 'POSIBLE VIAJE CANCELADO · ' + etq,
+                            detalle: (enOrigen ? 'volvio al origen' : 'retrocedio ' + Math.round((R.progMax - s.progreso) * 100) + '%') +
+                                ' · avance max ' + Math.round(R.progMax * 100) + '%',
+                            hablar: 'Atencion, la unidad ' + etq + ' regreso. El viaje puede estar cancelado'
+                        });
+                    }
+                }
+
+                if (APP.config.reglas.giroU && st.vel > 10) {
+                    const dif = difAngulo(st.curso || 0, s.rumbo);
+                    if (dif > APP.config.giroGrados) {
+                        if (!R.rumboOpDesde) R.rumboOpDesde = Date.now() / 1000;
+                        const m = (Date.now() / 1000 - R.rumboOpDesde) / 60;
+                        if (m >= APP.config.giroMin) {
+                            pushAlert({
+                                regla: 'giroU', sev: 'medio', clave, eco: info.eco, soloHorario: true,
+                                titulo: 'GIRO EN U · ' + etq,
+                                detalle: 'rumbo opuesto a la ruta (' + Math.round(dif) + ' grados)',
+                                hablar: 'La unidad ' + etq + ' hizo un giro en U'
+                            });
+                        }
+                    } else {
+                        R.rumboOpDesde = null;
+                    }
+                }
+            }
+        }
+
         return R;
     }
 
@@ -791,6 +1239,7 @@
                 if (!shouldWatch(u)) continue;
                 const info = parseUnitName(u);
                 const st = unitState(u);
+                registrarTraza(info, st);
                 const prev = APP.memo[info.clave];
                 const ctx = {
                     ubicaciones: ubicaciones,
@@ -1536,6 +1985,7 @@
             '<button class="tab activo" data-tab="dash">' + ICO.dashboard + '<span class="contador" id="hjp-c-on">0</span></button>' +
             '<button class="tab" data-tab="unidades">' + ICO.panel + '<span class="contador" id="hjp-c-tot">0</span></button>' +
             '<button class="tab" data-tab="alertas">' + ICO.alertas + '<span class="contador" id="hjp-c-al">0</span></button>' +
+            '<button class="tab" data-tab="rutas">' + ICO.destino + '<span class="contador" id="hjp-c-ru">0</span></button>' +
             '<button class="tab" data-tab="geocercas">' + ICO.geocercas + '<span class="contador" id="hjp-c-zn">0</span></button>' +
             '</div>' +
             '<div class="tools" id="hjp-tools">' +
@@ -1588,6 +2038,9 @@
             '</div>' +
             '<div id="hjp-lista-alertas"></div>' +
             '</div>' +
+            '<div class="tabla" id="hjp-wrap-rutas" style="display:none">' +
+            '<div id="hjp-lista-rutas"></div>' +
+            '</div>' +
             '<div class="tabla" id="hjp-wrap-geocercas" style="display:none">' +
             '<table class="zone"><thead><tr><th>Geocerca</th><th>Dentro</th></tr></thead>' +
             '<tbody id="hjp-body-zonas"></tbody></table>' +
@@ -1631,6 +2084,7 @@
             '<button class="cfg-tab" data-cfg="avisos">Avisos</button>' +
             '<button class="cfg-tab" data-cfg="visual">Visual</button>' +
             '<button class="cfg-tab" data-cfg="ventanas">Ventanas</button>' +
+            '<button class="cfg-tab" data-cfg="rutas">Rutas</button>' +
             '<button class="cfg-tab" data-cfg="avanzado">Avanzado</button>' +
             '</div>' +
             '<div class="cfg-body" id="hjp-cfg-body">' +
@@ -1724,6 +2178,23 @@
             numRow('c-verif-seg', 'Revisar cada (seg)') +
             '<h4>Tamano del panel</h4>' +
             '<button class="accbtn" id="hjp-reset-panel" style="width:100%">' + ICO.colapsar + ' Restablecer tamano</button>' +
+            '</div>' +
+            '<div class="cfg-pane" data-cfg="rutas" style="display:none">' +
+            '<h4>Rutas y OpenStreetMap</h4>' +
+            checkRow('c-osrm', 'Calcular rutas con OSRM (OpenStreetMap)') +
+            checkRow('c-overpass', 'Permitir A* sobre datos OSM (Overpass, experimental)') +
+            checkRow('c-trazado', 'Registrar trazado del recorrido') +
+            numRow('c-trazado-max', 'Puntos por traza') +
+            '<h4>Alertas de ruta</h4>' +
+            checkRow('c-r-desvio', 'Desvio de ruta') +
+            numRow('c-desvio-m', 'Desvio mayor a (m)') +
+            numRow('c-desvio-min', 'Desvio sostenido (min)') +
+            checkRow('c-r-retorno', 'Retorno / viaje cancelado') +
+            numRow('c-retorno-m', 'Radio de origen (m)') +
+            numRow('c-retorno-pct', 'Retroceso minimo (%)') +
+            checkRow('c-r-giro', 'Giro en U') +
+            numRow('c-giro-grados', 'Angulo de giro (grados)') +
+            numRow('c-giro-min', 'Giro sostenido (min)') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Perfiles de configuracion</h4>' +
@@ -1871,7 +2342,7 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
-        const ids = ['dash', 'unidades', 'alertas', 'geocercas'];
+        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'geocercas'];
         ids.forEach((n) => {
             const el = byId('hjp-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
@@ -1882,6 +2353,7 @@
         if (name === 'dash') paintKPI();
         else if (name === 'unidades') paintTabla();
         else if (name === 'alertas') paintAlertas();
+        else if (name === 'rutas') paintRutas();
         else if (name === 'geocercas') paintGeocercas();
         paintCounters();
         paintStateBadge();
@@ -1899,10 +2371,12 @@
         const cOn = byId('hjp-c-on');
         const cTot = byId('hjp-c-tot');
         const cAl = byId('hjp-c-al');
+        const cRu = byId('hjp-c-ru');
         const cZn = byId('hjp-c-zn');
         if (cOn) cOn.textContent = on;
         if (cTot) cTot.textContent = watched.length;
         if (cAl) cAl.textContent = APP.historial.length;
+        if (cRu) cRu.textContent = Object.keys(APP.rutas).length;
         if (cZn) cZn.textContent = APP.zonas.length;
     }
     function paintStateBadge() {
@@ -2111,12 +2585,62 @@
         }
         body.innerHTML = rows.join('') || '<tr><td colspan="2" class="vacio">' + LANG.sinCoin + '</td></tr>';
     }
+    function paintRutas() {
+        const cont = byId('hjp-lista-rutas');
+        if (!cont) return;
+        const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const filas = watched.filter((x) => rutaDe(x.info));
+        const sinUnidad = Object.keys(APP.rutas).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
+        if (!filas.length && !sinUnidad.length) {
+            cont.innerHTML = '<div class="vacio" style="padding:18px;text-align:center;color:var(--hjp-fg-dim)">' +
+                'Sin rutas planificadas. Usa el menú contextual de una unidad (clic derecho en Unidades) para planear una ruta con OpenStreetMap (OSRM o A*).</div>';
+            return;
+        }
+        const tarjeta = (info, st) => {
+            const eco = info.clave;
+            const r = rutaDe(info);
+            const s = (st && st.online && st.lat != null && r) ? snapRuta(st.lat, st.lon, r) : null;
+            const desviado = !!(s && s.dist > APP.config.desvioM);
+            const llego = !!(s && s.progreso >= 0.95);
+            const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
+            const color = llego ? 'var(--hjp-ok-fg)' : (desviado ? 'var(--hjp-bad-fg)' : 'var(--hjp-accent-2)');
+            const dest = r.destinoTexto || (r.destino.lat.toFixed(4) + ',' + r.destino.lon.toFixed(4));
+            return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
+                '<span class="ico" style="color:' + color + '">' + ICO.destino + '</span>' +
+                '<div class="cuerpo"><b>' + esc(eco || info.nombre) + ' · ' + est + '</b>' +
+                '<span>' + esc(dest) + ' · ' + Math.round(r.total / 1000) + ' km · ' + esc(r.modo || '') + '</span>' +
+                '<div class="meta">' +
+                '<span class="regla">' + (s ? 'progreso ' + Math.round(s.progreso * 100) + '%' : 'sin datos') + '</span>' +
+                (s ? '<span>' + Math.round(s.dist) + ' m de la ruta</span>' : '') +
+                (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min ETA</span>' : '') +
+                '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
+                '</div></div>' +
+                '<button class="mini hjp-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON">' + ICO.exportar + '</button>' +
+                '<button class="mini hjp-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON">' + ICO.descargar + '</button>' +
+                '<button class="mini hjp-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular">' + ICO.refrescar + '</button>' +
+                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta">✕</button>' +
+                '</div>';
+        };
+        let html = filas.map((x) => tarjeta(x.info, x.st)).join('');
+        sinUnidad.forEach((eco) => {
+            const r = APP.rutas[eco];
+            if (!r) return;
+            html += '<div class="alerta" style="border-left:4px solid var(--hjp-fg-mute);opacity:.75">' +
+                '<span class="ico">' + ICO.destino + '</span>' +
+                '<div class="cuerpo"><b>' + esc(eco) + ' · FUERA DE VIGILANCIA</b>' +
+                '<span>' + esc(r.destinoTexto || '') + ' · ' + Math.round(r.total / 1000) + ' km</span></div>' +
+                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta">✕</button>' +
+                '</div>';
+        });
+        cont.innerHTML = html;
+    }
     function paintPanel() { setTab(APP.tab); }
 
     setInterval(() => {
         if (panelEl.style.display === 'none') return;
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();
+        if (APP.tab === 'rutas') paintRutas();
         if (APP.tab === 'geocercas') paintGeocercas();
         byId('hjp-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
@@ -2211,10 +2735,10 @@
     }
     function exportConfig() {
         const data = {
-            version: 5, ts: Date.now(),
+            version: 6, ts: Date.now(),
             config: APP.config, barra: APP.barra,
             seleccion: Array.from(APP.seleccion), dismissed: Array.from(APP.dismissed),
-            watchMap: APP.watchMap, limites: APP.limites,
+            watchMap: APP.watchMap, limites: APP.limites, rutas: APP.rutas,
             panelPos: APP.panelPos, panelSize: APP.panelSize
         };
         const a = makeEl('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })) });
@@ -2241,6 +2765,7 @@
                     if (Array.isArray(d.dismissed)) { APP.dismissed = new Set(d.dismissed); writeJSON(LS.dismissed, Array.from(APP.dismissed)); }
                     if (d.watchMap && typeof d.watchMap === 'object') { APP.watchMap = d.watchMap; writeJSON(LS.watch, APP.watchMap); }
                     if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeJSON(LS.limites, APP.limites); }
+                    if (d.rutas && typeof d.rutas === 'object') { APP.rutas = d.rutas; guardarRutas(); }
                     if (d.panelPos) { APP.panelPos = d.panelPos; writeJSON(LS.panelpos, APP.panelPos); }
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
                     applyBar(); applyTheme(); placePanel();
@@ -2460,6 +2985,22 @@
         byId('hjp-csv').addEventListener('click', exportUnits);
         byId('hjp-csv-al').addEventListener('click', exportAlertas);
         byId('hjp-informe').addEventListener('click', exportInforme);
+        const listaRutasEl = byId('hjp-lista-rutas');
+        if (listaRutasEl) {
+            listaRutasEl.addEventListener('click', (e) => {
+                const b = e.target.closest && e.target.closest('button');
+                if (!b) return;
+                const eco = b.dataset.eco;
+                if (b.classList.contains('hjp-ruta-del')) eliminarRuta(eco);
+                else if (b.classList.contains('hjp-ruta-geo')) exportRutaGeoJSON(eco);
+                else if (b.classList.contains('hjp-traza-geo')) exportTraza(eco);
+                else if (b.classList.contains('hjp-ruta-calc')) {
+                    const it = unitByEco(eco);
+                    const r = it ? rutaDe(it.info) : APP.rutas[eco];
+                    if (r) planearRuta(eco, r.destinoTexto || (r.destino.lat + ',' + r.destino.lon), null, r.modo);
+                }
+            });
+        }
         byId('hjp-captura').addEventListener('click', captureSelection);
         byId('hjp-verifica').addEventListener('click', () => { verifyWindows(false); });
         byId('hjp-sel-all').addEventListener('click', () => { selectAllVisible(); });
@@ -2563,6 +3104,12 @@
                 { id: 'lista', label: (APP.watchMap[eco] !== undefined ? '⚑ Quitar de lista vigilada' : '⚑ Anadir a lista vigilada') },
                 { id: 'limite', label: '▸ Limite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
+                { id: 'ruta-plan', label: '⌖ Planear ruta (OSRM)' },
+                { id: 'ruta-astar', label: '⌖ Planear ruta (A*)' },
+                { id: 'ruta-geo', label: '⎘ Exportar ruta GeoJSON' },
+                { id: 'ruta-del', label: '✕ Eliminar ruta' },
+                { id: 'traza-geo', label: '⎘ Exportar traza GeoJSON' },
+                { sep: 1 },
                 { id: 'mapa-osm', label: '⌖ Ver en OpenStreetMap' },
                 { id: 'mapa-google', label: '⌖ Ver en Google Maps' },
                 { id: 'copy-eco', label: '⎘ Copiar economico' },
@@ -2593,7 +3140,17 @@
                     setLimite(eco, val);
                     advice('Limite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }
-            } else if (acc === 'mapa-osm') openMap(eco, 'osm');
+            } else if (acc === 'ruta-plan' || acc === 'ruta-astar') {
+                if (acc === 'ruta-astar' && !APP.config.overpass) {
+                    advice('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
+                } else {
+                    const dest = window.prompt('Destino (lugar, direccion o "lat,lon"):', '');
+                    if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
+                }
+            } else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
+            else if (acc === 'ruta-del') { if (eliminarRuta(eco)) advice('Ruta eliminada', eco); else advice('Sin ruta', eco); }
+            else if (acc === 'traza-geo') exportTraza(eco);
+            else if (acc === 'mapa-osm') openMap(eco, 'osm');
             else if (acc === 'mapa-google') openMap(eco, 'google');
             else if (acc === 'copy-eco') { copyToClipboard(eco); advice('Copiado', eco); }
             else if (acc === 'copy-placa') {
@@ -2661,6 +3218,19 @@
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
+            g('c-r-desvio').checked = !!APP.config.reglas.desvio;
+            g('c-desvio-m').value = APP.config.desvioM;
+            g('c-desvio-min').value = APP.config.desvioMin;
+            g('c-r-retorno').checked = !!APP.config.reglas.retorno;
+            g('c-retorno-m').value = APP.config.retornoM;
+            g('c-retorno-pct').value = APP.config.retornoPct;
+            g('c-r-giro').checked = !!APP.config.reglas.giroU;
+            g('c-giro-grados').value = APP.config.giroGrados;
+            g('c-giro-min').value = APP.config.giroMin;
+            g('c-osrm').checked = !!APP.config.osrm;
+            g('c-overpass').checked = !!APP.config.overpass;
+            g('c-trazado').checked = !!APP.config.trazado;
+            g('c-trazado-max').value = APP.config.trazadoMax;
             g('c-hor-on').checked = !!APP.config.horario.on;
             g('c-hor-a').value = APP.config.horario.desde;
             g('c-hor-b').value = APP.config.horario.hasta;
@@ -2717,6 +3287,19 @@
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
+            cf.reglas.desvio = g('c-r-desvio').checked;
+            cf.desvioM = Math.max(30, isoNum(g('c-desvio-m').value, cf.desvioM));
+            cf.desvioMin = Math.max(1, isoNum(g('c-desvio-min').value, cf.desvioMin));
+            cf.reglas.retorno = g('c-r-retorno').checked;
+            cf.retornoM = Math.max(50, isoNum(g('c-retorno-m').value, cf.retornoM));
+            cf.retornoPct = clamp(isoNum(g('c-retorno-pct').value, cf.retornoPct), 5, 90);
+            cf.reglas.giroU = g('c-r-giro').checked;
+            cf.giroGrados = clamp(isoNum(g('c-giro-grados').value, cf.giroGrados), 90, 180);
+            cf.giroMin = Math.max(1, isoNum(g('c-giro-min').value, cf.giroMin));
+            cf.osrm = g('c-osrm').checked;
+            cf.overpass = g('c-overpass').checked;
+            cf.trazado = g('c-trazado').checked;
+            cf.trazadoMax = Math.max(50, isoNum(g('c-trazado-max').value, cf.trazadoMax));
             cf.horario.on = g('c-hor-on').checked;
             cf.horario.desde = g('c-hor-a').value || DEFAULTS.horario.desde;
             cf.horario.hasta = g('c-hor-b').value || DEFAULTS.horario.hasta;
