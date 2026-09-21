@@ -297,7 +297,26 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 - **Ventanas**: modo del panel, lado y ancho de la barra lateral, botones de la
   barra, orientacion, verificacion automatica y tamano del panel.
 - **Rutas**: servicios de OpenStreetMap, trazado y alertas de ruta.
-- **Avanzado**: perfiles de configuracion, limpiar bitacora y resets.
+- **Avanzado**: versiones y busqueda de actualizaciones, perfiles de
+  configuracion, limpiar bitacora y resets.
+
+## Actualizaciones
+
+El script comprueba la cabecera `@version` del repositorio al iniciar y cada
+30 minutos. Cuando hay una version nueva:
+
+- Aparece un indicador en la cabecera del panel con un icono de campana de
+  actualizacion. Su titulo indica la version disponible.
+- Al hacer clic se abre la URL de instalacion en una pestana nueva para que
+  Tampermonkey o Violentmonkey actualice el script.
+- Tras la actualizacion el indicador cambia a un icono de recarga y muestra
+  el mensaje "recarga para aplicar". Al pulsar recarga la pagina.
+- Tambien puedes comprobar manualmente desde Ajustes, pestana **Avanzado**,
+  con el boton **Buscar actualizaciones**, que muestra la version instalada,
+  la ultima revision y si hay una nueva disponible.
+
+Las tarjetas de avisos (toasts) aparecen en la esquina inferior derecha para
+no estorbar la cabecera.
 
 ## Preguntas frecuentes
 
