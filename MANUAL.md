@@ -62,7 +62,10 @@ horizontal o vertical.
 
 - **Automatizar Unidades**: abre la lista de unidades. Desde ahi defines que
   unidades vigilar y lanza la apertura y el acomodo automatico de sus ventanas.
-- **Panel API**: muestra u oculta el panel de control.
+- **Panel**: muestra u oculta el panel de control. Funciona en modo flotante y
+  en barra lateral.
+- **Flotante / Lateral**: alterna entre los dos modos del panel. Su icono y
+  etiqueta reflejan el modo actual.
 - **Cerrar Todas**: cierra todas las ventanas de unidades abiertas.
 - **Plegar**: oculta los botones y deja solo la barra; util si estorba.
 - El punto de color indica el estado general: verde normal, ambar atencion,
@@ -83,10 +86,17 @@ El panel puede mostrarse de dos formas:
 
 Para cambiar de modo:
 
-- Pulsa el boton de expandir/contraer en la cabecera del panel, o
+- Pulsa el boton **Flotante / Lateral** de la barra superior (siempre
+  visible), o
 - Usa **Alt + L**, o
 - Ve a Ajustes, pestana **Ventanas**, y elige **Modo** (flotante o barra
   lateral), **Lado** (derecha o izquierda) y **Ancho lateral (px)**.
+
+Para mostrar u ocultar el panel (ambos modos) usa el boton **Panel** de la
+barra, el icono de campana con tachado del menu **No molestar** o el atajo
+**Alt + P**. En modo barra lateral, al ocultarla queda una pequena pestana
+vertical en el borde (el **rail**) que la trae de vuelta con un clic y una
+animacion suave.
 
 La barra de botones se mantiene por encima del panel lateral para que siempre
 puedas cambiarlo o cerrarlo.
@@ -162,7 +172,8 @@ Notas:
 - **Severidad minima**: puedes hacer que solo las alertas de cierta gravedad
   generen tarjeta/voz/pitido.
 - **No molestar**: pausa voz, pitido y tarjetas durante 30 minutos. El boton
-  esta en la cabecera del panel; el estado se refleja en el punto de la barra.
+  (campana tachada) esta en la cabecera del panel; el estado se refleja en el
+  punto de la barra.
 
 ## Rutas con OpenStreetMap
 
