@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.7.1
+// @version      4.8.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.7.1';
+    const VER = '4.8.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -163,6 +163,9 @@
         panelMode: 'flotante',
         panelLado: 'derecha',
         panelAncho: 420,
+        panelVisible: false,
+        ocultarAlClicFuera: true,
+        confirmarCierre: true,
         osrm: true,
         overpass: false,
         desvioM: 250,
@@ -292,6 +295,7 @@
         unlocked: false,
         consultaRestante: 0
     };
+    APP.panelHidden = !APP.config.panelVisible;
     APP.barra.botones = Object.assign({ main: true, panel: true, close: true }, APP.barra.botones || {});
     if (!Array.isArray(APP.kpi.online)) APP.kpi.online = [];
     if (!Array.isArray(APP.kpi.offline)) APP.kpi.offline = [];
@@ -1594,6 +1598,35 @@
             b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
         });
     }
+    // Cierre seguro en dos pasos: el primer clic "arma" el boton y el segundo
+    // ejecuta el cierre. Asi un clic accidental no cierra todas las ventanas.
+    function cerrarTodasSeguro(btn) {
+        if (!APP.config.confirmarCierre) { closeAllWindows(); advice('Ventanas cerradas', ''); return; }
+        if (btn && btn.dataset.armado === '1') {
+            delete btn.dataset.armado;
+            clearTimeout(btn._tArmado);
+            restaurarBotonCerrar(btn);
+            closeAllWindows();
+            advice('Ventanas cerradas', 'Se cerraron las ventanas de unidades');
+            return;
+        }
+        if (!btn) { closeAllWindows(); return; }
+        if (btn.dataset.armado !== '1') btn.dataset.prevHtml = btn.innerHTML;
+        btn.dataset.armado = '1';
+        btn.innerHTML = '<span class="hjp-mi">' + ICO.alto + '</span> Confirmar';
+        btn.classList.add('armado');
+        btn.title = 'Pulsa otra vez para cerrar todas las ventanas';
+        clearTimeout(btn._tArmado);
+        btn._tArmado = setTimeout(() => { delete btn.dataset.armado; restaurarBotonCerrar(btn); }, 4000);
+    }
+    function restaurarBotonCerrar(btn) {
+        if (!btn) return;
+        btn.classList.remove('armado');
+        if (btn.dataset.prevHtml) btn.innerHTML = btn.dataset.prevHtml;
+        if (btn.id === 'hjp-btn-close') btn.title = 'Cerrar todas las ventanas de unidades';
+        if (btn.id === 'hjp-sb-close') btn.title = 'Cerrar todas las ventanas de unidades';
+        delete btn.dataset.prevHtml;
+    }
     function aplicarContorno(cont, color) {
         if (!cont) return;
         if (!color) { cont.style.border = ''; cont.style.boxShadow = ''; return; }
@@ -1917,6 +1950,8 @@
             "#hjp-btn-main,#hjp-btn-panel,#hjp-btn-modo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent}\n" +
             "#hjp-btn-close{background:var(--hjp-bg-strong);color:var(--hjp-fg-dim)}\n" +
             "#hjp-btn-update{background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;border-color:transparent;box-shadow:0 0 0 0 rgba(67,160,71,.5);animation:hjpPulseGreen 2s infinite}\n" +
+            "#hjp-panel .hjp-tile.armado,#hjp-barra .hjp-btn.armado{background:linear-gradient(135deg,#b71c1c,#e53935)!important;color:#fff!important;border-color:transparent!important;animation:hjpArmPulse .7s ease infinite}\n" +
+            "@keyframes hjpArmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}\n" +
             "@keyframes hjpPulseGreen{0%{box-shadow:0 0 0 0 rgba(67,160,71,.55)}70%{box-shadow:0 0 0 9px rgba(67,160,71,0)}100%{box-shadow:0 0 0 0 rgba(67,160,71,0)}}\n" +
             "#hjp-panel .hjp-iconbtn.warn{color:var(--hjp-warn)}\n" +
             "#hjp-panel{position:fixed;left:10px;bottom:10px;width:470px;height:440px;display:none;flex-direction:column;\n" +
@@ -2383,6 +2418,9 @@
             '<option value="izquierda">Izquierda</option>' +
             '</select></label>' +
             numRow('c-panel-ancho', 'Ancho lateral (px)') +
+            checkRow('c-panel-clicfuera', 'Ocultar la barra lateral al hacer clic fuera') +
+            checkRow('c-confirmar-cierre', 'Pedir confirmacion al cerrar todas las ventanas') +
+            '<p style="font-size:11px;color:var(--hjp-fg-dim);margin:2px 0 0">El panel recuerda el modo (flotante o lateral) y si estaba abierto.</p>' +
             '<h4>Barra de botones</h4>' +
             '<div class="row-grid">' +
             checkRow('c-b-main', 'Automatizar') +
@@ -2570,6 +2608,7 @@
     function toggleSidebar() {
         APP.config.panelMode = esLateral() ? 'flotante' : 'lateral';
         APP.panelHidden = false;
+        APP.config.panelVisible = true;
         panelEl.style.display = 'flex';
         aplicarModoPanel();
         actualizarBotonesModo();
@@ -2591,6 +2630,7 @@
     }
     function togglePanel() {
         APP.panelHidden = !APP.panelHidden;
+        APP.config.panelVisible = !APP.panelHidden;
         if (esLateral()) {
             panelEl.style.display = 'flex';
         } else {
@@ -2602,6 +2642,14 @@
         const t = byId('hjp-btn-panel');
         if (t) t.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
         if (APP.panelHidden) advice('Panel', 'oculto · usa el boton de la barra o el rail para mostrarlo');
+        actualizarBotonesModo();
+    }
+    // Oculta la barra lateral sin avisos (util para el clic fuera del panel).
+    function ocultarSidebar() {
+        if (!esLateral() || APP.panelHidden) return;
+        APP.panelHidden = true;
+        APP.config.panelVisible = false;
+        aplicarModoPanel();
         actualizarBotonesModo();
     }
     function aplicarRail() {
@@ -3470,7 +3518,7 @@
             await execList(ecos);
             if (ta) ta.value = '';
         });
-        closeBtn.addEventListener('click', closeAllWindows);
+        closeBtn.addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
         panelBtn.addEventListener('click', () => {
             togglePanel();
             paintPanel();
@@ -3478,9 +3526,19 @@
         modoBtn.addEventListener('click', toggleSidebar);
         if (railEl) railEl.addEventListener('click', togglePanel);
         byId('hjp-sb-main').addEventListener('click', () => mainBtn.click());
-        byId('hjp-sb-close').addEventListener('click', () => closeBtn.click());
+        byId('hjp-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
         byId('hjp-sb-modo').addEventListener('click', toggleSidebar);
         byId('hjp-sb-panel').addEventListener('click', togglePanel);
+        // Clic fuera del panel en modo barra lateral: se oculta.
+        document.addEventListener('pointerdown', (e) => {
+            if (!APP.config.ocultarAlClicFuera) return;
+            if (e.button !== 0) return;
+            if (!esLateral() || APP.panelHidden) return;
+            const t = e.target;
+            if (!t || !t.closest) return;
+            if (esUIPropia(t)) return;
+            ocultarSidebar();
+        }, true);
         byId('hjp-cerrar-panel').addEventListener('click', () => { if (!APP.panelHidden) togglePanel(); });
         byId('hjp-collapse').addEventListener('click', togglePanel);
         byId('hjp-ayuda-btn').addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
@@ -3721,6 +3779,8 @@
             g('c-contornos').checked = !!APP.config.contornos;
             g('c-contorno-horas').value = APP.config.contornoHoras;
             g('c-panel-modo').value = APP.config.panelMode || 'flotante';
+            g('c-panel-clicfuera').checked = !!APP.config.ocultarAlClicFuera;
+            g('c-confirmar-cierre').checked = !!APP.config.confirmarCierre;
             g('c-panel-lado').value = APP.config.panelLado || 'derecha';
             g('c-panel-ancho').value = APP.config.panelAncho || 420;
             g('c-b-main').checked = !!APP.barra.botones.main;
@@ -3827,6 +3887,8 @@
             cf.panelMode = g('c-panel-modo').value || 'flotante';
             cf.panelLado = g('c-panel-lado').value || 'derecha';
             cf.panelAncho = clamp(isoNum(g('c-panel-ancho').value, cf.panelAncho), 360, 900);
+            cf.ocultarAlClicFuera = g('c-panel-clicfuera').checked;
+            cf.confirmarCierre = g('c-confirmar-cierre').checked;
             APP.barra.botones.main = g('c-b-main').checked;
             APP.barra.botones.panel = g('c-b-panel').checked;
             APP.barra.botones.close = g('c-b-close').checked;

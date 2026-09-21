@@ -66,7 +66,10 @@ horizontal o vertical.
   en barra lateral.
 - **Flotante / Lateral**: alterna entre los dos modos del panel. Su icono y
   etiqueta reflejan el modo actual.
-- **Cerrar Todas**: cierra todas las ventanas de unidades abiertas.
+- **Cerrar Todas**: cierra todas las ventanas de unidades abiertas. Para evitar
+  cierres accidentales, el primer clic arma el boton (se pone rojo y dice
+  "Confirmar") y el segundo clic cierra; si no confirmas en 4 segundos se
+  desarma. Se puede desactivar en Ajustes, pestana Ventanas.
 - **Plegar**: oculta los botones y deja solo la barra; util si estorba.
 - El punto de color indica el estado general: verde normal, ambar atencion,
   rojo alertas criticas recientes, gris con borde punteado si esta activo
@@ -93,13 +96,19 @@ Para cambiar de modo:
   lateral), **Lado** (derecha o izquierda) y **Ancho lateral (px)**.
 
 Para mostrar u ocultar el panel (ambos modos) usa el boton **Panel** de la
-barra, el icono de campana con tachado del menu **No molestar** o el atajo
-**Alt + P**. En modo barra lateral, al ocultarla queda una pequena pestana
-vertical en el borde (el **rail**) que la trae de vuelta con un clic y una
-animacion suave.
+barra, el boton **Ocultar** de la barra lateral, el icono de campana con tachado
+del menu **No molestar** o el atajo **Alt + P**. En modo barra lateral, al
+ocultarla queda una pequena pestana vertical en el borde (el **rail**) que la
+trae de vuelta con un clic y una animacion suave.
 
-La barra de botones se mantiene por encima del panel lateral para que siempre
-puedas cambiarlo o cerrarlo.
+Ademas, en modo barra lateral, **al hacer clic fuera del panel** la barra se
+oculta automaticamente y deja el rail visible. Puedes desactivar este
+comportamiento en Ajustes, pestana **Ventanas** ("Ocultar la barra lateral al
+hacer clic fuera").
+
+El panel **recuerda como lo dejaste**: el modo (flotante o barra lateral), el
+lado, el ancho y si estaba abierto o cerrado. Al recargar la pagina se restaura
+en ese estado.
 
 ## Las cinco pestanas
 
@@ -307,7 +316,8 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   duracion de tarjetas, severidad minima, horario y editor de la lista.
 - **Visual**: tema (oscuro, claro, automatico), densidad, color de acento y
   mostrar coordenadas.
-- **Ventanas**: modo del panel, lado y ancho de la barra lateral, botones de la
+- **Ventanas**: modo del panel, lado y ancho de la barra lateral, ocultar al
+  hacer clic fuera, confirmacion al cerrar todas las ventanas, botones de la
   barra, orientacion, verificacion automatica y tamano del panel.
 - **Rutas**: servicios de OpenStreetMap, trazado y alertas de ruta.
 - **Avanzado**: versiones y busqueda de actualizaciones, perfiles de
