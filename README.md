@@ -14,7 +14,7 @@ que ya carga tu sesión de Wialon y te avisa de todo lo importante.</p>
 </p>
 
 <p>
-<img src="https://img.shields.io/badge/version-4.3.1-2563eb?style=flat-square" alt="version">
+<img src="https://img.shields.io/badge/version-4.4.0-2563eb?style=flat-square" alt="version">
 <img src="https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=flat-square" alt="Tampermonkey">
 <img src="https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=flat-square" alt="Violentmonkey">
 <img src="https://img.shields.io/badge/navegadores-Chrome%20%7C%20Edge%20%7C%20Firefox%20%7C%20Opera-2ea44f?style=flat-square" alt="navegadores">

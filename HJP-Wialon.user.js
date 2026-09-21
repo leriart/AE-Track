@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.3.1
+// @version      4.4.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -32,21 +32,36 @@
     'use strict';
 
     /* ====================== ICONOS (UAX#39, sin color emoji) ====================== */
-    const ICO = Object.freeze({
-        moviendo: '◉', detenida: '◎', offline: '✕', online: '●', sinluz: '○',
-        critico: '▲', alto: '△', medio: '◆', bajo: '◇', ok: '✓',
-        panel: '▦', dashboard: '▤', alertas: '⚑', automatizar: '▷', cerrar: '✕',
-        refrescar: '↻', ajustes: '⚙\uFE0E', descargar: '⇩', filtro: '⌕', copiar: '⎘',
-        zona: '⌖', tiempo: '⧗', velocidad: '▸', base: '⌂',
-        entra: '↦', sale: '↤', destino: '✓', regreso: '⇄',
-        reconecta: '↻', desconecta: '⊘', info: 'ⓘ', reloj: '⧗',
-        senal: '▂▄▆█', silencio: '◇', sonido: '◆', bandera: '⚑',
-        geocercas: '⌖', subir: '▴', bajar: '▾',
-        luna: '☾', sol: '☼', limpiar: '⌫',
-        expandir: '⤢', colapsar: '⤡', ayuda: '?', importar: '↥', exportar: '↧',
-        silencioTotal: '⤬',
-        fullscreen: '⤢',
-        fullscreenOff: '⤡'
+    const MAT = Object.freeze({
+        moviendo: 'E531', detenida: 'E047', offline: 'E1CE', online: 'E1B3', sinluz: 'E1CE',
+        critico: 'E000', alto: 'E002', medio: 'E7EE', bajo: 'E5DB', ok: 'E86C',
+        panel: 'E8EC', dashboard: 'E871', alertas: 'E002', automatizar: 'E037', cerrar: 'E5CD',
+        refrescar: 'E5D5', ajustes: 'E8B8', descargar: 'E2C4', filtro: 'E6B0', copiar: 'E14D',
+        zona: 'E55F', tiempo: 'E889', velocidad: 'E9E4', base: 'E88A',
+        entra: 'E5C8', sale: 'E5C4', destino: 'E153', regreso: 'E8D5',
+        reconecta: 'E1E2', desconecta: 'E1E1', info: 'E88E', reloj: 'E8B5',
+        senal: 'E202', silencio: 'E7F6', sonido: 'E7F4', bandera: 'E153',
+        geocercas: 'E55B', subir: 'E316', bajar: 'E313',
+        luna: 'E51C', sol: 'E518', limpiar: 'E14A',
+        expandir: 'E5D0', colapsar: 'E5D1', ayuda: 'E887', importar: 'E2C6', exportar: 'E2C4',
+        silencioTotal: 'E644',
+        fullscreen: 'E5D0',
+        fullscreenOff: 'E5D1',
+        verif: 'E834',
+        captura: 'E15F',
+        verifica: 'E14E',
+        selAll: 'E834',
+        selClear: 'E14A',
+        arrowLeft: 'E314',
+        arrowRight: 'E315'
+    });
+    function ico(name) {
+        const h = MAT[name];
+        return h ? String.fromCharCode(parseInt(h, 16)) : '?';
+    }
+    const ICO = new Proxy({}, {
+        get(_, k) { return ico(k); },
+        ownKeys() { return Object.keys(MAT); }
     });
 
     const COL = Object.freeze({
@@ -248,6 +263,7 @@
         filtSever: 'todas',
         filtro: '',
         filtEstado: readJSON(LS.filtEstado, 'todas'),
+        panelHidden: true,
         unlocked: false,
         consultaRestante: 0
     };
@@ -951,7 +967,7 @@
         card.style.borderLeftColor = COL[item.sev] || '#555';
         const color = COL[item.sev] || '#777';
         card.innerHTML =
-            '<span class="ico" style="color:' + color + '">' + esc(item.icono) + '</span>' +
+            '<span class="ico hjp-mi" style="color:' + color + '">' + item.icono + '</span>' +
             '<div class="cuerpo"><b>' + esc(item.titulo) + '</b>' +
             (item.detalle ? '<span>' + esc(item.detalle) + '</span>' : '') +
             '</div><span class="hora">' + new Date(item.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
@@ -1758,29 +1774,33 @@
     function injectCSS() {
         const css =
             ":root{\n" +
-            "  --hjp-bg:#1a1c20; --hjp-bg-soft:#25282e; --hjp-bg-strong:#2c2f36;\n" +
-            "  --hjp-border:#33373f; --hjp-border-soft:#2a2d33;\n" +
-            "  --hjp-fg:#e6e6e6; --hjp-fg-dim:#8a92a0; --hjp-fg-mute:#6f7783;\n" +
-            "  --hjp-accent:#1565c0; --hjp-accent-2:#42a5f5;\n" +
-            "  --hjp-ok:#2e7d32; --hjp-ok-fg:#a5d6a7; --hjp-ok-bg:#1b3320;\n" +
+            "  --hjp-bg:#1f2330; --hjp-bg-soft:#272d3c; --hjp-bg-strong:#313849;\n" +
+            "  --hjp-border:#3a4252; --hjp-border-soft:#2f3645;\n" +
+            "  --hjp-fg:#e8ecf3; --hjp-fg-dim:#9aa4b5; --hjp-fg-mute:#6f7888;\n" +
+            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44;\n" +
+            "  --hjp-ok:#43a047; --hjp-ok-fg:#a5d6a7; --hjp-ok-bg:#1b3320;\n" +
             "  --hjp-warn:#f9a825; --hjp-warn-fg:#ffe082; --hjp-warn-bg:#33270e;\n" +
-            "  --hjp-bad:#b71c1c; --hjp-bad-fg:#ef9a9a; --hjp-bad-bg:#2b1010;\n" +
-            "  --hjp-shadow:0 12px 34px rgba(0,0,0,.55);\n" +
+            "  --hjp-bad:#e53935; --hjp-bad-fg:#ef9a9a; --hjp-bad-bg:#2b1010;\n" +
+            "  --hjp-shadow:0 4px 14px rgba(0,0,0,.32);\n" +
+            "  --hjp-radius:8px;\n" +
+            "  --hjp-font:'Inter','Roboto','Segoe UI','Helvetica Neue',Arial,sans-serif;\n" +
+            "  --hjp-easing:cubic-bezier(.4,0,.2,1);\n" +
             "}\n" +
             "body[data-hjp-theme='claro']{\n" +
-            "  --hjp-bg:#ffffff; --hjp-bg-soft:#f4f5f7; --hjp-bg-strong:#e7e9ec;\n" +
-            "  --hjp-border:#d4d7de; --hjp-border-soft:#e7e9ec;\n" +
-            "  --hjp-fg:#1a1a1a; --hjp-fg-dim:#555b65; --hjp-fg-mute:#7c818b;\n" +
-            "  --hjp-ok-fg:#2e7d32; --hjp-ok-bg:#e8f3e9;\n" +
-            "  --hjp-warn-fg:#8d6b00; --hjp-warn-bg:#fff4d4;\n" +
-            "  --hjp-bad-fg:#b71c1c; --hjp-bad-bg:#fde2e2;\n" +
-            "  --hjp-shadow:0 8px 22px rgba(0,0,0,.18);\n" +
+            "  --hjp-bg:#f5f7fa; --hjp-bg-soft:#ffffff; --hjp-bg-strong:#eef2f7;\n" +
+            "  --hjp-border:#dfe4ec; --hjp-border-soft:#ebeef3;\n" +
+            "  --hjp-fg:#1d2433; --hjp-fg-dim:#5b6577; --hjp-fg-mute:#8993a3;\n" +
+            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44;\n" +
+            "  --hjp-ok:#2e7d32; --hjp-ok-fg:#1b5e20; --hjp-ok-bg:#e8f5e9;\n" +
+            "  --hjp-warn:#f9a825; --hjp-warn-fg:#8d6b00; --hjp-warn-bg:#fff4d4;\n" +
+            "  --hjp-bad:#c62828; --hjp-bad-fg:#b71c1c; --hjp-bad-bg:#fde2e2;\n" +
+            "  --hjp-shadow:0 2px 8px rgba(20,30,50,.10);\n" +
             "}\n" +
-            "#hjp-toasts{position:fixed;top:210px;right:15px;z-index:1000002;display:flex;flex-direction:column;gap:8px;width:330px;pointer-events:none}\n" +
+            "#hjp-toasts{position:fixed;top:210px;right:15px;z-index:1000002;display:flex;flex-direction:column;gap:8px;width:330px;pointer-events:none;transition:opacity .2s}\n" +
             ".hjp-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:9px;background:var(--hjp-bg-soft);color:var(--hjp-fg);\n" +
-            "  border-left:5px solid var(--hjp-fg-mute);border-radius:7px;padding:10px 11px;box-shadow:var(--hjp-shadow);\n" +
-            "  font:12.5px/1.35 system-ui,sans-serif;animation:hjpIn .25s ease}\n" +
-            ".hjp-toast.sale{opacity:0;transform:translateX(36px);transition:all .35s}\n" +
+            "  border-left:4px solid var(--hjp-accent);border-radius:var(--hjp-radius);padding:10px 12px;box-shadow:var(--hjp-shadow);\n" +
+            "  font:12.5px/1.35 var(--hjp-font);animation:hjpIn .28s var(--hjp-easing) both}\n" +
+            ".hjp-toast.sale{opacity:0;transform:translateX(40px);transition:all .35s var(--hjp-easing)}\n" +
             "@keyframes hjpIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}\n" +
             ".hjp-toast .ico{font-size:18px;line-height:1;width:18px;text-align:center}\n" +
             ".hjp-toast .cuerpo{display:flex;flex-direction:column;flex:1;min-width:0}\n" +
@@ -1790,26 +1810,40 @@
             ".hjp-toast .mini{background:transparent;border:none;color:var(--hjp-fg-mute);cursor:pointer;font-size:11px}\n" +
             "#hjp-barra{position:fixed;top:80px;right:15px;z-index:999999;display:flex;align-items:center;gap:6px;\n" +
             "  background:rgba(28,30,36,.94);border:1px solid var(--hjp-border);border-radius:10px;padding:5px;\n" +
-            "  box-shadow:var(--hjp-shadow);font:12px system-ui,sans-serif;user-select:none;touch-action:none;max-width:95vw}\n" +
+            "  box-shadow:var(--hjp-shadow);font:12px var(--hjp-font);user-select:none;touch-action:none;max-width:95vw}\n" +
             "#hjp-barra.vertical{flex-direction:column;align-items:stretch}\n" +
             "#hjp-barra .hjp-grip{cursor:grab;color:var(--hjp-fg-mute);padding:0 3px;font-size:15px;line-height:1;letter-spacing:-2px;user-select:none}\n" +
             "#hjp-barra .hjp-grip:active{cursor:grabbing}\n" +
             "#hjp-barra .hjp-btn{background:#33373f;color:#fff;border:none;border-radius:7px;padding:7px 11px;\n" +
-            "  cursor:pointer;font:12px system-ui,sans-serif;font-weight:bold;white-space:nowrap;transition:filter .12s,transform .08s}\n" +
+            "  cursor:pointer;font:12px var(--hjp-font);font-weight:bold;white-space:nowrap;transition:filter .12s,transform .08s}\n" +
             "#hjp-barra .hjp-btn:hover{filter:brightness(1.18)}\n" +
             "#hjp-barra .hjp-btn:active{transform:translateY(1px)}\n" +
             "#hjp-barra .hjp-fold{background:#22242a;color:#9aa2b1;padding:4px 9px}\n" +
             "#hjp-barra.plegada .hjp-btn:not(.hjp-fold){display:none}\n" +
-            "#hjp-btn-main{background:#d32f2f}\n" +
-            "#hjp-btn-panel{background:#1565c0}\n" +
-            "#hjp-btn-close{background:#37474f}\n" +
+            "#hjp-btn-main,#hjp-btn-panel,#hjp-btn-modo{background:#850D22}\n" +
+            "#hjp-btn-close{background:#5b6b7a}\n" +
             "#hjp-panel{position:fixed;left:10px;bottom:10px;width:470px;height:440px;display:none;flex-direction:column;\n" +
-            "  background:var(--hjp-bg);color:var(--hjp-fg);font:12.5px/1.4 system-ui,sans-serif;border:1px solid var(--hjp-border);border-radius:10px;\n" +
-            "  box-shadow:var(--hjp-shadow);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh}\n" +
+            "  background:var(--hjp-bg);color:var(--hjp-fg);font:12.5px/1.4 var(--hjp-font);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius);\n" +
+            "  box-shadow:var(--hjp-shadow);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh;\n" +
+            "  transition:transform .28s var(--hjp-easing),opacity .2s ease}\n" +
+            "#hjp-panel.visible{opacity:1}\n" +
             "#hjp-panel.lateral{left:auto;right:0;top:0;bottom:0;height:100vh;max-height:100vh;border-radius:0;resize:none;\n" +
-            "  box-shadow:-14px 0 34px rgba(0,0,0,.45);border-top:none;border-bottom:none;border-right:none}\n" +
-            "#hjp-panel.lateral.izquierda{left:0;right:auto;box-shadow:14px 0 34px rgba(0,0,0,.45);border-left:none;border-right:1px solid var(--hjp-border)}\n" +
+            "  box-shadow:-14px 0 34px rgba(0,0,0,.35);border-top:none;border-bottom:none;border-right:none;will-change:transform}\n" +
+            "#hjp-panel.lateral.izquierda{left:0;right:auto;box-shadow:14px 0 34px rgba(0,0,0,.35);border-left:none;border-right:1px solid var(--hjp-border)}\n" +
             "#hjp-panel.lateral header{cursor:default}\n" +
+            "#hjp-panel.lateral.oculto{transform:translateX(100%);opacity:0;pointer-events:none}\n" +
+            "#hjp-panel.lateral.izquierda.oculto{transform:translateX(-100%)}\n" +
+            "#hjp-panel.dragging{transition:none;opacity:1}\n" +
+            "#hjp-rail{position:fixed;top:50%;transform:translateY(-50%);width:32px;height:96px;background:var(--hjp-bg-soft);\n" +
+            "  border:1px solid var(--hjp-border);border-radius:16px;display:none;align-items:center;justify-content:center;\n" +
+            "  cursor:pointer;z-index:999999;box-shadow:var(--hjp-shadow);color:var(--hjp-accent-2);font:600 16px var(--hjp-font);\n" +
+            "  transition:transform .2s var(--hjp-easing),background .15s}\n" +
+            "#hjp-rail:hover{background:var(--hjp-bg-strong);transform:translateY(-50%) scale(1.05)}\n" +
+            "#hjp-rail.derecha{right:6px}\n" +
+            "#hjp-rail.izquierda{left:6px}\n" +
+            "#hjp-rail.mostrar{display:flex}\n" +
+            ".hjp-mi{font-family:'Material Icons','Material Symbols Outlined';font-weight:normal;font-style:normal;font-size:1.1em;line-height:1;vertical-align:-2px;display:inline-block;text-transform:none;letter-spacing:normal;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}\n" +
+            "#hjp-barra .hjp-btn .hjp-mi{font-size:1.05em;vertical-align:-2px;margin-right:1px}\n" +
             "#hjp-panel header{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--hjp-bg-soft);cursor:move;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap}\n" +
             "#hjp-panel header h3{min-width:110px}\n" +
             "#hjp-panel header h3{margin:0;font-size:13px;flex:1;letter-spacing:.2px}\n" +
@@ -1817,7 +1851,7 @@
             "#hjp-panel .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
             "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent);color:#fff;border-color:var(--hjp-accent-2)}\n" +
             "#hjp-panel .tabs{display:flex;background:var(--hjp-bg-soft);padding:0 4px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;border:none;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 system-ui;border-bottom:2px solid transparent;letter-spacing:.3px;transition:color .12s}\n" +
+            "#hjp-panel .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;border:none;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--hjp-font);border-bottom:2px solid transparent;letter-spacing:.3px;transition:color .12s}\n" +
             "#hjp-panel .tab .etqt{font-size:11px;letter-spacing:.2px}\n" +
             "#hjp-panel .tab:hover{color:var(--hjp-fg)}\n" +
             "#hjp-panel .tab.activo{color:var(--hjp-fg);border-bottom-color:var(--hjp-accent-2)}\n" +
@@ -1832,7 +1866,7 @@
             "#hjp-panel select.filtro{flex:0 0 auto;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
             "#hjp-panel select.filtro:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
             "#hjp-panel .severidad-pick{display:flex;gap:3px;align-items:center;padding:6px 9px;background:var(--hjp-bg-soft);border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel .severidad-pick span{cursor:pointer;padding:2px 6px;border-radius:5px;font:600 11px system-ui;border:1px solid var(--hjp-border);color:var(--hjp-fg-dim)}\n" +
+            "#hjp-panel .severidad-pick span{cursor:pointer;padding:2px 6px;border-radius:5px;font:600 11px var(--hjp-font);border:1px solid var(--hjp-border);color:var(--hjp-fg-dim)}\n" +
             "#hjp-panel .severidad-pick span.activo{border-color:var(--hjp-accent-2);color:var(--hjp-fg)}\n" +
             "#hjp-panel .tabla{overflow:auto;flex:1}\n" +
             "#hjp-panel table{width:100%;border-collapse:collapse}\n" +
@@ -1866,7 +1900,7 @@
             "#hjp-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
             "#hjp-panel .kpi{background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
             "#hjp-panel .kpi .etq{font-size:10px;color:var(--hjp-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
-            "#hjp-panel .kpi .valor{font:600 18px/1 system-ui;color:var(--hjp-fg)}\n" +
+            "#hjp-panel .kpi .valor{font:600 18px/1 var(--hjp-font);color:var(--hjp-fg)}\n" +
             "#hjp-panel .kpi.ok .valor{color:var(--hjp-ok-fg)}\n" +
             "#hjp-panel .kpi.warn .valor{color:var(--hjp-warn-fg)}\n" +
             "#hjp-panel .kpi.bad .valor{color:var(--hjp-bad-fg)}\n" +
@@ -1882,13 +1916,13 @@
             "#hjp-panel .zone .contador-unidades{color:var(--hjp-ok-fg);font-weight:600}\n" +
             "#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--hjp-bg-soft);padding:14px;\n" +
             "  border-radius:10px;box-shadow:var(--hjp-shadow);z-index:1000001;display:none;flex-direction:column;gap:10px;\n" +
-            "  width:340px;color:var(--hjp-fg);font:13px system-ui;border:1px solid var(--hjp-border)}\n" +
+            "  width:340px;color:var(--hjp-fg);font:13px var(--hjp-font);border:1px solid var(--hjp-border)}\n" +
             "#hjp-modal{width:520px;max-height:88vh;overflow:hidden;padding:0}\n" +
             "#hjp-modal > h3{padding:12px 14px 6px}\n" +
             "#hjp-modal > p{padding:0 14px 8px}\n" +
             "#hjp-modal > textarea{margin:0 14px 0;width:calc(100% - 28px);height:88px}\n" +
             "#hjp-modal .hjp-modal-actions{display:flex;gap:6px;padding:6px 14px 0}\n" +
-            "#hjp-modal .hjp-modal-actions button{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 10px;cursor:pointer;font:11.5px system-ui}\n" +
+            "#hjp-modal .hjp-modal-actions button{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 10px;cursor:pointer;font:11.5px var(--hjp-font)}\n" +
             "#hjp-modal .hjp-modal-actions button:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-fg-mute)}\n" +
             "#hjp-modal-lista-wrap{margin:8px 14px 0;border:1px solid var(--hjp-border);border-radius:7px;max-height:200px;overflow:auto}\n" +
             "#hjp-modal-lista .lista-row{display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
@@ -1920,12 +1954,12 @@
             "#hjp-ayuda .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft);border-radius:0 0 10px 10px}\n" +
             "#hjp-ayuda .hjp-iconbtn{background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1}\n" +
             "#hjp-ayuda .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
-            "#hjp-ayuda button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px system-ui}\n" +
-            "#hjp-ayuda button.cancel{background:#555;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px system-ui}\n" +
+            "#hjp-ayuda button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px var(--hjp-font)}\n" +
+            "#hjp-ayuda button.cancel{background:#555;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px var(--hjp-font)}\n" +
             "#hjp-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--hjp-bg);border-bottom:1px solid var(--hjp-border-soft);border-radius:10px 10px 0 0}\n" +
             "#hjp-config .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
             "#hjp-config .cfg-tabs{display:flex;background:var(--hjp-bg);padding:0 10px;border-bottom:1px solid var(--hjp-border-soft);gap:6px;flex-wrap:wrap}\n" +
-            "#hjp-config .cfg-tab{background:transparent;border:none;color:var(--hjp-fg-dim);padding:9px 12px;cursor:pointer;font:600 11.5px system-ui;border-bottom:2px solid transparent;letter-spacing:.4px;text-transform:uppercase}\n" +
+            "#hjp-config .cfg-tab{background:transparent;border:none;color:var(--hjp-fg-dim);padding:9px 12px;cursor:pointer;font:600 11.5px var(--hjp-font);border-bottom:2px solid transparent;letter-spacing:.4px;text-transform:uppercase}\n" +
             "#hjp-config .cfg-tab.activo{color:var(--hjp-fg);border-bottom-color:var(--hjp-accent-2)}\n" +
             "#hjp-config .cfg-body{overflow:auto;padding:12px;max-height:calc(88vh - 110px)}\n" +
             "#hjp-config .cfg-body h4{margin:8px 0 6px;font-size:11px;color:var(--hjp-accent-2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--hjp-border-soft);padding-bottom:4px}\n" +
@@ -1933,27 +1967,28 @@
             "#hjp-config label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;padding:3px 0}\n" +
             "#hjp-config label.full{display:block}\n" +
             "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time],\n" +
-            "#hjp-config input[type=color],#hjp-config textarea,#hjp-config select{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:5px;padding:4px 7px;font:12px system-ui}\n" +
+            "#hjp-config input[type=color],#hjp-config textarea,#hjp-config select{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:5px;padding:4px 7px;font:12px var(--hjp-font)}\n" +
             "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time]{width:90px}\n" +
             "#hjp-config input[type=color]{width:55px;padding:0;height:30px}\n" +
             "#hjp-config textarea{width:100%;height:90px;font:11.5px monospace;resize:vertical;box-sizing:border-box}\n" +
             "#hjp-config .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft);border-radius:0 0 10px 10px}\n" +
             "#hjp-config .row-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}\n" +
             "#hjp-config .row-grid label{padding:1px 0}\n" +
-            "#hjp-config button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:bold;font:12px system-ui}\n" +
+            "#hjp-config button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-weight:bold;font:12px var(--hjp-font)}\n" +
             "#hjp-config button.cancel{background:#555;color:#fff}\n" +
             "#hjp-modal textarea{width:100%;height:160px;resize:none;padding:10px;border-radius:6px;border:1px solid var(--hjp-border);background:var(--hjp-bg);color:var(--hjp-fg);box-sizing:border-box;font:12px monospace}\n" +
             "#hjp-modal h3{margin:0;text-align:center;font-size:13px;color:var(--hjp-fg)}\n" +
-            "#hjp-modal button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-weight:bold;font:12px system-ui}\n" +
-            "#hjp-modal button.cancel{background:#555;color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-weight:bold;font:12px system-ui}\n" +
+            "#hjp-modal button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-weight:bold;font:12px var(--hjp-font)}\n" +
+            "#hjp-modal button.cancel{background:#555;color:#fff;border:none;border-radius:6px;padding:7px 14px;cursor:pointer;font-weight:bold;font:12px var(--hjp-font)}\n" +
             "#hjp-contexto{padding:4px;gap:0;width:auto;min-width:170px}\n" +
-            "#hjp-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--hjp-border-soft);display:flex;align-items:center;gap:8px}\n" +
+            "#hjp-contexto .op .hjp-mi{color:var(--hjp-accent-2);font-size:1.15em}\n" +
             "#hjp-contexto .op:last-child{border-bottom:none}\n" +
             "#hjp-contexto .op:hover{background:var(--hjp-bg-strong)}\n" +
             "#hjp-contexto .sep{height:1px;background:var(--hjp-border-soft);margin:2px 0}\n" +
             ".hjp-acciones{display:flex;justify-content:space-between;gap:8px}\n" +
             "#hjp-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--hjp-bad);color:#fff;padding:6px 16px;\n" +
-            "  border-radius:5px;z-index:1000002;font:12px system-ui;display:none;box-shadow:var(--hjp-shadow)}\n" +
+            "  border-radius:5px;z-index:1000002;font:12px var(--hjp-font);display:none;box-shadow:var(--hjp-shadow)}\n" +
             "body.hjp-lateral #hjp-barra{z-index:1000004}\n" +
             "#hjp-barra .hjp-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#hjp-barra .hjp-badge-estado.ok{background:var(--hjp-ok)}\n" +
@@ -1976,8 +2011,8 @@
     }
 
     /* ====================== UI BUILD ====================== */
-    let mainBtn, panelBtn, closeBtn, foldBtn, gripEl, barraEl,
-        panelEl, modalEl, cfgWinEl, ayudaEl, ctxEl, toastsEl, avisoEl;
+    let mainBtn, panelBtn, modoBtn, closeBtn, foldBtn, gripEl, barraEl,
+        panelEl, modalEl, cfgWinEl, ayudaEl, ctxEl, toastsEl, avisoEl, railEl;
 
     function checkRow(id, txt) {
         return '<label>' + txt + ' <input type="checkbox" id="' + id + '"></label>';
@@ -1989,13 +2024,18 @@
         return '<label class="full">' + txt + '<textarea id="' + id + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '></textarea></label>';
     }
     function buildUI() {
-        mainBtn = makeEl('button', { innerText: ICO.automatizar + ' Automatizar Unidades', id: 'hjp-btn-main', className: 'hjp-btn', title: 'Abrir lista de unidades y automatizar ventanas' });
-        panelBtn = makeEl('button', { innerText: ICO.panel + ' Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
-        closeBtn = makeEl('button', { innerText: ICO.cerrar + ' Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
+        const iconFont = document.createElement('link');
+        iconFont.rel = 'stylesheet';
+        iconFont.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
+        try { document.head.appendChild(iconFont); } catch (_) { /* noop */ }
+        mainBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.automatizar + '</span> Automatizar Unidades', id: 'hjp-btn-main', className: 'hjp-btn', title: 'Abrir lista de unidades y automatizar ventanas' });
+        panelBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.panel + '</span> Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
+        modoBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-modo-label">Flotante</span>', id: 'hjp-btn-modo', className: 'hjp-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
+        closeBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
         foldBtn = makeEl('button', { innerText: '▾', id: 'hjp-btn-fold', className: 'hjp-btn hjp-fold', title: 'Plegar barra' });
         gripEl = makeEl('span', { innerText: '⠿', id: 'hjp-grip', className: 'hjp-grip', title: 'Arrastrar barra · doble clic para orientar' });
         barraEl = makeEl('div', { id: 'hjp-barra' });
-        barraEl.append(gripEl, mainBtn, panelBtn, closeBtn, foldBtn);
+        barraEl.append(gripEl, mainBtn, panelBtn, modoBtn, closeBtn, foldBtn);
         if (APP.barra.vertical) barraEl.classList.add('vertical');
 
         panelEl = makeEl('div', { id: 'hjp-panel' });
@@ -2003,21 +2043,21 @@
             '<header id="hjp-drag">' +
             '<span id="hjp-estado-barra" class="hjp-badge-estado"></span>' +
             '<h3>' + esc(LANG.titlePanel) + '</h3>' +
-            '<button class="hjp-iconbtn" id="hjp-tema" title="Tema">' + ICO.luna + '</button>' +
-            '<button class="hjp-iconbtn" id="hjp-nmolestar" title="No molestar">' + ICO.silencioTotal + '</button>' +
-            '<button class="hjp-iconbtn" id="hjp-test" title="Probar avisos">' + ICO.senal + '</button>' +
-            '<button class="hjp-iconbtn" id="hjp-exportar-todo" title="Exportar configuración">' + ICO.exportar + '</button>' +
-            '<button class="hjp-iconbtn" id="hjp-importar-todo" title="Importar configuración">' + ICO.importar + '</button>' +
-            '<button class="hjp-iconbtn" id="hjp-modo" title="Abrir como barra lateral">' + ICO.expandir + '</button>' +
-            '<button class="hjp-iconbtn" id="hjp-ayuda-btn" title="Ayuda rápida">?</button>' +
-            '<button class="hjp-iconbtn" id="hjp-cerrar-panel" title="Cerrar panel">✕</button>' +
+            '<button class="hjp-iconbtn" id="hjp-tema" title="Tema"><span class="hjp-mi">' + ICO.luna + '</span></button>' +
+            '<button class="hjp-iconbtn" id="hjp-nmolestar" title="No molestar"><span class="hjp-mi">' + ICO.silencioTotal + '</span></button>' +
+            '<button class="hjp-iconbtn" id="hjp-test" title="Probar avisos"><span class="hjp-mi">' + ICO.senal + '</span></button>' +
+            '<button class="hjp-iconbtn" id="hjp-exportar-todo" title="Exportar configuración"><span class="hjp-mi">' + ICO.exportar + '</span></button>' +
+            '<button class="hjp-iconbtn" id="hjp-importar-todo" title="Importar configuración"><span class="hjp-mi">' + ICO.importar + '</span></button>' +
+            '<button class="hjp-iconbtn" id="hjp-collapse" title="Colapsar/expandir barra lateral"><span class="hjp-mi">' + ICO.colapsar + '</span></button>' +
+            '<button class="hjp-iconbtn" id="hjp-ayuda-btn" title="Ayuda rápida"><span class="hjp-mi">' + ICO.ayuda + '</span></button>' +
+            '<button class="hjp-iconbtn" id="hjp-cerrar-panel" title="Cerrar panel"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
             '</header>' +
             '<div class="tabs" id="hjp-tabs">' +
-            '<button class="tab activo" data-tab="dash" title="Resumen general de la flota">' + ICO.dashboard + '<span class="etqt">Dashboard</span><span class="contador" id="hjp-c-on">0</span></button>' +
-            '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones">' + ICO.panel + '<span class="etqt">Unidades</span><span class="contador" id="hjp-c-tot">0</span></button>' +
-            '<button class="tab" data-tab="alertas" title="Historial de avisos">' + ICO.alertas + '<span class="etqt">Avisos</span><span class="contador" id="hjp-c-al">0</span></button>' +
-            '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento">' + ICO.destino + '<span class="etqt">Rutas</span><span class="contador" id="hjp-c-ru">0</span></button>' +
-            '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro">' + ICO.geocercas + '<span class="etqt">Geocercas</span><span class="contador" id="hjp-c-zn">0</span></button>' +
+            '<button class="tab activo" data-tab="dash" title="Resumen general de la flota"><span class="hjp-mi">' + ICO.dashboard + '</span><span class="etqt">Dashboard</span><span class="contador" id="hjp-c-on">0</span></button>' +
+            '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones"><span class="hjp-mi">' + ICO.panel + '</span><span class="etqt">Unidades</span><span class="contador" id="hjp-c-tot">0</span></button>' +
+            '<button class="tab" data-tab="alertas" title="Historial de avisos"><span class="hjp-mi">' + ICO.alertas + '</span><span class="etqt">Avisos</span><span class="contador" id="hjp-c-al">0</span></button>' +
+            '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="hjp-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="hjp-c-ru">0</span></button>' +
+            '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="hjp-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="hjp-c-zn">0</span></button>' +
             '</div>' +
             '<div class="tools" id="hjp-tools">' +
             '<input class="filtro" id="hjp-filtro" placeholder="' + esc(LANG.busq) + '">' +
@@ -2029,16 +2069,16 @@
             '<option value="vigilada">Vigiladas</option>' +
             '<option value="silenciada">Silenciadas</option>' +
             '</select>' +
-            '<button id="hjp-refresh" title="Refrescar">' + ICO.refrescar + '</button>' +
-            '<button id="hjp-cfg-btn" title="Ajustes">' + ICO.ajustes + '</button>' +
-            '<button id="hjp-csv" title="Exportar unidades">' + ICO.descargar + ' CSV</button>' +
-            '<button id="hjp-csv-al" title="Exportar bitacora">' + ICO.descargar + ' Bitacora</button>' +
-            '<button id="hjp-informe" title="Generar informe del dia">' + ICO.descargar + ' Informe</button>' +
-            '<button id="hjp-verif" title="Solo ventanas seleccionadas">▣ Solo seleccion</button>' +
-            '<button id="hjp-captura" title="Capturar ventanas">⊞ Capturar</button>' +
-            '<button id="hjp-verifica" title="Verificar ahora">⊘ Aplicar</button>' +
-            '<button id="hjp-sel-all" title="Seleccionar todas las unidades visibles">☑ Sel. visibles</button>' +
-            '<button id="hjp-sel-clear" title="Quitar toda la selección">⌫ Quitar selección</button>' +
+            '<button id="hjp-refresh" title="Refrescar"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
+            '<button id="hjp-cfg-btn" title="Ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span></button>' +
+            '<button id="hjp-csv" title="Exportar unidades"><span class="hjp-mi">' + ICO.descargar + '</span> CSV</button>' +
+            '<button id="hjp-csv-al" title="Exportar bitacora"><span class="hjp-mi">' + ICO.descargar + '</span> Bitacora</button>' +
+            '<button id="hjp-informe" title="Generar informe del dia"><span class="hjp-mi">' + ICO.descargar + '</span> Informe</button>' +
+            '<button id="hjp-verif" title="Solo ventanas seleccionadas"><span class="hjp-mi">' + ICO.verif + '</span> Solo seleccion</button>' +
+            '<button id="hjp-captura" title="Capturar ventanas"><span class="hjp-mi">' + ICO.captura + '</span> Capturar</button>' +
+            '<button id="hjp-verifica" title="Verificar ahora"><span class="hjp-mi">' + ICO.verifica + '</span> Aplicar</button>' +
+            '<button id="hjp-sel-all" title="Seleccionar todas las unidades visibles"><span class="hjp-mi">' + ICO.selAll + '</span> Sel. visibles</button>' +
+            '<button id="hjp-sel-clear" title="Quitar toda la selección"><span class="hjp-mi">' + ICO.selClear + '</span> Quitar selección</button>' +
             '</div>' +
             '<div class="tabla" id="hjp-wrap-dash">' +
             '<div id="hjp-dash">' +
@@ -2107,7 +2147,7 @@
 
         cfgWinEl = makeEl('div', { id: 'hjp-config' });
         cfgWinEl.innerHTML = (
-            '<div class="cfg-head"><h3>' + ICO.ajustes + ' Configuracion</h3>' +
+            '<div class="cfg-head"><h3><span class="hjp-mi">' + ICO.ajustes + '</span> Configuracion</h3>' +
             '<button class="hjp-iconbtn" id="hjp-cfg-cerrar-x" title="Cerrar">✕</button></div>' +
             '<div class="cfg-tabs" id="hjp-cfg-tabs">' +
             '<button class="cfg-tab activo" data-cfg="general">General</button>' +
@@ -2213,12 +2253,12 @@
             '</div>' +
             checkRow('c-b-plegada', 'Barra plegada') +
             checkRow('c-b-vertical', 'Orientacion vertical') +
-            '<div style="margin-top:6px"><button class="accbtn" id="hjp-b-reset" style="width:100%">' + ICO.expandir + ' Recentrar barra</button></div>' +
+            '<div style="margin-top:6px"><button class="accbtn" id="hjp-b-reset" style="width:100%"><span class="hjp-mi">' + ICO.expandir + '</span> Recentrar barra</button></div>' +
             '<h4>Verificacion</h4>' +
             checkRow('c-verif', 'Verificacion automatica') +
             numRow('c-verif-seg', 'Revisar cada (seg)') +
             '<h4>Tamano del panel</h4>' +
-            '<button class="accbtn" id="hjp-reset-panel" style="width:100%">' + ICO.colapsar + ' Restablecer tamano</button>' +
+            '<button class="accbtn" id="hjp-reset-panel" style="width:100%"><span class="hjp-mi">' + ICO.colapsar + '</span> Restablecer tamano</button>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="rutas" style="display:none">' +
             '<h4>Rutas y OpenStreetMap</h4>' +
@@ -2246,10 +2286,10 @@
             '<button class="accbtn" id="hjp-perfil-borrar" style="background:#b71c1c">Borrar</button>' +
             '</div>' +
             '<h4>Bitacora</h4>' +
-            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:#b71c1c">' + ICO.limpiar + ' Limpiar bitacora</button>' +
+            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:#850D22">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar bitacora</button>' +
             '<h4>Reseteo</h4>' +
             '<div class="hjp-acciones">' +
-            '<button class="accbtn" id="hjp-borrar-memo" style="background:#b71c1c">' + ICO.limpiar + ' Borrar estado</button>' +
+            '<button class="accbtn" id="hjp-borrar-memo" style="background:#850D22"><span class="hjp-mi">' + ICO.limpiar + '</span> Borrar estado</button>' +
             '<button class="accbtn" id="hjp-borrar-todo" style="background:#5d0007">Borrar TODO</button>' +
             '</div>' +
             '</div>' +
@@ -2285,12 +2325,12 @@
             '<ul>' +
             '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>5</kbd>: cambiar de pestana.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar el panel.</li>' +
-            '<li><kbd>Alt</kbd>+<kbd>L</kbd>: panel flotante o barra lateral.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>L</kbd>: alternar entre panel flotante y barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
             '<li><kbd>Esc</kbd>: cerrar ventanas emergentes.</li>' +
             '</ul>' +
             '<h4>Consejo</h4>' +
-            '<p>Para abrir el panel como barra lateral usa el boton de expandir de la cabecera o <kbd>Alt</kbd>+<kbd>L</kbd>. El manual completo esta en MANUAL.md del repositorio.</p>' +
+            '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestana en el borde (rail) que la trae de vuelta con un clic.</p>' +
             '</div>' +
             '<div class="cfg-foot">' +
             '<button class="cancel" id="hjp-ayuda-cerrar">Cerrar</button>' +
@@ -2301,6 +2341,8 @@
         ctxEl = makeEl('div', { id: 'hjp-contexto' });
         toastsEl = makeEl('div', { id: 'hjp-toasts' });
         avisoEl = makeEl('div', { id: 'hjp-aviso' });
+        railEl = makeEl('div', { id: 'hjp-rail' });
+        railEl.title = 'Mostrar el panel';
 
         document.body.appendChild(barraEl);
         document.body.appendChild(panelEl);
@@ -2310,6 +2352,7 @@
         document.body.appendChild(ctxEl);
         document.body.appendChild(toastsEl);
         document.body.appendChild(avisoEl);
+        document.body.appendChild(railEl);
     }
 /* ====================== PLACE / DRAG ====================== */
     function placeBar() {
@@ -2361,17 +2404,59 @@
             panelEl.style.height = ((APP.panelSize && APP.panelSize.h) ? APP.panelSize.h : 440) + 'px';
             panelEl.style.width = ((APP.panelSize && APP.panelSize.w) ? APP.panelSize.w : 470) + 'px';
         }
-        const b = byId('hjp-modo');
-        if (b) {
-            b.innerText = esLateral() ? ICO.colapsar : ICO.expandir;
-            b.title = esLateral() ? 'Volver a panel flotante' : 'Abrir como barra lateral';
+        const colIcon = document.querySelector('#hjp-collapse .hjp-mi');
+        if (colIcon) colIcon.textContent = esLateral() ? ICO.colapsar : ICO.expandir;
+        const colBtn = byId('hjp-collapse');
+        if (colBtn) colBtn.title = esLateral() ? 'Ocultar barra lateral' : 'Ocultar panel';
+        if (esLateral()) {
+            panelEl.style.display = 'flex';
+            panelEl.classList.toggle('oculto', !!APP.panelHidden);
+        } else {
+            panelEl.classList.remove('oculto');
+            panelEl.style.display = APP.panelHidden ? 'none' : 'flex';
         }
+        aplicarRail();
         writeJSON(LS.cfg, APP.config);
     }
     function toggleSidebar() {
         APP.config.panelMode = esLateral() ? 'flotante' : 'lateral';
+        APP.panelHidden = false;
+        panelEl.style.display = 'flex';
         aplicarModoPanel();
+        actualizarBotonesModo();
         advice('Panel', esLateral() ? 'modo barra lateral' : 'modo flotante');
+    }
+    function actualizarBotonesModo() {
+        const lbl = document.querySelector('#hjp-btn-modo .hjp-modo-label');
+        if (lbl) lbl.textContent = esLateral() ? 'Lateral' : 'Flotante';
+        const icon = document.querySelector('#hjp-btn-modo .hjp-mi');
+        if (icon) icon.textContent = esLateral() ? ICO.colapsar : ICO.expandir;
+        const panelLbl = byId('hjp-btn-panel');
+        if (panelLbl) panelLbl.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
+    }
+    function togglePanel() {
+        APP.panelHidden = !APP.panelHidden;
+        if (esLateral()) {
+            panelEl.style.display = 'flex';
+        } else {
+            panelEl.style.display = APP.panelHidden ? 'none' : 'flex';
+        }
+        aplicarModoPanel();
+        const icon = document.querySelector('#hjp-btn-panel .hjp-mi');
+        if (icon) icon.textContent = APP.panelHidden ? ICO.panel : ICO.cerrar;
+        const t = byId('hjp-btn-panel');
+        if (t) t.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
+        if (APP.panelHidden) advice('Panel', 'oculto · usa el boton de la barra o el rail para mostrarlo');
+        actualizarBotonesModo();
+    }
+    function aplicarRail() {
+        if (!railEl) return;
+        const lado = APP.config.panelLado || 'derecha';
+        railEl.classList.toggle('izquierda', lado === 'izquierda');
+        railEl.classList.toggle('derecha', lado !== 'izquierda');
+        railEl.innerHTML = '<span class="hjp-mi">' + (lado === 'izquierda' ? ICO.arrowRight : ICO.arrowLeft) + '</span>';
+        const show = esLateral() && APP.panelHidden;
+        railEl.classList.toggle('mostrar', show);
     }
     function placePanel() {
         if (esLateral()) return;
@@ -2408,7 +2493,7 @@
             barraEl.addEventListener('pointercancel', end);
         })();
 
-        (function dragPanel() {
+         (function dragPanel() {
             const head = byId('hjp-drag');
             let activo = false, dx = 0, dy = 0;
             head.addEventListener('pointerdown', (e) => {
@@ -2416,6 +2501,7 @@
                 if (e.target.closest('.hjp-iconbtn')) return;
                 if (esLateral()) return;
                 activo = true;
+                panelEl.classList.add('dragging');
                 const r = panelEl.getBoundingClientRect();
                 dx = e.clientX - r.left; dy = e.clientY - r.top;
                 try { head.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
@@ -2427,7 +2513,7 @@
                 panelEl.style.top = (e.clientY - dy) + 'px';
                 panelEl.style.bottom = 'auto';
             });
-            const end = () => { if (activo) { activo = false; savePanelPos(); } };
+            const end = () => { if (activo) { activo = false; savePanelPos(); panelEl.classList.remove('dragging'); } };
             head.addEventListener('pointerup', end);
             head.addEventListener('pointercancel', end);
         })();
@@ -2549,7 +2635,7 @@
             recientes.innerHTML = items.length
                 ? items.map((a) => (
                     '<div class="alerta" style="border-left:3px solid ' + (COL[a.sev] || '#555') + '">' +
-                    '<span class="ico" style="color:' + (COL[a.sev] || '#777') + '">' + esc(a.icono) + '</span>' +
+                    '<span class="ico hjp-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
                     '<div class="cuerpo"><b>' + esc(a.titulo) + '</b>' +
                     (a.detalle ? '<span>' + esc(a.detalle) + '</span>' : '') + '</div>' +
                     '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
@@ -2625,15 +2711,15 @@
                 '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
                 '<input type="checkbox" class="hjp-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
                 '</td>' +
-                '<td class="estadoicon ' + clase + '">' + ic + '</td>' +
-                '<td class="eco">' + (vig ? ICO.bandera + ' ' : '') + esc(info.eco || '-') + '</td>' +
+                '<td class="estadoicon ' + clase + '"><span class="hjp-mi">' + ic + '</span></td>' +
+                '<td class="eco">' + (vig ? '<span class="hjp-mi">' + ICO.bandera + '</span> ' : '') + esc(info.eco || '-') + '</td>' +
                 '<td>' + esc(info.placa || '') + '</td>' +
                 '<td>' + txt + '</td>' +
                 '<td>' + ageText(st.edadMin) + '</td>' +
                 celVel +
                 '<td>' + esc(zona) + coords + '</td>' +
                 '<td><button class="mini hjp-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
-                (sil ? ICO.silencio : ICO.sonido) + '</button></td>' +
+                '<span class="hjp-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
                 '</tr>'
             );
         }).join('') || '<tr><td colspan="9" class="vacio">' + LANG.sinUni + '</td></tr>';
@@ -2658,7 +2744,7 @@
         cont.innerHTML = lista.length
             ? lista.map((a) => (
                 '<div class="alerta" style="border-left:4px solid ' + (COL[a.sev] || '#555') + '">' +
-                '<span class="ico" style="color:' + (COL[a.sev] || '#777') + '">' + esc(a.icono) + '</span>' +
+                '<span class="ico hjp-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
                 '<div class="cuerpo">' +
                 '<b>' + esc(a.titulo) + '</b>' +
                 (a.detalle ? '<span>' + esc(a.detalle) + '</span>' : '') +
@@ -2726,7 +2812,7 @@
             const color = llego ? 'var(--hjp-ok-fg)' : (desviado ? 'var(--hjp-bad-fg)' : 'var(--hjp-accent-2)');
             const dest = r.destinoTexto || (r.destino.lat.toFixed(4) + ',' + r.destino.lon.toFixed(4));
             return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
-                '<span class="ico" style="color:' + color + '">' + ICO.destino + '</span>' +
+                '<span class="ico hjp-mi" style="color:' + color + '">' + ICO.destino + '</span>' +
                 '<div class="cuerpo"><b>' + esc(eco || info.nombre) + ' · ' + est + '</b>' +
                 '<span>' + esc(dest) + ' · ' + Math.round(r.total / 1000) + ' km · ' + esc(r.modo || '') + '</span>' +
                 '<div class="meta">' +
@@ -2735,10 +2821,10 @@
                 (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min ETA</span>' : '') +
                 '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
                 '</div></div>' +
-                '<button class="mini hjp-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON">' + ICO.exportar + '</button>' +
-                '<button class="mini hjp-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON">' + ICO.descargar + '</button>' +
-                '<button class="mini hjp-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular">' + ICO.refrescar + '</button>' +
-                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta">✕</button>' +
+                '<button class="mini hjp-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="hjp-mi">' + ICO.exportar + '</span></button>' +
+                '<button class="mini hjp-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="hjp-mi">' + ICO.descargar + '</span></button>' +
+                '<button class="mini hjp-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
+                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
                 '</div>';
         };
         let html = filas.map((x) => tarjeta(x.info, x.st)).join('');
@@ -2746,10 +2832,10 @@
             const r = APP.rutas[eco];
             if (!r) return;
             html += '<div class="alerta" style="border-left:4px solid var(--hjp-fg-mute);opacity:.75">' +
-                '<span class="ico">' + ICO.destino + '</span>' +
+                '<span class="ico hjp-mi">' + ICO.destino + '</span>' +
                 '<div class="cuerpo"><b>' + esc(eco) + ' · FUERA DE VIGILANCIA</b>' +
                 '<span>' + esc(r.destinoTexto || '') + ' · ' + Math.round(r.total / 1000) + ' km</span></div>' +
-                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta">✕</button>' +
+                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
                 '</div>';
         });
         cont.innerHTML = html;
@@ -2963,7 +3049,7 @@
     /* ====================== MENU CONTEXTUAL ====================== */
     function showMenu(x, y, options) {
         ctxEl.innerHTML = options.map((o) =>
-            o.sep ? '<div class="sep"></div>' : '<div class="op" data-acc="' + esc(o.id) + '">' + esc(o.label) + '</div>'
+            o.sep ? '<div class="sep"></div>' : '<div class="op" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="hjp-mi">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
         ).join('');
         ctxEl.style.display = 'flex';
         ctxEl.style.left = '0px'; ctxEl.style.top = '0px';
@@ -2992,9 +3078,14 @@
         document.addEventListener('keydown', (e) => {
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
                 const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'geocercas' };
-                if (tabs[e.key]) { setTab(tabs[e.key]); panelEl.style.display = 'flex'; e.preventDefault(); return; }
+                if (tabs[e.key]) {
+                    setTab(tabs[e.key]);
+                    if (APP.panelHidden) togglePanel();
+                    e.preventDefault();
+                    return;
+                }
                 if (e.key.toLowerCase() === 'p') {
-                    panelEl.style.display = panelEl.style.display === 'flex' ? 'none' : 'flex';
+                    togglePanel();
                     paintPanel();
                     e.preventDefault(); return;
                 }
@@ -3101,11 +3192,13 @@
         });
         closeBtn.addEventListener('click', closeAllWindows);
         panelBtn.addEventListener('click', () => {
-            panelEl.style.display = panelEl.style.display === 'flex' ? 'none' : 'flex';
+            togglePanel();
             paintPanel();
         });
-        byId('hjp-cerrar-panel').addEventListener('click', () => { panelEl.style.display = 'none'; });
-        byId('hjp-modo').addEventListener('click', toggleSidebar);
+        modoBtn.addEventListener('click', toggleSidebar);
+        if (railEl) railEl.addEventListener('click', togglePanel);
+        byId('hjp-cerrar-panel').addEventListener('click', () => { if (!APP.panelHidden) togglePanel(); });
+        byId('hjp-collapse').addEventListener('click', togglePanel);
         byId('hjp-ayuda-btn').addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
         byId('hjp-ayuda-x').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
         byId('hjp-ayuda-cerrar').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
@@ -3228,25 +3321,27 @@
             e.preventDefault();
             const it = unitByEco(eco);
             const lim = it ? limiteDe(it.info) : APP.config.velMax;
+            const silenciado = APP.dismissed.has(eco);
+            const enLista = APP.watchMap[eco] !== undefined;
             showMenu(e.clientX, e.clientY, [
-                { id: 'open', label: '▷ Abrir ventana' },
-                { id: 'sil', label: (APP.dismissed.has(eco) ? '◆ Reactivar avisos' : '◇ Silenciar esta unidad') },
-                { id: 'verif', label: '⊘ Aplicar verificacion' },
+                { id: 'open', icon: ICO.panel, label: 'Abrir ventana' },
+                { id: 'sil', icon: silenciado ? ICO.sonido : ICO.silencio, label: silenciado ? 'Reactivar avisos' : 'Silenciar esta unidad' },
+                { id: 'verif', icon: ICO.verifica, label: 'Aplicar verificacion' },
                 { sep: 1 },
-                { id: 'lista', label: (APP.watchMap[eco] !== undefined ? '⚑ Quitar de lista vigilada' : '⚑ Anadir a lista vigilada') },
-                { id: 'limite', label: '▸ Limite de velocidad (actual ' + lim + ' km/h)' },
+                { id: 'lista', icon: ICO.bandera, label: enLista ? 'Quitar de lista vigilada' : 'Anadir a lista vigilada' },
+                { id: 'limite', icon: ICO.velocidad, label: 'Limite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
-                { id: 'ruta-plan', label: '⌖ Planear ruta (OSRM)' },
-                { id: 'ruta-astar', label: '⌖ Planear ruta (A*)' },
-                { id: 'ruta-geo', label: '⎘ Exportar ruta GeoJSON' },
-                { id: 'ruta-del', label: '✕ Eliminar ruta' },
-                { id: 'traza-geo', label: '⎘ Exportar traza GeoJSON' },
+                { id: 'ruta-plan', icon: ICO.destino, label: 'Planear ruta (OSRM)' },
+                { id: 'ruta-astar', icon: ICO.destino, label: 'Planear ruta (A*)' },
+                { id: 'ruta-geo', icon: ICO.exportar, label: 'Exportar ruta GeoJSON' },
+                { id: 'ruta-del', icon: ICO.cerrar, label: 'Eliminar ruta' },
+                { id: 'traza-geo', icon: ICO.descargar, label: 'Exportar traza GeoJSON' },
                 { sep: 1 },
-                { id: 'mapa-osm', label: '⌖ Ver en OpenStreetMap' },
-                { id: 'mapa-google', label: '⌖ Ver en Google Maps' },
-                { id: 'copy-eco', label: '⎘ Copiar economico' },
-                { id: 'copy-placa', label: '⎘ Copiar placa' },
-                { id: 'copy-coords', label: '⎘ Copiar coordenadas' }
+                { id: 'mapa-osm', icon: ICO.zona, label: 'Ver en OpenStreetMap' },
+                { id: 'mapa-google', icon: ICO.zona, label: 'Ver en Google Maps' },
+                { id: 'copy-eco', icon: ICO.copiar, label: 'Copiar economico' },
+                { id: 'copy-placa', icon: ICO.copiar, label: 'Copiar placa' },
+                { id: 'copy-coords', icon: ICO.copiar, label: 'Copiar coordenadas' }
             ]);
             ctxEl._target = { eco };
         });
