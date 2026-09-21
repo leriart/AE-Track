@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.12.0
+// @version      4.13.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.12.0';
+    const VER = '4.13.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -140,7 +140,8 @@
         seleccion: 'hjp.api.s.seleccion',
         kpi: 'hjp.api.s.kpi',
         limites: 'hjp.api.s.limites',
-        orden: 'hjp.api.s.orden'
+        orden: 'hjp.api.s.orden',
+        viajes: 'hjp.api.s.viajes'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -190,6 +191,10 @@
         giroMin: 3,
         trazado: true,
         trazadoMax: 500,
+        partidaHoras: 6,
+        paradaMin: 15,
+        historialHoras: 168,
+        analizarAuto: true,
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -315,6 +320,7 @@
         limites: readSessionObject(SS.limites, {}, LS.limites),
         perfiles: readObject(LS.perfiles, {}),
         rutas: readObject(LS.rutas, {}),
+        viajes: readSessionObject(SS.viajes, {}, null),
         trazas: {},
         grafoCache: {},
         barra: readObject(LS.barra, {
@@ -731,8 +737,16 @@
     async function planearRuta(eco, destinoTexto, origenOv, modo) {
         const it = unitByEco(eco);
         if (!it) { advice('Unidad no encontrada', eco); return null; }
-        const origen = origenOv || (it.st.lat != null ? { lat: it.st.lat, lon: it.st.lon } : null);
-        if (!origen) { advice('Sin origen', 'La unidad no reporta posicion actual'); return null; }
+        let origen = origenOv || null;
+        if (!origen && APP.config.analizarAuto) {
+            // Punto de partida detectado en el historial (parada > partidaHoras).
+            try {
+                const v = await analizarViaje(eco, true);
+                if (v && v.partida) origen = { lat: v.partida.lat, lon: v.partida.lon };
+            } catch (_) { /* noop */ }
+        }
+        if (!origen) origen = (it.st.lat != null ? { lat: it.st.lat, lon: it.st.lon } : null);
+        if (!origen) { advice('Sin origen', 'La unidad no reporta posicion actual ni historial'); return null; }
         let destino = null;
         const txt = String(destinoTexto || '').trim();
         if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(txt)) {
@@ -759,6 +773,8 @@
             resetEstadoRuta(clave);
             advice('Ruta creada', Math.round(ruta.total / 1000) + ' km · ' + ruta.modo);
             if (APP.tab === 'rutas') paintRutas();
+            // Reanaliza el viaje ahora que existe destino (llegada/regreso/carga).
+            analizarViaje(eco, true);
             return ruta;
         } catch (e) {
             advice('Error de ruta', (e && e.message) || 'sin conexion');
@@ -833,6 +849,140 @@
         };
         descargarJSON(geojson, 'hjp_traza_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
         advice('Traza exportada', arr.length + ' puntos');
+    }
+
+    /* ====================== ANALISIS DE VIAJE (historial) ====================== */
+    function esZonaCarga(nombre) {
+        return /\b(CARGA|CARGAR|DESCARGA|CEDIS|PATIO|PLANTA|OFICINAS|ALMACEN|TALLER|BODEGA|BASCULA|RASTRO|LABORATORIO|SILO)\b/.test(norm(nombre));
+    }
+    // Descarga el historial de posiciones y velocidad de una unidad.
+    async function fetchHistorial(uid, horas) {
+        const ahora = Math.floor(Date.now() / 1000);
+        const r = await remoteCall('messages/load_interval', {
+            itemId: uid,
+            timeFrom: ahora - Math.max(1, horas) * 3600,
+            timeTo: ahora,
+            flags: 1, flagsMask: 1, loadCount: 5000
+        });
+        return (r.messages || []).map((m) => {
+            const pos = m.pos || {};
+            return { t: m.t, lat: pos.y, lon: pos.x, s: pos.s || 0 };
+        }).filter((p) => p.lat != null && p.lon != null && p.t).sort((a, b) => a.t - b.t);
+    }
+    // Punto de partida: el ultimo tramo parado (<=3 km/h) de al menos `horas`
+    // horas, es decir, donde el vehiculo estuvo apagado/parado mas de 6 horas.
+    function detectarPuntoPartida(puntos, horas) {
+        const umbral = Math.max(1, horas) * 3600;
+        const segs = [];
+        let ini = null;
+        for (let i = 0; i < puntos.length; i++) {
+            if (puntos[i].s <= 3) { if (ini == null) ini = i; }
+            else if (ini != null) { segs.push({ ini, fin: i - 1 }); ini = null; }
+        }
+        if (ini != null) segs.push({ ini, fin: puntos.length - 1, abierto: true });
+        let mejor = null;
+        for (let k = 0; k < segs.length; k++) {
+            const s = segs[k];
+            if (s.abierto) continue; // el tramo en curso no marca el inicio del viaje
+            const dur = puntos[s.fin].t - puntos[s.ini].t;
+            if (dur >= umbral) mejor = { ini: s.ini, fin: s.fin, dur };
+        }
+        if (!mejor) return null;
+        const p = puntos[mejor.fin];
+        return { lat: p.lat, lon: p.lon, t: p.t, durHoras: mejor.dur / 3600, finIdx: mejor.fin };
+    }
+    // Paradas de al menos `paradaMin` minutos dentro del trayecto.
+    function analizarParadas(puntos, desde, paradaMin, partidaSeg) {
+        const segs = [];
+        let ini = null;
+        for (let i = desde; i < puntos.length; i++) {
+            if (puntos[i].s <= 3) { if (ini == null) ini = i; }
+            else if (ini != null) { segs.push({ ini, fin: i - 1 }); ini = null; }
+        }
+        if (ini != null) segs.push({ ini, fin: puntos.length - 1, abierto: true });
+        return segs.filter((s) => {
+            const dur = puntos[s.fin].t - puntos[s.ini].t;
+            return dur >= paradaMin * 60 && dur < partidaSeg;
+        }).map((s) => {
+            const a = puntos[s.ini], b = puntos[s.fin];
+            return { lat: a.lat, lon: a.lon, desde: a.t, hasta: b.t, durMin: (b.t - a.t) / 60, abierto: !!s.abierto };
+        });
+    }
+    async function analizarViaje(eco, silencioso) {
+        const it = unitByEco(eco);
+        if (!it) { if (!silencioso) advice('Unidad no encontrada', eco); return null; }
+        const horas = Math.max(2, Number(APP.config.historialHoras) || 168);
+        const partidaHoras = Math.max(1, Number(APP.config.partidaHoras) || 6);
+        const paradaMin = Math.max(1, Number(APP.config.paradaMin) || 15);
+        if (!silencioso) advice('Analizando viaje', 'historial de ' + horas + ' h...');
+        let puntos = [];
+        try { puntos = await fetchHistorial(it.u.id, horas); }
+        catch (e) { if (!silencioso) advice('Sin historial', (e && e.message) || 'sin conexion'); return null; }
+        if (puntos.length < 3) { if (!silencioso) advice('Sin datos', 'No hay suficiente historial'); return null; }
+        const partida = detectarPuntoPartida(puntos, partidaHoras);
+        if (!partida) { if (!silencioso) advice('Sin punto de partida', 'No se hallo una parada de mas de ' + partidaHoras + ' h'); return null; }
+        const desde = partida.finIdx;
+        const trayecto = puntos.slice(desde);
+        const paradas = analizarParadas(puntos, desde, paradaMin, partidaHoras * 3600);
+        let dist = 0;
+        for (let i = 1; i < trayecto.length; i++) {
+            dist += haversine(trayecto[i - 1].lat, trayecto[i - 1].lon, trayecto[i].lat, trayecto[i].lon);
+        }
+        let salida = null;
+        for (let i = desde; i < puntos.length; i++) { if (puntos[i].s > 3) { salida = puntos[i]; break; } }
+        const fin = puntos[puntos.length - 1];
+        let maxDist = 0;
+        for (let i = desde; i < puntos.length; i++) {
+            const d = haversine(partida.lat, partida.lon, puntos[i].lat, puntos[i].lon);
+            if (d > maxDist) maxDist = d;
+        }
+        const ruta = rutaDe(it.info);
+        let llego = false, tLlegada = null, destino = null;
+        const radio = Math.max(150, Number(APP.config.retornoM) || 400);
+        if (ruta && ruta.destino) {
+            for (let i = desde; i < puntos.length; i++) {
+                if (haversine(puntos[i].lat, puntos[i].lon, ruta.destino.lat, ruta.destino.lon) <= radio) {
+                    llego = true; tLlegada = puntos[i].t;
+                    destino = { lat: ruta.destino.lat, lon: ruta.destino.lon };
+                    break;
+                }
+            }
+        }
+        const distInicio = haversine(fin.lat, fin.lon, partida.lat, partida.lon);
+        const regreso = !!(llego && distInicio > 300 && distInicio < maxDist * 0.6);
+        const zonaPartida = zoneAt(partida.lat, partida.lon);
+        const cargo = esZonaCarga(zonaPartida)
+            || (paradas.length > 0 && haversine(paradas[0].lat, paradas[0].lon, partida.lat, partida.lon) < 300);
+        const traza = simplificarRuta(trayecto.map((p) => [p.lon, p.lat]), 120);
+        const v = {
+            eco: it.info.eco, uid: it.u.id,
+            partida, salida: salida ? salida.t : partida.t,
+            fin: { lat: fin.lat, lon: fin.lon, t: fin.t },
+            paradas, puntos: trayecto.length, distanciaKm: Math.round(dist / 1000),
+            zonaPartida, cargo, llego, tLlegada, destino, regreso,
+            maxDistKm: Math.round(maxDist / 1000), traza, analizado: Date.now()
+        };
+        APP.viajes[it.info.eco] = v;
+        writeSession(SS.viajes, APP.viajes);
+        if (APP.tab === 'rutas') paintRutas();
+        if (!silencioso) {
+            advice('Viaje analizado', v.distanciaKm + ' km · ' + v.paradas.length + ' parada(s)'
+                + (cargo ? ' · carga' : '') + (llego ? ' · llego a destino' : '') + (regreso ? ' · en regreso' : ''));
+        }
+        return v;
+    }
+    function exportViajeGeoJSON(eco) {
+        const v = APP.viajes[eco];
+        if (!v) { advice('Sin analisis', 'Analiza el viaje primero'); return; }
+        const features = [];
+        if (v.traza && v.traza.length > 1) {
+            features.push({ type: 'Feature', properties: { tipo: 'trayecto', eco, distancia_km: v.distanciaKm }, geometry: { type: 'LineString', coordinates: v.traza } });
+        }
+        features.push({ type: 'Feature', properties: { tipo: 'partida', zona: v.zonaPartida || '' }, geometry: { type: 'Point', coordinates: [v.partida.lon, v.partida.lat] } });
+        if (v.destino) features.push({ type: 'Feature', properties: { tipo: 'destino' }, geometry: { type: 'Point', coordinates: [v.destino.lon, v.destino.lat] } });
+        v.paradas.forEach((p, i) => features.push({ type: 'Feature', properties: { tipo: 'parada', n: i + 1, minutos: Math.round(p.durMin) }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } }));
+        descargarJSON({ type: 'FeatureCollection', features }, 'hjp_viaje_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
+        advice('Viaje exportado', eco);
     }
 
     /* ====================== NOMBRE + ESTADO ====================== */
@@ -2471,6 +2621,7 @@
             '</div>' +
             '<div class="tabla" id="hjp-wrap-rutas" style="display:none">' +
             '<div id="hjp-lista-rutas"></div>' +
+            '<div id="hjp-lista-viajes"></div>' +
             '</div>' +
             '<div class="tabla" id="hjp-wrap-geocercas" style="display:none">' +
             '<table class="zone"><thead><tr><th>Geocerca</th><th>Dentro</th></tr></thead>' +
@@ -2650,6 +2801,11 @@
             checkRow('c-r-giro', 'Giro en U') +
             numRow('c-giro-grados', 'Angulo de giro (grados)') +
             numRow('c-giro-min', 'Giro sostenido (min)') +
+            '<h4>Analisis de viaje (historial)</h4>' +
+            numRow('c-partida-horas', 'Punto de partida: parada mayor a (h)') +
+            numRow('c-parada-min', 'Parada minima (min)') +
+            numRow('c-hist-horas', 'Historial a analizar (h)') +
+            checkRow('c-analizar-auto', 'Analizar automaticamente al planear ruta') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
@@ -3194,7 +3350,42 @@
         }
         body.innerHTML = rows.join('') || '<tr><td colspan="2" class="vacio">' + LANG.sinCoin + '</td></tr>';
     }
+    function paintViajes() {
+        const cont = byId('hjp-lista-viajes');
+        if (!cont) return;
+        const ecos = Object.keys(APP.viajes);
+        if (!ecos.length) {
+            cont.innerHTML = '<div style="padding:10px 12px;color:var(--hjp-fg-dim);font-size:12px">' +
+                'Sin viajes analizados. Clic derecho en una unidad (pestana Unidades) &gt; <b>Analizar viaje</b> para detectar el punto de partida (donde estuvo parada mas de '
+                + (APP.config.partidaHoras || 6) + ' h), el trayecto, las paradas y la carga.</div>';
+            return;
+        }
+        cont.innerHTML = ecos.map((eco) => {
+            const v = APP.viajes[eco];
+            const flags = [];
+            if (v.cargo) flags.push('carga');
+            if (v.paradas.length) flags.push(v.paradas.length + ' parada(s)');
+            if (v.llego) flags.push('llego a destino');
+            if (v.regreso) flags.push('en regreso');
+            const color = v.regreso ? 'var(--hjp-warn-fg)' : (v.llego ? 'var(--hjp-ok-fg)' : 'var(--hjp-accent-2)');
+            return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
+                '<span class="ico hjp-mi" style="color:' + color + '">' + ICO.tiempo + '</span>' +
+                '<div class="cuerpo"><b>' + esc(eco) + ' · VIAJE</b>' +
+                '<span>Partida ' + new Date(v.partida.t * 1000).toLocaleString().slice(0, 16) + (v.zonaPartida ? ' · ' + esc(v.zonaPartida) : '') + '</span>' +
+                '<div class="meta">' +
+                '<span class="regla">' + v.distanciaKm + ' km</span>' +
+                '<span>' + v.puntos + ' puntos</span>' +
+                (v.salida ? '<span>salida ' + new Date(v.salida * 1000).toLocaleTimeString().slice(0, 5) + '</span>' : '') +
+                (flags.length ? '<span>' + esc(flags.join(' · ')) + '</span>' : '') +
+                '<span>' + new Date(v.analizado).toLocaleTimeString().slice(0, 5) + '</span>' +
+                '</div></div>' +
+                '<button class="mini hjp-viaje-geo" data-eco="' + esc(eco) + '" title="Exportar viaje GeoJSON"><span class="hjp-mi">' + ICO.exportar + '</span></button>' +
+                '<button class="mini hjp-viaje-re" data-eco="' + esc(eco) + '" title="Reanalizar viaje"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
+                '</div>';
+        }).join('');
+    }
     function paintRutas() {
+        paintViajes();
         const cont = byId('hjp-lista-rutas');
         if (!cont) return;
         const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
@@ -3356,6 +3547,10 @@
                 bar.style.display = ver ? '' : 'none';
                 try { placeBar(); } catch (_) { /* noop */ }
             }
+            if (ver) {
+                bar.innerHTML = '<span class="hjp-mi">' + ICO.actualizar + '</span> Actualizar' + (u.remote ? ' ' + esc(u.remote) : '');
+                bar.title = 'Actualizar a la version ' + esc(u.remote || '') + ' (instalada ' + u.local + ')';
+            }
         }
         if (b) {
             b.classList.remove('warn');
@@ -3451,15 +3646,33 @@
             pintarActualizacion();
         }
     }
+    function recargarUnaVez() {
+        if (APP.update.recargando) return;
+        APP.update.recargando = true;
+        try { location.reload(); } catch (_) { /* noop */ }
+    }
     function aplicarActualizacion() {
         const u = APP.update;
         if (u.state === 'available') {
             u.state = 'installed';
             pintarActualizacion();
-            try { window.open(u.url || UPDATE_URL, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
-            advice('Actualizacion iniciada', 'instala la nueva version en Tampermonkey y recarga esta pagina');
+            const url = u.url || UPDATE_URL;
+            // Abre la URL de instalacion: Tampermonkey/Violentmonkey mostrara el
+            // dialogo de actualizacion con la nueva version.
+            let abierto = null;
+            try { abierto = window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+            if (!abierto) { try { location.href = url; return; } catch (_) { /* noop */ } }
+            advice('Actualizando a ' + (u.remote || 'la nueva version'), 'confirma la instalacion en Tampermonkey; al volver se recargara sola');
+            // Al volver a esta pestaña, recarga para aplicar la version nueva.
+            const alVolver = () => {
+                setTimeout(recargarUnaVez, 900);
+            };
+            window.addEventListener('focus', alVolver, { once: true });
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) alVolver();
+            }, { once: true });
         } else if (u.state === 'installed') {
-            try { location.reload(); } catch (_) { /* noop */ }
+            recargarUnaVez();
         } else {
             comprobarActualizacion();
         }
@@ -3778,6 +3991,16 @@
                 }
             });
         }
+        const listaViajesEl = byId('hjp-lista-viajes');
+        if (listaViajesEl) {
+            listaViajesEl.addEventListener('click', (e) => {
+                const b = e.target.closest && e.target.closest('button');
+                if (!b) return;
+                const eco = b.dataset.eco;
+                if (b.classList.contains('hjp-viaje-geo')) exportViajeGeoJSON(eco);
+                else if (b.classList.contains('hjp-viaje-re')) analizarViaje(eco, false);
+            });
+        }
         byId('hjp-captura').addEventListener('click', captureSelection);
         byId('hjp-verifica').addEventListener('click', () => { verifyWindows(false); });
         byId('hjp-sel-all').addEventListener('click', () => { selectAllVisible(); });
@@ -3898,6 +4121,8 @@
                 { id: 'ruta-geo', icon: ICO.exportar, label: 'Exportar ruta GeoJSON' },
                 { id: 'ruta-del', icon: ICO.cerrar, label: 'Eliminar ruta' },
                 { id: 'traza-geo', icon: ICO.descargar, label: 'Exportar traza GeoJSON' },
+                { id: 'viaje-analizar', icon: ICO.tiempo, label: 'Analizar viaje (historial)' },
+                { id: 'viaje-geo', icon: ICO.exportar, label: 'Exportar viaje GeoJSON' },
                 { sep: 1 },
                 { id: 'mapa-osm', icon: ICO.zona, label: 'Ver en OpenStreetMap' },
                 { id: 'mapa-google', icon: ICO.zona, label: 'Ver en Google Maps' },
@@ -3939,6 +4164,8 @@
             } else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
             else if (acc === 'ruta-del') { if (eliminarRuta(eco)) advice('Ruta eliminada', eco); else advice('Sin ruta', eco); }
             else if (acc === 'traza-geo') exportTraza(eco);
+            else if (acc === 'viaje-analizar') analizarViaje(eco, false);
+            else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
             else if (acc === 'mapa-osm') openMap(eco, 'osm');
             else if (acc === 'mapa-google') openMap(eco, 'google');
             else if (acc === 'copy-eco') { copyToClipboard(eco); advice('Copiado', eco); }
@@ -4023,6 +4250,10 @@
             g('c-r-giro').checked = !!APP.config.reglas.giroU;
             g('c-giro-grados').value = APP.config.giroGrados;
             g('c-giro-min').value = APP.config.giroMin;
+            g('c-partida-horas').value = APP.config.partidaHoras;
+            g('c-parada-min').value = APP.config.paradaMin;
+            g('c-hist-horas').value = APP.config.historialHoras;
+            g('c-analizar-auto').checked = !!APP.config.analizarAuto;
             g('c-osrm').checked = !!APP.config.osrm;
             g('c-overpass').checked = !!APP.config.overpass;
             g('c-trazado').checked = !!APP.config.trazado;
@@ -4095,6 +4326,10 @@
             cf.reglas.giroU = g('c-r-giro').checked;
             cf.giroGrados = clamp(isoNum(g('c-giro-grados').value, cf.giroGrados), 90, 180);
             cf.giroMin = Math.max(1, isoNum(g('c-giro-min').value, cf.giroMin));
+            cf.partidaHoras = Math.max(1, isoNum(g('c-partida-horas').value, cf.partidaHoras));
+            cf.paradaMin = Math.max(1, isoNum(g('c-parada-min').value, cf.paradaMin));
+            cf.historialHoras = Math.max(2, isoNum(g('c-hist-horas').value, cf.historialHoras));
+            cf.analizarAuto = g('c-analizar-auto').checked;
             cf.osrm = g('c-osrm').checked;
             cf.overpass = g('c-overpass').checked;
             cf.trazado = g('c-trazado').checked;
