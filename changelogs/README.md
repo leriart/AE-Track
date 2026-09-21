@@ -2,6 +2,7 @@
 
 Historial de cambios de HJP Wialon, un archivo por version.
 
+- [4.11.0](./4.11.0.md)
 - [4.10.0](./4.10.0.md)
 - [4.9.0](./4.9.0.md)
 - [4.8.1](./4.8.1.md)
