@@ -317,15 +317,25 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 El script comprueba la cabecera `@version` del repositorio al iniciar y cada
 30 minutos. Cuando hay una version nueva:
 
-- Aparece un indicador en la cabecera del panel con un icono de campana de
-  actualizacion. Su titulo indica la version disponible.
+- Aparece un boton verde **Actualizar** en la barra flotante (visible sin
+  abrir el panel) y un indicador en la cabecera del panel. Su titulo indica la
+  version disponible.
 - Al hacer clic se abre la URL de instalacion en una pestana nueva para que
-  Tampermonkey o Violentmonkey actualice el script.
+  Tampermonkey o Violentmonkey actualice el script. Si tu copia procede de la
+  rama `dev` (mas nueva que `main`), el script tambien revisa esa rama.
 - Tras la actualizacion el indicador cambia a un icono de recarga y muestra
   el mensaje "recarga para aplicar". Al pulsar recarga la pagina.
+- Si la comprobacion falla (por ejemplo sin conexion o bloqueada por el sitio),
+  el icono de la cabecera se muestra en ambar con el motivo; al pulsarlo se
+  reintenta.
 - Tambien puedes comprobar manualmente desde Ajustes, pestana **Avanzado**,
   con el boton **Buscar actualizaciones**, que muestra la version instalada,
-  la ultima revision y si hay una nueva disponible.
+  la version remota detectada y si hay una nueva disponible.
+
+Nota: la deteccion solo vera una version nueva cuando el repositorio tenga una
+`@version` mayor que la instalada. Si acabas de preparar cambios pero aun no
+los has subido a GitHub, no habra nada que detectar. La cache de GitHub puede
+tardar unos minutos en servir la ultima version.
 
 Las tarjetas de avisos (toasts) aparecen en la esquina inferior derecha para
 no estorbar la cabecera.

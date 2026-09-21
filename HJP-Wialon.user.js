@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.6.0
+// @version      4.6.1
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,8 +87,9 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.6.0';
+    const VER = '4.6.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
+    const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
         const m = text.match(/@version\s+(\S+)/);
         return m ? m[1] : null;
@@ -1900,6 +1901,9 @@
             "#hjp-barra.plegada .hjp-btn:not(.hjp-fold){display:none}\n" +
             "#hjp-btn-main,#hjp-btn-panel,#hjp-btn-modo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent}\n" +
             "#hjp-btn-close{background:var(--hjp-bg-strong);color:var(--hjp-fg-dim)}\n" +
+            "#hjp-btn-update{background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;border-color:transparent;box-shadow:0 0 0 0 rgba(67,160,71,.5);animation:hjpPulseGreen 2s infinite}\n" +
+            "@keyframes hjpPulseGreen{0%{box-shadow:0 0 0 0 rgba(67,160,71,.55)}70%{box-shadow:0 0 0 9px rgba(67,160,71,0)}100%{box-shadow:0 0 0 0 rgba(67,160,71,0)}}\n" +
+            "#hjp-panel .hjp-iconbtn.warn{color:var(--hjp-warn)}\n" +
             "#hjp-panel{position:fixed;left:10px;bottom:10px;width:470px;height:440px;display:none;flex-direction:column;\n" +
             "  background:var(--hjp-bg);color:var(--hjp-fg);font:12.5px/1.4 var(--hjp-font);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius);\n" +
             "  box-shadow:var(--hjp-elev);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh;\n" +
@@ -2123,7 +2127,7 @@
     }
 
     /* ====================== UI BUILD ====================== */
-    let mainBtn, panelBtn, modoBtn, closeBtn, foldBtn, gripEl, barraEl,
+    let mainBtn, panelBtn, modoBtn, closeBtn, updateBtn, foldBtn, gripEl, barraEl,
         panelEl, modalEl, cfgWinEl, ayudaEl, ctxEl, toastsEl, avisoEl, railEl;
 
     function checkRow(id, txt) {
@@ -2144,10 +2148,11 @@
         panelBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.panel + '</span> Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
         modoBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-modo-label">Flotante</span>', id: 'hjp-btn-modo', className: 'hjp-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
         closeBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
+        updateBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.actualizar + '</span> Actualizar', id: 'hjp-btn-update', className: 'hjp-btn hjp-update', title: 'Nueva version disponible', style: 'display:none' });
         foldBtn = makeEl('button', { innerText: '▾', id: 'hjp-btn-fold', className: 'hjp-btn hjp-fold', title: 'Plegar barra' });
         gripEl = makeEl('span', { innerText: '⠿', id: 'hjp-grip', className: 'hjp-grip', title: 'Arrastrar barra · doble clic para orientar' });
         barraEl = makeEl('div', { id: 'hjp-barra' });
-        barraEl.append(gripEl, mainBtn, panelBtn, modoBtn, closeBtn, foldBtn);
+        barraEl.append(gripEl, updateBtn, mainBtn, panelBtn, modoBtn, closeBtn, foldBtn);
         if (APP.barra.vertical) barraEl.classList.add('vertical');
 
         panelEl = makeEl('div', { id: 'hjp-panel' });
@@ -3076,23 +3081,41 @@
     /* ====================== ACTUALIZACIONES ====================== */
     function pintarActualizacion() {
         const b = byId('hjp-actualizar');
-        if (!b) return;
         const u = APP.update;
-        if (u.state === 'available') {
-            b.style.display = '';
-            b.classList.add('activo');
-            const icon = b.querySelector('.hjp-mi');
-            if (icon) icon.textContent = ICO.actualizar;
-            b.title = 'Actualizar a la version ' + u.remote + ' (instalada ' + u.local + ')';
-        } else if (u.state === 'installed') {
-            b.style.display = '';
-            b.classList.add('activo');
-            const icon = b.querySelector('.hjp-mi');
-            if (icon) icon.textContent = ICO.refrescar;
-            b.title = 'Actualizacion instalada · recarga para aplicar';
-        } else {
-            b.style.display = 'none';
-            b.classList.remove('activo');
+        const bar = byId('hjp-btn-update');
+        if (bar) {
+            const ver = (u.state === 'available');
+            const visible = bar.style.display !== 'none';
+            if (visible !== ver) {
+                bar.style.display = ver ? '' : 'none';
+                try { placeBar(); } catch (_) { /* noop */ }
+            }
+        }
+        if (b) {
+            b.classList.remove('warn');
+            if (u.state === 'available') {
+                b.style.display = '';
+                b.classList.add('activo');
+                const icon = b.querySelector('.hjp-mi');
+                if (icon) icon.textContent = ICO.actualizar;
+                b.title = 'Actualizar a la version ' + u.remote + ' (instalada ' + u.local + ')';
+            } else if (u.state === 'installed') {
+                b.style.display = '';
+                b.classList.add('activo');
+                const icon = b.querySelector('.hjp-mi');
+                if (icon) icon.textContent = ICO.refrescar;
+                b.title = 'Actualizacion instalada · recarga para aplicar';
+            } else if (u.state === 'error') {
+                b.style.display = '';
+                b.classList.remove('activo');
+                b.classList.add('warn');
+                const icon = b.querySelector('.hjp-mi');
+                if (icon) icon.textContent = ICO.alto;
+                b.title = 'No se pudo comprobar actualizaciones' + (u.lastError ? ' (' + u.lastError + ')' : '') + ' · clic para reintentar';
+            } else {
+                b.style.display = 'none';
+                b.classList.remove('activo');
+            }
         }
         pintarInfoUpdate();
     }
@@ -3101,54 +3124,78 @@
         if (!el) return;
         const u = APP.update;
         let html = 'Version instalada: <b>' + VER + '</b>';
+        if (u.remote) html += ' · remota: <b>' + esc(u.remote) + '</b>' + (u.canal ? ' (' + esc(u.canal) + ')' : '');
         if (u.state === 'checking') html += ' · comprobando...';
         else if (u.state === 'current' && u.lastCheck) html += ' · al dia (revisado ' + new Date(u.lastCheck).toLocaleTimeString() + ')';
-        else if (u.state === 'available') html += ' · <b style="color:var(--hjp-accent-2)">disponible ' + u.remote + '</b>';
+        else if (u.state === 'available') html += ' · <b style="color:var(--hjp-accent-2)">actualizacion disponible</b>';
         else if (u.state === 'installed') html += ' · <b style="color:var(--hjp-accent-2)">actualizada · recarga</b>';
-        else if (u.state === 'error') html += ' · error: ' + esc(u.lastError || '');
+        else if (u.state === 'error') html += ' · <b style="color:var(--hjp-warn-fg)">no se pudo comprobar</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
         el.innerHTML = html;
+    }
+    async function fetchVersionRemota(url) {
+        const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const tmo = ctl ? setTimeout(() => ctl.abort(), 15000) : null;
+        try {
+            const res = await fetch(url + '?t=' + Date.now(), { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const text = await res.text();
+            const v = parseVersionHeader(text);
+            if (!v) throw new Error('version no encontrada');
+            return v;
+        } finally {
+            if (tmo) clearTimeout(tmo);
+        }
     }
     async function comprobarActualizacion() {
         APP.update.state = 'checking';
         pintarActualizacion();
         try {
-            const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-            const tmo = ctl ? setTimeout(() => ctl.abort(), 15000) : null;
-            const res = await fetch(UPDATE_URL + '?t=' + Date.now(), { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
-            if (tmo) clearTimeout(tmo);
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const text = await res.text();
-            const remote = parseVersionHeader(text);
-            if (!remote) throw new Error('version no encontrada');
-            APP.update.remote = remote;
+            // Canal estable (main).
+            const main = await fetchVersionRemota(UPDATE_URL);
+            let mejor = { v: main, url: UPDATE_URL, canal: 'main' };
+            // Si la copia instalada va por delante de main (build de desarrollo),
+            // revisamos tambien el canal dev para no quedarnos sin avisos.
+            if (cmpVersion(VER, main) > 0) {
+                try {
+                    const dev = await fetchVersionRemota(UPDATE_URL_DEV);
+                    if (cmpVersion(dev, VER) > 0) mejor = { v: dev, url: UPDATE_URL_DEV, canal: 'dev' };
+                } catch (_) { /* dev opcional */ }
+            }
+            APP.update.remote = mejor.v;
+            APP.update.canal = mejor.canal;
+            APP.update.url = mejor.url;
             APP.update.local = VER;
-            if (cmpVersion(remote, VER) > 0) {
+            APP.update.lastCheck = Date.now();
+            log('update check:', 'instalada', VER, '· main', main, '· canal', mejor.canal, mejor.v);
+            if (cmpVersion(mejor.v, VER) > 0) {
                 APP.update.state = 'available';
-                APP.update.lastCheck = Date.now();
                 pintarActualizacion();
                 if (!APP.update.notificado) {
                     APP.update.notificado = true;
-                    advice('Nueva version disponible', remote + ' (instalada ' + VER + ')');
+                    advice('Nueva version disponible', mejor.v + ' (instalada ' + VER + ') · canal ' + mejor.canal);
                 }
             } else {
                 APP.update.state = 'current';
-                APP.update.lastCheck = Date.now();
                 pintarActualizacion();
             }
         } catch (e) {
             APP.update.state = 'error';
             APP.update.lastError = (e && e.message) || 'sin conexion';
+            try { console.warn('[HJP] update check error:', APP.update.lastError); } catch (_) { /* noop */ }
             pintarActualizacion();
         }
     }
     function aplicarActualizacion() {
-        if (APP.update.state === 'available') {
-            APP.update.state = 'installed';
+        const u = APP.update;
+        if (u.state === 'available') {
+            u.state = 'installed';
             pintarActualizacion();
-            try { window.open(UPDATE_URL, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
-            advice('Actualizacion iniciada', 'recarga esta pagina para aplicar la nueva version');
-        } else if (APP.update.state === 'installed') {
+            try { window.open(u.url || UPDATE_URL, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+            advice('Actualizacion iniciada', 'instala la nueva version en Tampermonkey y recarga esta pagina');
+        } else if (u.state === 'installed') {
             try { location.reload(); } catch (_) { /* noop */ }
+        } else {
+            comprobarActualizacion();
         }
     }
 
@@ -3482,6 +3529,7 @@
             advice('Tema', APP.config.theme);
         });
         byId('hjp-actualizar').addEventListener('click', aplicarActualizacion);
+        updateBtn.addEventListener('click', aplicarActualizacion);
         byId('hjp-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
         byId('hjp-test').addEventListener('click', testNotify);
         byId('hjp-exportar-todo').addEventListener('click', exportConfig);
@@ -3815,9 +3863,12 @@
             borrarPerfil(n);
             advice('Perfil borrado', n);
         });
-        byId('hjp-check-update').addEventListener('click', () => {
-            comprobarActualizacion();
-            setTimeout(pintarInfoUpdate, 1200);
+        byId('hjp-check-update').addEventListener('click', async () => {
+            await comprobarActualizacion();
+            const u = APP.update;
+            if (u.state === 'available') advice('Nueva version disponible', u.remote + ' (instalada ' + VER + ')');
+            else if (u.state === 'current') advice('Estas al dia', 'Version instalada ' + VER + ' · remota ' + (u.remote || '?'));
+            else advice('No se pudo comprobar', u.lastError || 'sin conexion');
         });
         byId('hjp-limpiar-hist').addEventListener('click', () => {
             if (!APP.historial.length) { advice('Bitacora vacia', ''); return; }
