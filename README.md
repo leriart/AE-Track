@@ -21,9 +21,22 @@ y mantiene abiertas solo las unidades seleccionadas.
 - Automatización de ventanas: apertura, acomodo, resaltado, cierre y
   verificación periódica de que solo sigan abiertas las seleccionadas.
 - Lista vigilada (una por línea, formato `eco` o `eco=destino`).
+- Límite de velocidad global y por unidad, con resaltado cuando se excede.
+- Filtro por estado en la pestaña Unidades (moviendo, detenidas, sin señal,
+  vigiladas, silenciadas) combinable con la búsqueda de texto.
+- Menú contextual por unidad: abrir ventana, silenciar, agregar o quitar de la
+  lista, definir límite de velocidad, ver en OpenStreetMap o Google Maps y
+  copiar económico, placa o coordenadas.
+- Perfiles de configuración con nombre (guardar, cargar, borrar).
+- Limpieza de la bitácora de avisos.
+- Idioma de voz seleccionable y volumen del pitido.
+- Horario de alertas con soporte de rangos que cruzan medianoche.
 - Tema oscuro y claro, densidad normal o compacta y color de acento.
-- Exportación e importación de configuración y respaldo en JSON.
+- Exportación e importación de configuración y respaldo en JSON (incluye
+  límites por unidad).
 - Exportación de unidades y bitácora a CSV.
+- Informe diario descargable en Markdown (resumen de alertas por severidad,
+  por regla, unidades con más avisos y unidades sin señal).
 - Reentrante: si la API de Wialon no está lista, avisa y reintenta.
 - Sin emojis: solo glifos Unicode.
 - Persistencia en `localStorage` bajo las claves `hjp.api.*`.
@@ -52,8 +65,8 @@ Alternativas:
 Después de instalar la extensión, si el navegador lo solicita, habilita el modo
 desarrollador y activa la extensión para los sitios:
 
-- `*://*.ae-track.com/*`
-- `*://*.wialon.com/*`
+- `*://*.ae-track.com/*` y `*://ae-track.com/*`
+- `*://*.wialon.com/*` y `*://wialon.com/*`
 
 ### 2. Instalación automática del userscript
 
@@ -108,9 +121,11 @@ Notas:
 | Umbral detenido (`stopMin`) | 30 min |
 | Umbral en zona (`zonaMin`) | 20 min |
 | Umbral desconexión (`descoMin`) | 25 min |
-| Velocidad máxima (`velMax`) | 110 km/h |
+| Velocidad máxima global (`velMax`) | 110 km/h |
 | Cooldown entre alertas (`cooldownMin`) | 45 min |
 | Voz / pitido / notificación escritorio | activada / activada / desactivada |
+| Idioma de voz (`voiceLang`) | es-MX |
+| Volumen del pitido (`beepVol`) | 0.06 |
 | Horario activo | 06:00 a 23:00 |
 | Tema | oscuro |
 
@@ -121,15 +136,62 @@ HJP-Wialon.user.js   Userscript completo (un solo archivo, IIFE en modo estricto
 README.md            Este documento
 ```
 
-## Publicar una nueva versión
+## Ramas: main y dev
 
-1. Edita `HJP-Wialon.user.js` y sube el número en `// @version` (por ejemplo
-   `4.0.1` a `4.0.2`).
-2. Haz commit y sube el cambio a la rama `main`.
-3. Tampermonkey detectará la nueva versión en la siguiente comprobación.
+- `main` es la rama estable. Es la única que apuntan `@updateURL` y
+  `@downloadURL`, así que solo los cambios fusionados aquí llegan a los
+  usuarios por actualización automática.
+- `dev` es la rama de desarrollo y pruebas. Los cambios hechos aquí no afectan
+  ni actualizan la instalación de los usuarios.
+
+### Probar la rama dev
+
+La versión de `dev` tiene una `@version` mayor que la de `main`. Para probarla
+sin afectar la instalación estable, instala el script desde la URL de `dev` en
+un navegador o perfil de pruebas:
+
+https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js
+
+Nota: el `@updateURL` del script sigue apuntando a `main`; por eso, cuando la
+versión de `main` alcance o supere la de `dev` probada, Tampermonkey podrá
+reemplazarla. Durante las pruebas, desactiva la actualización automática de ese
+userscript o mantén la copia de `main` en otro perfil.
+
+### Publicar una nueva versión
+
+1. Trabaja y prueba los cambios en `dev`.
+2. Edita `HJP-Wialon.user.js` y sube el número en `// @version` (por ejemplo
+   `4.1.0` a `4.1.1`).
+3. Haz commit y sube `dev`.
+4. Fusiona `dev` en `main` (por ejemplo con GitHub Desktop: `dev` -> `main`).
+5. Tampermonkey detectará la nueva versión en la siguiente comprobación de
+   actualizaciones.
 
 Si el cambio modifica los datos guardados en `localStorage`, mantén la
 compatibilidad o documenta la migración en este README.
+
+## Historial de cambios
+
+### 4.1.0 (rama dev)
+
+- Límite de velocidad por unidad, además del límite global.
+- Filtro por estado en la pestaña Unidades.
+- Menú contextual ampliado: lista vigilada, límite, OpenStreetMap y Google
+  Maps, copiar económico, placa y coordenadas.
+- Perfiles de configuración con nombre.
+- Limpieza de la bitácora.
+- Informe diario en Markdown.
+- Idioma de voz seleccionable y volumen del pitido.
+- Correcciones: horario con rangos que cruzan medianoche, rearme de la alerta
+  de desconexión, reanudación del `AudioContext` tras la interacción del
+  usuario, poda de la tabla de cooldowns, lectura robusta de `localStorage` e
+  importación JSON validada.
+- Soporte de dominios base `ae-track.com` y `wialon.com` en `@match`.
+
+### 4.0.1
+
+- Metadatos de instalación y actualización automática, README y renombrado a
+  `HJP-Wialon.user.js`.
 
 ## Soporte
 

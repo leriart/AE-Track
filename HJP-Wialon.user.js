@@ -1,15 +1,17 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.0.1
-// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora y Geocercas. Tema oscuro/claro, backup JSON. Sin emojis.
+// @version      4.1.0
+// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora y Geocercas. Límite de velocidad por unidad, perfiles de configuración, filtros, tema oscuro/claro y backup JSON. Sin emojis.
 // @author       lerit
 // @homepageURL  https://github.com/leriart/AE-Track
 // @supportURL   https://github.com/leriart/AE-Track/issues
 // @updateURL    https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js
 // @downloadURL  https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js
 // @match        *://*.ae-track.com/*
+// @match        *://ae-track.com/*
 // @match        *://*.wialon.com/*
+// @match        *://wialon.com/*
 // @run-at       document-idle
 // @grant        none
 // ==/UserScript==
@@ -81,7 +83,10 @@
         kpi: 'hjp.api.kpi',
         nmolestar: 'hjp.api.nmolestar',
         expanded: 'hjp.api.expanded',
-        fullscreen: 'hjp.api.fullscreen'
+        fullscreen: 'hjp.api.fullscreen',
+        limites: 'hjp.api.limites',
+        perfiles: 'hjp.api.perfiles',
+        filtEstado: 'hjp.api.filtEstado'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -97,6 +102,7 @@
         voice: true,
         voiceLang: 'es-MX',
         beep: true,
+        beepVol: 0.06,
         desktop: false,
         toastSeg: 12,
         severidadMin: 'bajo',
@@ -145,6 +151,16 @@
         try { localStorage.removeItem(key); } catch (_) { /* noop */ }
     }
 
+    function readArray(key, fallback) {
+        const v = readJSON(key, fallback);
+        return Array.isArray(v) ? v : fallback;
+    }
+
+    function readObject(key, fallback) {
+        const v = readJSON(key, fallback);
+        return (v && typeof v === 'object' && !Array.isArray(v)) ? v : fallback;
+    }
+
     function deepMerge(over, base) {
         const out = Object.assign({}, base, over);
         if (base.reglas) out.reglas = Object.assign({}, base.reglas, (over && over.reglas) || {});
@@ -179,22 +195,24 @@
         unidades: [],
         zonas: [],
         zonasPorNombre: new Map(),
-        watchMap: readJSON(LS.watch, {}),
-        seleccion: new Set(readJSON(LS.seleccion, [])),
-        dismissed: new Set(readJSON(LS.dismissed, [])),
-        memo: readJSON(LS.memo, {}),
-        historial: readJSON(LS.hist, []),
-        geoCache: readJSON(LS.geo, {}),
-        barra: readJSON(LS.barra, {
+        watchMap: readObject(LS.watch, {}),
+        seleccion: new Set(readArray(LS.seleccion, [])),
+        dismissed: new Set(readArray(LS.dismissed, [])),
+        memo: readObject(LS.memo, {}),
+        historial: readArray(LS.hist, []),
+        geoCache: readObject(LS.geo, {}),
+        limites: readObject(LS.limites, {}),
+        perfiles: readObject(LS.perfiles, {}),
+        barra: readObject(LS.barra, {
             x: null, y: null, plegada: false, vertical: false,
             botones: { main: true, panel: true, close: true }
         }),
         panelPos: readJSON(LS.panelpos, null),
         panelSize: readJSON(LS.panelsize, null),
         noMolestar: readJSON(LS.nmolestar, null),
-        kpi: readJSON(LS.kpi, { online: [], offline: [] }),
+        kpi: readObject(LS.kpi, { online: [], offline: [] }),
         expanded: readJSON(LS.expanded, false),
-        config: deepMerge(readJSON(LS.cfg, {}), DEFAULTS),
+        config: deepMerge(readObject(LS.cfg, {}), DEFAULTS),
 
         timer: null,
         timerVerif: null,
@@ -207,10 +225,13 @@
         tab: 'dash',
         filtSever: 'todas',
         filtro: '',
+        filtEstado: readJSON(LS.filtEstado, 'todas'),
         unlocked: false,
         consultaRestante: 0
     };
     APP.barra.botones = Object.assign({ main: true, panel: true, close: true }, APP.barra.botones || {});
+    if (!Array.isArray(APP.kpi.online)) APP.kpi.online = [];
+    if (!Array.isArray(APP.kpi.offline)) APP.kpi.offline = [];
 
     /* ======================== DOM HELPERS ======================== */
     function byId(id) { return document.getElementById(id); }
@@ -383,6 +404,41 @@
         const e = info.eco, p = info.placa, i = String(info.id);
         return (e && APP.watchMap[e]) || (p && APP.watchMap[p]) || (APP.watchMap[i]) || '';
     }
+    function limiteDe(info) {
+        const e = info.eco, p = info.placa, i = String(info.id);
+        const v = (e && APP.limites[e]) || (p && APP.limites[p]) || APP.limites[i];
+        const n = Number(v);
+        return (Number.isFinite(n) && n > 0) ? n : APP.config.velMax;
+    }
+    function setLimite(eco, val) {
+        if (!eco) return;
+        const n = Number(val);
+        if (Number.isFinite(n) && n > 0) APP.limites[eco] = n;
+        else delete APP.limites[eco];
+        writeJSON(LS.limites, APP.limites);
+        refresh();
+    }
+    function unitByEco(eco) {
+        if (!eco) return null;
+        const u = APP.unidades.find((x) => {
+            const info = parseUnitName(x);
+            return info.eco === eco || info.placa === eco || String(info.id) === eco;
+        });
+        if (!u) return null;
+        return { u, info: parseUnitName(u), st: unitState(u) };
+    }
+    function openMap(eco, kind) {
+        const it = unitByEco(eco);
+        if (!it || it.st.lat == null || it.st.lon == null) {
+            advice('Sin ubicacion', 'La unidad no reporta coordenadas');
+            return;
+        }
+        const lat = it.st.lat, lon = it.st.lon;
+        const url = (kind === 'google')
+            ? 'https://www.google.com/maps?q=' + lat + ',' + lon
+            : 'https://www.openstreetmap.org/?mlat=' + lat + '&mlon=' + lon + '#map=16/' + lat + '/' + lon;
+        try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+    }
     function shouldWatch(u) {
         if (APP.config.watchAll) return true;
         const info = parseUnitName(u);
@@ -403,14 +459,24 @@
         if (h < 24) return h.toFixed(1) + 'h';
         return Math.round(h / 24) + 'd';
     }
+    function hhmmMin(t) {
+        const p = String(t == null ? '' : t).split(':');
+        if (p.length < 2) return null;
+        const h = parseInt(p[0], 10), m = parseInt(p[1], 10);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+        const r = (h * 60 + m) % 1440;
+        return r < 0 ? r + 1440 : r;
+    }
     function inHorario() {
         const cfg = APP.config;
         if (!cfg.horario.on) return true;
-        const a = cfg.horario.desde.split(':').map(Number);
-        const b = cfg.horario.hasta.split(':').map(Number);
+        const a = hhmmMin(cfg.horario.desde);
+        const b = hhmmMin(cfg.horario.hasta);
+        if (a == null || b == null) return true;
         const d = new Date();
         const m = d.getHours() * 60 + d.getMinutes();
-        return m >= a[0] * 60 + a[1] && m <= b[0] * 60 + b[1];
+        // Rango normal (06:00-23:00) o rango nocturno que cruza medianoche (22:00-06:00).
+        return (a <= b) ? (m >= a && m <= b) : (m >= a || m <= b);
     }
     function normEco(s) { return String(s || '').replace(/^0+/, '') || String(s || ''); }
 
@@ -420,22 +486,39 @@
         try {
             window.speechSynthesis.cancel();
             const u = new SpeechSynthesisUtterance(text);
-            u.lang = APP.config.voiceLang;
+            const lang = APP.config.voiceLang || 'es-MX';
+            u.lang = lang;
             u.rate = 1.05; u.pitch = 1.0;
+            const pref = lang.slice(0, 2).toLowerCase();
+            const voces = window.speechSynthesis.getVoices() || [];
+            const voz = voces.find((v) => String(v.lang || '').toLowerCase().replace('_', '-') === lang.toLowerCase())
+                || voces.find((v) => String(v.lang || '').toLowerCase().indexOf(pref) === 0);
+            if (voz) u.voice = voz;
             window.speechSynthesis.speak(u);
         } catch (_) { /* noop */ }
+    }
+    function audioCtx() {
+        try {
+            const Ctor = window.AudioContext || window.webkitAudioContext;
+            if (!Ctor) return null;
+            return beep._ctx || (beep._ctx = new Ctor());
+        } catch (_) { return null; }
+    }
+    function unlockAudio() {
+        const ctx = audioCtx();
+        if (ctx && ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (_) { /* noop */ } }
     }
     function beep(sev) {
         if (!APP.config.beep) return;
         try {
-            const Ctor = window.AudioContext || window.webkitAudioContext;
-            if (!Ctor) return;
-            const ctx = beep._ctx || (beep._ctx = new Ctor());
+            const ctx = audioCtx();
+            if (!ctx) return;
+            if (ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (_) { /* noop */ } }
             const o = ctx.createOscillator();
             const g = ctx.createGain();
             o.type = 'square';
             o.frequency.value = (sev === 'critico') ? 880 : (sev === 'alto') ? 660 : 440;
-            g.gain.value = 0.05;
+            g.gain.value = clamp(Number(APP.config.beepVol) || 0.06, 0, 1);
             o.connect(g); g.connect(ctx.destination);
             o.start();
             o.stop(ctx.currentTime + (sev === 'critico' ? 0.35 : 0.18));
@@ -446,11 +529,18 @@
         if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
         try { new Notification(title, { body }); } catch (_) { /* noop */ }
     }
+    function pruneCooldowns(ahora) {
+        const keys = Object.keys(APP.cooldowns);
+        if (keys.length < 500) return;
+        const limite = (Number(APP.config.cooldownMin) || 45) * 60000;
+        keys.forEach((k) => { if (ahora - APP.cooldowns[k] > limite) delete APP.cooldowns[k]; });
+    }
     function pushAlert(alert) {
         if (APP.dismissed.has(alert.clave)) return;
         if (alert.soloHorario && !inHorario()) return;
         const ck = alert.clave + '::' + alert.regla;
         const ahora = Date.now();
+        pruneCooldowns(ahora);
         if (APP.cooldowns[ck] && ahora - APP.cooldowns[ck] < APP.config.cooldownMin * 60000) return;
         APP.cooldowns[ck] = ahora;
 
@@ -537,6 +627,9 @@
                 R.descoAlerta = false;
             }
         }
+        // Si la unidad vuelve a reportar, se rearma la alerta de desconexion
+        // aunque la regla general de "sin senal" este desactivada.
+        if (st.estado !== 'offline') R.descoAlerta = false;
 
         // b) GPS perdido en marcha
         if (APP.config.reglas.gpsPerdido && prev && prev.estado !== 'offline') {
@@ -664,14 +757,17 @@
             }
         }
 
-        // h) Exceso de velocidad
-        if (APP.config.reglas.velocidad && st.online && st.vel > APP.config.velMax) {
-            pushAlert({
-                regla: 'velocidad', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                titulo: 'EXCESO DE VELOCIDAD · ' + etq,
-                detalle: Math.round(st.vel) + ' km/h (limite ' + APP.config.velMax + ')',
-                hablar: 'La unidad ' + etq + ' excede la velocidad'
-            });
+        // h) Exceso de velocidad (limite global o por unidad)
+        if (APP.config.reglas.velocidad && st.online) {
+            const lim = limiteDe(info);
+            if (st.vel > lim) {
+                pushAlert({
+                    regla: 'velocidad', sev: 'medio', clave, eco: info.eco, soloHorario: true,
+                    titulo: 'EXCESO DE VELOCIDAD · ' + etq,
+                    detalle: Math.round(st.vel) + ' km/h (limite ' + lim + ')',
+                    hablar: 'La unidad ' + etq + ' excede la velocidad'
+                });
+            }
         }
 
         return R;
@@ -1273,6 +1369,8 @@
             "#hjp-panel .tools button.activo{background:var(--hjp-accent);color:#fff;border-color:var(--hjp-accent-2)}\n" +
             "#hjp-panel input.filtro{flex:1;min-width:90px;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
             "#hjp-panel input.filtro:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
+            "#hjp-panel select.filtro{flex:0 0 auto;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
+            "#hjp-panel select.filtro:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
             "#hjp-panel .severidad-pick{display:flex;gap:3px;align-items:center;padding:6px 9px;background:var(--hjp-bg-soft);border-bottom:1px solid var(--hjp-border-soft)}\n" +
             "#hjp-panel .severidad-pick span{cursor:pointer;padding:2px 6px;border-radius:5px;font:600 11px system-ui;border:1px solid var(--hjp-border);color:var(--hjp-fg-dim)}\n" +
             "#hjp-panel .severidad-pick span.activo{border-color:var(--hjp-accent-2);color:var(--hjp-fg)}\n" +
@@ -1442,10 +1540,19 @@
             '</div>' +
             '<div class="tools" id="hjp-tools">' +
             '<input class="filtro" id="hjp-filtro" placeholder="' + esc(LANG.busq) + '">' +
+            '<select class="filtro" id="hjp-filtro-estado" title="Filtrar por estado">' +
+            '<option value="todas">Todas</option>' +
+            '<option value="moviendo">Moviendo</option>' +
+            '<option value="detenida">Detenidas</option>' +
+            '<option value="offline">Sin senal</option>' +
+            '<option value="vigilada">Vigiladas</option>' +
+            '<option value="silenciada">Silenciadas</option>' +
+            '</select>' +
             '<button id="hjp-refresh" title="Refrescar">' + ICO.refrescar + '</button>' +
             '<button id="hjp-cfg-btn" title="Ajustes">' + ICO.ajustes + '</button>' +
             '<button id="hjp-csv" title="Exportar unidades">' + ICO.descargar + ' CSV</button>' +
             '<button id="hjp-csv-al" title="Exportar bitacora">' + ICO.descargar + ' Bitacora</button>' +
+            '<button id="hjp-informe" title="Generar informe del dia">' + ICO.descargar + ' Informe</button>' +
             '<button id="hjp-verif" title="Solo ventanas seleccionadas">▣ Solo seleccion</button>' +
             '<button id="hjp-captura" title="Capturar ventanas">⊞ Capturar</button>' +
             '<button id="hjp-verifica" title="Verificar ahora">⊘ Aplicar</button>' +
@@ -1559,8 +1666,15 @@
             '</div>' +
             '<div class="cfg-pane" data-cfg="avisos" style="display:none">' +
             '<h4>Avisos</h4>' +
-            checkRow('c-voz', 'Voz (es-MX)') +
+            checkRow('c-voz', 'Voz') +
+            '<label>Idioma de voz <select id="c-voz-lang">' +
+            '<option value="es-MX">Espanol (Mexico)</option>' +
+            '<option value="es-ES">Espanol (Espana)</option>' +
+            '<option value="es-US">Espanol (EE. UU.)</option>' +
+            '<option value="en-US">Ingles (EE. UU.)</option>' +
+            '</select></label>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
+            numRow('c-beep-vol', 'Volumen del pitido (0-1)') +
             checkRow('c-desktop', 'Notificacion del navegador') +
             numRow('c-toastSeg', 'Duracion de toasts (s)') +
             '<label>Severidad minima en toasts' +
@@ -1612,6 +1726,15 @@
             '<button class="accbtn" id="hjp-reset-panel" style="width:100%">' + ICO.colapsar + ' Restablecer tamano</button>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
+            '<h4>Perfiles de configuracion</h4>' +
+            '<label>Perfil <select id="hjp-perfil-sel" style="flex:1"></select></label>' +
+            '<div class="hjp-acciones" style="margin-top:6px">' +
+            '<button class="accbtn" id="hjp-perfil-guardar">Guardar como...</button>' +
+            '<button class="accbtn" id="hjp-perfil-cargar">Cargar</button>' +
+            '<button class="accbtn" id="hjp-perfil-borrar" style="background:#b71c1c">Borrar</button>' +
+            '</div>' +
+            '<h4>Bitacora</h4>' +
+            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:#b71c1c">' + ICO.limpiar + ' Limpiar bitacora</button>' +
             '<h4>Reseteo</h4>' +
             '<div class="hjp-acciones">' +
             '<button class="accbtn" id="hjp-borrar-memo" style="background:#b71c1c">' + ICO.limpiar + ' Borrar estado</button>' +
@@ -1872,6 +1995,12 @@
             .filter(shouldWatch)
             .map((u) => ({ info: parseUnitName(u), st: unitState(u) }))
             .filter((x) => {
+                const est = APP.filtEstado || 'todas';
+                if (est === 'moviendo' && x.st.estado !== 'moviendo') return false;
+                if (est === 'detenida' && x.st.estado !== 'detenida') return false;
+                if (est === 'offline' && x.st.estado !== 'offline') return false;
+                if (est === 'vigilada' && !isWatched(x.info)) return false;
+                if (est === 'silenciada' && !APP.dismissed.has(x.info.clave)) return false;
                 if (!APP.filtro) return true;
                 const f = APP.filtro.toLowerCase();
                 return (x.info.eco + ' ' + x.info.placa + ' ' + x.info.nombre).toLowerCase().indexOf(f) >= 0;
@@ -1892,6 +2021,11 @@
             const txt = st.estado === 'offline' ? 'sin senal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
             const coords = (APP.config.mostrarCoords && st.lat != null)
                 ? ' <span style="color:var(--hjp-fg-mute);font-size:10px">' + st.lat.toFixed(3) + ',' + st.lon.toFixed(3) + '</span>' : '';
+            const lim = limiteDe(info);
+            const excede = st.online && st.vel > lim;
+            const celVel = '<td' + (excede ? ' style="color:var(--hjp-bad-fg);font-weight:bold"' : '') + ' title="' +
+                (lim !== APP.config.velMax ? 'limite de la unidad: ' + lim + ' km/h' : 'limite global: ' + lim + ' km/h') + '">' +
+                Math.round(st.vel) + (lim !== APP.config.velMax ? ' <span style="font-size:10px">/' + lim + '</span>' : '') + '</td>';
             return (
                 '<tr class="fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
                 '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
@@ -1902,7 +2036,7 @@
                 '<td>' + esc(info.placa || '') + '</td>' +
                 '<td>' + txt + '</td>' +
                 '<td>' + ageText(st.edadMin) + '</td>' +
-                '<td>' + Math.round(st.vel) + '</td>' +
+                celVel +
                 '<td>' + esc(zona) + coords + '</td>' +
                 '<td><button class="mini hjp-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
                 (sil ? ICO.silencio : ICO.sonido) + '</button></td>' +
@@ -2020,12 +2154,68 @@
         ]));
         downloadCSV(filas, 'wialon_bitacora');
     }
+    function exportInforme() {
+        const inicio = new Date();
+        inicio.setHours(0, 0, 0, 0);
+        const hoy = APP.historial.filter((a) => a.ts >= inicio.getTime());
+        const cuenta = (lista, campo) => lista.reduce((acc, a) => {
+            const k = a[campo] || '—';
+            acc[k] = (acc[k] || 0) + 1;
+            return acc;
+        }, {});
+        const porSev = cuenta(hoy, 'sev');
+        const porRegla = cuenta(hoy, 'regla');
+        const porEco = cuenta(hoy.filter((a) => a.eco), 'eco');
+        const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const off = watched.filter((x) => !x.st.online);
+
+        const lineas = [];
+        lineas.push('# Informe HJP · Wialon');
+        lineas.push('');
+        lineas.push('Generado: ' + new Date().toLocaleString());
+        lineas.push('Unidades vigiladas: ' + watched.length);
+        lineas.push('En linea: ' + (watched.length - off.length) + ' · Sin senal: ' + off.length);
+        lineas.push('');
+        lineas.push('## Alertas de hoy (' + hoy.length + ')');
+        const sevs = Object.keys(porSev).sort((a, b) => pickSeverity(b) - pickSeverity(a));
+        if (sevs.length) sevs.forEach((s) => lineas.push('- ' + s + ': ' + porSev[s]));
+        else lineas.push('- Sin alertas registradas.');
+        lineas.push('');
+        lineas.push('## Por regla');
+        const reglas = Object.keys(porRegla).sort((a, b) => porRegla[b] - porRegla[a]);
+        if (reglas.length) reglas.forEach((r) => lineas.push('- ' + r + ': ' + porRegla[r]));
+        else lineas.push('- Sin datos.');
+        lineas.push('');
+        lineas.push('## Unidades con mas alertas');
+        const ecos = Object.keys(porEco).sort((a, b) => porEco[b] - porEco[a]).slice(0, 15);
+        if (ecos.length) ecos.forEach((e) => lineas.push('- ' + e + ': ' + porEco[e]));
+        else lineas.push('- Sin datos.');
+        lineas.push('');
+        lineas.push('## Unidades sin senal ahora');
+        if (off.length) off.forEach((x) => lineas.push('- ' + (x.info.eco || x.info.nombre) + ' (' + ageText(x.st.edadMin) + ')'));
+        else lineas.push('- Todas reportando.');
+        lineas.push('');
+        lineas.push('## Ultimos avisos');
+        if (APP.historial.length) {
+            APP.historial.slice(0, 25).forEach((a) => lineas.push(
+                '- [' + new Date(a.ts).toLocaleString() + '] ' + a.titulo + (a.detalle ? ' · ' + a.detalle : '')
+            ));
+        } else {
+            lineas.push('- Sin avisos.');
+        }
+        const a = makeEl('a', { href: URL.createObjectURL(new Blob([lineas.join('\n')], { type: 'text/markdown;charset=utf-8;' })) });
+        a.download = 'hjp_informe_' + new Date().toISOString().slice(0, 10) + '.md';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        advice('Informe generado', hoy.length + ' alertas hoy');
+    }
     function exportConfig() {
         const data = {
-            version: 4, ts: Date.now(),
+            version: 5, ts: Date.now(),
             config: APP.config, barra: APP.barra,
             seleccion: Array.from(APP.seleccion), dismissed: Array.from(APP.dismissed),
-            watchMap: APP.watchMap, panelPos: APP.panelPos, panelSize: APP.panelSize
+            watchMap: APP.watchMap, limites: APP.limites,
+            panelPos: APP.panelPos, panelSize: APP.panelSize
         };
         const a = makeEl('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })) });
         a.download = 'hjp_config_' + new Date().toISOString().slice(0, 10) + '.json';
@@ -2042,13 +2232,15 @@
             r.onload = () => {
                 try {
                     const d = JSON.parse(r.result);
-                    if (d.config) APP.config = deepMerge(d.config, DEFAULTS);
+                    if (!d || typeof d !== 'object') throw new Error('JSON invalido');
+                    if (d.config && typeof d.config === 'object') APP.config = deepMerge(d.config, DEFAULTS);
                     writeJSON(LS.cfg, APP.config);
-                    if (d.barra) APP.barra = d.barra;
+                    if (d.barra && typeof d.barra === 'object') APP.barra = d.barra;
                     writeJSON(LS.barra, APP.barra);
                     if (Array.isArray(d.seleccion)) { APP.seleccion = new Set(d.seleccion); writeJSON(LS.seleccion, Array.from(APP.seleccion)); }
                     if (Array.isArray(d.dismissed)) { APP.dismissed = new Set(d.dismissed); writeJSON(LS.dismissed, Array.from(APP.dismissed)); }
-                    if (d.watchMap) { APP.watchMap = d.watchMap; writeJSON(LS.watch, APP.watchMap); }
+                    if (d.watchMap && typeof d.watchMap === 'object') { APP.watchMap = d.watchMap; writeJSON(LS.watch, APP.watchMap); }
+                    if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeJSON(LS.limites, APP.limites); }
                     if (d.panelPos) { APP.panelPos = d.panelPos; writeJSON(LS.panelpos, APP.panelPos); }
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
                     applyBar(); applyTheme(); placePanel();
@@ -2061,6 +2253,55 @@
             r.readAsText(f);
         });
         inp.click();
+    }
+    function pintarPerfiles() {
+        const sel = byId('hjp-perfil-sel');
+        if (!sel) return;
+        const nombres = Object.keys(APP.perfiles).sort((a, b) => a.localeCompare(b));
+        sel.innerHTML = nombres.length
+            ? nombres.map((n) => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('')
+            : '<option value="">(sin perfiles)</option>';
+    }
+    function guardarPerfil(nombre) {
+        if (!nombre) return false;
+        APP.perfiles[nombre] = {
+            config: JSON.parse(JSON.stringify(APP.config)),
+            limites: JSON.parse(JSON.stringify(APP.limites)),
+            ts: Date.now()
+        };
+        writeJSON(LS.perfiles, APP.perfiles);
+        pintarPerfiles();
+        const sel = byId('hjp-perfil-sel');
+        if (sel) sel.value = nombre;
+        return true;
+    }
+    function cargarPerfil(nombre) {
+        const p = APP.perfiles[nombre];
+        if (!p) return false;
+        if (p.config) { APP.config = deepMerge(p.config, DEFAULTS); writeJSON(LS.cfg, APP.config); }
+        if (p.limites) { APP.limites = p.limites; writeJSON(LS.limites, APP.limites); }
+        applyBar();
+        applyTheme();
+        restartTimers();
+        refresh();
+        return true;
+    }
+    function borrarPerfil(nombre) {
+        if (!nombre || !APP.perfiles[nombre]) return false;
+        delete APP.perfiles[nombre];
+        writeJSON(LS.perfiles, APP.perfiles);
+        pintarPerfiles();
+        return true;
+    }
+    function limpiarBitacora() {
+        const n = APP.historial.length;
+        APP.historial = [];
+        writeJSON(LS.hist, APP.historial);
+        paintCounters();
+        if (APP.tab === 'alertas') paintAlertas();
+        if (APP.tab === 'dash') paintKPI();
+        paintStateBadge();
+        return n;
     }
     function testNotify() {
         const previo = APP.noMolestar;
@@ -2218,6 +2459,7 @@
         byId('hjp-refresh').addEventListener('click', refresh);
         byId('hjp-csv').addEventListener('click', exportUnits);
         byId('hjp-csv-al').addEventListener('click', exportAlertas);
+        byId('hjp-informe').addEventListener('click', exportInforme);
         byId('hjp-captura').addEventListener('click', captureSelection);
         byId('hjp-verifica').addEventListener('click', () => { verifyWindows(false); });
         byId('hjp-sel-all').addEventListener('click', () => { selectAllVisible(); });
@@ -2235,6 +2477,17 @@
             else if (APP.tab === 'unidades') paintTabla();
             else if (APP.tab === 'geocercas') paintGeocercas();
         });
+        const selEst = byId('hjp-filtro-estado');
+        if (selEst) {
+            selEst.value = APP.filtEstado || 'todas';
+            selEst.addEventListener('change', (e) => {
+                APP.filtEstado = e.target.value;
+                writeJSON(LS.filtEstado, APP.filtEstado);
+                if (APP.tab === 'unidades') paintTabla();
+            });
+        }
+        document.addEventListener('pointerdown', unlockAudio, { once: true });
+        document.addEventListener('keydown', unlockAudio, { once: true });
         document.querySelectorAll('#hjp-tabs .tab').forEach((t) =>
             t.addEventListener('click', () => setTab(t.dataset.tab)));
         document.querySelectorAll('#hjp-filtroseveridad span').forEach((s) =>
@@ -2300,13 +2553,21 @@
             const eco = tr ? tr.dataset.eco : null;
             if (!eco) return;
             e.preventDefault();
+            const it = unitByEco(eco);
+            const lim = it ? limiteDe(it.info) : APP.config.velMax;
             showMenu(e.clientX, e.clientY, [
                 { id: 'open', label: '▷ Abrir ventana' },
                 { id: 'sil', label: (APP.dismissed.has(eco) ? '◆ Reactivar avisos' : '◇ Silenciar esta unidad') },
                 { id: 'verif', label: '⊘ Aplicar verificacion' },
                 { sep: 1 },
+                { id: 'lista', label: (APP.watchMap[eco] !== undefined ? '⚑ Quitar de lista vigilada' : '⚑ Anadir a lista vigilada') },
+                { id: 'limite', label: '▸ Limite de velocidad (actual ' + lim + ' km/h)' },
+                { sep: 1 },
+                { id: 'mapa-osm', label: '⌖ Ver en OpenStreetMap' },
+                { id: 'mapa-google', label: '⌖ Ver en Google Maps' },
                 { id: 'copy-eco', label: '⎘ Copiar economico' },
-                { id: 'copy-placa', label: '⎘ Copiar placa' }
+                { id: 'copy-placa', label: '⎘ Copiar placa' },
+                { id: 'copy-coords', label: '⎘ Copiar coordenadas' }
             ]);
             ctxEl._target = { eco };
         });
@@ -2320,12 +2581,31 @@
                 writeJSON(LS.dismissed, Array.from(APP.dismissed));
                 paintTabla();
             } else if (acc === 'verif') verifyWindows(false);
+            else if (acc === 'lista') {
+                if (APP.watchMap[eco] !== undefined) { quitarDeLista(eco); advice('Quitada de la lista', eco); }
+                else { agregarALista(eco, ''); advice('Anadida a la lista', eco); }
+                paintTabla();
+            } else if (acc === 'limite') {
+                const it = unitByEco(eco);
+                const actual = it ? limiteDe(it.info) : APP.config.velMax;
+                const val = window.prompt('Limite de velocidad para ' + eco + ' (km/h). Dejalo vacio para usar el global (' + APP.config.velMax + ').', actual);
+                if (val !== null) {
+                    setLimite(eco, val);
+                    advice('Limite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
+                }
+            } else if (acc === 'mapa-osm') openMap(eco, 'osm');
+            else if (acc === 'mapa-google') openMap(eco, 'google');
             else if (acc === 'copy-eco') { copyToClipboard(eco); advice('Copiado', eco); }
             else if (acc === 'copy-placa') {
                 const u = APP.unidades.find((x) => parseUnitName(x).eco === eco);
                 const placa = u ? parseUnitName(u).placa : '';
                 copyToClipboard(placa);
                 advice('Copiado', placa || eco);
+            } else if (acc === 'copy-coords') {
+                const it = unitByEco(eco);
+                const txt = (it && it.st.lat != null) ? (it.st.lat + ',' + it.st.lon) : '';
+                if (!txt) advice('Sin ubicacion', 'La unidad no reporta coordenadas');
+                else { copyToClipboard(txt); advice('Coordenadas copiadas', txt); }
             }
             hideMenu();
         });
@@ -2352,7 +2632,10 @@
             g('c-toastSeg').value = APP.config.toastSeg;
             g('c-sevmin').value = APP.config.severidadMin;
             g('c-voz').checked = !!APP.config.voice;
+            g('c-voz-lang').value = APP.config.voiceLang || 'es-MX';
             g('c-beep').checked = !!APP.config.beep;
+            g('c-beep-vol').value = APP.config.beepVol;
+            g('c-beep-vol').step = '0.01';
             g('c-desktop').checked = !!APP.config.desktop;
             g('c-watchAll').checked = !!APP.config.watchAll;
             g('c-auto').checked = !!APP.config.autoOpen;
@@ -2381,6 +2664,7 @@
             g('c-hor-on').checked = !!APP.config.horario.on;
             g('c-hor-a').value = APP.config.horario.desde;
             g('c-hor-b').value = APP.config.horario.hasta;
+            pintarPerfiles();
             if (APP.config.desktop && typeof Notification !== 'undefined' && Notification.permission === 'default') {
                 Notification.requestPermission();
             }
@@ -2410,7 +2694,9 @@
             cf.toastSeg = Math.max(3, isoNum(g('c-toastSeg').value, cf.toastSeg));
             cf.severidadMin = g('c-sevmin').value;
             cf.voice = g('c-voz').checked;
+            cf.voiceLang = g('c-voz-lang').value || DEFAULTS.voiceLang;
             cf.beep = g('c-beep').checked;
+            cf.beepVol = clamp(parseFloat(g('c-beep-vol').value) || cf.beepVol || DEFAULTS.beepVol, 0, 1);
             cf.desktop = g('c-desktop').checked;
             cf.watchAll = g('c-watchAll').checked;
             cf.autoOpen = g('c-auto').checked;
@@ -2464,6 +2750,36 @@
             APP.panelSize = { w: 470, h: 440 };
             writeJSON(LS.panelsize, APP.panelSize);
             advice('Tamano restablecido');
+        });
+        byId('hjp-perfil-guardar').addEventListener('click', () => {
+            const n = window.prompt('Nombre del perfil de configuracion:', '');
+            if (n && n.trim()) {
+                guardarPerfil(n.trim());
+                advice('Perfil guardado', n.trim());
+            }
+        });
+        byId('hjp-perfil-cargar').addEventListener('click', () => {
+            const sel = byId('hjp-perfil-sel');
+            const n = sel ? sel.value : '';
+            if (!n) { advice('Sin perfil', 'Guarda un perfil primero'); return; }
+            if (cargarPerfil(n)) {
+                cfgWinEl.style.display = 'none';
+                advice('Perfil cargado', n);
+            }
+        });
+        byId('hjp-perfil-borrar').addEventListener('click', () => {
+            const sel = byId('hjp-perfil-sel');
+            const n = sel ? sel.value : '';
+            if (!n) return;
+            if (!window.confirm('¿Borrar el perfil "' + n + '"?')) return;
+            borrarPerfil(n);
+            advice('Perfil borrado', n);
+        });
+        byId('hjp-limpiar-hist').addEventListener('click', () => {
+            if (!APP.historial.length) { advice('Bitacora vacia', ''); return; }
+            if (!window.confirm('¿Borrar toda la bitacora de avisos?')) return;
+            limpiarBitacora();
+            advice('Bitacora limpiada');
         });
         byId('hjp-borrar-memo').addEventListener('click', () => {
             APP.memo = {}; writeJSON(LS.memo, APP.memo); refresh();
