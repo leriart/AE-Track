@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.8.1
+// @version      4.9.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.8.1';
+    const VER = '4.9.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -127,6 +127,19 @@
         perfiles: 'hjp.api.perfiles',
         filtEstado: 'hjp.api.filtEstado',
         rutas: 'hjp.api.rutas'
+    });
+
+    // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
+    // Se migran desde LS en el primer acceso para no perder datos existentes.
+    const SS = Object.freeze({
+        watch: 'hjp.api.s.watch',
+        memo: 'hjp.api.s.memo',
+        dismissed: 'hjp.api.s.dismissed',
+        hist: 'hjp.api.s.hist',
+        geo: 'hjp.api.s.geo',
+        seleccion: 'hjp.api.s.seleccion',
+        kpi: 'hjp.api.s.kpi',
+        limites: 'hjp.api.s.limites'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -210,6 +223,31 @@
 
     function clearKey(key) {
         try { localStorage.removeItem(key); } catch (_) { /* noop */ }
+    }
+
+    // sessionStorage por pestaña. Migra desde LS la primera vez para no perder
+    // los datos guardados en versiones anteriores.
+    function readSession(key, fallback, legacyKey) {
+        try {
+            const raw = sessionStorage.getItem(key);
+            if (raw != null) {
+                const v = JSON.parse(raw);
+                if (v != null) return v;
+            }
+            if (legacyKey) {
+                const legacy = localStorage.getItem(legacyKey);
+                if (legacy != null) {
+                    const parsed = JSON.parse(legacy);
+                    sessionStorage.setItem(key, JSON.stringify(parsed));
+                    try { localStorage.removeItem(legacyKey); } catch (_) { /* noop */ }
+                    return parsed;
+                }
+            }
+        } catch (_) { /* noop */ }
+        return fallback;
+    }
+    function writeSession(key, value) {
+        try { sessionStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* noop */ }
     }
 
     function readArray(key, fallback) {
@@ -1845,6 +1883,12 @@
         return '#' + [mix((n >> 16) & 255), mix((n >> 8) & 255), mix(n & 255)]
             .map((x) => x.toString(16).padStart(2, '0')).join('');
     }
+    function hexToRgb(hex) {
+        const h = String(hex || '').replace('#', '');
+        if (h.length !== 6) return null;
+        const n = parseInt(h, 16);
+        return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+    }
     function applyTheme() {
         const c = APP.config;
         const theme = (c.theme === 'auto')
@@ -1861,6 +1905,8 @@
             document.documentElement.style.setProperty('--hjp-accent', c.acento);
             document.documentElement.style.setProperty('--hjp-accent-2', a2);
             document.documentElement.style.setProperty('--hjp-accent-grad', 'linear-gradient(135deg,' + c.acento + ',' + a2 + ')');
+            const rgb = hexToRgb(c.acento);
+            if (rgb) document.documentElement.style.setProperty('--hjp-accent-rgb', rgb.r + ',' + rgb.g + ',' + rgb.b);
         }
         const p = byId('hjp-panel');
         if (p) p.classList.toggle('density-compact', c.density === 'compact');
@@ -1983,12 +2029,12 @@
             "#hjp-panel .hjp-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:var(--hjp-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--hjp-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#hjp-panel .hjp-iconbtn:hover{background:var(--hjp-bg);border-color:var(--hjp-border);color:var(--hjp-fg);transform:translateY(-1px);box-shadow:var(--hjp-shadow)}\n" +
             "#hjp-panel .hjp-iconbtn:active{transform:translateY(0)}\n" +
-            "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(133,13,34,.4)}\n" +
+            "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--hjp-accent-rgb),.4)}\n" +
             "#hjp-panel .tabs{display:flex;gap:4px;background:var(--hjp-bg-soft);padding:6px 8px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
             "#hjp-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--hjp-font);border-radius:var(--hjp-radius-sm);letter-spacing:.2px;transition:background .18s var(--hjp-easing),color .18s,box-shadow .18s,transform .1s}\n" +
             "#hjp-panel .tab .etqt{font-size:11px;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#hjp-panel .tab:hover{color:var(--hjp-fg);background:var(--hjp-bg-strong);transform:translateY(-1px)}\n" +
-            "#hjp-panel .tab.activo{color:#fff;background:var(--hjp-accent-grad);box-shadow:0 3px 10px rgba(133,13,34,.35)}\n" +
+            "#hjp-panel .tab.activo{color:#fff;background:var(--hjp-accent-grad);box-shadow:0 3px 10px rgba(var(--hjp-accent-rgb),.35)}\n" +
             "#hjp-panel .tab .contador{font-size:10px;background:var(--hjp-bg-strong);color:var(--hjp-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
             "#hjp-panel .tab.activo .contador{background:rgba(255,255,255,.25);color:#fff}\n" +
             "#hjp-panel .tools{display:flex;gap:6px;padding:7px 9px;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap;align-items:center;background:var(--hjp-bg-soft)}\n" +
@@ -2090,7 +2136,7 @@
             "#hjp-ayuda .hjp-iconbtn{background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1}\n" +
             "#hjp-ayuda .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
             "#hjp-ayuda button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
-            "#hjp-ayuda button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(133,13,34,.4);filter:brightness(1.05)}\n" +
+            "#hjp-ayuda button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--hjp-accent-rgb),.4);filter:brightness(1.05)}\n" +
             "#hjp-ayuda button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
             "#hjp-ayuda button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
             "#hjp-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--hjp-bg);border-bottom:1px solid var(--hjp-border-soft);border-radius:10px 10px 0 0}\n" +
@@ -2112,13 +2158,13 @@
             "#hjp-config .row-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}\n" +
             "#hjp-config .row-grid label{padding:1px 0}\n" +
             "#hjp-config button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
-            "#hjp-config button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(133,13,34,.4);filter:brightness(1.05)}\n" +
+            "#hjp-config button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--hjp-accent-rgb),.4);filter:brightness(1.05)}\n" +
             "#hjp-config button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
             "#hjp-config button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
             "#hjp-modal textarea{width:100%;height:160px;resize:none;padding:10px;border-radius:6px;border:1px solid var(--hjp-border);background:var(--hjp-bg);color:var(--hjp-fg);box-sizing:border-box;font:12px monospace}\n" +
             "#hjp-modal h3{margin:0;text-align:center;font-size:13px;color:var(--hjp-fg)}\n" +
             "#hjp-modal button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
-            "#hjp-modal button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(133,13,34,.4);filter:brightness(1.05)}\n" +
+            "#hjp-modal button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--hjp-accent-rgb),.4);filter:brightness(1.05)}\n" +
             "#hjp-modal button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
             "#hjp-modal button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
             "#hjp-contexto{padding:4px;gap:0;width:auto;min-width:170px}\n" +
@@ -2138,7 +2184,7 @@
             "#hjp-panel .hjp-tile:active{transform:translateY(0)}\n" +
             "#hjp-panel .hjp-tile .hjp-mi{font-size:21px;color:var(--hjp-accent-2);line-height:1}\n" +
             "#hjp-panel .hjp-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
-            "#hjp-panel .hjp-tile.primary{background:var(--hjp-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(133,13,34,.35)}\n" +
+            "#hjp-panel .hjp-tile.primary{background:var(--hjp-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(var(--hjp-accent-rgb),.35)}\n" +
             "#hjp-panel .hjp-tile.primary .hjp-mi{color:#fff}\n" +
             "#hjp-barra .hjp-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#hjp-barra .hjp-badge-estado.ok{background:var(--hjp-ok)}\n" +
@@ -2472,10 +2518,10 @@
             '<button class="accbtn" id="hjp-perfil-borrar" style="background:#b71c1c">Borrar</button>' +
             '</div>' +
             '<h4>Bitacora</h4>' +
-            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:#850D22">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar bitacora</button>' +
+            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:var(--hjp-accent)">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar bitacora</button>' +
             '<h4>Reseteo</h4>' +
             '<div class="hjp-acciones">' +
-            '<button class="accbtn" id="hjp-borrar-memo" style="background:#850D22"><span class="hjp-mi">' + ICO.limpiar + '</span> Borrar estado</button>' +
+            '<button class="accbtn" id="hjp-borrar-memo" style="background:var(--hjp-accent)"><span class="hjp-mi">' + ICO.limpiar + '</span> Borrar estado</button>' +
             '<button class="accbtn" id="hjp-borrar-todo" style="background:#5d0007">Borrar TODO</button>' +
             '</div>' +
             '</div>' +
@@ -3776,7 +3822,7 @@
             g('c-verif-seg').value = APP.config.verifSeg;
             g('c-tema').value = APP.config.theme;
             g('c-dens').value = APP.config.density;
-            g('c-acento').value = APP.config.acento || '#1565c0';
+            g('c-acento').value = APP.config.acento || '#850D22';
             g('c-coords').checked = !!APP.config.mostrarCoords;
             g('c-contornos').checked = !!APP.config.contornos;
             g('c-contorno-horas').value = APP.config.contornoHoras;
