@@ -1,10 +1,12 @@
 # HJP · Wialon
 
 Userscript para Tampermonkey que anade vigilancia de flota sobre la API nativa
-de Wialon y sobre AE-Track.
+de Wialon y sobre AE-Track. Proyecto original de
+[Héctor Ramírez (HectorRamirez-cpu)](https://github.com/HectorRamirez-cpu).
 
 - Script: [`HJP-Wialon.user.js`](./HJP-Wialon.user.js)
 - Manual completo: [`MANUAL.md`](./MANUAL.md)
+- Changelog: [`changelogs/`](./changelogs/)
 - Compatible con: Chrome, Chromium, Edge, Brave, Opera, Vivaldi y Firefox
   (Tampermonkey) y con Violentmonkey.
 
@@ -73,3 +75,11 @@ https://github.com/leriart/AE-Track/issues
 
 Detalle de uso, reglas, rutas, atajos y preguntas frecuentes en el
 [manual de usuario](./MANUAL.md).
+
+## Creditos
+
+- Proyecto original y autoria de la idea: **Héctor Ramírez**
+  ([HectorRamirez-cpu](https://github.com/HectorRamirez-cpu)).
+- Adaptacion, mantenimiento y nuevas funciones: **lerit**.
+
+Cambios por version en [`changelogs/`](./changelogs/).

@@ -22,6 +22,7 @@ Indice:
 - [Configuracion paso a paso](#configuracion-paso-a-paso)
 - [Preguntas frecuentes](#preguntas-frecuentes)
 - [Privacidad y datos](#privacidad-y-datos)
+- [Creditos](#creditos)
 
 ## Que es y que necesitas
 
@@ -329,3 +330,12 @@ Ajustes, pestana Avanzado, **Borrar TODO**. La pagina se recargara.
   geocodificar y calcular rutas.
 - Al cerrar sesion o borrar los datos del sitio, desaparece la informacion
   guardada. Usa **Exportar configuracion** para conservar un respaldo.
+
+## Creditos
+
+- Proyecto original e idea: **Héctor Ramírez**
+  ([HectorRamirez-cpu](https://github.com/HectorRamirez-cpu)).
+- Adaptacion, mantenimiento y nuevas funciones: **lerit**.
+
+Los cambios de cada version estan en la carpeta
+[`changelogs/`](./changelogs/) del repositorio.
