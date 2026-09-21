@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.6.1
+// @version      4.7.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -54,7 +54,7 @@
         selClear: 'E14A',
         arrowLeft: 'E314',
         arrowRight: 'E315',
-        actualizar: 'E8BB'
+        actualizar: 'E5D5'
     });
     function ico(name) {
         const h = MAT[name];
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.6.1';
+    const VER = '4.7.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -1935,8 +1935,8 @@
             "#hjp-panel .hjp-iconbtn:active{transform:translateY(0)}\n" +
             "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(133,13,34,.4)}\n" +
             "#hjp-panel .tabs{display:flex;gap:4px;background:var(--hjp-bg-soft);padding:6px 8px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--hjp-font);border-radius:var(--hjp-radius-sm);letter-spacing:.2px;transition:background .18s var(--hjp-easing),color .18s,box-shadow .18s,transform .1s}\n" +
-            "#hjp-panel .tab .etqt{font-size:11px;letter-spacing:.2px}\n" +
+            "#hjp-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--hjp-font);border-radius:var(--hjp-radius-sm);letter-spacing:.2px;transition:background .18s var(--hjp-easing),color .18s,box-shadow .18s,transform .1s}\n" +
+            "#hjp-panel .tab .etqt{font-size:11px;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#hjp-panel .tab:hover{color:var(--hjp-fg);background:var(--hjp-bg-strong);transform:translateY(-1px)}\n" +
             "#hjp-panel .tab.activo{color:#fff;background:var(--hjp-accent-grad);box-shadow:0 3px 10px rgba(133,13,34,.35)}\n" +
             "#hjp-panel .tab .contador{font-size:10px;background:var(--hjp-bg-strong);color:var(--hjp-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
@@ -2082,12 +2082,12 @@
             "  border-radius:5px;z-index:1000002;font:12px var(--hjp-font);display:none;box-shadow:var(--hjp-shadow)}\n" +
             "body.hjp-lateral #hjp-barra{display:none}\n" +
             "#hjp-panel .hjp-sidebar-tools{display:none;gap:8px;padding:10px;background:linear-gradient(180deg,var(--hjp-bg-strong),var(--hjp-bg-soft));border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel.lateral .hjp-sidebar-tools{display:grid;grid-template-columns:repeat(4,1fr)}\n" +
-            "#hjp-panel .hjp-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;min-width:0;padding:10px 4px;border-radius:var(--hjp-radius);background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);color:var(--hjp-fg);cursor:pointer;font:600 10.5px var(--hjp-font);transition:background .16s var(--hjp-easing),transform .12s,box-shadow .16s,border-color .16s}\n" +
+            "#hjp-panel.lateral .hjp-sidebar-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));border-top:3px solid var(--hjp-accent)}\n" +
+            "#hjp-panel .hjp-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-width:0;overflow:hidden;padding:11px 6px;border-radius:var(--hjp-radius);background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);color:var(--hjp-fg);cursor:pointer;font:600 10.5px var(--hjp-font);transition:background .16s var(--hjp-easing),transform .12s,box-shadow .16s,border-color .16s}\n" +
             "#hjp-panel .hjp-tile:hover{background:var(--hjp-bg);border-color:var(--hjp-fg-mute);transform:translateY(-2px);box-shadow:var(--hjp-shadow)}\n" +
             "#hjp-panel .hjp-tile:active{transform:translateY(0)}\n" +
-            "#hjp-panel .hjp-tile .hjp-mi{font-size:20px;color:var(--hjp-accent-2)}\n" +
-            "#hjp-panel .hjp-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}\n" +
+            "#hjp-panel .hjp-tile .hjp-mi{font-size:21px;color:var(--hjp-accent-2);line-height:1}\n" +
+            "#hjp-panel .hjp-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
             "#hjp-panel .hjp-tile.primary{background:var(--hjp-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(133,13,34,.35)}\n" +
             "#hjp-panel .hjp-tile.primary .hjp-mi{color:#fff}\n" +
             "#hjp-barra .hjp-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
@@ -2169,9 +2169,6 @@
             '<button class="hjp-iconbtn" id="hjp-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--hjp-accent-2)"><span class="hjp-mi">' + ICO.actualizar + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-tema" title="Tema"><span class="hjp-mi">' + ICO.luna + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-nmolestar" title="No molestar"><span class="hjp-mi">' + ICO.silencioTotal + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-test" title="Probar avisos"><span class="hjp-mi">' + ICO.senal + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-exportar-todo" title="Exportar configuración"><span class="hjp-mi">' + ICO.exportar + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-importar-todo" title="Importar configuración"><span class="hjp-mi">' + ICO.importar + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-collapse" title="Colapsar/expandir barra lateral"><span class="hjp-mi">' + ICO.colapsar + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-ayuda-btn" title="Ayuda rápida"><span class="hjp-mi">' + ICO.ayuda + '</span></button>' +
             '<button class="hjp-iconbtn" id="hjp-cerrar-panel" title="Cerrar panel"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
@@ -2407,6 +2404,12 @@
             '<h4>Actualizaciones</h4>' +
             '<div id="hjp-update-info" style="font-size:11.5px;color:var(--hjp-fg-dim);margin-bottom:6px">Version instalada: <b>' + VER + '</b></div>' +
             '<button class="accbtn" id="hjp-check-update" style="width:100%"><span class="hjp-mi">' + ICO.refrescar + '</span> Buscar actualizaciones</button>' +
+            '<h4>Datos y prueba</h4>' +
+            '<div class="hjp-acciones">' +
+            '<button class="accbtn" id="hjp-test-btn"><span class="hjp-mi">' + ICO.senal + '</span> Probar avisos</button>' +
+            '<button class="accbtn" id="hjp-exportar-btn"><span class="hjp-mi">' + ICO.exportar + '</span> Exportar</button>' +
+            '<button class="accbtn" id="hjp-importar-btn"><span class="hjp-mi">' + ICO.importar + '</span> Importar</button>' +
+            '</div>' +
             '<h4>Perfiles de configuracion</h4>' +
             '<label>Perfil <select id="hjp-perfil-sel" style="flex:1"></select></label>' +
             '<div class="hjp-acciones" style="margin-top:6px">' +
@@ -2701,6 +2704,7 @@
         else if (name === 'geocercas') paintGeocercas();
         paintCounters();
         paintStateBadge();
+        paintInfo();
     }
     function paintInfo() {
         const info = byId('hjp-info');
@@ -2989,6 +2993,7 @@
         byId('hjp-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
         paintStateBadge();
+        paintInfo();
     }, 1000);
 
     /* ====================== CSV + BACKUP ====================== */
@@ -3531,9 +3536,9 @@
         byId('hjp-actualizar').addEventListener('click', aplicarActualizacion);
         updateBtn.addEventListener('click', aplicarActualizacion);
         byId('hjp-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
-        byId('hjp-test').addEventListener('click', testNotify);
-        byId('hjp-exportar-todo').addEventListener('click', exportConfig);
-        byId('hjp-importar-todo').addEventListener('click', importConfig);
+        byId('hjp-test-btn').addEventListener('click', testNotify);
+        byId('hjp-exportar-btn').addEventListener('click', exportConfig);
+        byId('hjp-importar-btn').addEventListener('click', importConfig);
         foldBtn.addEventListener('click', () => {
             APP.barra.plegada = !APP.barra.plegada;
             applyBar();

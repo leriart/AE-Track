@@ -287,9 +287,10 @@ Sobre una unidad en la pestana Unidades:
 - **Bitacora** (CSV): descarga el historial de avisos.
 - **Informe**: genera un informe del dia en Markdown con alertas por severidad,
   por regla, unidades con mas avisos y unidades sin senal.
-- **Exportar configuracion** (cabecera): descarga un JSON con toda tu
-  configuracion, listas, limites y rutas.
-- **Importar configuracion** (cabecera): restaura ese JSON.
+- **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y
+  prueba; descarga un JSON con toda tu configuracion, listas, limites y rutas.
+- **Importar** configuracion: en la misma seccion; restaura ese JSON.
+- **Probar avisos**: en la misma seccion; lanza una alerta de prueba.
 - **Perfiles**: en Ajustes, pestana Avanzado, guarda configuraciones con nombre
   y cargalas cuando quieras.
 - **Limpiar bitacora**: borra el historial de avisos.
@@ -356,8 +357,8 @@ solo tienes el panel abierto y no hay seleccion, la lista aparece vacia.
 
 **No suenan la voz ni el pitido.**
 Los navegadores bloquean el audio hasta que interactuas con la pagina. Haz clic
-una vez en cualquier parte y comprueba que Voz y Pitido esten activados. Usa el
-boton de probar avisos de la cabecera.
+una vez en cualquier parte y comprueba que Voz y Pitido esten activados. Usa
+**Probar avisos** en Ajustes, pestana Avanzado, seccion Datos y prueba.
 
 **No aparecen las notificaciones del navegador.**
 Activa la opcion en Ajustes y acepta el permiso del navegador.
