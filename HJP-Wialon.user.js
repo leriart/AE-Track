@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.7.0
+// @version      4.7.1
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.7.0';
+    const VER = '4.7.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -1341,14 +1341,28 @@
         input.dispatchEvent(new Event('input', { bubbles: true }));
         input.dispatchEvent(new Event('change', { bubbles: true }));
     }
+    // Devuelve true si el elemento pertenece a la UI del propio script (panel,
+    // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
+    function esUIPropia(el) {
+        try {
+            return !!(el && el.closest && el.closest('#hjp-panel,#hjp-barra,#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto,#hjp-toasts,#hjp-aviso,#hjp-rail'));
+        } catch (_) { return false; }
+    }
     function findSearchInput() {
         const inputs = Array.prototype.slice.call(document.querySelectorAll('input'))
-            .filter((i) => i.type !== 'hidden' && i.offsetParent && !i.disabled);
+            .filter((i) => i.type !== 'hidden' && i.offsetParent && !i.disabled && !esUIPropia(i));
         const byPh = inputs.find((i) => {
             const t = ((i.placeholder || '') + ' ' + (i.getAttribute('aria-label') || '') + ' ' + (i.title || '')).toLowerCase();
-            return /buscar|search|filtr|filtro/.test(t);
+            return /buscar|search/.test(t);
         });
-        return byPh || inputs.find((i) => i.type === 'search') || document.querySelector('input[placeholder="Buscar"]') || inputs[0] || null;
+        return byPh
+            || inputs.find((i) => i.type === 'search')
+            || inputs.find((i) => {
+                const t = ((i.placeholder || '') + ' ' + (i.getAttribute('aria-label') || '') + ' ' + (i.title || '')).toLowerCase();
+                return /filtr|filtro/.test(t);
+            })
+            || inputs[0]
+            || null;
     }
     function pickRow(eco) {
         const plano = normEco(eco);
@@ -1417,6 +1431,7 @@
         const all = document.querySelectorAll('div');
         for (let i = 0; i < all.length; i++) {
             const el = all[i];
+            if (esUIPropia(el)) continue;
             const r = el.getBoundingClientRect();
             if (r.width < 250 || r.height < 180) continue;
             if (r.width > window.innerWidth * 0.7 || r.height > window.innerHeight * 0.9) continue;
