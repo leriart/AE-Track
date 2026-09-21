@@ -257,6 +257,39 @@ Los servicios de OpenStreetMap son gratuitos y tienen limites de uso. Si ves
 errores de conexion o el codigo 429, espera unos minutos o baja la frecuencia
 de sondeo.
 
+## Analisis de viaje (historial)
+
+El script puede leer el historial de posiciones de una unidad y reconstruir su
+viaje. Para ello:
+
+1. Clic derecho sobre una unidad en la pestana **Unidades**.
+2. Elige **Analizar viaje (historial)**.
+3. Mira el resultado en la pestana **Rutas**, en la lista de viajes.
+
+Que detecta:
+
+- **Punto de partida**: el ultimo lugar donde la unidad estuvo parada (menos de
+  3 km/h) durante mas de **6 horas** (configurable). Ese lugar se marca como
+  inicio del viaje.
+- **Trayecto**: el recorrido desde el punto de partida hasta ahora, con la
+  distancia total.
+- **Salida**: la hora a la que empezo a moverse tras la parada larga.
+- **Paradas**: las detenciones de mas de 15 min (configurable) dentro del
+  trayecto.
+- **Carga**: se estima que cargo si el punto de partida o la primera parada esta
+  en una zona de carga (cedis, planta, bodega, patio, bascula, etc.).
+- **Destino**: si hay una ruta planificada, cuando se acerco al destino.
+- **Regreso**: si, tras llegar, se esta acercando de nuevo al punto de partida.
+
+Al planear una ruta, el **origen** se toma del punto de partida detectado en el
+historial (si la opcion esta activada en Ajustes). Si no, se usa la posicion
+actual.
+
+Puedes **exportar el viaje a GeoJSON** (trayecto, punto de partida, paradas y
+destino) desde el clic derecho o desde el boton de la lista de viajes. Los
+parametros del analisis (horas de partida, parada minima y horas de historial)
+se ajustan en Ajustes, pestana **Rutas**.
+
 ## Limite de velocidad por unidad
 
 Ademas del limite global, cada unidad puede tener su propio limite:
@@ -346,14 +379,15 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 El script comprueba la cabecera `@version` del repositorio al iniciar y cada
 30 minutos. Cuando hay una version nueva:
 
-- Aparece un boton verde **Actualizar** en la barra flotante (visible sin
+- Aparece un boton verde **Actualizar X.Y.Z** en la barra flotante (visible sin
   abrir el panel) y un indicador en la cabecera del panel. Su titulo indica la
   version disponible.
-- Al hacer clic se abre la URL de instalacion en una pestana nueva para que
-  Tampermonkey o Violentmonkey actualice el script. Si tu copia procede de la
-  rama `dev` (mas nueva que `main`), el script tambien revisa esa rama.
-- Tras la actualizacion el indicador cambia a un icono de recarga y muestra
-  el mensaje "recarga para aplicar". Al pulsar recarga la pagina.
+- Al hacer clic se abre la URL de instalacion de la nueva version en una
+  pestana nueva para que Tampermonkey o Violentmonkey muestren el dialogo de
+  actualizacion. Si tu copia procede de la rama `dev` (mas nueva que `main`),
+  el script tambien revisa esa rama.
+- Al volver a esta pestana, la pagina **se recarga sola** para aplicar la
+  version nueva. Si prefieres hacerlo a mano, el boton cambia a **Recargar**.
 - Si la comprobacion falla (por ejemplo sin conexion o bloqueada por el sitio),
   el icono de la cabecera se muestra en ambar con el motivo; al pulsarlo se
   reintenta.
