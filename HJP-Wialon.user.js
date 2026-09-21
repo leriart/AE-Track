@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.2.0
-// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro y backup JSON. Sin emojis.
+// @version      4.3.0
+// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit
 // @homepageURL  https://github.com/leriart/AE-Track
 // @supportURL   https://github.com/leriart/AE-Track/issues
@@ -119,6 +119,9 @@
         density: 'normal',
         acento: '#1565c0',
         mostrarCoords: false,
+        panelMode: 'flotante',
+        panelLado: 'derecha',
+        panelAncho: 420,
         osrm: true,
         overpass: false,
         desvioM: 250,
@@ -1801,13 +1804,19 @@
             "#hjp-panel{position:fixed;left:10px;bottom:10px;width:470px;height:440px;display:none;flex-direction:column;\n" +
             "  background:var(--hjp-bg);color:var(--hjp-fg);font:12.5px/1.4 system-ui,sans-serif;border:1px solid var(--hjp-border);border-radius:10px;\n" +
             "  box-shadow:var(--hjp-shadow);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh}\n" +
-            "#hjp-panel header{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--hjp-bg-soft);cursor:move;border-bottom:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-panel.lateral{left:auto;right:0;top:0;bottom:0;height:100vh;max-height:100vh;border-radius:0;resize:none;\n" +
+            "  box-shadow:-14px 0 34px rgba(0,0,0,.45);border-top:none;border-bottom:none;border-right:none}\n" +
+            "#hjp-panel.lateral.izquierda{left:0;right:auto;box-shadow:14px 0 34px rgba(0,0,0,.45);border-left:none;border-right:1px solid var(--hjp-border)}\n" +
+            "#hjp-panel.lateral header{cursor:default}\n" +
+            "#hjp-panel header{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--hjp-bg-soft);cursor:move;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap}\n" +
+            "#hjp-panel header h3{min-width:110px}\n" +
             "#hjp-panel header h3{margin:0;font-size:13px;flex:1;letter-spacing:.2px}\n" +
             "#hjp-panel .hjp-iconbtn{background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1;transition:all .12s}\n" +
             "#hjp-panel .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
             "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent);color:#fff;border-color:var(--hjp-accent-2)}\n" +
             "#hjp-panel .tabs{display:flex;background:var(--hjp-bg-soft);padding:0 4px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel .tab{flex:1;background:transparent;border:none;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 system-ui;border-bottom:2px solid transparent;letter-spacing:.3px;transition:color .12s}\n" +
+            "#hjp-panel .tab{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;background:transparent;border:none;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 system-ui;border-bottom:2px solid transparent;letter-spacing:.3px;transition:color .12s}\n" +
+            "#hjp-panel .tab .etqt{font-size:11px;letter-spacing:.2px}\n" +
             "#hjp-panel .tab:hover{color:var(--hjp-fg)}\n" +
             "#hjp-panel .tab.activo{color:var(--hjp-fg);border-bottom-color:var(--hjp-accent-2)}\n" +
             "#hjp-panel .tab .contador{font-size:10px;background:var(--hjp-bg-strong);color:var(--hjp-fg-dim);padding:1px 5px;border-radius:8px;margin-left:4px;display:inline-block}\n" +
@@ -1869,7 +1878,7 @@
             "#hjp-panel table.zone td{padding:5px 9px}\n" +
             "#hjp-panel table.zone tr.fila td:first-child{color:var(--hjp-accent-2);font-weight:600}\n" +
             "#hjp-panel .zone .contador-unidades{color:var(--hjp-ok-fg);font-weight:600}\n" +
-            "#hjp-modal,#hjp-config,#hjp-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--hjp-bg-soft);padding:14px;\n" +
+            "#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--hjp-bg-soft);padding:14px;\n" +
             "  border-radius:10px;box-shadow:var(--hjp-shadow);z-index:1000001;display:none;flex-direction:column;gap:10px;\n" +
             "  width:340px;color:var(--hjp-fg);font:13px system-ui;border:1px solid var(--hjp-border)}\n" +
             "#hjp-modal{width:520px;max-height:88vh;overflow:hidden;padding:0}\n" +
@@ -1894,6 +1903,23 @@
             "#hjp-modal > .hjp-acciones{margin-top:10px;padding:10px 14px;border-top:1px solid var(--hjp-border-soft)}\n" +
             "#hjp-modal p code{background:var(--hjp-bg);padding:1px 4px;border-radius:3px;color:var(--hjp-accent-2)}\n" +
             "#hjp-config{width:560px;max-height:88vh;overflow:hidden;padding:0}\n" +
+            "#hjp-ayuda{width:620px;max-width:94vw;max-height:88vh;overflow:hidden;padding:0}\n" +
+            "#hjp-ayuda .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--hjp-bg);border-bottom:1px solid var(--hjp-border-soft);border-radius:10px 10px 0 0}\n" +
+            "#hjp-ayuda .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
+            "#hjp-ayuda .ayuda-body{overflow:auto;padding:12px 14px;max-height:calc(88vh - 60px)}\n" +
+            "#hjp-ayuda h4{margin:12px 0 6px;font-size:11px;color:var(--hjp-accent-2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--hjp-border-soft);padding-bottom:4px}\n" +
+            "#hjp-ayuda h4:first-child{margin-top:0}\n" +
+            "#hjp-ayuda p,#hjp-ayuda li{font-size:12.5px;color:var(--hjp-fg);margin:4px 0}\n" +
+            "#hjp-ayuda ul{margin:4px 0 4px 18px;padding:0}\n" +
+            "#hjp-ayuda code,#hjp-ayuda kbd{background:var(--hjp-bg);padding:1px 5px;border-radius:4px;font:11.5px monospace;color:var(--hjp-accent-2);border:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-ayuda .pasos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:6px}\n" +
+            "#hjp-ayuda .paso{background:var(--hjp-bg);border:1px solid var(--hjp-border);border-radius:8px;padding:9px 11px}\n" +
+            "#hjp-ayuda .paso b{display:block;color:var(--hjp-accent-2);font-size:12px;margin-bottom:3px}\n" +
+            "#hjp-ayuda .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft);border-radius:0 0 10px 10px}\n" +
+            "#hjp-ayuda .hjp-iconbtn{background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1}\n" +
+            "#hjp-ayuda .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
+            "#hjp-ayuda button.accbtn{background:var(--hjp-accent);color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px system-ui}\n" +
+            "#hjp-ayuda button.cancel{background:#555;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font:600 12px system-ui}\n" +
             "#hjp-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--hjp-bg);border-bottom:1px solid var(--hjp-border-soft);border-radius:10px 10px 0 0}\n" +
             "#hjp-config .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
             "#hjp-config .cfg-tabs{display:flex;background:var(--hjp-bg);padding:0 10px;border-bottom:1px solid var(--hjp-border-soft);gap:6px;flex-wrap:wrap}\n" +
@@ -1926,6 +1952,7 @@
             ".hjp-acciones{display:flex;justify-content:space-between;gap:8px}\n" +
             "#hjp-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--hjp-bad);color:#fff;padding:6px 16px;\n" +
             "  border-radius:5px;z-index:1000002;font:12px system-ui;display:none;box-shadow:var(--hjp-shadow)}\n" +
+            "body.hjp-lateral #hjp-barra{z-index:1000004}\n" +
             "#hjp-barra .hjp-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#hjp-barra .hjp-badge-estado.ok{background:var(--hjp-ok)}\n" +
             "#hjp-barra .hjp-badge-estado.warn{background:var(--hjp-warn)}\n" +
@@ -1948,7 +1975,7 @@
 
     /* ====================== UI BUILD ====================== */
     let mainBtn, panelBtn, closeBtn, foldBtn, gripEl, barraEl,
-        panelEl, modalEl, cfgWinEl, ctxEl, toastsEl, avisoEl;
+        panelEl, modalEl, cfgWinEl, ayudaEl, ctxEl, toastsEl, avisoEl;
 
     function checkRow(id, txt) {
         return '<label>' + txt + ' <input type="checkbox" id="' + id + '"></label>';
@@ -1960,8 +1987,8 @@
         return '<label class="full">' + txt + '<textarea id="' + id + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '></textarea></label>';
     }
     function buildUI() {
-        mainBtn = makeEl('button', { innerText: ICO.automatizar + ' Automatizar Unidades', id: 'hjp-btn-main', className: 'hjp-btn', title: 'Abrir ventanas de unidades' });
-        panelBtn = makeEl('button', { innerText: ICO.panel + ' Panel API', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar/ocultar panel' });
+        mainBtn = makeEl('button', { innerText: ICO.automatizar + ' Automatizar Unidades', id: 'hjp-btn-main', className: 'hjp-btn', title: 'Abrir lista de unidades y automatizar ventanas' });
+        panelBtn = makeEl('button', { innerText: ICO.panel + ' Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
         closeBtn = makeEl('button', { innerText: ICO.cerrar + ' Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
         foldBtn = makeEl('button', { innerText: '▾', id: 'hjp-btn-fold', className: 'hjp-btn hjp-fold', title: 'Plegar barra' });
         gripEl = makeEl('span', { innerText: '⠿', id: 'hjp-grip', className: 'hjp-grip', title: 'Arrastrar barra · doble clic para orientar' });
@@ -1979,14 +2006,16 @@
             '<button class="hjp-iconbtn" id="hjp-test" title="Probar avisos">' + ICO.senal + '</button>' +
             '<button class="hjp-iconbtn" id="hjp-exportar-todo" title="Exportar configuración">' + ICO.exportar + '</button>' +
             '<button class="hjp-iconbtn" id="hjp-importar-todo" title="Importar configuración">' + ICO.importar + '</button>' +
+            '<button class="hjp-iconbtn" id="hjp-modo" title="Abrir como barra lateral">' + ICO.expandir + '</button>' +
+            '<button class="hjp-iconbtn" id="hjp-ayuda-btn" title="Ayuda rápida">?</button>' +
             '<button class="hjp-iconbtn" id="hjp-cerrar-panel" title="Cerrar panel">✕</button>' +
             '</header>' +
             '<div class="tabs" id="hjp-tabs">' +
-            '<button class="tab activo" data-tab="dash">' + ICO.dashboard + '<span class="contador" id="hjp-c-on">0</span></button>' +
-            '<button class="tab" data-tab="unidades">' + ICO.panel + '<span class="contador" id="hjp-c-tot">0</span></button>' +
-            '<button class="tab" data-tab="alertas">' + ICO.alertas + '<span class="contador" id="hjp-c-al">0</span></button>' +
-            '<button class="tab" data-tab="rutas">' + ICO.destino + '<span class="contador" id="hjp-c-ru">0</span></button>' +
-            '<button class="tab" data-tab="geocercas">' + ICO.geocercas + '<span class="contador" id="hjp-c-zn">0</span></button>' +
+            '<button class="tab activo" data-tab="dash" title="Resumen general de la flota">' + ICO.dashboard + '<span class="etqt">Dashboard</span><span class="contador" id="hjp-c-on">0</span></button>' +
+            '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones">' + ICO.panel + '<span class="etqt">Unidades</span><span class="contador" id="hjp-c-tot">0</span></button>' +
+            '<button class="tab" data-tab="alertas" title="Historial de avisos">' + ICO.alertas + '<span class="etqt">Avisos</span><span class="contador" id="hjp-c-al">0</span></button>' +
+            '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento">' + ICO.destino + '<span class="etqt">Rutas</span><span class="contador" id="hjp-c-ru">0</span></button>' +
+            '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro">' + ICO.geocercas + '<span class="etqt">Geocercas</span><span class="contador" id="hjp-c-zn">0</span></button>' +
             '</div>' +
             '<div class="tools" id="hjp-tools">' +
             '<input class="filtro" id="hjp-filtro" placeholder="' + esc(LANG.busq) + '">' +
@@ -2164,6 +2193,16 @@
             '<span style="font-size:11.5px;color:var(--hjp-fg-dim)">Atajos: <b>Alt+1..4</b> cambia pestanas · <b>Alt+P</b> panel · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra modales</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
+            '<h4>Panel</h4>' +
+            '<label>Modo <select id="c-panel-modo">' +
+            '<option value="flotante">Flotante</option>' +
+            '<option value="lateral">Barra lateral</option>' +
+            '</select></label>' +
+            '<label>Lado de la barra <select id="c-panel-lado">' +
+            '<option value="derecha">Derecha</option>' +
+            '<option value="izquierda">Izquierda</option>' +
+            '</select></label>' +
+            numRow('c-panel-ancho', 'Ancho lateral (px)') +
             '<h4>Barra de botones</h4>' +
             '<div class="row-grid">' +
             checkRow('c-b-main', 'Automatizar') +
@@ -2219,6 +2258,44 @@
             '</div>'
         );
 
+        ayudaEl = makeEl('div', { id: 'hjp-ayuda' });
+        ayudaEl.innerHTML = (
+            '<div class="cfg-head"><h3>? Ayuda rapida</h3>' +
+            '<button class="hjp-iconbtn" id="hjp-ayuda-x" title="Cerrar">✕</button></div>' +
+            '<div class="ayuda-body">' +
+            '<h4>En 3 pasos</h4>' +
+            '<div class="pasos">' +
+            '<div class="paso"><b>1. Elige unidades</b>Abre <i>Unidades</i> y marca con la casilla las que quieras vigilar, o activa <i>Monitorear todas</i> en Ajustes.</div>' +
+            '<div class="paso"><b>2. Abre sus ventanas</b>Pulsa <i>Automatizar Unidades</i> (arriba a la derecha) para abrirlas y acomodarlas solas.</div>' +
+            '<div class="paso"><b>3. Vigila los avisos</b>Las alertas aparecen como tarjetas, voz y pitido. Revisalas en <i>Avisos</i>.</div>' +
+            '</div>' +
+            '<h4>Que hace cada pestana</h4>' +
+            '<ul>' +
+            '<li><b>Dashboard</b>: cuantas en linea, sin senal, detenidas y alertas del dia.</li>' +
+            '<li><b>Unidades</b>: lista con estado, velocidad, zona y acciones. Clic para abrir su ventana; clic derecho para mas opciones.</li>' +
+            '<li><b>Avisos</b>: historial filtrable por severidad. Exportable a CSV.</li>' +
+            '<li><b>Rutas</b>: progreso de cada ruta y desvios. Se planea desde el clic derecho de una unidad.</li>' +
+            '<li><b>Geocercas</b>: unidades dentro de cada geocerca.</li>' +
+            '</ul>' +
+            '<h4>Alertas de ruta</h4>' +
+            '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes &gt; Rutas.</p>' +
+            '<h4>Atajos de teclado</h4>' +
+            '<ul>' +
+            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>5</kbd>: cambiar de pestana.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar el panel.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>L</kbd>: panel flotante o barra lateral.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
+            '<li><kbd>Esc</kbd>: cerrar ventanas emergentes.</li>' +
+            '</ul>' +
+            '<h4>Consejo</h4>' +
+            '<p>Para abrir el panel como barra lateral usa el boton de expandir de la cabecera o <kbd>Alt</kbd>+<kbd>L</kbd>. El manual completo esta en MANUAL.md del repositorio.</p>' +
+            '</div>' +
+            '<div class="cfg-foot">' +
+            '<button class="cancel" id="hjp-ayuda-cerrar">Cerrar</button>' +
+            '<button class="accbtn" id="hjp-ayuda-config">Abrir ajustes</button>' +
+            '</div>'
+        );
+
         ctxEl = makeEl('div', { id: 'hjp-contexto' });
         toastsEl = makeEl('div', { id: 'hjp-toasts' });
         avisoEl = makeEl('div', { id: 'hjp-aviso' });
@@ -2227,6 +2304,7 @@
         document.body.appendChild(panelEl);
         document.body.appendChild(modalEl);
         document.body.appendChild(cfgWinEl);
+        document.body.appendChild(ayudaEl);
         document.body.appendChild(ctxEl);
         document.body.appendChild(toastsEl);
         document.body.appendChild(avisoEl);
@@ -2257,8 +2335,45 @@
         placeBar();
         writeJSON(LS.barra, APP.barra);
     }
+    function esLateral() { return (APP.config.panelMode || 'flotante') === 'lateral'; }
+    function aplicarModoPanel() {
+        if (!panelEl) return;
+        const lado = APP.config.panelLado || 'derecha';
+        const ancho = clamp(Number(APP.config.panelAncho) || 420, 360, Math.max(360, window.innerWidth - 20));
+        panelEl.classList.toggle('lateral', esLateral());
+        panelEl.classList.toggle('izquierda', esLateral() && lado === 'izquierda');
+        document.body.classList.toggle('hjp-lateral', esLateral());
+        if (esLateral()) {
+            panelEl.style.top = '0px';
+            panelEl.style.bottom = '0px';
+            panelEl.style.height = '100vh';
+            panelEl.style.width = ancho + 'px';
+            if (lado === 'izquierda') { panelEl.style.left = '0px'; panelEl.style.right = 'auto'; }
+            else { panelEl.style.left = 'auto'; panelEl.style.right = '0px'; }
+        } else {
+            panelEl.classList.remove('izquierda');
+            panelEl.style.right = 'auto';
+            panelEl.style.bottom = 'auto';
+            panelEl.style.top = (APP.panelPos ? APP.panelPos.y : 60) + 'px';
+            panelEl.style.left = (APP.panelPos ? APP.panelPos.x : 10) + 'px';
+            panelEl.style.height = ((APP.panelSize && APP.panelSize.h) ? APP.panelSize.h : 440) + 'px';
+            panelEl.style.width = ((APP.panelSize && APP.panelSize.w) ? APP.panelSize.w : 470) + 'px';
+        }
+        const b = byId('hjp-modo');
+        if (b) {
+            b.innerText = esLateral() ? ICO.colapsar : ICO.expandir;
+            b.title = esLateral() ? 'Volver a panel flotante' : 'Abrir como barra lateral';
+        }
+        writeJSON(LS.cfg, APP.config);
+    }
+    function toggleSidebar() {
+        APP.config.panelMode = esLateral() ? 'flotante' : 'lateral';
+        aplicarModoPanel();
+        advice('Panel', esLateral() ? 'modo barra lateral' : 'modo flotante');
+    }
     function placePanel() {
-        if (!APP.panelPos) return;
+        if (esLateral()) return;
+        if (!APP.panelPos) { aplicarModoPanel(); return; }
         panelEl.style.left = APP.panelPos.x + 'px';
         panelEl.style.top = APP.panelPos.y + 'px';
         panelEl.style.bottom = 'auto';
@@ -2297,6 +2412,7 @@
             head.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
                 if (e.target.closest('.hjp-iconbtn')) return;
+                if (esLateral()) return;
                 activo = true;
                 const r = panelEl.getBoundingClientRect();
                 dx = e.clientX - r.left; dy = e.clientY - r.top;
@@ -2316,6 +2432,7 @@
 
         if (typeof ResizeObserver !== 'undefined') {
             const ro = new ResizeObserver(() => {
+                if (esLateral()) return;
                 const w = panelEl.offsetWidth;
                 const h = panelEl.offsetHeight;
                 APP.panelSize = { w: w, h: h };
@@ -2326,6 +2443,7 @@
 
         window.addEventListener('resize', () => {
             placeBar();
+            if (esLateral()) { aplicarModoPanel(); return; }
             placePanel();
             const r = panelEl.getBoundingClientRect();
             APP.panelSize = { w: r.width, h: r.height };
@@ -2871,11 +2989,15 @@
     function bindKeys() {
         document.addEventListener('keydown', (e) => {
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'geocercas' };
-                if (tabs[e.key]) { setTab(tabs[e.key]); e.preventDefault(); return; }
+                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'geocercas' };
+                if (tabs[e.key]) { setTab(tabs[e.key]); panelEl.style.display = 'flex'; e.preventDefault(); return; }
                 if (e.key.toLowerCase() === 'p') {
                     panelEl.style.display = panelEl.style.display === 'flex' ? 'none' : 'flex';
                     paintPanel();
+                    e.preventDefault(); return;
+                }
+                if (e.key.toLowerCase() === 'l') {
+                    toggleSidebar();
                     e.preventDefault(); return;
                 }
                 if (e.key.toLowerCase() === 'h') {
@@ -2885,7 +3007,7 @@
                 }
             }
             if (e.key === 'Escape') {
-                [modalEl, cfgWinEl, ctxEl].forEach((w) => { if (w) w.style.display = 'none'; });
+                [modalEl, cfgWinEl, ayudaEl, ctxEl].forEach((w) => { if (w) w.style.display = 'none'; });
             }
         });
     }
@@ -2981,6 +3103,14 @@
             paintPanel();
         });
         byId('hjp-cerrar-panel').addEventListener('click', () => { panelEl.style.display = 'none'; });
+        byId('hjp-modo').addEventListener('click', toggleSidebar);
+        byId('hjp-ayuda-btn').addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
+        byId('hjp-ayuda-x').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
+        byId('hjp-ayuda-cerrar').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
+        byId('hjp-ayuda-config').addEventListener('click', () => {
+            ayudaEl.style.display = 'none';
+            abrirCfg();
+        });
         byId('hjp-refresh').addEventListener('click', refresh);
         byId('hjp-csv').addEventListener('click', exportUnits);
         byId('hjp-csv-al').addEventListener('click', exportAlertas);
@@ -3205,6 +3335,9 @@
             g('c-dens').value = APP.config.density;
             g('c-acento').value = APP.config.acento || '#1565c0';
             g('c-coords').checked = !!APP.config.mostrarCoords;
+            g('c-panel-modo').value = APP.config.panelMode || 'flotante';
+            g('c-panel-lado').value = APP.config.panelLado || 'derecha';
+            g('c-panel-ancho').value = APP.config.panelAncho || 420;
             g('c-b-main').checked = !!APP.barra.botones.main;
             g('c-b-panel').checked = !!APP.barra.botones.panel;
             g('c-b-close').checked = !!APP.barra.botones.close;
@@ -3303,6 +3436,9 @@
             cf.horario.on = g('c-hor-on').checked;
             cf.horario.desde = g('c-hor-a').value || DEFAULTS.horario.desde;
             cf.horario.hasta = g('c-hor-b').value || DEFAULTS.horario.hasta;
+            cf.panelMode = g('c-panel-modo').value || 'flotante';
+            cf.panelLado = g('c-panel-lado').value || 'derecha';
+            cf.panelAncho = clamp(isoNum(g('c-panel-ancho').value, cf.panelAncho), 360, 900);
             APP.barra.botones.main = g('c-b-main').checked;
             APP.barra.botones.panel = g('c-b-panel').checked;
             APP.barra.botones.close = g('c-b-close').checked;
@@ -3315,6 +3451,7 @@
             writeJSON(LS.watch, APP.watchMap);
             writeJSON(LS.barra, APP.barra);
             applyTheme();
+            aplicarModoPanel();
             restartTimers();
             cfgWinEl.style.display = 'none';
             refresh();
@@ -3379,6 +3516,7 @@
 
     /* ====================== INIT ====================== */
     async function init() {
+        const primerUso = !localStorage.getItem(LS.cfg);
         injectCSS();
         buildUI();
         attachDraggables();
@@ -3404,11 +3542,15 @@
         APP.unlocked = true;
         applyBar();
         applyTheme();
+        aplicarModoPanel();
         placePanel();
         paintVerifyButton();
         updateNoMolestar();
         await refresh();
         restartTimers();
+        if (primerUso) {
+            setTimeout(() => advice('Bienvenido a HJP · Wialon', 'Pulsa ? en la cabecera para la ayuda rapida'), 900);
+        }
     }
     function log() { try { console.log.apply(console, ['[HJP]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 
