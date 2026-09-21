@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.9.0
+// @version      4.10.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.9.0';
+    const VER = '4.10.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -235,11 +235,11 @@
                 if (v != null) return v;
             }
             if (legacyKey) {
+                // Copia la lista antigua (global) a esta pestaña la primera vez.
                 const legacy = localStorage.getItem(legacyKey);
                 if (legacy != null) {
                     const parsed = JSON.parse(legacy);
                     sessionStorage.setItem(key, JSON.stringify(parsed));
-                    try { localStorage.removeItem(legacyKey); } catch (_) { /* noop */ }
                     return parsed;
                 }
             }
@@ -248,6 +248,17 @@
     }
     function writeSession(key, value) {
         try { sessionStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* noop */ }
+    }
+    function readSessionArray(key, fallback, legacyKey) {
+        const v = readSession(key, fallback, legacyKey);
+        return Array.isArray(v) ? v : fallback;
+    }
+    function readSessionObject(key, fallback, legacyKey) {
+        const v = readSession(key, fallback, legacyKey);
+        return (v && typeof v === 'object' && !Array.isArray(v)) ? v : fallback;
+    }
+    function clearSession(key) {
+        try { sessionStorage.removeItem(key); } catch (_) { /* noop */ }
     }
 
     function readArray(key, fallback) {
@@ -294,13 +305,13 @@
         unidades: [],
         zonas: [],
         zonasPorNombre: new Map(),
-        watchMap: readObject(LS.watch, {}),
-        seleccion: new Set(readArray(LS.seleccion, [])),
-        dismissed: new Set(readArray(LS.dismissed, [])),
-        memo: readObject(LS.memo, {}),
-        historial: readArray(LS.hist, []),
-        geoCache: readObject(LS.geo, {}),
-        limites: readObject(LS.limites, {}),
+        watchMap: readSessionObject(SS.watch, {}, LS.watch),
+        seleccion: new Set(readSessionArray(SS.seleccion, [], LS.seleccion)),
+        dismissed: new Set(readSessionArray(SS.dismissed, [], LS.dismissed)),
+        memo: readSessionObject(SS.memo, {}, LS.memo),
+        historial: readSessionArray(SS.hist, [], LS.hist),
+        geoCache: readSessionObject(SS.geo, {}, LS.geo),
+        limites: readSessionObject(SS.limites, {}, LS.limites),
         perfiles: readObject(LS.perfiles, {}),
         rutas: readObject(LS.rutas, {}),
         trazas: {},
@@ -312,7 +323,7 @@
         panelPos: readJSON(LS.panelpos, null),
         panelSize: readJSON(LS.panelsize, null),
         noMolestar: readJSON(LS.nmolestar, null),
-        kpi: readObject(LS.kpi, { online: [], offline: [] }),
+        kpi: readSessionObject(SS.kpi, { online: [], offline: [] }, LS.kpi),
         expanded: readJSON(LS.expanded, false),
         config: deepMerge(readObject(LS.cfg, {}), DEFAULTS),
 
@@ -466,7 +477,7 @@
             const ciudad = a.city || a.town || a.municipality || a.county || a.state || '';
             const info = { texto: [detalle, ciudad].filter(Boolean).join(', '), ciudad };
             APP.geoCache[key] = info;
-            writeJSON(LS.geo, APP.geoCache);
+            writeSession(SS.geo, APP.geoCache);
             return info;
         } catch (_) { return null; }
     }
@@ -712,7 +723,7 @@
         if (!m) return;
         m.progMax = 0; m.retornoAlerta = false; m.llego = false;
         m.desviadoDesde = null; m.rumboOpDesde = null;
-        writeJSON(LS.memo, APP.memo);
+        writeSession(SS.memo, APP.memo);
     }
     async function planearRuta(eco, destinoTexto, origenOv, modo) {
         const it = unitByEco(eco);
@@ -870,7 +881,7 @@
         const n = Number(val);
         if (Number.isFinite(n) && n > 0) APP.limites[eco] = n;
         else delete APP.limites[eco];
-        writeJSON(LS.limites, APP.limites);
+        writeSession(SS.limites, APP.limites);
         refresh();
     }
     function unitByEco(eco) {
@@ -1007,7 +1018,7 @@
         };
         APP.historial.unshift(item);
         if (APP.historial.length > 300) APP.historial.length = 300;
-        writeJSON(LS.hist, APP.historial);
+        writeSession(SS.hist, APP.historial);
 
         const nivel = pickSeverity(item.sev);
         const minNivel = pickSeverity(APP.config.severidadMin);
@@ -1342,13 +1353,13 @@
                 }
             }
             APP.memo = nuevas;
-            writeJSON(LS.memo, APP.memo);
+            writeSession(SS.memo, APP.memo);
 
             const watched = unidades.filter(shouldWatch);
             const onNow = watched.filter((u) => unitState(u).online).length;
             APP.kpi.online = APP.kpi.online.concat(onNow).slice(-180);
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);
-            writeJSON(LS.kpi, APP.kpi);
+            writeSession(SS.kpi, APP.kpi);
 
             paintPanel();
             revalidarContornos();
@@ -1707,7 +1718,7 @@
 
     /* ====================== LISTA UNIFICADA (eco + destino) ====================== */
     function guardarLista() {
-        writeJSON(LS.watch, APP.watchMap);
+        writeSession(SS.watch, APP.watchMap);
         paintInfo();
     }
     function agregarALista(eco, destino) {
@@ -1760,7 +1771,7 @@
     function captureSelection() {
         const list = openWindows();
         APP.seleccion = new Set(list.map((v) => v.eco).filter(Boolean));
-        writeJSON(LS.seleccion, Array.from(APP.seleccion));
+        writeSession(SS.seleccion, Array.from(APP.seleccion));
         advice('Seleccion capturada', APP.seleccion.size + ' ventana(s) / unidad(es)');
         paintInfo();
         if (APP.tab === 'unidades') paintTabla();
@@ -1769,13 +1780,13 @@
     function addToSelection(eco, placa) {
         if (eco) APP.seleccion.add(eco);
         else if (placa) APP.seleccion.add(placa);
-        writeJSON(LS.seleccion, Array.from(APP.seleccion));
+        writeSession(SS.seleccion, Array.from(APP.seleccion));
         paintInfo();
     }
     function removeFromSelection(eco, placa) {
         if (eco) APP.seleccion.delete(eco);
         else if (placa) APP.seleccion.delete(placa);
-        writeJSON(LS.seleccion, Array.from(APP.seleccion));
+        writeSession(SS.seleccion, Array.from(APP.seleccion));
         paintInfo();
     }
     function selectAllVisible() {
@@ -1789,7 +1800,7 @@
                 n++;
             }
         });
-        writeJSON(LS.seleccion, Array.from(APP.seleccion));
+        writeSession(SS.seleccion, Array.from(APP.seleccion));
         advice('Seleccion anadida', n + ' unidad(es) visible(s)');
         paintInfo();
         paintTabla();
@@ -1798,7 +1809,7 @@
     function clearSelection() {
         const n = APP.seleccion.size;
         APP.seleccion.clear();
-        writeJSON(LS.seleccion, Array.from(APP.seleccion));
+        writeSession(SS.seleccion, Array.from(APP.seleccion));
         advice('Seleccion vaciada', n + ' unidad(es) liberadas');
         paintInfo();
         paintTabla();
@@ -1846,7 +1857,7 @@
     }
     async function execList(ecos) {
         APP.seleccion = new Set(ecos.map((e) => normEco(e)).filter(Boolean));
-        writeJSON(LS.seleccion, Array.from(APP.seleccion));
+        writeSession(SS.seleccion, Array.from(APP.seleccion));
         paintInfo();
         for (let i = 0; i < ecos.length; i++) {
             const b = byId('hjp-btn-main');
@@ -3342,10 +3353,10 @@
                     writeJSON(LS.cfg, APP.config);
                     if (d.barra && typeof d.barra === 'object') APP.barra = d.barra;
                     writeJSON(LS.barra, APP.barra);
-                    if (Array.isArray(d.seleccion)) { APP.seleccion = new Set(d.seleccion); writeJSON(LS.seleccion, Array.from(APP.seleccion)); }
-                    if (Array.isArray(d.dismissed)) { APP.dismissed = new Set(d.dismissed); writeJSON(LS.dismissed, Array.from(APP.dismissed)); }
-                    if (d.watchMap && typeof d.watchMap === 'object') { APP.watchMap = d.watchMap; writeJSON(LS.watch, APP.watchMap); }
-                    if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeJSON(LS.limites, APP.limites); }
+                    if (Array.isArray(d.seleccion)) { APP.seleccion = new Set(d.seleccion); writeSession(SS.seleccion, Array.from(APP.seleccion)); }
+                    if (Array.isArray(d.dismissed)) { APP.dismissed = new Set(d.dismissed); writeSession(SS.dismissed, Array.from(APP.dismissed)); }
+                    if (d.watchMap && typeof d.watchMap === 'object') { APP.watchMap = d.watchMap; writeSession(SS.watch, APP.watchMap); }
+                    if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeSession(SS.limites, APP.limites); }
                     if (d.rutas && typeof d.rutas === 'object') { APP.rutas = d.rutas; guardarRutas(); }
                     if (d.panelPos) { APP.panelPos = d.panelPos; writeJSON(LS.panelpos, APP.panelPos); }
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
@@ -3385,7 +3396,7 @@
         const p = APP.perfiles[nombre];
         if (!p) return false;
         if (p.config) { APP.config = deepMerge(p.config, DEFAULTS); writeJSON(LS.cfg, APP.config); }
-        if (p.limites) { APP.limites = p.limites; writeJSON(LS.limites, APP.limites); }
+        if (p.limites) { APP.limites = p.limites; writeSession(SS.limites, APP.limites); }
         applyBar();
         applyTheme();
         restartTimers();
@@ -3402,7 +3413,7 @@
     function limpiarBitacora() {
         const n = APP.historial.length;
         APP.historial = [];
-        writeJSON(LS.hist, APP.historial);
+        writeSession(SS.hist, APP.historial);
         paintCounters();
         if (APP.tab === 'alertas') paintAlertas();
         if (APP.tab === 'dash') paintKPI();
@@ -3700,7 +3711,7 @@
             if (!eco) return;
             if (e.target.classList && e.target.classList.contains('hjp-sil')) {
                 if (APP.dismissed.has(eco)) APP.dismissed.delete(eco); else APP.dismissed.add(eco);
-                writeJSON(LS.dismissed, Array.from(APP.dismissed));
+                writeSession(SS.dismissed, Array.from(APP.dismissed));
                 paintTabla();
                 return;
             }
@@ -3744,7 +3755,7 @@
             if (acc === 'open') openUnitWindow(eco);
             else if (acc === 'sil') {
                 if (APP.dismissed.has(eco)) APP.dismissed.delete(eco); else APP.dismissed.add(eco);
-                writeJSON(LS.dismissed, Array.from(APP.dismissed));
+                writeSession(SS.dismissed, Array.from(APP.dismissed));
                 paintTabla();
             } else if (acc === 'verif') verifyWindows(false);
             else if (acc === 'lista') {
@@ -3946,7 +3957,7 @@
             paintVerifyButton();
             if (!cf.loadZones) APP.zonas = [];
             writeJSON(LS.cfg, APP.config);
-            writeJSON(LS.watch, APP.watchMap);
+            writeSession(SS.watch, APP.watchMap);
             writeJSON(LS.barra, APP.barra);
             applyTheme();
             aplicarModoPanel();
@@ -4007,12 +4018,13 @@
             advice('Bitacora limpiada');
         });
         byId('hjp-borrar-memo').addEventListener('click', () => {
-            APP.memo = {}; writeJSON(LS.memo, APP.memo); refresh();
+            APP.memo = {}; writeSession(SS.memo, APP.memo); refresh();
             advice('Estado borrado');
         });
         byId('hjp-borrar-todo').addEventListener('click', () => {
             if (!window.confirm('Borrar TODO (configuracion, estado, bitacora, historial)?')) return;
             Object.keys(LS).forEach((k) => { try { localStorage.removeItem(LS[k]); } catch (_) { /* noop */ } });
+            Object.keys(SS).forEach((k) => { try { sessionStorage.removeItem(SS[k]); } catch (_) { /* noop */ } });
             avisoEl.textContent = 'Estado borrado, recargando...';
             avisoEl.style.display = 'block';
             setTimeout(() => { try { location.reload(); } catch (_) { /* noop */ } }, 700);

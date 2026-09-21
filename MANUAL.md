@@ -384,10 +384,28 @@ Usa el modo flotante y muevelo, o cambia la barra lateral de lado.
 **Quiero empezar de cero.**
 Ajustes, pestana Avanzado, **Borrar TODO**. La pagina se recargara.
 
+## Una lista por pestaña
+
+La **lista de unidades**, la seleccion, las unidades silenciadas, los limites de
+velocidad, el historial de avisos y la cache de direcciones se guardan **por
+pestaña** del navegador. Asi, si tienes dos pestañas abiertas (por ejemplo dos
+instancias o dos vistas con datos distintos), cada una mantiene su propia lista
+de unidades sin afectar a la otra.
+
+- Los datos de cada pestaña se conservan al recargar esa pestaña.
+- La primera vez, cada pestaña hereda la lista que tuvieras guardada antes de
+  forma global, para no perderla.
+- La configuracion general (tema, acento, reglas, panel, notificaciones) sigue
+  siendo comun a todas las pestañas.
+- Al cerrar una pestaña se descarta su lista. Para conservarla usa **Exportar
+  configuracion** en Ajustes, pestana Avanzado.
+
 ## Privacidad y datos
 
-- Todos los datos (configuracion, listas, limites, rutas y bitacora) se guardan
-  en el almacenamiento local de tu navegador, bajo claves `hjp.api.*`.
+- La configuracion general (tema, acento, reglas, panel, notificaciones) se
+  guarda en el almacenamiento local del navegador, bajo claves `hjp.api.*`.
+- La lista de unidades y demas datos de trabajo se guardan por pestaña en el
+  almacenamiento de sesion del navegador.
 - El script no envia datos a servidores propios. Solo consulta servicios
   publicos de OpenStreetMap (Nominatim, OSRM y, si lo activas, Overpass) para
   geocodificar y calcular rutas.
