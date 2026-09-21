@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.10.0
+// @version      4.11.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.10.0';
+    const VER = '4.11.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -139,7 +139,8 @@
         geo: 'hjp.api.s.geo',
         seleccion: 'hjp.api.s.seleccion',
         kpi: 'hjp.api.s.kpi',
-        limites: 'hjp.api.s.limites'
+        limites: 'hjp.api.s.limites',
+        orden: 'hjp.api.s.orden'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -345,6 +346,7 @@
         consultaRestante: 0
     };
     APP.panelHidden = !APP.config.panelVisible;
+    APP.orden = readSessionArray(SS.orden, [], null);
     APP.barra.botones = Object.assign({ main: true, panel: true, close: true }, APP.barra.botones || {});
     if (!Array.isArray(APP.kpi.online)) APP.kpi.online = [];
     if (!Array.isArray(APP.kpi.offline)) APP.kpi.offline = [];
@@ -1573,8 +1575,10 @@
         return list;
     }
     async function organizeWindows() {
-        const list = openWindows();
-        if (!list.length) return;
+        const abiertas = openWindows();
+        if (!abiertas.length) return;
+        // Ordena las ventanas segun la lista (orden configurado/arrastrado).
+        const list = ordenarPorLista(abiertas, (v) => v.eco);
         // Algoritmo portado del HJP original: rejilla con origen fijo (380, 60),
         // gap=15 y tamaño de celda tomado de la primera ventana. Coloca en filas
         // de izquierda a derecha y baja por filas hasta agotar el ancho.
@@ -1721,10 +1725,54 @@
         writeSession(SS.watch, APP.watchMap);
         paintInfo();
     }
+    function guardarOrden() { writeSession(SS.orden, APP.orden); }
+    // Mantiene APP.orden alineado con la lista: agrega las nuevas al final y
+    // quita las que ya no estan.
+    function sincronizarOrden() {
+        if (!Array.isArray(APP.orden)) APP.orden = [];
+        const keys = Object.keys(APP.watchMap);
+        keys.forEach((k) => { if (APP.orden.indexOf(k) < 0) APP.orden.push(k); });
+        APP.orden = APP.orden.filter((k) => keys.indexOf(k) >= 0);
+        guardarOrden();
+    }
+    function indiceOrden(eco) {
+        const i = APP.orden.indexOf(String(eco));
+        return i < 0 ? 1e9 : i;
+    }
+    // Ordena un arreglo de objetos segun APP.orden usando getEco para extraer
+    // el economico de cada elemento.
+    function ordenarPorLista(arr, getEco) {
+        return arr.slice().sort((a, b) => indiceOrden(getEco(a)) - indiceOrden(getEco(b)));
+    }
+    function aplicarOrdenModo(modo) {
+        const base = Object.keys(APP.watchMap);
+        if (modo === 'pegado') {
+            APP.orden = base.slice();
+        } else if (modo === 'numero') {
+            APP.orden = base.slice().sort((a, b) => {
+                const na = parseInt(a, 10), nb = parseInt(b, 10);
+                const va = Number.isFinite(na) ? na : 1e12;
+                const vb = Number.isFinite(nb) ? nb : 1e12;
+                return (va - vb) || a.localeCompare(b);
+            });
+        } else if (modo === 'numero-desc') {
+            aplicarOrdenModo('numero');
+            APP.orden.reverse();
+        } else if (modo === 'alfabetico') {
+            APP.orden = base.slice().sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        } else if (modo === 'invertir') {
+            APP.orden = APP.orden.slice().reverse();
+        }
+        guardarOrden();
+        pintarModalLista();
+        paintInfo();
+    }
     function agregarALista(eco, destino) {
         eco = normEco(eco);
         if (!eco) return false;
         APP.watchMap[eco] = (destino || APP.watchMap[eco] || '').trim();
+        if (APP.orden.indexOf(eco) < 0) APP.orden.push(eco);
+        guardarOrden();
         guardarLista();
         return true;
     }
@@ -1732,6 +1780,8 @@
         if (!eco) return;
         if (Object.prototype.hasOwnProperty.call(APP.watchMap, eco)) {
             delete APP.watchMap[eco];
+            APP.orden = APP.orden.filter((k) => k !== eco);
+            guardarOrden();
             guardarLista();
         }
     }
@@ -1752,19 +1802,55 @@
     function pintarModalLista() {
         const body = byId('hjp-modal-lista');
         if (!body) return;
-        const ecos = Object.keys(APP.watchMap);
-        ecos.sort((a, b) => a.localeCompare(b));
+        sincronizarOrden();
+        const ecos = APP.orden.slice();
         if (!ecos.length) {
             body.innerHTML = '<div class="lista-empty">Lista vacía. Pega abajo o añade uno.</div>';
             return;
         }
-        body.innerHTML = ecos.map((eco) => (
+        body.innerHTML = ecos.map((eco, i) => (
             '<div class="lista-row" data-eco="' + esc(eco) + '">' +
+            '<span class="hjp-drag-handle" draggable="true" title="Arrastrar para cambiar el orden">⠿</span>' +
+            '<span class="orden-num">' + (i + 1) + '</span>' +
             '<span class="eco">' + esc(eco) + '</span>' +
             '<input type="text" class="hjp-dest" data-eco="' + esc(eco) + '" value="' + esc(APP.watchMap[eco] || '') + '" placeholder="destino opcional">' +
-            '<button class="hjp-del" data-eco="' + esc(eco) + '" title="Quitar de la lista">✕</button>' +
+            '<button class="hjp-del" data-eco="' + esc(eco) + '" draggable="false" title="Quitar de la lista"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
             '</div>'
         )).join('');
+    }
+    // Arrastrar y soltar para reordenar la lista.
+    function inicializarDragLista() {
+        const cont = byId('hjp-modal-lista');
+        if (!cont || cont._dragInit) return;
+        cont._dragInit = true;
+        let dragEco = null;
+        cont.addEventListener('dragstart', (e) => {
+            const h = e.target.closest && e.target.closest('.hjp-drag-handle');
+            if (!h) { e.preventDefault(); return; }
+            const row = h.closest('.lista-row');
+            dragEco = row ? row.dataset.eco : null;
+            if (row) row.classList.add('arrastrando');
+            try { e.dataTransfer.setData('text/plain', dragEco || ''); e.dataTransfer.effectAllowed = 'move'; } catch (_) { /* noop */ }
+        });
+        cont.addEventListener('dragover', (e) => {
+            if (!dragEco) return;
+            e.preventDefault();
+            const over = e.target.closest && e.target.closest('.lista-row');
+            const dragging = cont.querySelector('.lista-row.arrastrando');
+            if (!over || !dragging || over === dragging) return;
+            const rect = over.getBoundingClientRect();
+            const after = (e.clientY - rect.top) > rect.height / 2;
+            cont.insertBefore(dragging, after ? over.nextSibling : over);
+        });
+        cont.addEventListener('drop', (e) => { if (dragEco) e.preventDefault(); });
+        cont.addEventListener('dragend', () => {
+            const dragging = cont.querySelector('.lista-row.arrastrando');
+            if (dragging) dragging.classList.remove('arrastrando');
+            dragEco = null;
+            const ecos = Array.prototype.slice.call(cont.querySelectorAll('.lista-row')).map((r) => r.dataset.eco).filter(Boolean);
+            if (ecos.length) { APP.orden = ecos; guardarOrden(); }
+            pintarModalLista();
+        });
     }
 
     /* ====================== VERIFICACION ====================== */
@@ -1856,16 +1942,19 @@
             : 'Activar verificacion de ventanas';
     }
     async function execList(ecos) {
-        APP.seleccion = new Set(ecos.map((e) => normEco(e)).filter(Boolean));
+        // Respeta el orden configurado (pegado, numero o arrastrado).
+        sincronizarOrden();
+        const ordenados = ordenarPorLista(ecos, (e) => e);
+        APP.seleccion = new Set(ordenados.map((e) => normEco(e)).filter(Boolean));
         writeSession(SS.seleccion, Array.from(APP.seleccion));
         paintInfo();
-        for (let i = 0; i < ecos.length; i++) {
+        for (let i = 0; i < ordenados.length; i++) {
             const b = byId('hjp-btn-main');
             if (b) {
-                b.innerHTML = '<span class="hjp-mi">' + ICO.automatizar + '</span> Buscando (' + (i + 1) + '/' + ecos.length + ')...';
+                b.innerHTML = '<span class="hjp-mi">' + ICO.automatizar + '</span> Buscando (' + (i + 1) + '/' + ordenados.length + ')...';
                 b.style.background = 'linear-gradient(135deg,#f57c00,#ff9800)';
             }
-            await openUnitWindow(ecos[i]);
+            await openUnitWindow(ordenados[i]);
             await sleep(250);
         }
         const inp = findSearchInput();
@@ -2125,6 +2214,12 @@
             "#hjp-modal-lista .lista-row button{background:transparent;border:1px solid var(--hjp-border);color:var(--hjp-fg-dim);border-radius:5px;padding:2px 9px;cursor:pointer;font-size:11px}\n" +
             "#hjp-modal-lista .lista-row button:hover{color:var(--hjp-bad-fg);border-color:var(--hjp-bad-fg)}\n" +
             "#hjp-modal-lista .lista-empty{padding:14px;text-align:center;color:var(--hjp-fg-mute);font-size:12px}\n" +
+            "#hjp-modal-lista .lista-row.arrastrando{opacity:.5;background:var(--hjp-bg-strong)}\n" +
+            "#hjp-modal-lista .hjp-drag-handle{cursor:grab;color:var(--hjp-fg-mute);font-size:14px;letter-spacing:-2px;padding:0 4px;user-select:none;touch-action:none}\n" +
+            "#hjp-modal-lista .hjp-drag-handle:active{cursor:grabbing}\n" +
+            "#hjp-modal-lista .orden-num{font:600 10px monospace;color:var(--hjp-fg-mute);min-width:16px;text-align:right}\n" +
+            "#hjp-modal .hjp-order-tools{display:flex;flex-wrap:wrap;gap:5px;align-items:center;padding:6px 14px 0;font-size:11px;color:var(--hjp-fg-dim)}\n" +
+            "#hjp-modal .hjp-order-tools span{margin-right:2px}\n" +
             "#hjp-modal .hjp-modal-add{display:flex;gap:6px;padding:8px 14px 0}\n" +
             "#hjp-modal .hjp-modal-add input{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:5px;padding:5px 7px;font-size:12px;flex:1;min-width:60px}\n" +
             "#hjp-modal .hjp-modal-add input:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
@@ -2359,9 +2454,18 @@
             '<button class="mini" id="hjp-modal-parse">⇭ Pegar a la lista</button>' +
             '<button class="mini" id="hjp-modal-clear-txt">⌫ Limpiar área</button>' +
             '</div>' +
+            '<div class="hjp-order-tools">' +
+            '<span>Orden de las ventanas:</span>' +
+            '<button class="mini" id="hjp-orden-pegado" title="En el orden en que se pegaron">Pegado</button>' +
+            '<button class="mini" id="hjp-orden-numero" title="Por numero de economico (menor a mayor)">Numero</button>' +
+            '<button class="mini" id="hjp-orden-numero-desc" title="Por numero de economico (mayor a menor)">Numero inverso</button>' +
+            '<button class="mini" id="hjp-orden-alfabetico" title="Orden alfabetico">A-Z</button>' +
+            '<button class="mini" id="hjp-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
+            '</div>' +
             '<div id="hjp-modal-lista-wrap">' +
                 '<div id="hjp-modal-lista"></div>' +
             '</div>' +
+            '<p style="font-size:11px;color:var(--hjp-fg-dim);margin:4px 14px 0">Arrastra el asa ⠿ de cada unidad para cambiar el orden con el que se acomodan las ventanas.</p>' +
             '<div class="hjp-modal-add">' +
                 '<input type="text" id="hjp-modal-new-eco" placeholder="eco (ej. 4381)">' +
                 '<input type="text" id="hjp-modal-new-dest" placeholder="destino (opcional)">' +
@@ -3355,7 +3459,12 @@
                     writeJSON(LS.barra, APP.barra);
                     if (Array.isArray(d.seleccion)) { APP.seleccion = new Set(d.seleccion); writeSession(SS.seleccion, Array.from(APP.seleccion)); }
                     if (Array.isArray(d.dismissed)) { APP.dismissed = new Set(d.dismissed); writeSession(SS.dismissed, Array.from(APP.dismissed)); }
-                    if (d.watchMap && typeof d.watchMap === 'object') { APP.watchMap = d.watchMap; writeSession(SS.watch, APP.watchMap); }
+                    if (d.watchMap && typeof d.watchMap === 'object') {
+                        APP.watchMap = d.watchMap;
+                        writeSession(SS.watch, APP.watchMap);
+                        APP.orden = Object.keys(APP.watchMap);
+                        guardarOrden();
+                    }
                     if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeSession(SS.limites, APP.limites); }
                     if (d.rutas && typeof d.rutas === 'object') { APP.rutas = d.rutas; guardarRutas(); }
                     if (d.panelPos) { APP.panelPos = d.panelPos; writeJSON(LS.panelpos, APP.panelPos); }
@@ -3519,6 +3628,12 @@
             paintInfo();
             advice('Pegado', n + ' unidad(es) procesadas');
         });
+        byId('hjp-orden-pegado').addEventListener('click', () => aplicarOrdenModo('pegado'));
+        byId('hjp-orden-numero').addEventListener('click', () => aplicarOrdenModo('numero'));
+        byId('hjp-orden-numero-desc').addEventListener('click', () => aplicarOrdenModo('numero-desc'));
+        byId('hjp-orden-alfabetico').addEventListener('click', () => aplicarOrdenModo('alfabetico'));
+        byId('hjp-orden-invertir').addEventListener('click', () => aplicarOrdenModo('invertir'));
+        inicializarDragLista();
         byId('hjp-modal-clear-txt').addEventListener('click', () => {
             const ta = byId('hjp-txt'); if (ta) ta.value = '';
             ta && ta.focus();

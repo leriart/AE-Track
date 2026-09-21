@@ -139,6 +139,20 @@ Pulsa **Automatizar Unidades** en la barra. Se abre la lista, donde puedes:
 - Pulsar **Ejecutar (abrir ventanas)** para abrir y acomodar las ventanas de las
   unidades de la lista.
 
+### Orden de las ventanas
+
+El orden de la lista es el orden en el que se abren y se acomodan las ventanas
+de los vehiculos. Puedes cambiarlo de dos formas:
+
+- Con los botones de la parte superior de la lista: **Pegado** (orden en que las
+  pegaste), **Numero** (de menor a mayor), **Numero inverso**, **A-Z** e
+  **Invertir**.
+- **Arrastrando** el asa (⠿) de cada fila para colocarla donde quieras. El
+  numero a la izquierda indica la posicion actual.
+
+El orden se guarda por pestaña y se aplica al pulsar **Ejecutar (abrir
+ventanas)**.
+
 Tambien puedes marcar y desmarcar unidades directamente con la casilla de la
 columna **Sel** en la pestana Unidades.
 
