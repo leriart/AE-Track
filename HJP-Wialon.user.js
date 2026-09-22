@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.13.0
+// @version      4.14.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.13.0';
+    const VER = '4.14.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -126,7 +126,8 @@
         limites: 'hjp.api.limites',
         perfiles: 'hjp.api.perfiles',
         filtEstado: 'hjp.api.filtEstado',
-        rutas: 'hjp.api.rutas'
+        rutas: 'hjp.api.rutas',
+        odometro: 'hjp.api.odometro'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
@@ -189,6 +190,7 @@
         retornoPct: 25,
         giroGrados: 130,
         giroMin: 3,
+        demoraBaseMin: 30,
         trazado: true,
         trazadoMax: 500,
         partidaHoras: 6,
@@ -207,7 +209,8 @@
             velocidad: false,
             desvio: false,
             retorno: false,
-            giroU: false
+            giroU: false,
+            demoraBase: false
         })
     });
 
@@ -320,9 +323,11 @@
         limites: readSessionObject(SS.limites, {}, LS.limites),
         perfiles: readObject(LS.perfiles, {}),
         rutas: readObject(LS.rutas, {}),
+        odometro: readObject(LS.odometro, {}),
         viajes: readSessionObject(SS.viajes, {}, null),
         trazas: {},
         grafoCache: {},
+        snapMemo: {},
         barra: readObject(LS.barra, {
             x: null, y: null, plegada: false, vertical: false,
             botones: { main: true, panel: true, close: true }
@@ -349,7 +354,8 @@
         panelHidden: true,
         update: { state: 'idle', remote: null, local: VER },
         unlocked: false,
-        consultaRestante: 0
+        consultaRestante: 0,
+        stats: { erroresReglas: 0, astarCap: 0 }
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
@@ -493,6 +499,9 @@
 
     /* ====================== ALGORITMOS GEO / RUTAS (OSM + A*) ====================== */
     const RADIO_TIERRA = 6371008.8;
+    // Umbral (km) por debajo del cual la proyeccion equirectangular local
+    // tiene precision suficiente y es mas barata que la geodesica esferica.
+    const DIST_LOCAL_UMBRAL_KM = 1;
     function rad(d) { return d * Math.PI / 180; }
     function grad(r) { return r * 180 / Math.PI; }
     function haversine(lat1, lon1, lat2, lon2) {
@@ -500,6 +509,13 @@
         const s = Math.sin(dLat / 2) * Math.sin(dLat / 2)
             + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return 2 * RADIO_TIERRA * Math.asin(Math.min(1, Math.sqrt(s)));
+    }
+    // Haversine en radianes (util para trigonometria esferica).
+    function haversineAngular(lat1, lon1, lat2, lon2) {
+        const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+        const s = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 2 * Math.asin(Math.min(1, Math.sqrt(s)));
     }
     function bearing(lat1, lon1, lat2, lon2) {
         const p1 = rad(lat1), p2 = rad(lat2), dl = rad(lon2 - lon1);
@@ -509,28 +525,66 @@
     }
     function difAngulo(a, b) { return Math.abs(((a - b + 540) % 360) - 180); }
 
-    // Distancia punto->segmento en metros con proyeccion equirectangular local.
+    // Distancia punto->segmento. Para segmentos cortos usa proyeccion
+    // equirectangular local (barata, suficiente); para los largos usa la
+    // formula de cross-track sobre la esfera (geodesica).
     function distPuntoSegmento(lat, lon, aLat, aLon, bLat, bLon) {
-        const lat0 = (aLat + bLat) / 2;
-        const mx = 111320 * Math.cos(rad(lat0)), my = 110540;
-        const px = (lon - aLon) * mx, py = (lat - aLat) * my;
-        const bx = (bLon - aLon) * mx, by = (bLat - aLat) * my;
-        const len2 = bx * bx + by * by;
-        let t = len2 > 0 ? (px * bx + py * by) / len2 : 0;
-        t = clamp(t, 0, 1);
-        const dx = px - bx * t, dy = py - by * t;
-        return { dist: Math.sqrt(dx * dx + dy * dy), t };
-    }
-    // Reduce una polilinea conservando puntos separados al menos minM metros.
-    function simplificarRuta(coords, minM) {
-        if (!coords || coords.length < 3) return coords ? coords.slice() : [];
-        const sep = minM || 40;
-        const out = [coords[0]];
-        let last = coords[0];
-        for (let i = 1; i < coords.length - 1; i++) {
-            if (haversine(last[1], last[0], coords[i][1], coords[i][0]) >= sep) { out.push(coords[i]); last = coords[i]; }
+        const dAB = haversine(aLat, aLon, bLat, bLon);
+        if (dAB < DIST_LOCAL_UMBRAL_KM * 1000) {
+            const lat0 = (aLat + bLat) / 2;
+            const mx = 111320 * Math.cos(rad(lat0)), my = 110540;
+            const px = (lon - aLon) * mx, py = (lat - aLat) * my;
+            const bx = (bLon - aLon) * mx, by = (bLat - aLat) * my;
+            const len2 = bx * bx + by * by;
+            let t = len2 > 0 ? (px * bx + py * by) / len2 : 0;
+            t = clamp(t, 0, 1);
+            const dx = px - bx * t, dy = py - by * t;
+            return { dist: Math.sqrt(dx * dx + dy * dy), t };
         }
-        out.push(coords[coords.length - 1]);
+        // Cross-track sobre la esfera (formula geodesica exacta).
+        const d13 = haversineAngular(aLat, aLon, lat, lon);
+        const d12 = haversineAngular(aLat, aLon, bLat, bLon);
+        if (d12 < 1e-12) return { dist: d13 * RADIO_TIERRA, t: 0 };
+        const t13 = rad(bearing(aLat, aLon, lat, lon));
+        const t12 = rad(bearing(aLat, aLon, bLat, bLon));
+        const sinXt = Math.sin(d13) * Math.sin(t13 - t12);
+        const dXt = Math.asin(clamp(sinXt, -1, 1));
+        // Along-track firmado: negativo si el pie cae antes de A.
+        const dAtSigned = Math.atan2(Math.sin(d13) * Math.cos(t13 - t12), Math.cos(d13));
+        if (dAtSigned < 0) return { dist: haversine(aLat, aLon, lat, lon), t: 0 };
+        if (dAtSigned > d12) return { dist: haversine(bLat, bLon, lat, lon), t: 1 };
+        return { dist: Math.abs(dXt) * RADIO_TIERRA, t: dAtSigned / d12 };
+    }
+    // Reduce una polilinea con Douglas-Peucker (iterativo, sin recursion).
+    // Conserva mejor los vertices y curvas que un filtro por distancia minima.
+    // epsM: tolerancia en metros. Default 25 m (equivalente aproximado al
+    // antiguo minM=40 en lineas rectas, mejor en esquinas).
+    function simplificarRuta(coords, epsM) {
+        if (!coords || coords.length < 3) return coords ? coords.slice() : [];
+        const eps = (epsM == null ? 25 : epsM);
+        const n = coords.length;
+        const keep = new Uint8Array(n);
+        keep[0] = 1; keep[n - 1] = 1;
+        const stack = [0, n - 1];
+        while (stack.length) {
+            const end = stack.pop();
+            const start = stack.pop();
+            if (end - start < 2) continue;
+            const aLat = coords[start][1], aLon = coords[start][0];
+            const bLat = coords[end][1], bLon = coords[end][0];
+            let maxD = 0, maxI = -1;
+            for (let i = start + 1; i < end; i++) {
+                const d = distPuntoSegmento(coords[i][1], coords[i][0], aLat, aLon, bLat, bLon).dist;
+                if (d > maxD) { maxD = d; maxI = i; }
+            }
+            if (maxI >= 0 && maxD > eps) {
+                keep[maxI] = 1;
+                stack.push(start, maxI);
+                stack.push(maxI, end);
+            }
+        }
+        const out = [];
+        for (let i = 0; i < n; i++) if (keep[i]) out.push(coords[i]);
         return out;
     }
     function precomputarRuta(coords) {
@@ -543,25 +597,54 @@
         return { acum, total };
     }
     // Proyecta un punto sobre la polilinea de una ruta y calcula progreso y rumbo.
-    function snapRuta(lat, lon, ruta) {
+    // Proyecta un punto sobre la polilinea de una ruta. Si se pasa memo
+    // (objeto { idx }), prueba primero ese segmento y sus vecinos (idx-1, idx,
+    // idx+1); si el mejor candidato esta a menos de MEMO_UMBRAL_M (1 km),
+    // se considera valido y se evita el escaneo completo. Si no, se hace
+    // escaneo lineal (saltos grandes: recalculo, ruta nueva, GPS erratico).
+    const MEMO_UMBRAL_M = 1000;
+    function snapRuta(lat, lon, ruta, memo) {
         if (!ruta || !ruta.coords || ruta.coords.length < 2 || lat == null || lon == null) return null;
         const c = ruta.coords;
+        const n = c.length;
+        function proyectar(i) {
+            if (i < 0 || i >= n - 1) return null;
+            const d = distPuntoSegmento(lat, lon, c[i][1], c[i][0], c[i + 1][1], c[i + 1][0]);
+            return { dist: d.dist, idx: i, t: d.t };
+        }
+        function resultado(mejor) {
+            const acum = ruta.acum || [0, ruta.total || 1];
+            const segLen = (acum[mejor.idx + 1] || 0) - (acum[mejor.idx] || 0);
+            const recorrido = (acum[mejor.idx] || 0) + mejor.t * segLen;
+            const total = ruta.total || 1;
+            const a = c[mejor.idx], b = c[mejor.idx + 1];
+            return {
+                dist: mejor.dist, idx: mejor.idx, t: mejor.t,
+                progreso: clamp(recorrido / total, 0, 1),
+                recorrido, total,
+                rumbo: bearing(a[1], a[0], b[1], b[0])
+            };
+        }
+        if (memo && Number.isInteger(memo.idx) && memo.idx >= 0 && memo.idx < n - 1) {
+            const cands = [memo.idx, memo.idx - 1, memo.idx + 1];
+            let mejor = null;
+            for (let k = 0; k < cands.length; k++) {
+                const p = proyectar(cands[k]);
+                if (p && (!mejor || p.dist < mejor.dist)) mejor = p;
+            }
+            if (mejor && mejor.dist <= MEMO_UMBRAL_M) {
+                memo.idx = mejor.idx;
+                return resultado(mejor);
+            }
+        }
+        // Fallback: escaneo completo (memo no disponible o vehiculo salto lejos).
         let mejor = { dist: Infinity, idx: 0, t: 0 };
-        for (let i = 0; i < c.length - 1; i++) {
+        for (let i = 0; i < n - 1; i++) {
             const d = distPuntoSegmento(lat, lon, c[i][1], c[i][0], c[i + 1][1], c[i + 1][0]);
             if (d.dist < mejor.dist) mejor = { dist: d.dist, idx: i, t: d.t };
         }
-        const acum = ruta.acum || [0, ruta.total || 1];
-        const segLen = (acum[mejor.idx + 1] || 0) - (acum[mejor.idx] || 0);
-        const recorrido = (acum[mejor.idx] || 0) + mejor.t * segLen;
-        const total = ruta.total || 1;
-        const a = c[mejor.idx], b = c[mejor.idx + 1];
-        return {
-            dist: mejor.dist, idx: mejor.idx, t: mejor.t,
-            progreso: clamp(recorrido / total, 0, 1),
-            recorrido, total,
-            rumbo: bearing(a[1], a[0], b[1], b[0])
-        };
+        if (memo) memo.idx = mejor.idx;
+        return resultado(mejor);
     }
 
     // Cola de prioridad binaria para A*.
@@ -595,16 +678,26 @@
     };
     MinHeap.prototype.size = function () { return this.a.length; };
 
-    // A* generico sobre un grafo de nodos { id: { lat, lon } } y adyacencia { id: [id] }.
-    // Heuristica: distancia haversine al objetivo (admisible para grafos viales).
+    // A* generico sobre un grafo de nodos { id: { lat, lon } } y adyacencia.
+    // Cada arista puede ser: un id numerico (coste = haversine) o
+    // { to, costo } donde costo es el peso real (ej. segundos). Esto permite
+    // usar A* sobre el grafo OSM ponderado por maxspeed sin perder compatibilidad
+    // con tests existentes.
+    // Heuristica: tiempo minimo restante a la velocidad maxima posible
+    // (110 km/h por autopista). Admisible y consistente.
+    const VEL_MAX_RUTA_KMH = 110;
     function aEstrella(nodos, adyacencia, inicio, meta) {
         if (!nodos.has(inicio) || !nodos.has(meta)) return null;
         const metaN = nodos.get(meta);
-        const h = (id) => { const n = nodos.get(id); return haversine(n.lat, n.lon, metaN.lat, metaN.lon); };
+        const hTiempo = (id) => {
+            const n = nodos.get(id);
+            const dM = haversine(n.lat, n.lon, metaN.lat, metaN.lon);
+            return (dM / 1000) / VEL_MAX_RUTA_KMH * 3600; // segundos
+        };
         const abiertos = new MinHeap();
         const g = new Map(), padre = new Map(), cerrados = new Set();
         g.set(inicio, 0);
-        abiertos.push({ id: inicio, f: h(inicio) });
+        abiertos.push({ id: inicio, f: hTiempo(inicio) });
         let iter = 0;
         while (abiertos.size() && iter < 300000) {
             iter++;
@@ -622,14 +715,21 @@
             const nActual = nodos.get(actual);
             const gActual = g.get(actual);
             for (let i = 0; i < vecinos.length; i++) {
-                const v = vecinos[i];
+                const e = vecinos[i];
+                const v = (typeof e === 'object' && e) ? e.to : e;
+                const peso = (typeof e === 'object' && e && e.costo != null)
+                    ? e.costo
+                    : (() => {
+                        const nv = nodos.get(v);
+                        return nv ? haversine(nActual.lat, nActual.lon, nv.lat, nv.lon) : Infinity;
+                    })();
                 if (cerrados.has(v)) continue;
                 const nv = nodos.get(v);
                 if (!nv) continue;
-                const ng = gActual + haversine(nActual.lat, nActual.lon, nv.lat, nv.lon);
+                const ng = gActual + peso;
                 if (g.has(v) && ng >= g.get(v)) continue;
                 g.set(v, ng); padre.set(v, actual);
-                abiertos.push({ id: v, f: ng + h(v) });
+                abiertos.push({ id: v, f: ng + hTiempo(v) });
             }
         }
         return null;
@@ -652,7 +752,7 @@
     async function overpassGrafo(minLat, minLon, maxLat, maxLon) {
         const clave = [minLat, minLon, maxLat, maxLon].map((v) => v.toFixed(2)).join(',');
         if (APP.grafoCache[clave]) return APP.grafoCache[clave];
-        const q = '[out:json][timeout:30];way["highway"~"motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street"](' +
+        const q = '[out:json][timeout:30];way["highway"~"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|service|living_street"](' +
             minLat + ',' + minLon + ',' + maxLat + ',' + maxLon + ');(._;>;);out body;';
         const res = await fetch('https://overpass-api.de/api/interpreter', {
             method: 'POST',
@@ -661,18 +761,33 @@
         });
         if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
         const d = await res.json();
-        const nodos = new Map(), ady = new Map();
+        const nodos = new Map();
+        const tagsPorWay = new Map(); // wayId -> tags
         (d.elements || []).forEach((el) => {
             if (el.type === 'node') nodos.set(el.id, { lat: el.lat, lon: el.lon });
+            else if (el.type === 'way') tagsPorWay.set(el.id, el.tags || {});
         });
+        // Adyacencia: Map<id, {to, distanciaM, costo}[]> donde costo es tiempo
+        // estimado en segundos (distancia / velocidadPorTipo). Esto permite
+        // que A* optimice por tiempo y respeta sentido unico y maxspeed.
+        const ady = new Map();
+        function pushArista(from, to, dist, costo) {
+            if (!ady.has(from)) ady.set(from, []);
+            ady.get(from).push({ to: to, distanciaM: dist, costo: costo });
+        }
         (d.elements || []).forEach((el) => {
-            if (el.type !== 'way' || !el.nodes) return;
+            if (el.type !== 'way' || !el.nodes || el.nodes.length < 2) return;
+            const tags = tagsPorWay.get(el.id) || {};
+            const sentido = sentidoOneWay(tags); // 0 bidi, 1 hacia adelante, -1 inverso
+            const v = parseMaxspeed(tags) || VEL_POR_TIPO[tags.highway] || VEL_POR_TIPO.default;
             for (let i = 0; i < el.nodes.length - 1; i++) {
                 const a = el.nodes[i], b = el.nodes[i + 1];
-                if (!nodos.has(a) || !nodos.has(b)) continue;
-                if (!ady.has(a)) ady.set(a, []);
-                if (!ady.has(b)) ady.set(b, []);
-                ady.get(a).push(b); ady.get(b).push(a);
+                const na = nodos.get(a), nb = nodos.get(b);
+                if (!na || !nb) continue;
+                const dist = haversine(na.lat, na.lon, nb.lat, nb.lon);
+                const costo = (dist / 1000) / Math.max(v, 5) * 3600; // segundos
+                if (sentido >= 0) pushArista(a, b, dist, costo);
+                if (sentido <= 0) pushArista(b, a, dist, costo);
             }
         });
         const grafo = { nodos, ady };
@@ -681,6 +796,30 @@
         APP.grafoCache[clave] = grafo;
         return grafo;
     }
+    // Sentido de una calle: 0 bidireccional, 1 hacia adelante, -1 inverso.
+    function sentidoOneWay(tags) {
+        if (!tags) return 0;
+        const v = String(tags.oneway || '').toLowerCase();
+        if (v === 'yes' || v === 'true' || v === '1') return 1;
+        if (v === '-1' || v === 'reverse') return -1;
+        return 0;
+    }
+    function parseMaxspeed(tags) {
+        if (!tags || !tags.maxspeed) return null;
+        const m = /^\s*(\d+)/.exec(String(tags.maxspeed));
+        return m ? parseInt(m[1], 10) : null;
+    }
+    // Velocidades por defecto por tipo de via (km/h), usadas si falta maxspeed.
+    const VEL_POR_TIPO = {
+        motorway: 100, motorway_link: 60,
+        trunk: 80, trunk_link: 50,
+        primary: 60, primary_link: 40,
+        secondary: 50, secondary_link: 35,
+        tertiary: 40, tertiary_link: 30,
+        unclassified: 30, residential: 30,
+        service: 20, living_street: 10,
+        default: 30
+    };
     function nodoCercano(nodos, lat, lon) {
         let mejor = null, mejorD = Infinity;
         nodos.forEach((n, id) => {
@@ -729,10 +868,12 @@
     function guardarRutas() { writeJSON(LS.rutas, APP.rutas); }
     function resetEstadoRuta(clave) {
         const m = APP.memo[clave];
-        if (!m) return;
-        m.progMax = 0; m.retornoAlerta = false; m.llego = false;
-        m.desviadoDesde = null; m.rumboOpDesde = null;
-        writeSession(SS.memo, APP.memo);
+        if (m) {
+            m.progMax = 0; m.retornoAlerta = false; m.llego = false;
+            m.desviadoDesde = null; m.rumboOpDesde = null;
+            writeSession(SS.memo, APP.memo);
+        }
+        if (APP.snapMemo[clave]) delete APP.snapMemo[clave];
     }
     async function planearRuta(eco, destinoTexto, origenOv, modo) {
         const it = unitByEco(eco);
@@ -871,42 +1012,130 @@
     }
     // Punto de partida: el ultimo tramo parado (<=3 km/h) de al menos `horas`
     // horas, es decir, donde el vehiculo estuvo apagado/parado mas de 6 horas.
+    // Usa DBSCAN con grid espacial sobre los puntos con velocidad baja para
+    // agrupar lecturas cercanas (insensible al jitter GPS).
     function detectarPuntoPartida(puntos, horas) {
-        const umbral = Math.max(1, horas) * 3600;
-        const segs = [];
-        let ini = null;
-        for (let i = 0; i < puntos.length; i++) {
-            if (puntos[i].s <= 3) { if (ini == null) ini = i; }
-            else if (ini != null) { segs.push({ ini, fin: i - 1 }); ini = null; }
+        const grupos = segmentosParados(puntos, 0, puntos.length);
+        const umbralSeg = Math.max(1, horas) * 3600;
+        // El tramo "abierto" (que llega hasta el final) no cuenta como inicio.
+        const tFin = puntos[puntos.length - 1].t;
+        for (let i = grupos.length - 1; i >= 0; i--) {
+            const g = grupos[i];
+            const abierto = (tFin - g.hasta) <= 60;
+            if (abierto) continue;
+            if (g.durSeg >= umbralSeg) {
+                return {
+                    lat: g.lat, lon: g.lon, t: g.desde,
+                    durHoras: g.durSeg / 3600, finIdx: g.finIdx
+                };
+            }
         }
-        if (ini != null) segs.push({ ini, fin: puntos.length - 1, abierto: true });
-        let mejor = null;
-        for (let k = 0; k < segs.length; k++) {
-            const s = segs[k];
-            if (s.abierto) continue; // el tramo en curso no marca el inicio del viaje
-            const dur = puntos[s.fin].t - puntos[s.ini].t;
-            if (dur >= umbral) mejor = { ini: s.ini, fin: s.fin, dur };
-        }
-        if (!mejor) return null;
-        const p = puntos[mejor.fin];
-        return { lat: p.lat, lon: p.lon, t: p.t, durHoras: mejor.dur / 3600, finIdx: mejor.fin };
+        return null;
     }
     // Paradas de al menos `paradaMin` minutos dentro del trayecto.
     function analizarParadas(puntos, desde, paradaMin, partidaSeg) {
-        const segs = [];
-        let ini = null;
-        for (let i = desde; i < puntos.length; i++) {
-            if (puntos[i].s <= 3) { if (ini == null) ini = i; }
-            else if (ini != null) { segs.push({ ini, fin: i - 1 }); ini = null; }
+        const grupos = segmentosParados(puntos, desde, puntos.length);
+        return grupos.filter((g) => {
+            return g.durSeg >= paradaMin * 60 && g.durSeg < partidaSeg;
+        }).map((g) => ({
+            lat: g.lat, lon: g.lon, desde: g.desde, hasta: g.hasta,
+            durMin: g.durSeg / 60, abierto: false
+        }));
+    }
+    // Umbrales y helpers de clusterizacion de paradas (DBSCAN espacial).
+    const UMBRAL_PARADO_KMH = 3;
+    const DBSCAN_EPS_M = 80;
+    const DBSCAN_MIN_PTS = 2;
+
+    // Agrupa puntos cercanos (clusterizacion por densidad).
+    function dbscanStops(puntos, epsM, minPts) {
+        if (!puntos || puntos.length === 0) return [];
+        const eps = epsM || DBSCAN_EPS_M;
+        const minN = minPts || DBSCAN_MIN_PTS;
+        const cellDeg = eps / 110000;
+        const grid = new Map();
+        for (let i = 0; i < puntos.length; i++) {
+            const key = Math.floor(puntos[i].lat / cellDeg) + ',' + Math.floor(puntos[i].lon / cellDeg);
+            let arr = grid.get(key);
+            if (!arr) { arr = []; grid.set(key, arr); }
+            arr.push(i);
         }
-        if (ini != null) segs.push({ ini, fin: puntos.length - 1, abierto: true });
-        return segs.filter((s) => {
-            const dur = puntos[s.fin].t - puntos[s.ini].t;
-            return dur >= paradaMin * 60 && dur < partidaSeg;
-        }).map((s) => {
-            const a = puntos[s.ini], b = puntos[s.fin];
-            return { lat: a.lat, lon: a.lon, desde: a.t, hasta: b.t, durMin: (b.t - a.t) / 60, abierto: !!s.abierto };
-        });
+        const visitado = new Uint8Array(puntos.length);
+        const clusters = [];
+        for (let i = 0; i < puntos.length; i++) {
+            if (visitado[i]) continue;
+            visitado[i] = 1;
+            const vecinos = vecinosCercanos(puntos, i, eps, cellDeg, grid);
+            if (vecinos.length < minN) continue;
+            const cluster = [i];
+            const cola = vecinos.slice();
+            while (cola.length) {
+                const k = cola.pop();
+                if (!visitado[k]) {
+                    visitado[k] = 1;
+                    const n2 = vecinosCercanos(puntos, k, eps, cellDeg, grid);
+                    if (n2.length >= minN) {
+                        for (let q = 0; q < n2.length; q++) cola.push(n2[q]);
+                    }
+                }
+                if (cluster.indexOf(k) < 0) cluster.push(k);
+            }
+            clusters.push(cluster);
+        }
+        return clusters;
+    }
+    function vecinosCercanos(puntos, i, eps, cellDeg, grid) {
+        const cx = Math.floor(puntos[i].lat / cellDeg);
+        const cy = Math.floor(puntos[i].lon / cellDeg);
+        const out = [];
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const cell = grid.get((cx + dx) + ',' + (cy + dy));
+                if (!cell) continue;
+                for (let m = 0; m < cell.length; m++) {
+                    const j = cell[m];
+                    if (j === i) continue;
+                    if (haversine(puntos[i].lat, puntos[i].lon, puntos[j].lat, puntos[j].lon) <= eps) {
+                        out.push(j);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+    function segmentosParados(puntos, desde, hasta) {
+        const candidatos = [];
+        const indices = [];
+        for (let i = desde; i < hasta; i++) {
+            if (puntos[i].s <= UMBRAL_PARADO_KMH) {
+                candidatos.push(puntos[i]);
+                indices.push(i);
+            }
+        }
+        if (candidatos.length === 0) return [];
+        const clusters = dbscanStops(candidatos, DBSCAN_EPS_M, DBSCAN_MIN_PTS);
+        const grupos = [];
+        for (let c = 0; c < clusters.length; c++) {
+            const cl = clusters[c];
+            let sumLat = 0, sumLon = 0;
+            let tIni = Infinity, tFin = -Infinity;
+            let idxIni = -1, idxFin = -1;
+            for (let q = 0; q < cl.length; q++) {
+                const k = cl[q];
+                const p = candidatos[k];
+                sumLat += p.lat; sumLon += p.lon;
+                if (p.t < tIni) { tIni = p.t; idxIni = indices[k]; }
+                if (p.t > tFin) { tFin = p.t; idxFin = indices[k]; }
+            }
+            grupos.push({
+                lat: sumLat / cl.length, lon: sumLon / cl.length,
+                desde: tIni, hasta: tFin, durSeg: tFin - tIni,
+                iniIdx: idxIni, finIdx: idxFin,
+                nPuntos: cl.length
+            });
+        }
+        grupos.sort((a, b) => a.desde - b.desde);
+        return grupos;
     }
     async function analizarViaje(eco, silencioso) {
         const it = unitByEco(eco);
@@ -1067,6 +1296,37 @@
         if (APP.seleccion.has(i)) return true;
         return false;
     }
+    // Acumula distancia recorrida por unidad cuando se mueve a mas de 1 km/h.
+    // Saltos GPS anomalos (>5 km en 1 minuto) se descartan para no inflar el
+    // odometro. Persiste en localStorage.
+    const ODOMETRO_MAX_SALTO_M = 5000;
+    function actualizarOdometro(info, st, prev) {
+        if (!info || !info.clave || !st || st.online !== true) return;
+        if (st.lat == null || st.lon == null) return;
+        if (st.vel != null && st.vel <= 1) return;
+        const clave = info.clave;
+        const od = APP.odometro[clave] || (APP.odometro[clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null });
+        if (od.ultimoLat != null && od.ultimoLon != null && st.t && od.ultimoT) {
+            const dt = Math.max(1, st.t - od.ultimoT);
+            const d = haversine(od.ultimoLat, od.ultimoLon, st.lat, st.lon);
+            if (d <= ODOMETRO_MAX_SALTO_M) od.m += d;
+        }
+        od.ultimoLat = st.lat;
+        od.ultimoLon = st.lon;
+        od.ultimoT = st.t || Math.floor(Date.now() / 1000);
+        writeJSON(LS.odometro, APP.odometro);
+    }
+    function resetOdometro(eco) {
+        const it = unitByEco(eco);
+        if (!it) return;
+        APP.odometro[it.info.clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null };
+        writeJSON(LS.odometro, APP.odometro);
+        advice('Odometro reiniciado', it.info.eco);
+    }
+    function odometroDe(info) {
+        if (!info || !info.clave) return null;
+        return APP.odometro[info.clave] || null;
+    }
     function isBase(zona) {
         return /\b(GENA|CEDIS|PATIO|PLANTA|OFICINAS|ALMACEN|TALLER|BODEGA|LABORATORIO|BASCULA|RASTRO)\b/.test(norm(zona));
     }
@@ -1214,7 +1474,257 @@
     function advice(titulo, detalle) {
         toast({ sev: 'bajo', icono: ICO.info, titulo, detalle: detalle || '', ts: Date.now() });
     }
-/* ====================== MOTOR DE REGLAS ====================== */
+/* ====================== MOTOR DE REGLAS ======================
+ * Cada regla recibe (u, st, prev, R, info, etq, ctx), muta R con su estado
+ * persistente (desde cuando, maximo progreso, etc.) y puede llamar a
+ * pushAlert. evaluateUnit solo orquesta; asi se pueden anadir o quitar
+ * reglas sin tocar el resto.
+ */
+    async function reglaOffline(st, prev, R, info, etq) {
+        if (!APP.config.reglas.offline) return;
+        if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
+            pushAlert({
+                regla: 'offline', sev: 'alto', clave: info.clave, eco: info.eco,
+                titulo: 'SIN SENAL · ' + etq,
+                detalle: 'sin reportar hace ' + ageText(st.edadMin) + (R.zona ? ' · ' + R.zona : ''),
+                hablar: 'Atención, la unidad ' + etq + ' se ha desconectado'
+            });
+        } else if (prev && prev.estado === 'offline' && st.estado !== 'offline') {
+            pushAlert({
+                regla: 'offline', sev: 'ok', clave: info.clave, eco: info.eco,
+                titulo: 'RECONECTO · ' + etq,
+                detalle: 'volvio a reportar · ' + Math.round(st.vel) + ' km/h',
+                hablar: 'La unidad ' + etq + ' volvio a estar en linea'
+            });
+            R.descoAlerta = false;
+        }
+    }
+    async function reglaGpsPerdido(st, prev, R, info, etq) {
+        if (!APP.config.reglas.gpsPerdido || !prev || prev.estado === 'offline') return;
+        if (prev.vel > 5 && st.estado === 'offline' && st.edadMin >= APP.config.gpsMin) {
+            pushAlert({
+                regla: 'gpsPerdido', sev: 'critico', clave: info.clave, eco: info.eco,
+                titulo: 'SENAL PERDIDA EN MARCHA · ' + etq,
+                detalle: 'ultima velocidad ' + Math.round(prev.vel) + ' km/h · sin datos ' + ageText(st.edadMin) + (prev.zona ? ' · ' + prev.zona : ''),
+                hablar: 'Atención, se perdio la señal de la unidad ' + etq + ' en marcha'
+            });
+        }
+    }
+    async function reglaDetenido(u, st, R, info, etq, ctx) {
+        if (!APP.config.reglas.detenido) return;
+        if (st.online && st.vel <= 1) {
+            if (!R.detenidoDesde) {
+                R.detenidoDesde = Date.now() / 1000;
+                if (APP.config.historico && APP.consultaRestante > 0 && ctx.quotaOk) {
+                    APP.consultaRestante--;
+                    try {
+                        const um = await fetchLastMotion(u.id);
+                        if (um) R.detenidoDesde = um;
+                    } catch (_) { /* noop */ }
+                }
+            }
+            const m = (Date.now() / 1000 - R.detenidoDesde) / 60;
+            if (m >= APP.config.stopMin && !isBase(R.zona)) {
+                let ctxTxt = ctx.ubicaciones[info.clave];
+                if (ctxTxt == null && ctx.quotaGeo) {
+                    const g = await reverseGeocode(st.lat, st.lon);
+                    ctx.ubicaciones[info.clave] = ctxTxt = g ? (g.texto || g.ciudad || '') : '';
+                }
+                pushAlert({
+                    regla: 'detenido', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                    titulo: 'DETENIDO ' + Math.round(m) + ' min · ' + etq,
+                    detalle: (R.zona ? 'zona: ' + R.zona : 'fuera de geocercas') + (ctxTxt ? ' · ' + ctxTxt : ''),
+                    hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos detenida'
+                });
+            }
+        } else {
+            R.detenidoDesde = null;
+        }
+    }
+    function reglaZona(st, R, info, etq) {
+        if (!APP.config.reglas.zona) return;
+        const z = R.zona;
+        if (z && !isBase(z)) {
+            const destino = watchDest(info);
+            const esperada = destino && norm(z).indexOf(norm(destino)) >= 0;
+            if (!esperada) {
+                if (!R.zonaExt || R.zonaExt.n !== z) R.zonaExt = { n: z, desde: Date.now() / 1000 };
+                const m = (Date.now() / 1000 - R.zonaExt.desde) / 60;
+                if (m >= APP.config.zonaMin) {
+                    pushAlert({
+                        regla: 'zona', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                        titulo: 'ZONA NO PREVISTA ' + Math.round(m) + ' min · ' + etq,
+                        detalle: 'permanece en ' + z,
+                        hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos en zona no prevista'
+                    });
+                }
+            } else {
+                R.zonaExt = null;
+            }
+        } else {
+            R.zonaExt = null;
+        }
+    }
+    function reglaGeocerca(st, prev, R, info, etq) {
+        if (!APP.config.reglas.geocerca || !prev || prev.zona === R.zona) return;
+        if (R.zona) {
+            pushAlert({
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                titulo: 'ENTRO · ' + etq,
+                detalle: ICO.entra + ' ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
+            });
+        } else if (prev.zona) {
+            pushAlert({
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                titulo: 'SALIO · ' + etq,
+                detalle: ICO.sale + ' ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
+            });
+        }
+    }
+    async function reglaDestino(st, R, info, etq) {
+        if (!APP.config.reglas.destino) return;
+        const destino = watchDest(info);
+        if (!destino || !st.online) return;
+        const geo = await reverseGeocode(st.lat, st.lon);
+        const ciudad = geo ? geo.ciudad : '';
+        const enDestino = !!ciudad && (norm(ciudad).indexOf(norm(destino)) >= 0 || norm(destino).indexOf(norm(ciudad)) >= 0);
+        if (enDestino && !R.enDestino) {
+            R.enDestino = true;
+            pushAlert({
+                regla: 'destino', sev: 'ok', clave: info.clave, eco: info.eco,
+                titulo: 'LLEGO A DESTINO · ' + etq,
+                detalle: 'en ' + ciudad,
+                hablar: 'La unidad ' + etq + ' llego a su destino'
+            });
+        } else if (!enDestino && R.enDestino && st.vel > 10) {
+            R.enDestino = false;
+            pushAlert({
+                regla: 'destino', sev: 'bajo', clave: info.clave, eco: info.eco,
+                titulo: 'EN REGRESO · ' + etq,
+                detalle: 'salio de ' + destino + ' · ' + Math.round(st.vel) + ' km/h',
+                hablar: 'La unidad ' + etq + ' va en regreso'
+            });
+        }
+    }
+    async function reglaDesconexion(st, R, info, etq) {
+        if (!APP.config.reglas.desconexion || st.estado !== 'offline' || st.edadMin < APP.config.descoMin) return;
+        if (!R.descoAlerta) {
+            R.descoAlerta = true;
+            pushAlert({
+                regla: 'desconexion', sev: 'critico', clave: info.clave, eco: info.eco,
+                titulo: 'DESCONEXION PROLONGADA · ' + etq,
+                detalle: 'lleva ' + ageText(st.edadMin) + ' sin senal',
+                hablar: 'Atención, la unidad ' + etq + ' sigue desconectada'
+            });
+        }
+    }
+    function reglaVelocidad(st, R, info, etq) {
+        if (!APP.config.reglas.velocidad || !st.online) return;
+        const lim = limiteDe(info);
+        if (st.vel > lim) {
+            pushAlert({
+                regla: 'velocidad', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                titulo: 'EXCESO DE VELOCIDAD · ' + etq,
+                detalle: Math.round(st.vel) + ' km/h (limite ' + lim + ')',
+                hablar: 'La unidad ' + etq + ' excede la velocidad'
+            });
+        }
+    }
+    function reglaDemoraBase(st, R, info, etq) {
+        if (!APP.config.reglas.demoraBase) return;
+        if (!st.online || st.vel > 1) { R.demoraBaseAlerta = 0; return; }
+        if (!isBase(R.zona)) { R.demoraBaseAlerta = 0; return; }
+        if (R.enDestino || R.llego) return;
+        if (!R.demoraBaseAlerta) R.demoraBaseAlerta = Date.now() / 1000;
+        const min = (Date.now() / 1000 - R.demoraBaseAlerta) / 60;
+        if (min >= APP.config.demoraBaseMin) {
+            pushAlert({
+                regla: 'demoraBase', sev: 'bajo', clave: info.clave, eco: info.eco, soloHorario: true,
+                titulo: 'DEMORA EN BASE · ' + etq,
+                detalle: Math.round(min) + ' min parado en ' + R.zona,
+                hablar: 'La unidad ' + etq + ' lleva ' + Math.round(min) + ' minutos en base sin salir'
+            });
+            // Re-armar: la proxima alerta se disparara tras demoraBaseMin
+            // desde este momento (el cooldown de pushAlert evita duplicados).
+            R.demoraBaseAlerta = Date.now() / 1000;
+        }
+    }
+    function reglaRuta(st, R, info, etq) {
+        const ruta = rutaDe(info);
+        const sigueRuta = APP.config.reglas.desvio || APP.config.reglas.retorno || APP.config.reglas.giroU;
+        if (!ruta || !sigueRuta || !st.online || st.lat == null) return;
+        if (!APP.snapMemo[info.clave]) APP.snapMemo[info.clave] = { idx: 0 };
+        const s = snapRuta(st.lat, st.lon, ruta, APP.snapMemo[info.clave]);
+        if (!s) return;
+        R.rutaDist = Math.round(s.dist);
+        R.rutaProg = s.progreso;
+
+        if (APP.config.reglas.desvio) {
+            if (s.dist > APP.config.desvioM) {
+                if (!R.desviadoDesde) R.desviadoDesde = Date.now() / 1000;
+                const m = (Date.now() / 1000 - R.desviadoDesde) / 60;
+                if (m >= APP.config.desvioMin) {
+                    pushAlert({
+                        regla: 'desvio', sev: 'alto', clave: info.clave, eco: info.eco,
+                        titulo: 'DESVIO DE RUTA · ' + etq,
+                        detalle: Math.round(s.dist) + ' m de la ruta · ' + Math.round(m) + ' min',
+                        hablar: 'Atencion, la unidad ' + etq + ' se ha desviado de la ruta'
+                    });
+                }
+            } else {
+                R.desviadoDesde = null;
+            }
+        }
+
+        if (APP.config.reglas.retorno) {
+            if (s.progreso > (R.progMax || 0)) R.progMax = s.progreso;
+            const dOrigen = haversine(st.lat, st.lon, ruta.origen.lat, ruta.origen.lon);
+            const dDestino = haversine(st.lat, st.lon, ruta.destino.lat, ruta.destino.lon);
+            const retrocedio = (R.progMax - s.progreso) >= (APP.config.retornoPct / 100);
+            const enOrigen = dOrigen <= APP.config.retornoM && R.progMax >= 0.2;
+            if (dDestino <= APP.config.retornoM && s.progreso >= 0.85) {
+                if (!R.llego) {
+                    R.llego = true;
+                    R.retornoAlerta = false;
+                    pushAlert({
+                        regla: 'destino', sev: 'ok', clave: info.clave, eco: info.eco,
+                        titulo: 'LLEGO A DESTINO · ' + etq,
+                        detalle: ruta.destinoTexto ? 'en ' + ruta.destinoTexto : 'en el punto de destino',
+                        hablar: 'La unidad ' + etq + ' llego a su destino'
+                    });
+                }
+            }
+            if (!R.retornoAlerta && !R.llego && R.progMax >= 0.15 && (enOrigen || retrocedio)) {
+                R.retornoAlerta = true;
+                pushAlert({
+                    regla: 'retorno', sev: 'critico', clave: info.clave, eco: info.eco,
+                    titulo: 'POSIBLE VIAJE CANCELADO · ' + etq,
+                    detalle: (enOrigen ? 'volvio al origen' : 'retrocedio ' + Math.round((R.progMax - s.progreso) * 100) + '%') +
+                        ' · avance max ' + Math.round(R.progMax * 100) + '%',
+                    hablar: 'Atencion, la unidad ' + etq + ' regreso. El viaje puede estar cancelado'
+                });
+            }
+        }
+
+        if (APP.config.reglas.giroU && st.vel > 10) {
+            const dif = difAngulo(st.curso || 0, s.rumbo);
+            if (dif > APP.config.giroGrados) {
+                if (!R.rumboOpDesde) R.rumboOpDesde = Date.now() / 1000;
+                const m = (Date.now() / 1000 - R.rumboOpDesde) / 60;
+                if (m >= APP.config.giroMin) {
+                    pushAlert({
+                        regla: 'giroU', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                        titulo: 'GIRO EN U · ' + etq,
+                        detalle: 'rumbo opuesto a la ruta (' + Math.round(dif) + ' grados)',
+                        hablar: 'La unidad ' + etq + ' hizo un giro en U'
+                    });
+                }
+            } else {
+                R.rumboOpDesde = null;
+            }
+        }
+    }
+
     async function evaluateUnit(u, info, st, prev, ctx) {
         const clave = info.clave;
         const etq = (info.eco || info.placa || info.nombre || info.id || '');
@@ -1229,247 +1739,27 @@
             progMax: prev ? prev.progMax : 0,
             retornoAlerta: prev ? prev.retornoAlerta : false,
             rumboOpDesde: prev ? prev.rumboOpDesde : null,
+            demoraBaseAlerta: prev ? (prev.demoraBaseAlerta || 0) : 0,
             llego: prev ? prev.llego : false
         };
-
-        // a) sin senal
-        if (APP.config.reglas.offline) {
-            if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
-                pushAlert({
-                    regla: 'offline', sev: 'alto', clave, eco: info.eco,
-                    titulo: 'SIN SENAL · ' + etq,
-                    detalle: 'sin reportar hace ' + ageText(st.edadMin) + (R.zona ? ' · ' + R.zona : ''),
-                    hablar: 'Atención, la unidad ' + etq + ' se ha desconectado'
-                });
-            } else if (prev && prev.estado === 'offline' && st.estado !== 'offline') {
-                pushAlert({
-                    regla: 'offline', sev: 'ok', clave, eco: info.eco,
-                    titulo: 'RECONECTO · ' + etq,
-                    detalle: 'volvio a reportar · ' + Math.round(st.vel) + ' km/h',
-                    hablar: 'La unidad ' + etq + ' volvio a estar en linea'
-                });
-                R.descoAlerta = false;
-            }
+        try {
+            await reglaOffline(st, prev, R, info, etq);
+            // Si la unidad vuelve a reportar, rearma la alerta de desconexion
+            // aunque la regla general este desactivada.
+            if (st.estado !== 'offline') R.descoAlerta = false;
+            await reglaGpsPerdido(st, prev, R, info, etq);
+            await reglaDetenido(u, st, R, info, etq, ctx);
+            reglaZona(st, R, info, etq);
+            reglaGeocerca(st, prev, R, info, etq);
+            await reglaDestino(st, R, info, etq);
+            await reglaDesconexion(st, R, info, etq);
+            reglaVelocidad(st, R, info, etq);
+            reglaDemoraBase(st, R, info, etq);
+            reglaRuta(st, R, info, etq);
+        } catch (e) {
+            APP.stats.erroresReglas = (APP.stats.erroresReglas || 0) + 1;
+            if (APP.unlocked) console.warn('[HJP] regla', clave, e && e.message);
         }
-        // Si la unidad vuelve a reportar, se rearma la alerta de desconexion
-        // aunque la regla general de "sin senal" este desactivada.
-        if (st.estado !== 'offline') R.descoAlerta = false;
-
-        // b) GPS perdido en marcha
-        if (APP.config.reglas.gpsPerdido && prev && prev.estado !== 'offline') {
-            if (prev.vel > 5 && st.estado === 'offline' && st.edadMin >= APP.config.gpsMin) {
-                pushAlert({
-                    regla: 'gpsPerdido', sev: 'critico', clave, eco: info.eco,
-                    titulo: 'SENAL PERDIDA EN MARCHA · ' + etq,
-                    detalle: 'ultima velocidad ' + Math.round(prev.vel) + ' km/h · sin datos ' + ageText(st.edadMin) + (prev.zona ? ' · ' + prev.zona : ''),
-                    hablar: 'Atención, se perdio la señal de la unidad ' + etq + ' en marcha'
-                });
-            }
-        }
-
-        // c) Detenido en carretera
-        if (APP.config.reglas.detenido) {
-            if (st.online && st.vel <= 1) {
-                if (!R.detenidoDesde) {
-                    R.detenidoDesde = Date.now() / 1000;
-                    if (APP.config.historico && APP.consultaRestante > 0 && ctx.quotaOk) {
-                        APP.consultaRestante--;
-                        try {
-                            const um = await fetchLastMotion(u.id);
-                            if (um) R.detenidoDesde = um;
-                        } catch (_) { /* noop */ }
-                    }
-                }
-                const m = (Date.now() / 1000 - R.detenidoDesde) / 60;
-                if (m >= APP.config.stopMin && !isBase(R.zona)) {
-                    let ctxTxt = ctx.ubicaciones[clave];
-                    if (ctxTxt == null && ctx.quotaGeo) {
-                        const g = await reverseGeocode(st.lat, st.lon);
-                        ctx.ubicaciones[clave] = ctxTxt = g ? (g.texto || g.ciudad || '') : '';
-                    }
-                    pushAlert({
-                        regla: 'detenido', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                        titulo: 'DETENIDO ' + Math.round(m) + ' min · ' + etq,
-                        detalle: (R.zona ? 'zona: ' + R.zona : 'fuera de geocercas') + (ctxTxt ? ' · ' + ctxTxt : ''),
-                        hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos detenida'
-                    });
-                }
-            } else {
-                R.detenidoDesde = null;
-            }
-        }
-
-        // d) Zona no prevista
-        if (APP.config.reglas.zona) {
-            const z = R.zona;
-            if (z && !isBase(z)) {
-                const destino = watchDest(info);
-                const esperada = destino && norm(z).indexOf(norm(destino)) >= 0;
-                if (!esperada) {
-                    if (!R.zonaExt || R.zonaExt.n !== z) R.zonaExt = { n: z, desde: Date.now() / 1000 };
-                    const m = (Date.now() / 1000 - R.zonaExt.desde) / 60;
-                    if (m >= APP.config.zonaMin) {
-                        pushAlert({
-                            regla: 'zona', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                            titulo: 'ZONA NO PREVISTA ' + Math.round(m) + ' min · ' + etq,
-                            detalle: 'permanece en ' + z,
-                            hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos en zona no prevista'
-                        });
-                    }
-                } else {
-                    R.zonaExt = null;
-                }
-            } else {
-                R.zonaExt = null;
-            }
-        }
-
-        // e) Entrada / salida de geocerca
-        if (APP.config.reglas.geocerca && prev && prev.zona !== R.zona) {
-            if (R.zona) {
-                pushAlert({
-                    regla: 'geocerca', sev: 'bajo', clave, eco: info.eco,
-                    titulo: 'ENTRO · ' + etq,
-                    detalle: ICO.entra + ' ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
-                });
-            } else if (prev.zona) {
-                pushAlert({
-                    regla: 'geocerca', sev: 'bajo', clave, eco: info.eco,
-                    titulo: 'SALIO · ' + etq,
-                    detalle: ICO.sale + ' ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
-                });
-            }
-        }
-
-        // f) Destino / regreso
-        if (APP.config.reglas.destino) {
-            const destino = watchDest(info);
-            if (destino && st.online) {
-                const geo = await reverseGeocode(st.lat, st.lon);
-                const ciudad = geo ? geo.ciudad : '';
-                const enDestino = !!ciudad && (norm(ciudad).indexOf(norm(destino)) >= 0 || norm(destino).indexOf(norm(ciudad)) >= 0);
-                if (enDestino && !R.enDestino) {
-                    R.enDestino = true;
-                    pushAlert({
-                        regla: 'destino', sev: 'ok', clave, eco: info.eco,
-                        titulo: 'LLEGO A DESTINO · ' + etq,
-                        detalle: 'en ' + ciudad,
-                        hablar: 'La unidad ' + etq + ' llego a su destino'
-                    });
-                } else if (!enDestino && R.enDestino && st.vel > 10) {
-                    R.enDestino = false;
-                    pushAlert({
-                        regla: 'destino', sev: 'bajo', clave, eco: info.eco,
-                        titulo: 'EN REGRESO · ' + etq,
-                        detalle: 'salio de ' + destino + ' · ' + Math.round(st.vel) + ' km/h',
-                        hablar: 'La unidad ' + etq + ' va en regreso'
-                    });
-                }
-            }
-        }
-
-        // g) Desconexion prolongada
-        if (APP.config.reglas.desconexion && st.estado === 'offline' && st.edadMin >= APP.config.descoMin) {
-            if (!R.descoAlerta) {
-                R.descoAlerta = true;
-                pushAlert({
-                    regla: 'desconexion', sev: 'critico', clave, eco: info.eco,
-                    titulo: 'DESCONEXION PROLONGADA · ' + etq,
-                    detalle: 'lleva ' + ageText(st.edadMin) + ' sin senal',
-                    hablar: 'Atención, la unidad ' + etq + ' sigue desconectada'
-                });
-            }
-        }
-
-        // h) Exceso de velocidad (limite global o por unidad)
-        if (APP.config.reglas.velocidad && st.online) {
-            const lim = limiteDe(info);
-            if (st.vel > lim) {
-                pushAlert({
-                    regla: 'velocidad', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                    titulo: 'EXCESO DE VELOCIDAD · ' + etq,
-                    detalle: Math.round(st.vel) + ' km/h (limite ' + lim + ')',
-                    hablar: 'La unidad ' + etq + ' excede la velocidad'
-                });
-            }
-        }
-
-        // i) Ruta: desvio, retorno/viaje cancelado y giro en U
-        const ruta = rutaDe(info);
-        const sigueRuta = APP.config.reglas.desvio || APP.config.reglas.retorno || APP.config.reglas.giroU;
-        if (ruta && sigueRuta && st.online && st.lat != null) {
-            const s = snapRuta(st.lat, st.lon, ruta);
-            if (s) {
-                R.rutaDist = Math.round(s.dist);
-                R.rutaProg = s.progreso;
-
-                if (APP.config.reglas.desvio) {
-                    if (s.dist > APP.config.desvioM) {
-                        if (!R.desviadoDesde) R.desviadoDesde = Date.now() / 1000;
-                        const m = (Date.now() / 1000 - R.desviadoDesde) / 60;
-                        if (m >= APP.config.desvioMin) {
-                            pushAlert({
-                                regla: 'desvio', sev: 'alto', clave, eco: info.eco,
-                                titulo: 'DESVIO DE RUTA · ' + etq,
-                                detalle: Math.round(s.dist) + ' m de la ruta · ' + Math.round(m) + ' min',
-                                hablar: 'Atencion, la unidad ' + etq + ' se ha desviado de la ruta'
-                            });
-                        }
-                    } else {
-                        R.desviadoDesde = null;
-                    }
-                }
-
-                if (APP.config.reglas.retorno) {
-                    if (s.progreso > (R.progMax || 0)) R.progMax = s.progreso;
-                    const dOrigen = haversine(st.lat, st.lon, ruta.origen.lat, ruta.origen.lon);
-                    const dDestino = haversine(st.lat, st.lon, ruta.destino.lat, ruta.destino.lon);
-                    const retrocedio = (R.progMax - s.progreso) >= (APP.config.retornoPct / 100);
-                    const enOrigen = dOrigen <= APP.config.retornoM && R.progMax >= 0.2;
-                    if (dDestino <= APP.config.retornoM && s.progreso >= 0.85) {
-                        if (!R.llego) {
-                            R.llego = true;
-                            R.retornoAlerta = false;
-                            pushAlert({
-                                regla: 'destino', sev: 'ok', clave, eco: info.eco,
-                                titulo: 'LLEGO A DESTINO · ' + etq,
-                                detalle: ruta.destinoTexto ? 'en ' + ruta.destinoTexto : 'en el punto de destino',
-                                hablar: 'La unidad ' + etq + ' llego a su destino'
-                            });
-                        }
-                    }
-                    if (!R.retornoAlerta && !R.llego && R.progMax >= 0.15 && (enOrigen || retrocedio)) {
-                        R.retornoAlerta = true;
-                        pushAlert({
-                            regla: 'retorno', sev: 'critico', clave, eco: info.eco,
-                            titulo: 'POSIBLE VIAJE CANCELADO · ' + etq,
-                            detalle: (enOrigen ? 'volvio al origen' : 'retrocedio ' + Math.round((R.progMax - s.progreso) * 100) + '%') +
-                                ' · avance max ' + Math.round(R.progMax * 100) + '%',
-                            hablar: 'Atencion, la unidad ' + etq + ' regreso. El viaje puede estar cancelado'
-                        });
-                    }
-                }
-
-                if (APP.config.reglas.giroU && st.vel > 10) {
-                    const dif = difAngulo(st.curso || 0, s.rumbo);
-                    if (dif > APP.config.giroGrados) {
-                        if (!R.rumboOpDesde) R.rumboOpDesde = Date.now() / 1000;
-                        const m = (Date.now() / 1000 - R.rumboOpDesde) / 60;
-                        if (m >= APP.config.giroMin) {
-                            pushAlert({
-                                regla: 'giroU', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                                titulo: 'GIRO EN U · ' + etq,
-                                detalle: 'rumbo opuesto a la ruta (' + Math.round(dif) + ' grados)',
-                                hablar: 'La unidad ' + etq + ' hizo un giro en U'
-                            });
-                        }
-                    } else {
-                        R.rumboOpDesde = null;
-                    }
-                }
-            }
-        }
-
         return R;
     }
 
@@ -1501,6 +1791,7 @@
                 try {
                     const R = await evaluateUnit(u, info, st, prev, ctx);
                     nuevas[info.clave] = R;
+                    actualizarOdometro(info, st, prev);
                 } catch (e) {
                     if (APP.unlocked) { try { console.warn('[HJP] reg', info.clave, e && e.message); } catch (_) { /* noop */ } }
                 }
@@ -2605,7 +2896,7 @@
             '</div>' +
             '</div>' +
             '<div class="tabla" id="hjp-wrap-unidades" style="display:none">' +
-            '<table><thead><tr><th title="Seleccionar">Sel</th><th></th><th>Eco</th><th>Placa</th><th>Estado</th><th>Ultimo</th><th>km/h</th><th>Zona</th><th></th></tr></thead>' +
+            '<table><thead><tr><th title="Seleccionar">Sel</th><th></th><th>Eco</th><th>Placa</th><th>Estado</th><th>Ultimo</th><th>km/h</th><th>Zona</th><th title="Odometro acumulado (km)">km</th><th></th></tr></thead>' +
             '<tbody id="hjp-body"></tbody></table>' +
             '<div id="hjp-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--hjp-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de esta columna.</div>' +
             '</div>' +
@@ -2801,6 +3092,8 @@
             checkRow('c-r-giro', 'Giro en U') +
             numRow('c-giro-grados', 'Angulo de giro (grados)') +
             numRow('c-giro-min', 'Giro sostenido (min)') +
+            checkRow('c-r-demora-base', 'Demora en base (parado en CEDIS/patio)') +
+            numRow('c-demora-base-min', 'Tiempo en base para alertar (min)') +
             '<h4>Analisis de viaje (historial)</h4>' +
             numRow('c-partida-horas', 'Punto de partida: parada mayor a (h)') +
             numRow('c-parada-min', 'Parada minima (min)') +
@@ -3265,6 +3558,9 @@
             const celVel = '<td' + (excede ? ' style="color:var(--hjp-bad-fg);font-weight:bold"' : '') + ' title="' +
                 (lim !== APP.config.velMax ? 'limite de la unidad: ' + lim + ' km/h' : 'limite global: ' + lim + ' km/h') + '">' +
                 Math.round(st.vel) + (lim !== APP.config.velMax ? ' <span style="font-size:10px">/' + lim + '</span>' : '') + '</td>';
+            const odo = odometroDe(info);
+            const km = odo ? Math.round(odo.m / 100) / 10 : 0;
+            const celOdo = '<td class="odo" title="Odometro acumulado (clic derecho para reiniciar)">' + km.toFixed(1) + '</td>';
             return (
                 '<tr class="fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
                 '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
@@ -3277,11 +3573,12 @@
                 '<td>' + ageText(st.edadMin) + '</td>' +
                 celVel +
                 '<td>' + esc(zona) + coords + '</td>' +
+                celOdo +
                 '<td><button class="mini hjp-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
                 '<span class="hjp-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
                 '</tr>'
             );
-        }).join('') || '<tr><td colspan="9" class="vacio">' + LANG.sinUni + '</td></tr>';
+        }).join('') || '<tr><td colspan="10" class="vacio">' + LANG.sinUni + '</td></tr>';
         const aviso = byId('hjp-sel-vacio');
         if (aviso) {
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
@@ -3399,7 +3696,8 @@
         const tarjeta = (info, st) => {
             const eco = info.clave;
             const r = rutaDe(info);
-            const s = (st && st.online && st.lat != null && r) ? snapRuta(st.lat, st.lon, r) : null;
+            const memo = APP.snapMemo[eco] || (APP.snapMemo[eco] = { idx: 0 });
+            const s = (st && st.online && st.lat != null && r) ? snapRuta(st.lat, st.lon, r, memo) : null;
             const desviado = !!(s && s.dist > APP.config.desvioM);
             const llego = !!(s && s.progreso >= 0.95);
             const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
@@ -4123,6 +4421,7 @@
                 { id: 'traza-geo', icon: ICO.descargar, label: 'Exportar traza GeoJSON' },
                 { id: 'viaje-analizar', icon: ICO.tiempo, label: 'Analizar viaje (historial)' },
                 { id: 'viaje-geo', icon: ICO.exportar, label: 'Exportar viaje GeoJSON' },
+                { id: 'odo-reset', icon: ICO.refrescar, label: 'Reiniciar odometro' },
                 { sep: 1 },
                 { id: 'mapa-osm', icon: ICO.zona, label: 'Ver en OpenStreetMap' },
                 { id: 'mapa-google', icon: ICO.zona, label: 'Ver en Google Maps' },
@@ -4166,6 +4465,7 @@
             else if (acc === 'traza-geo') exportTraza(eco);
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
+            else if (acc === 'odo-reset') resetOdometro(eco);
             else if (acc === 'mapa-osm') openMap(eco, 'osm');
             else if (acc === 'mapa-google') openMap(eco, 'google');
             else if (acc === 'copy-eco') { copyToClipboard(eco); advice('Copiado', eco); }
@@ -4250,6 +4550,8 @@
             g('c-r-giro').checked = !!APP.config.reglas.giroU;
             g('c-giro-grados').value = APP.config.giroGrados;
             g('c-giro-min').value = APP.config.giroMin;
+            g('c-r-demora-base').checked = !!APP.config.reglas.demoraBase;
+            g('c-demora-base-min').value = APP.config.demoraBaseMin;
             g('c-partida-horas').value = APP.config.partidaHoras;
             g('c-parada-min').value = APP.config.paradaMin;
             g('c-hist-horas').value = APP.config.historialHoras;
@@ -4326,6 +4628,8 @@
             cf.reglas.giroU = g('c-r-giro').checked;
             cf.giroGrados = clamp(isoNum(g('c-giro-grados').value, cf.giroGrados), 90, 180);
             cf.giroMin = Math.max(1, isoNum(g('c-giro-min').value, cf.giroMin));
+            cf.reglas.demoraBase = g('c-r-demora-base').checked;
+            cf.demoraBaseMin = Math.max(5, isoNum(g('c-demora-base-min').value, cf.demoraBaseMin));
             cf.partidaHoras = Math.max(1, isoNum(g('c-partida-horas').value, cf.partidaHoras));
             cf.paradaMin = Math.max(1, isoNum(g('c-parada-min').value, cf.paradaMin));
             cf.historialHoras = Math.max(2, isoNum(g('c-hist-horas').value, cf.historialHoras));
