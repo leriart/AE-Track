@@ -51,8 +51,18 @@ navegador (localStorage), no se envia a ningun servidor propio.
 4. Deja el panel abierto: las alertas apareceran solas como tarjetas, voz y
    pitido segun tu configuracion.
 
-Si es la primera vez, aparece un aviso de bienvenida. Pulsa el boton **?** de la
-cabecera para abrir la ayuda rapida en cualquier momento.
+Si es la primera vez, aparece una **ventana de bienvenida** con los tres pasos
+básicos. Pulsa el botón **?** de la cabecera para abrir la ayuda rápida en
+cualquier momento.
+
+### Avisos con color y confirmaciones
+
+Los mensajes del panel distinguen su tipo: **verde** para confirmaciones,
+**ámbar** para advertencias y **rojo** para errores. Las acciones que tardan
+(refrescar, abrir ventanas, verificar, buscar actualizaciones) muestran un
+indicador de progreso en el propio botón. Las acciones destructivas (eliminar
+ruta, reiniciar odómetro, borrar perfiles o el historial) piden confirmación
+en un diálogo con la misma apariencia del panel.
 
 ## La barra de botones
 
@@ -118,8 +128,10 @@ En la parte superior del panel:
   movimiento, en zonas y alertas del dia. Incluye una grafica de unidades en
   linea y los avisos recientes.
 - **Unidades**: lista de unidades vigiladas con estado, ultimo reporte,
-  velocidad, zona y acciones. Clic en una fila para abrir su ventana. La
-  campana silencia los avisos de esa unidad.
+  velocidad, zona, odometro y acciones. Clic en una fila para abrir su
+  ventana. La campana silencia los avisos de esa unidad. El estado se
+  muestra como **pildora de color** (verde en linea, ambar detenida, rojo
+  sin senal) y las columnas se pueden **ordenar** con clic en la cabecera.
 - **Avisos**: historial de alertas con filtro por severidad (criticas, altas,
   medias, bajas). Cada aviso indica la regla que lo genero y la hora.
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
@@ -159,6 +171,14 @@ pestaña y se aplica tambien al pulsar **Ejecutar (abrir ventanas)**.
 
 Tambien puedes marcar y desmarcar unidades directamente con la casilla de la
 columna **Sel** en la pestana Unidades.
+
+### Ordenar la tabla de unidades
+
+Haz clic en la cabecera de **Eco**, **Placa**, **Estado**, **Ultimo**,
+**km/h**, **Zona** o **km** para ordenar por esa columna. Un segundo clic
+invierte el sentido. El indicador de la cabecera (⇅, ▴, ▾) muestra la
+columna y direccion activas. El orden natural respeta los numeros: 2 va
+antes que 10. La eleccion se recuerda entre sesiones.
 
 ### Contornos de las ventanas
 
@@ -324,8 +344,20 @@ Sobre una unidad en la pestana Unidades:
 - Limite de velocidad.
 - Planear ruta (OSRM), planear ruta (A*), exportar ruta GeoJSON, eliminar ruta,
   exportar traza GeoJSON.
+- Analizar viaje (historial), exportar viaje GeoJSON.
+- Reiniciar odometro.
 - Ver en OpenStreetMap, ver en Google Maps.
 - Copiar economico, copiar placa, copiar coordenadas.
+
+## Odómetro por unidad
+
+La columna **km** de la lista de unidades muestra la distancia acumulada
+desde la primera vez que se vio esa unidad (o desde el último reinicio).
+Solo se suma distancia cuando la unidad se mueve a más de 1 km/h y los
+saltos GPS anómalos (> 5 km en 1 min) se descartan para no inflarlo.
+Persiste entre sesiones en `localStorage`. Reinícialo desde el menú
+contextual ("Reiniciar odómetro") cuando hagas un servicio mayor; el panel
+te pedirá confirmación.
 
 ## Atajos de teclado
 
@@ -339,12 +371,12 @@ Sobre una unidad en la pestana Unidades:
 | `Alt` + `P` | Mostrar u ocultar el panel |
 | `Alt` + `L` | Panel flotante o barra lateral |
 | `Alt` + `H` | Plegar la barra de botones |
-| `Esc` | Cerrar ventanas emergentes |
+| `Esc` | Cerrar el dialogo superior (dialogo, menu contextual y luego ventanas) |
 
 ## Informes, respaldos y CSV
 
 - **CSV** (Unidades): descarga la lista de unidades con estado, velocidad y zona.
-- **Bitacora** (CSV): descarga el historial de avisos.
+- **Avisos CSV**: descarga el historial de avisos.
 - **Informe**: genera un informe del dia en Markdown con alertas por severidad,
   por regla, unidades con mas avisos y unidades sin senal.
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y

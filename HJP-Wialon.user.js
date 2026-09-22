@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.13.0
-// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
+// @version      4.15.0
+// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, odómetro por unidad, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
 // @copyright    Proyecto original de Héctor Ramírez (https://github.com/HectorRamirez-cpu)
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.13.0';
+    const VER = '4.15.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -126,7 +126,10 @@
         limites: 'hjp.api.limites',
         perfiles: 'hjp.api.perfiles',
         filtEstado: 'hjp.api.filtEstado',
-        rutas: 'hjp.api.rutas'
+        sortCol: 'hjp.api.sortCol',
+        sortDir: 'hjp.api.sortDir',
+        rutas: 'hjp.api.rutas',
+        odometro: 'hjp.api.odometro'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
@@ -189,6 +192,7 @@
         retornoPct: 25,
         giroGrados: 130,
         giroMin: 3,
+        demoraBaseMin: 30,
         trazado: true,
         trazadoMax: 500,
         partidaHoras: 6,
@@ -207,7 +211,8 @@
             velocidad: false,
             desvio: false,
             retorno: false,
-            giroU: false
+            giroU: false,
+            demoraBase: false
         })
     });
 
@@ -320,9 +325,11 @@
         limites: readSessionObject(SS.limites, {}, LS.limites),
         perfiles: readObject(LS.perfiles, {}),
         rutas: readObject(LS.rutas, {}),
+        odometro: readObject(LS.odometro, {}),
         viajes: readSessionObject(SS.viajes, {}, null),
         trazas: {},
         grafoCache: {},
+        snapMemo: {},
         barra: readObject(LS.barra, {
             x: null, y: null, plegada: false, vertical: false,
             botones: { main: true, panel: true, close: true }
@@ -346,10 +353,13 @@
         filtSever: 'todas',
         filtro: '',
         filtEstado: readJSON(LS.filtEstado, 'todas'),
+        sortCol: readJSON(LS.sortCol, ''),
+        sortDir: readJSON(LS.sortDir, 'asc'),
         panelHidden: true,
         update: { state: 'idle', remote: null, local: VER },
         unlocked: false,
-        consultaRestante: 0
+        consultaRestante: 0,
+        stats: { erroresReglas: 0, astarCap: 0 }
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
@@ -493,6 +503,9 @@
 
     /* ====================== ALGORITMOS GEO / RUTAS (OSM + A*) ====================== */
     const RADIO_TIERRA = 6371008.8;
+    // Umbral (km) por debajo del cual la proyeccion equirectangular local
+    // tiene precision suficiente y es mas barata que la geodesica esferica.
+    const DIST_LOCAL_UMBRAL_KM = 1;
     function rad(d) { return d * Math.PI / 180; }
     function grad(r) { return r * 180 / Math.PI; }
     function haversine(lat1, lon1, lat2, lon2) {
@@ -500,6 +513,13 @@
         const s = Math.sin(dLat / 2) * Math.sin(dLat / 2)
             + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
         return 2 * RADIO_TIERRA * Math.asin(Math.min(1, Math.sqrt(s)));
+    }
+    // Haversine en radianes (util para trigonometria esferica).
+    function haversineAngular(lat1, lon1, lat2, lon2) {
+        const dLat = rad(lat2 - lat1), dLon = rad(lon2 - lon1);
+        const s = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+            + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        return 2 * Math.asin(Math.min(1, Math.sqrt(s)));
     }
     function bearing(lat1, lon1, lat2, lon2) {
         const p1 = rad(lat1), p2 = rad(lat2), dl = rad(lon2 - lon1);
@@ -509,28 +529,66 @@
     }
     function difAngulo(a, b) { return Math.abs(((a - b + 540) % 360) - 180); }
 
-    // Distancia punto->segmento en metros con proyeccion equirectangular local.
+    // Distancia punto->segmento. Para segmentos cortos usa proyeccion
+    // equirectangular local (barata, suficiente); para los largos usa la
+    // formula de cross-track sobre la esfera (geodesica).
     function distPuntoSegmento(lat, lon, aLat, aLon, bLat, bLon) {
-        const lat0 = (aLat + bLat) / 2;
-        const mx = 111320 * Math.cos(rad(lat0)), my = 110540;
-        const px = (lon - aLon) * mx, py = (lat - aLat) * my;
-        const bx = (bLon - aLon) * mx, by = (bLat - aLat) * my;
-        const len2 = bx * bx + by * by;
-        let t = len2 > 0 ? (px * bx + py * by) / len2 : 0;
-        t = clamp(t, 0, 1);
-        const dx = px - bx * t, dy = py - by * t;
-        return { dist: Math.sqrt(dx * dx + dy * dy), t };
-    }
-    // Reduce una polilinea conservando puntos separados al menos minM metros.
-    function simplificarRuta(coords, minM) {
-        if (!coords || coords.length < 3) return coords ? coords.slice() : [];
-        const sep = minM || 40;
-        const out = [coords[0]];
-        let last = coords[0];
-        for (let i = 1; i < coords.length - 1; i++) {
-            if (haversine(last[1], last[0], coords[i][1], coords[i][0]) >= sep) { out.push(coords[i]); last = coords[i]; }
+        const dAB = haversine(aLat, aLon, bLat, bLon);
+        if (dAB < DIST_LOCAL_UMBRAL_KM * 1000) {
+            const lat0 = (aLat + bLat) / 2;
+            const mx = 111320 * Math.cos(rad(lat0)), my = 110540;
+            const px = (lon - aLon) * mx, py = (lat - aLat) * my;
+            const bx = (bLon - aLon) * mx, by = (bLat - aLat) * my;
+            const len2 = bx * bx + by * by;
+            let t = len2 > 0 ? (px * bx + py * by) / len2 : 0;
+            t = clamp(t, 0, 1);
+            const dx = px - bx * t, dy = py - by * t;
+            return { dist: Math.sqrt(dx * dx + dy * dy), t };
         }
-        out.push(coords[coords.length - 1]);
+        // Cross-track sobre la esfera (formula geodesica exacta).
+        const d13 = haversineAngular(aLat, aLon, lat, lon);
+        const d12 = haversineAngular(aLat, aLon, bLat, bLon);
+        if (d12 < 1e-12) return { dist: d13 * RADIO_TIERRA, t: 0 };
+        const t13 = rad(bearing(aLat, aLon, lat, lon));
+        const t12 = rad(bearing(aLat, aLon, bLat, bLon));
+        const sinXt = Math.sin(d13) * Math.sin(t13 - t12);
+        const dXt = Math.asin(clamp(sinXt, -1, 1));
+        // Along-track firmado: negativo si el pie cae antes de A.
+        const dAtSigned = Math.atan2(Math.sin(d13) * Math.cos(t13 - t12), Math.cos(d13));
+        if (dAtSigned < 0) return { dist: haversine(aLat, aLon, lat, lon), t: 0 };
+        if (dAtSigned > d12) return { dist: haversine(bLat, bLon, lat, lon), t: 1 };
+        return { dist: Math.abs(dXt) * RADIO_TIERRA, t: dAtSigned / d12 };
+    }
+    // Reduce una polilinea con Douglas-Peucker (iterativo, sin recursion).
+    // Conserva mejor los vertices y curvas que un filtro por distancia minima.
+    // epsM: tolerancia en metros. Default 25 m (equivalente aproximado al
+    // antiguo minM=40 en lineas rectas, mejor en esquinas).
+    function simplificarRuta(coords, epsM) {
+        if (!coords || coords.length < 3) return coords ? coords.slice() : [];
+        const eps = (epsM == null ? 25 : epsM);
+        const n = coords.length;
+        const keep = new Uint8Array(n);
+        keep[0] = 1; keep[n - 1] = 1;
+        const stack = [0, n - 1];
+        while (stack.length) {
+            const end = stack.pop();
+            const start = stack.pop();
+            if (end - start < 2) continue;
+            const aLat = coords[start][1], aLon = coords[start][0];
+            const bLat = coords[end][1], bLon = coords[end][0];
+            let maxD = 0, maxI = -1;
+            for (let i = start + 1; i < end; i++) {
+                const d = distPuntoSegmento(coords[i][1], coords[i][0], aLat, aLon, bLat, bLon).dist;
+                if (d > maxD) { maxD = d; maxI = i; }
+            }
+            if (maxI >= 0 && maxD > eps) {
+                keep[maxI] = 1;
+                stack.push(start, maxI);
+                stack.push(maxI, end);
+            }
+        }
+        const out = [];
+        for (let i = 0; i < n; i++) if (keep[i]) out.push(coords[i]);
         return out;
     }
     function precomputarRuta(coords) {
@@ -543,25 +601,54 @@
         return { acum, total };
     }
     // Proyecta un punto sobre la polilinea de una ruta y calcula progreso y rumbo.
-    function snapRuta(lat, lon, ruta) {
+    // Proyecta un punto sobre la polilinea de una ruta. Si se pasa memo
+    // (objeto { idx }), prueba primero ese segmento y sus vecinos (idx-1, idx,
+    // idx+1); si el mejor candidato esta a menos de MEMO_UMBRAL_M (1 km),
+    // se considera valido y se evita el escaneo completo. Si no, se hace
+    // escaneo lineal (saltos grandes: recalculo, ruta nueva, GPS erratico).
+    const MEMO_UMBRAL_M = 1000;
+    function snapRuta(lat, lon, ruta, memo) {
         if (!ruta || !ruta.coords || ruta.coords.length < 2 || lat == null || lon == null) return null;
         const c = ruta.coords;
+        const n = c.length;
+        function proyectar(i) {
+            if (i < 0 || i >= n - 1) return null;
+            const d = distPuntoSegmento(lat, lon, c[i][1], c[i][0], c[i + 1][1], c[i + 1][0]);
+            return { dist: d.dist, idx: i, t: d.t };
+        }
+        function resultado(mejor) {
+            const acum = ruta.acum || [0, ruta.total || 1];
+            const segLen = (acum[mejor.idx + 1] || 0) - (acum[mejor.idx] || 0);
+            const recorrido = (acum[mejor.idx] || 0) + mejor.t * segLen;
+            const total = ruta.total || 1;
+            const a = c[mejor.idx], b = c[mejor.idx + 1];
+            return {
+                dist: mejor.dist, idx: mejor.idx, t: mejor.t,
+                progreso: clamp(recorrido / total, 0, 1),
+                recorrido, total,
+                rumbo: bearing(a[1], a[0], b[1], b[0])
+            };
+        }
+        if (memo && Number.isInteger(memo.idx) && memo.idx >= 0 && memo.idx < n - 1) {
+            const cands = [memo.idx, memo.idx - 1, memo.idx + 1];
+            let mejor = null;
+            for (let k = 0; k < cands.length; k++) {
+                const p = proyectar(cands[k]);
+                if (p && (!mejor || p.dist < mejor.dist)) mejor = p;
+            }
+            if (mejor && mejor.dist <= MEMO_UMBRAL_M) {
+                memo.idx = mejor.idx;
+                return resultado(mejor);
+            }
+        }
+        // Fallback: escaneo completo (memo no disponible o vehiculo salto lejos).
         let mejor = { dist: Infinity, idx: 0, t: 0 };
-        for (let i = 0; i < c.length - 1; i++) {
+        for (let i = 0; i < n - 1; i++) {
             const d = distPuntoSegmento(lat, lon, c[i][1], c[i][0], c[i + 1][1], c[i + 1][0]);
             if (d.dist < mejor.dist) mejor = { dist: d.dist, idx: i, t: d.t };
         }
-        const acum = ruta.acum || [0, ruta.total || 1];
-        const segLen = (acum[mejor.idx + 1] || 0) - (acum[mejor.idx] || 0);
-        const recorrido = (acum[mejor.idx] || 0) + mejor.t * segLen;
-        const total = ruta.total || 1;
-        const a = c[mejor.idx], b = c[mejor.idx + 1];
-        return {
-            dist: mejor.dist, idx: mejor.idx, t: mejor.t,
-            progreso: clamp(recorrido / total, 0, 1),
-            recorrido, total,
-            rumbo: bearing(a[1], a[0], b[1], b[0])
-        };
+        if (memo) memo.idx = mejor.idx;
+        return resultado(mejor);
     }
 
     // Cola de prioridad binaria para A*.
@@ -595,16 +682,26 @@
     };
     MinHeap.prototype.size = function () { return this.a.length; };
 
-    // A* generico sobre un grafo de nodos { id: { lat, lon } } y adyacencia { id: [id] }.
-    // Heuristica: distancia haversine al objetivo (admisible para grafos viales).
+    // A* generico sobre un grafo de nodos { id: { lat, lon } } y adyacencia.
+    // Cada arista puede ser: un id numerico (coste = haversine) o
+    // { to, costo } donde costo es el peso real (ej. segundos). Esto permite
+    // usar A* sobre el grafo OSM ponderado por maxspeed sin perder compatibilidad
+    // con tests existentes.
+    // Heuristica: tiempo minimo restante a la velocidad maxima posible
+    // (110 km/h por autopista). Admisible y consistente.
+    const VEL_MAX_RUTA_KMH = 110;
     function aEstrella(nodos, adyacencia, inicio, meta) {
         if (!nodos.has(inicio) || !nodos.has(meta)) return null;
         const metaN = nodos.get(meta);
-        const h = (id) => { const n = nodos.get(id); return haversine(n.lat, n.lon, metaN.lat, metaN.lon); };
+        const hTiempo = (id) => {
+            const n = nodos.get(id);
+            const dM = haversine(n.lat, n.lon, metaN.lat, metaN.lon);
+            return (dM / 1000) / VEL_MAX_RUTA_KMH * 3600; // segundos
+        };
         const abiertos = new MinHeap();
         const g = new Map(), padre = new Map(), cerrados = new Set();
         g.set(inicio, 0);
-        abiertos.push({ id: inicio, f: h(inicio) });
+        abiertos.push({ id: inicio, f: hTiempo(inicio) });
         let iter = 0;
         while (abiertos.size() && iter < 300000) {
             iter++;
@@ -622,14 +719,21 @@
             const nActual = nodos.get(actual);
             const gActual = g.get(actual);
             for (let i = 0; i < vecinos.length; i++) {
-                const v = vecinos[i];
+                const e = vecinos[i];
+                const v = (typeof e === 'object' && e) ? e.to : e;
+                const peso = (typeof e === 'object' && e && e.costo != null)
+                    ? e.costo
+                    : (() => {
+                        const nv = nodos.get(v);
+                        return nv ? haversine(nActual.lat, nActual.lon, nv.lat, nv.lon) : Infinity;
+                    })();
                 if (cerrados.has(v)) continue;
                 const nv = nodos.get(v);
                 if (!nv) continue;
-                const ng = gActual + haversine(nActual.lat, nActual.lon, nv.lat, nv.lon);
+                const ng = gActual + peso;
                 if (g.has(v) && ng >= g.get(v)) continue;
                 g.set(v, ng); padre.set(v, actual);
-                abiertos.push({ id: v, f: ng + h(v) });
+                abiertos.push({ id: v, f: ng + hTiempo(v) });
             }
         }
         return null;
@@ -652,7 +756,7 @@
     async function overpassGrafo(minLat, minLon, maxLat, maxLon) {
         const clave = [minLat, minLon, maxLat, maxLon].map((v) => v.toFixed(2)).join(',');
         if (APP.grafoCache[clave]) return APP.grafoCache[clave];
-        const q = '[out:json][timeout:30];way["highway"~"motorway|trunk|primary|secondary|tertiary|unclassified|residential|service|living_street"](' +
+        const q = '[out:json][timeout:30];way["highway"~"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|service|living_street"](' +
             minLat + ',' + minLon + ',' + maxLat + ',' + maxLon + ');(._;>;);out body;';
         const res = await fetch('https://overpass-api.de/api/interpreter', {
             method: 'POST',
@@ -661,18 +765,33 @@
         });
         if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
         const d = await res.json();
-        const nodos = new Map(), ady = new Map();
+        const nodos = new Map();
+        const tagsPorWay = new Map(); // wayId -> tags
         (d.elements || []).forEach((el) => {
             if (el.type === 'node') nodos.set(el.id, { lat: el.lat, lon: el.lon });
+            else if (el.type === 'way') tagsPorWay.set(el.id, el.tags || {});
         });
+        // Adyacencia: Map<id, {to, distanciaM, costo}[]> donde costo es tiempo
+        // estimado en segundos (distancia / velocidadPorTipo). Esto permite
+        // que A* optimice por tiempo y respeta sentido unico y maxspeed.
+        const ady = new Map();
+        function pushArista(from, to, dist, costo) {
+            if (!ady.has(from)) ady.set(from, []);
+            ady.get(from).push({ to: to, distanciaM: dist, costo: costo });
+        }
         (d.elements || []).forEach((el) => {
-            if (el.type !== 'way' || !el.nodes) return;
+            if (el.type !== 'way' || !el.nodes || el.nodes.length < 2) return;
+            const tags = tagsPorWay.get(el.id) || {};
+            const sentido = sentidoOneWay(tags); // 0 bidi, 1 hacia adelante, -1 inverso
+            const v = parseMaxspeed(tags) || VEL_POR_TIPO[tags.highway] || VEL_POR_TIPO.default;
             for (let i = 0; i < el.nodes.length - 1; i++) {
                 const a = el.nodes[i], b = el.nodes[i + 1];
-                if (!nodos.has(a) || !nodos.has(b)) continue;
-                if (!ady.has(a)) ady.set(a, []);
-                if (!ady.has(b)) ady.set(b, []);
-                ady.get(a).push(b); ady.get(b).push(a);
+                const na = nodos.get(a), nb = nodos.get(b);
+                if (!na || !nb) continue;
+                const dist = haversine(na.lat, na.lon, nb.lat, nb.lon);
+                const costo = (dist / 1000) / Math.max(v, 5) * 3600; // segundos
+                if (sentido >= 0) pushArista(a, b, dist, costo);
+                if (sentido <= 0) pushArista(b, a, dist, costo);
             }
         });
         const grafo = { nodos, ady };
@@ -681,6 +800,30 @@
         APP.grafoCache[clave] = grafo;
         return grafo;
     }
+    // Sentido de una calle: 0 bidireccional, 1 hacia adelante, -1 inverso.
+    function sentidoOneWay(tags) {
+        if (!tags) return 0;
+        const v = String(tags.oneway || '').toLowerCase();
+        if (v === 'yes' || v === 'true' || v === '1') return 1;
+        if (v === '-1' || v === 'reverse') return -1;
+        return 0;
+    }
+    function parseMaxspeed(tags) {
+        if (!tags || !tags.maxspeed) return null;
+        const m = /^\s*(\d+)/.exec(String(tags.maxspeed));
+        return m ? parseInt(m[1], 10) : null;
+    }
+    // Velocidades por defecto por tipo de via (km/h), usadas si falta maxspeed.
+    const VEL_POR_TIPO = {
+        motorway: 100, motorway_link: 60,
+        trunk: 80, trunk_link: 50,
+        primary: 60, primary_link: 40,
+        secondary: 50, secondary_link: 35,
+        tertiary: 40, tertiary_link: 30,
+        unclassified: 30, residential: 30,
+        service: 20, living_street: 10,
+        default: 30
+    };
     function nodoCercano(nodos, lat, lon) {
         let mejor = null, mejorD = Infinity;
         nodos.forEach((n, id) => {
@@ -693,7 +836,7 @@
     async function astarRoute(origen, destino) {
         const spanLat = Math.abs(origen.lat - destino.lat);
         const spanLon = Math.abs(origen.lon - destino.lon);
-        if (spanLat > 1.5 || spanLon > 1.5) throw new Error('Ruta demasiado larga para A* (limite ~150 km)');
+        if (spanLat > 1.5 || spanLon > 1.5) throw new Error('Ruta demasiado larga para A* (límite ~150 km)');
         const pad = 0.015;
         const grafo = await overpassGrafo(
             Math.min(origen.lat, destino.lat) - pad, Math.min(origen.lon, destino.lon) - pad,
@@ -729,14 +872,16 @@
     function guardarRutas() { writeJSON(LS.rutas, APP.rutas); }
     function resetEstadoRuta(clave) {
         const m = APP.memo[clave];
-        if (!m) return;
-        m.progMax = 0; m.retornoAlerta = false; m.llego = false;
-        m.desviadoDesde = null; m.rumboOpDesde = null;
-        writeSession(SS.memo, APP.memo);
+        if (m) {
+            m.progMax = 0; m.retornoAlerta = false; m.llego = false;
+            m.desviadoDesde = null; m.rumboOpDesde = null;
+            writeSession(SS.memo, APP.memo);
+        }
+        if (APP.snapMemo[clave]) delete APP.snapMemo[clave];
     }
     async function planearRuta(eco, destinoTexto, origenOv, modo) {
         const it = unitByEco(eco);
-        if (!it) { advice('Unidad no encontrada', eco); return null; }
+        if (!it) { adviceErr('Unidad no encontrada', eco); return null; }
         let origen = origenOv || null;
         if (!origen && APP.config.analizarAuto) {
             // Punto de partida detectado en el historial (parada > partidaHoras).
@@ -746,7 +891,7 @@
             } catch (_) { /* noop */ }
         }
         if (!origen) origen = (it.st.lat != null ? { lat: it.st.lat, lon: it.st.lon } : null);
-        if (!origen) { advice('Sin origen', 'La unidad no reporta posicion actual ni historial'); return null; }
+        if (!origen) { adviceWarn('Sin origen', 'La unidad no reporta posición actual ni historial'); return null; }
         let destino = null;
         const txt = String(destinoTexto || '').trim();
         if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(txt)) {
@@ -755,7 +900,7 @@
         } else if (txt) {
             destino = await geocodificarLugar(txt);
         }
-        if (!destino) { advice('Destino no resuelto', 'Escribe un lugar o "lat,lon"'); return null; }
+        if (!destino) { adviceErr('Destino no resuelto', 'Escribe un lugar o "lat,lon"'); return null; }
         advice('Calculando ruta', (modo === 'astar' ? 'A* sobre OSM' : 'OSRM') + '...');
         try {
             const calc = (modo === 'astar') ? await astarRoute(origen, destino) : await osrmRoute(origen, destino);
@@ -771,13 +916,13 @@
             APP.rutas[clave] = ruta;
             guardarRutas();
             resetEstadoRuta(clave);
-            advice('Ruta creada', Math.round(ruta.total / 1000) + ' km · ' + ruta.modo);
+            adviceOk('Ruta creada', Math.round(ruta.total / 1000) + ' km · ' + ruta.modo);
             if (APP.tab === 'rutas') paintRutas();
             // Reanaliza el viaje ahora que existe destino (llegada/regreso/carga).
             analizarViaje(eco, true);
             return ruta;
         } catch (e) {
-            advice('Error de ruta', (e && e.message) || 'sin conexion');
+            adviceErr('Error de ruta', (e && e.message) || 'sin conexion');
             return null;
         }
     }
@@ -804,7 +949,7 @@
     function exportRutaGeoJSON(eco) {
         const it = unitByEco(eco);
         const r = it ? rutaDe(it.info) : null;
-        if (!r) { advice('Sin ruta', eco); return; }
+        if (!r) { adviceWarn('Sin ruta', eco); return; }
         const geojson = {
             type: 'FeatureCollection',
             features: [
@@ -814,7 +959,7 @@
             ]
         };
         descargarJSON(geojson, 'hjp_ruta_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
-        advice('Ruta exportada', Math.round(r.total / 1000) + ' km');
+        adviceOk('Ruta exportada', Math.round(r.total / 1000) + ' km');
     }
     function registrarTraza(info, st) {
         if (!APP.config.trazado || !st.online || st.lat == null) return;
@@ -848,7 +993,7 @@
             }]
         };
         descargarJSON(geojson, 'hjp_traza_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
-        advice('Traza exportada', arr.length + ' puntos');
+        adviceOk('Traza exportada', arr.length + ' puntos');
     }
 
     /* ====================== ANALISIS DE VIAJE (historial) ====================== */
@@ -871,56 +1016,144 @@
     }
     // Punto de partida: el ultimo tramo parado (<=3 km/h) de al menos `horas`
     // horas, es decir, donde el vehiculo estuvo apagado/parado mas de 6 horas.
+    // Usa DBSCAN con grid espacial sobre los puntos con velocidad baja para
+    // agrupar lecturas cercanas (insensible al jitter GPS).
     function detectarPuntoPartida(puntos, horas) {
-        const umbral = Math.max(1, horas) * 3600;
-        const segs = [];
-        let ini = null;
-        for (let i = 0; i < puntos.length; i++) {
-            if (puntos[i].s <= 3) { if (ini == null) ini = i; }
-            else if (ini != null) { segs.push({ ini, fin: i - 1 }); ini = null; }
+        const grupos = segmentosParados(puntos, 0, puntos.length);
+        const umbralSeg = Math.max(1, horas) * 3600;
+        // El tramo "abierto" (que llega hasta el final) no cuenta como inicio.
+        const tFin = puntos[puntos.length - 1].t;
+        for (let i = grupos.length - 1; i >= 0; i--) {
+            const g = grupos[i];
+            const abierto = (tFin - g.hasta) <= 60;
+            if (abierto) continue;
+            if (g.durSeg >= umbralSeg) {
+                return {
+                    lat: g.lat, lon: g.lon, t: g.desde,
+                    durHoras: g.durSeg / 3600, finIdx: g.finIdx
+                };
+            }
         }
-        if (ini != null) segs.push({ ini, fin: puntos.length - 1, abierto: true });
-        let mejor = null;
-        for (let k = 0; k < segs.length; k++) {
-            const s = segs[k];
-            if (s.abierto) continue; // el tramo en curso no marca el inicio del viaje
-            const dur = puntos[s.fin].t - puntos[s.ini].t;
-            if (dur >= umbral) mejor = { ini: s.ini, fin: s.fin, dur };
-        }
-        if (!mejor) return null;
-        const p = puntos[mejor.fin];
-        return { lat: p.lat, lon: p.lon, t: p.t, durHoras: mejor.dur / 3600, finIdx: mejor.fin };
+        return null;
     }
     // Paradas de al menos `paradaMin` minutos dentro del trayecto.
     function analizarParadas(puntos, desde, paradaMin, partidaSeg) {
-        const segs = [];
-        let ini = null;
-        for (let i = desde; i < puntos.length; i++) {
-            if (puntos[i].s <= 3) { if (ini == null) ini = i; }
-            else if (ini != null) { segs.push({ ini, fin: i - 1 }); ini = null; }
+        const grupos = segmentosParados(puntos, desde, puntos.length);
+        return grupos.filter((g) => {
+            return g.durSeg >= paradaMin * 60 && g.durSeg < partidaSeg;
+        }).map((g) => ({
+            lat: g.lat, lon: g.lon, desde: g.desde, hasta: g.hasta,
+            durMin: g.durSeg / 60, abierto: false
+        }));
+    }
+    // Umbrales y helpers de clusterizacion de paradas (DBSCAN espacial).
+    const UMBRAL_PARADO_KMH = 3;
+    const DBSCAN_EPS_M = 80;
+    const DBSCAN_MIN_PTS = 2;
+
+    // Agrupa puntos cercanos (clusterizacion por densidad).
+    function dbscanStops(puntos, epsM, minPts) {
+        if (!puntos || puntos.length === 0) return [];
+        const eps = epsM || DBSCAN_EPS_M;
+        const minN = minPts || DBSCAN_MIN_PTS;
+        const cellDeg = eps / 110000;
+        const grid = new Map();
+        for (let i = 0; i < puntos.length; i++) {
+            const key = Math.floor(puntos[i].lat / cellDeg) + ',' + Math.floor(puntos[i].lon / cellDeg);
+            let arr = grid.get(key);
+            if (!arr) { arr = []; grid.set(key, arr); }
+            arr.push(i);
         }
-        if (ini != null) segs.push({ ini, fin: puntos.length - 1, abierto: true });
-        return segs.filter((s) => {
-            const dur = puntos[s.fin].t - puntos[s.ini].t;
-            return dur >= paradaMin * 60 && dur < partidaSeg;
-        }).map((s) => {
-            const a = puntos[s.ini], b = puntos[s.fin];
-            return { lat: a.lat, lon: a.lon, desde: a.t, hasta: b.t, durMin: (b.t - a.t) / 60, abierto: !!s.abierto };
-        });
+        const visitado = new Uint8Array(puntos.length);
+        const clusters = [];
+        for (let i = 0; i < puntos.length; i++) {
+            if (visitado[i]) continue;
+            visitado[i] = 1;
+            const vecinos = vecinosCercanos(puntos, i, eps, cellDeg, grid);
+            if (vecinos.length < minN) continue;
+            const cluster = [i];
+            const cola = vecinos.slice();
+            while (cola.length) {
+                const k = cola.pop();
+                if (!visitado[k]) {
+                    visitado[k] = 1;
+                    const n2 = vecinosCercanos(puntos, k, eps, cellDeg, grid);
+                    if (n2.length >= minN) {
+                        for (let q = 0; q < n2.length; q++) cola.push(n2[q]);
+                    }
+                }
+                if (cluster.indexOf(k) < 0) cluster.push(k);
+            }
+            clusters.push(cluster);
+        }
+        return clusters;
+    }
+    function vecinosCercanos(puntos, i, eps, cellDeg, grid) {
+        const cx = Math.floor(puntos[i].lat / cellDeg);
+        const cy = Math.floor(puntos[i].lon / cellDeg);
+        const out = [];
+        for (let dx = -1; dx <= 1; dx++) {
+            for (let dy = -1; dy <= 1; dy++) {
+                const cell = grid.get((cx + dx) + ',' + (cy + dy));
+                if (!cell) continue;
+                for (let m = 0; m < cell.length; m++) {
+                    const j = cell[m];
+                    if (j === i) continue;
+                    if (haversine(puntos[i].lat, puntos[i].lon, puntos[j].lat, puntos[j].lon) <= eps) {
+                        out.push(j);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+    function segmentosParados(puntos, desde, hasta) {
+        const candidatos = [];
+        const indices = [];
+        for (let i = desde; i < hasta; i++) {
+            if (puntos[i].s <= UMBRAL_PARADO_KMH) {
+                candidatos.push(puntos[i]);
+                indices.push(i);
+            }
+        }
+        if (candidatos.length === 0) return [];
+        const clusters = dbscanStops(candidatos, DBSCAN_EPS_M, DBSCAN_MIN_PTS);
+        const grupos = [];
+        for (let c = 0; c < clusters.length; c++) {
+            const cl = clusters[c];
+            let sumLat = 0, sumLon = 0;
+            let tIni = Infinity, tFin = -Infinity;
+            let idxIni = -1, idxFin = -1;
+            for (let q = 0; q < cl.length; q++) {
+                const k = cl[q];
+                const p = candidatos[k];
+                sumLat += p.lat; sumLon += p.lon;
+                if (p.t < tIni) { tIni = p.t; idxIni = indices[k]; }
+                if (p.t > tFin) { tFin = p.t; idxFin = indices[k]; }
+            }
+            grupos.push({
+                lat: sumLat / cl.length, lon: sumLon / cl.length,
+                desde: tIni, hasta: tFin, durSeg: tFin - tIni,
+                iniIdx: idxIni, finIdx: idxFin,
+                nPuntos: cl.length
+            });
+        }
+        grupos.sort((a, b) => a.desde - b.desde);
+        return grupos;
     }
     async function analizarViaje(eco, silencioso) {
         const it = unitByEco(eco);
-        if (!it) { if (!silencioso) advice('Unidad no encontrada', eco); return null; }
+        if (!it) { if (!silencioso) adviceErr('Unidad no encontrada', eco); return null; }
         const horas = Math.max(2, Number(APP.config.historialHoras) || 168);
         const partidaHoras = Math.max(1, Number(APP.config.partidaHoras) || 6);
         const paradaMin = Math.max(1, Number(APP.config.paradaMin) || 15);
         if (!silencioso) advice('Analizando viaje', 'historial de ' + horas + ' h...');
         let puntos = [];
         try { puntos = await fetchHistorial(it.u.id, horas); }
-        catch (e) { if (!silencioso) advice('Sin historial', (e && e.message) || 'sin conexion'); return null; }
-        if (puntos.length < 3) { if (!silencioso) advice('Sin datos', 'No hay suficiente historial'); return null; }
+        catch (e) { if (!silencioso) adviceWarn('Sin historial', (e && e.message) || 'sin conexion'); return null; }
+        if (puntos.length < 3) { if (!silencioso) adviceWarn('Sin datos', 'No hay suficiente historial'); return null; }
         const partida = detectarPuntoPartida(puntos, partidaHoras);
-        if (!partida) { if (!silencioso) advice('Sin punto de partida', 'No se hallo una parada de mas de ' + partidaHoras + ' h'); return null; }
+        if (!partida) { if (!silencioso) advice('Sin punto de partida', 'No se halló una parada de más de ' + partidaHoras + ' h'); return null; }
         const desde = partida.finIdx;
         const trayecto = puntos.slice(desde);
         const paradas = analizarParadas(puntos, desde, paradaMin, partidaHoras * 3600);
@@ -966,14 +1199,14 @@
         writeSession(SS.viajes, APP.viajes);
         if (APP.tab === 'rutas') paintRutas();
         if (!silencioso) {
-            advice('Viaje analizado', v.distanciaKm + ' km · ' + v.paradas.length + ' parada(s)'
+            adviceOk('Viaje analizado', v.distanciaKm + ' km · ' + v.paradas.length + ' parada(s)'
                 + (cargo ? ' · carga' : '') + (llego ? ' · llego a destino' : '') + (regreso ? ' · en regreso' : ''));
         }
         return v;
     }
     function exportViajeGeoJSON(eco) {
         const v = APP.viajes[eco];
-        if (!v) { advice('Sin analisis', 'Analiza el viaje primero'); return; }
+        if (!v) { adviceWarn('Sin análisis', 'Analiza el viaje primero'); return; }
         const features = [];
         if (v.traza && v.traza.length > 1) {
             features.push({ type: 'Feature', properties: { tipo: 'trayecto', eco, distancia_km: v.distanciaKm }, geometry: { type: 'LineString', coordinates: v.traza } });
@@ -982,7 +1215,7 @@
         if (v.destino) features.push({ type: 'Feature', properties: { tipo: 'destino' }, geometry: { type: 'Point', coordinates: [v.destino.lon, v.destino.lat] } });
         v.paradas.forEach((p, i) => features.push({ type: 'Feature', properties: { tipo: 'parada', n: i + 1, minutos: Math.round(p.durMin) }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } }));
         descargarJSON({ type: 'FeatureCollection', features }, 'hjp_viaje_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
-        advice('Viaje exportado', eco);
+        adviceOk('Viaje exportado', eco);
     }
 
     /* ====================== NOMBRE + ESTADO ====================== */
@@ -1049,7 +1282,7 @@
     function openMap(eco, kind) {
         const it = unitByEco(eco);
         if (!it || it.st.lat == null || it.st.lon == null) {
-            advice('Sin ubicacion', 'La unidad no reporta coordenadas');
+            adviceWarn('Sin ubicación', 'La unidad no reporta coordenadas');
             return;
         }
         const lat = it.st.lat, lon = it.st.lon;
@@ -1066,6 +1299,37 @@
         if (p && APP.seleccion.has(p)) return true;
         if (APP.seleccion.has(i)) return true;
         return false;
+    }
+    // Acumula distancia recorrida por unidad cuando se mueve a mas de 1 km/h.
+    // Saltos GPS anomalos (>5 km en 1 minuto) se descartan para no inflar el
+    // odometro. Persiste en localStorage.
+    const ODOMETRO_MAX_SALTO_M = 5000;
+    function actualizarOdometro(info, st, prev) {
+        if (!info || !info.clave || !st || st.online !== true) return;
+        if (st.lat == null || st.lon == null) return;
+        if (st.vel != null && st.vel <= 1) return;
+        const clave = info.clave;
+        const od = APP.odometro[clave] || (APP.odometro[clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null });
+        if (od.ultimoLat != null && od.ultimoLon != null && st.t && od.ultimoT) {
+            const dt = Math.max(1, st.t - od.ultimoT);
+            const d = haversine(od.ultimoLat, od.ultimoLon, st.lat, st.lon);
+            if (d <= ODOMETRO_MAX_SALTO_M) od.m += d;
+        }
+        od.ultimoLat = st.lat;
+        od.ultimoLon = st.lon;
+        od.ultimoT = st.t || Math.floor(Date.now() / 1000);
+        writeJSON(LS.odometro, APP.odometro);
+    }
+    function resetOdometro(eco) {
+        const it = unitByEco(eco);
+        if (!it) return;
+        APP.odometro[it.info.clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null };
+        writeJSON(LS.odometro, APP.odometro);
+        adviceOk('Odómetro reiniciado', it.info.eco);
+    }
+    function odometroDe(info) {
+        if (!info || !info.clave) return null;
+        return APP.odometro[info.clave] || null;
     }
     function isBase(zona) {
         return /\b(GENA|CEDIS|PATIO|PLANTA|OFICINAS|ALMACEN|TALLER|BODEGA|LABORATORIO|BASCULA|RASTRO)\b/.test(norm(zona));
@@ -1211,10 +1475,421 @@
         }, APP.config.toastSeg * 1000);
         while (cont.children.length > 6) cont.removeChild(cont.firstChild);
     }
-    function advice(titulo, detalle) {
-        toast({ sev: 'bajo', icono: ICO.info, titulo, detalle: detalle || '', ts: Date.now() });
+    // Toasts informativos con severidad opcional: 'info' (default), 'ok',
+    // 'warn'/'medio', 'err'/'critico'. El color del borde y del icono sale de
+    // COL, por lo que cada severidad se distingue de un vistazo.
+    function advice(titulo, detalle, sev) {
+        const s = sev || 'info';
+        const ic = (s === 'ok') ? ICO.ok
+            : (s === 'warn' || s === 'medio') ? ICO.medio
+                : (s === 'err' || s === 'critico' || s === 'alto') ? ICO.critico
+                    : ICO.info;
+        // 'info' usa el color azul de la severidad 'bajo' (COL no tiene 'info').
+        const sevCol = (s === 'info') ? 'bajo' : s;
+        toast({ sev: sevCol, icono: ic, titulo, detalle: detalle || '', ts: Date.now() });
     }
-/* ====================== MOTOR DE REGLAS ====================== */
+    function adviceOk(t, d) { advice(t, d, 'ok'); }
+    function adviceWarn(t, d) { advice(t, d, 'medio'); }
+    function adviceErr(t, d) { advice(t, d, 'critico'); }
+    // Pone un boton en estado ocupado: spinner, aria-busy y deshabilitado.
+    // Restaura el contenido original al terminar.
+    function setBusy(btn, on) {
+        if (!btn) return;
+        if (on) {
+            if (btn.dataset.hjpTxt == null) btn.dataset.hjpTxt = btn.innerHTML;
+            btn.classList.add('hjp-busy');
+            btn.setAttribute('aria-busy', 'true');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="hjp-spin"></span>';
+        } else {
+            btn.classList.remove('hjp-busy');
+            btn.removeAttribute('aria-busy');
+            btn.disabled = false;
+            if (btn.dataset.hjpTxt != null) {
+                btn.innerHTML = btn.dataset.hjpTxt;
+                delete btn.dataset.hjpTxt;
+            }
+        }
+    }
+    // Ejecuta una accion async mostrando el boton ocupado hasta que termine.
+    async function conBusy(btn, fn) {
+        setBusy(btn, true);
+        try { return await fn(); } finally { setBusy(btn, false); }
+    }
+
+    /* ====================== DIALOGO PROPIO ======================
+     * Sustituye a window.confirm/window.prompt con la misma estetica del
+     * panel. Api:
+     *   hjpConfirm(titulo, mensaje, onOk, {peligro, okText, icon})
+     *   hjpPrompt(titulo, label, valor, onOk, {placeholder, type, okText})
+     *   abrirDialogo({...})  // generico
+     */
+    let dlgEl = null, dlgPrevFocus = null;
+    function ensureDialog() {
+        if (dlgEl && dlgEl.isConnected) return dlgEl;
+        dlgEl = makeEl('div', { id: 'hjp-dialog' });
+        dlgEl.setAttribute('role', 'dialog');
+        dlgEl.setAttribute('aria-modal', 'true');
+        document.body.appendChild(dlgEl);
+        return dlgEl;
+    }
+    function dialogoAbierto() { return !!(dlgEl && dlgEl.classList.contains('abierto')); }
+    function cerrarDialogo() {
+        if (!dlgEl) return;
+        dlgEl.classList.remove('abierto');
+        dlgEl.innerHTML = '';
+        if (dlgPrevFocus && dlgPrevFocus.focus && dlgPrevFocus.isConnected) {
+            try { dlgPrevFocus.focus(); } catch (_) { /* noop */ }
+        }
+        dlgPrevFocus = null;
+    }
+    function abrirDialogo(opts) {
+        const el = ensureDialog();
+        dlgPrevFocus = document.activeElement;
+        const inputId = opts.input ? 'hjp-dlg-input' : '';
+        const inp = opts.input || {};
+        el.innerHTML =
+            '<div class="dlg-head"><span class="hjp-mi">' + (opts.icon || ICO.info) + '</span>' +
+            '<span>' + esc(opts.titulo) + '</span></div>' +
+            '<div class="dlg-body">' +
+            (opts.html || '') +
+            (opts.input ? '<input id="' + inputId + '" type="' + (inp.type || 'text') + '" placeholder="' +
+                esc(inp.placeholder || '') + '" value="' + esc(inp.value == null ? '' : inp.value) + '">' : '') +
+            '</div>' +
+            '<div class="dlg-foot">' +
+            (opts.cancel === false ? '' : '<button class="dlg-cancel">' + esc(opts.cancelText || 'Cancelar') + '</button>') +
+            '<button class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + esc(opts.okText || 'Aceptar') + '</button>' +
+            '</div>';
+        el.classList.add('abierto');
+        const okBtn = el.querySelector('.dlg-ok');
+        const cancelBtn = el.querySelector('.dlg-cancel');
+        const inpEl = opts.input ? byId(inputId) : null;
+        if (inpEl) { inpEl.focus(); if (inpEl.select) inpEl.select(); }
+        else if (okBtn) okBtn.focus();
+        okBtn.addEventListener('click', () => {
+            const val = inpEl ? inpEl.value : undefined;
+            cerrarDialogo();
+            if (opts.onOk) opts.onOk(val);
+        });
+        if (cancelBtn) cancelBtn.addEventListener('click', cerrarDialogo);
+        if (inpEl) inpEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }
+        });
+        return el;
+    }
+    function hjpConfirm(titulo, mensaje, onOk, opts) {
+        const o = opts || {};
+        abrirDialogo({
+            icon: o.icon || ICO.medio,
+            titulo: titulo,
+            html: '<p>' + esc(mensaje) + '</p>',
+            okText: o.okText || 'Confirmar',
+            peligro: !!o.peligro,
+            onOk: onOk
+        });
+    }
+    function hjpPrompt(titulo, label, value, onOk, opts) {
+        const o = opts || {};
+        abrirDialogo({
+            icon: o.icon || ICO.ajustes,
+            titulo: titulo,
+            html: label ? '<p>' + esc(label) + '</p>' : '',
+            input: { value: value == null ? '' : value, placeholder: o.placeholder || '', type: o.type || 'text' },
+            okText: o.okText || 'Aceptar',
+            onOk: (val) => { if (val !== null && val !== undefined) onOk(val); }
+        });
+    }
+    // Estado vacio reutilizable: icono + titulo + pista + accion opcional.
+    // `hint` admite HTML controlado; `accion` es HTML de botones.
+    // Indicador de cambios sin guardar en la ventana de ajustes.
+    let cfgDirty = false;
+    function marcarCfgDirty() {
+        cfgDirty = true;
+        const d = byId('hjp-cfg-dirty');
+        if (d) d.classList.add('on');
+    }
+    function limpiarCfgDirty() {
+        cfgDirty = false;
+        const d = byId('hjp-cfg-dirty');
+        if (d) d.classList.remove('on');
+    }
+    function emptyState(icon, titulo, hint, accion) {
+        return '<div class="hjp-vacio">' +
+            '<span class="hjp-mi">' + icon + '</span>' +
+            '<b>' + esc(titulo) + '</b>' +
+            (hint ? '<span>' + hint + '</span>' : '') +
+            (accion || '') +
+            '</div>';
+    }
+    function abrirBienvenida() {
+        abrirDialogo({
+            icon: ICO.automatizar,
+            titulo: 'Bienvenido a HJP · Wialon',
+            cancel: false,
+            okText: 'Empezar',
+            html:
+                '<p>Vigilancia de flota sobre Wialon, directo en el navegador. En 3 pasos:</p>' +
+                '<div class="pasos">' +
+                '<div class="paso"><span class="n">1</span><div><b>Elige unidades</b>' +
+                '<span>En <i>Automatizar Unidades</i> pega los economicos, o activa <i>Monitorear todas</i> en Ajustes.</span></div></div>' +
+                '<div class="paso"><span class="n">2</span><div><b>Evalua reglas</b>' +
+                '<span>El script vigila sin señal, detenciones, zonas, geocercas, velocidad y rutas. Ajustalo en Ajustes.</span></div></div>' +
+                '<div class="paso"><span class="n">3</span><div><b>Vigila los avisos</b>' +
+                '<span>Tarjetas, voz, pitido y notificación. Revisa el historial en la pestaña <i>Avisos</i>.</span></div></div>' +
+                '</div>'
+        });
+    }
+/* ====================== MOTOR DE REGLAS ======================
+ * Cada regla recibe (u, st, prev, R, info, etq, ctx), muta R con su estado
+ * persistente (desde cuando, maximo progreso, etc.) y puede llamar a
+ * pushAlert. evaluateUnit solo orquesta; asi se pueden anadir o quitar
+ * reglas sin tocar el resto.
+ */
+    async function reglaOffline(st, prev, R, info, etq) {
+        if (!APP.config.reglas.offline) return;
+        if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
+            pushAlert({
+                regla: 'offline', sev: 'alto', clave: info.clave, eco: info.eco,
+                titulo: 'SIN SENAL · ' + etq,
+                detalle: 'sin reportar hace ' + ageText(st.edadMin) + (R.zona ? ' · ' + R.zona : ''),
+                hablar: 'Atención, la unidad ' + etq + ' se ha desconectado'
+            });
+        } else if (prev && prev.estado === 'offline' && st.estado !== 'offline') {
+            pushAlert({
+                regla: 'offline', sev: 'ok', clave: info.clave, eco: info.eco,
+                titulo: 'RECONECTO · ' + etq,
+                detalle: 'volvió a reportar · ' + Math.round(st.vel) + ' km/h',
+                hablar: 'La unidad ' + etq + ' volvió a estar en línea'
+            });
+            R.descoAlerta = false;
+        }
+    }
+    async function reglaGpsPerdido(st, prev, R, info, etq) {
+        if (!APP.config.reglas.gpsPerdido || !prev || prev.estado === 'offline') return;
+        if (prev.vel > 5 && st.estado === 'offline' && st.edadMin >= APP.config.gpsMin) {
+            pushAlert({
+                regla: 'gpsPerdido', sev: 'critico', clave: info.clave, eco: info.eco,
+                titulo: 'SENAL PERDIDA EN MARCHA · ' + etq,
+                detalle: 'ultima velocidad ' + Math.round(prev.vel) + ' km/h · sin datos ' + ageText(st.edadMin) + (prev.zona ? ' · ' + prev.zona : ''),
+                hablar: 'Atención, se perdio la señal de la unidad ' + etq + ' en marcha'
+            });
+        }
+    }
+    async function reglaDetenido(u, st, R, info, etq, ctx) {
+        if (!APP.config.reglas.detenido) return;
+        if (st.online && st.vel <= 1) {
+            if (!R.detenidoDesde) {
+                R.detenidoDesde = Date.now() / 1000;
+                if (APP.config.historico && APP.consultaRestante > 0 && ctx.quotaOk) {
+                    APP.consultaRestante--;
+                    try {
+                        const um = await fetchLastMotion(u.id);
+                        if (um) R.detenidoDesde = um;
+                    } catch (_) { /* noop */ }
+                }
+            }
+            const m = (Date.now() / 1000 - R.detenidoDesde) / 60;
+            if (m >= APP.config.stopMin && !isBase(R.zona)) {
+                let ctxTxt = ctx.ubicaciones[info.clave];
+                if (ctxTxt == null && ctx.quotaGeo) {
+                    const g = await reverseGeocode(st.lat, st.lon);
+                    ctx.ubicaciones[info.clave] = ctxTxt = g ? (g.texto || g.ciudad || '') : '';
+                }
+                pushAlert({
+                    regla: 'detenido', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                    titulo: 'DETENIDO ' + Math.round(m) + ' min · ' + etq,
+                    detalle: (R.zona ? 'zona: ' + R.zona : 'fuera de geocercas') + (ctxTxt ? ' · ' + ctxTxt : ''),
+                    hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos detenida'
+                });
+            }
+        } else {
+            R.detenidoDesde = null;
+        }
+    }
+    function reglaZona(st, R, info, etq) {
+        if (!APP.config.reglas.zona) return;
+        const z = R.zona;
+        if (z && !isBase(z)) {
+            const destino = watchDest(info);
+            const esperada = destino && norm(z).indexOf(norm(destino)) >= 0;
+            if (!esperada) {
+                if (!R.zonaExt || R.zonaExt.n !== z) R.zonaExt = { n: z, desde: Date.now() / 1000 };
+                const m = (Date.now() / 1000 - R.zonaExt.desde) / 60;
+                if (m >= APP.config.zonaMin) {
+                    pushAlert({
+                        regla: 'zona', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                        titulo: 'ZONA NO PREVISTA ' + Math.round(m) + ' min · ' + etq,
+                        detalle: 'permanece en ' + z,
+                        hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos en zona no prevista'
+                    });
+                }
+            } else {
+                R.zonaExt = null;
+            }
+        } else {
+            R.zonaExt = null;
+        }
+    }
+    function reglaGeocerca(st, prev, R, info, etq) {
+        if (!APP.config.reglas.geocerca || !prev || prev.zona === R.zona) return;
+        if (R.zona) {
+            pushAlert({
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                titulo: 'ENTRO · ' + etq,
+                detalle: ICO.entra + ' ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
+            });
+        } else if (prev.zona) {
+            pushAlert({
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                titulo: 'SALIO · ' + etq,
+                detalle: ICO.sale + ' ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
+            });
+        }
+    }
+    async function reglaDestino(st, R, info, etq) {
+        if (!APP.config.reglas.destino) return;
+        const destino = watchDest(info);
+        if (!destino || !st.online) return;
+        const geo = await reverseGeocode(st.lat, st.lon);
+        const ciudad = geo ? geo.ciudad : '';
+        const enDestino = !!ciudad && (norm(ciudad).indexOf(norm(destino)) >= 0 || norm(destino).indexOf(norm(ciudad)) >= 0);
+        if (enDestino && !R.enDestino) {
+            R.enDestino = true;
+            pushAlert({
+                regla: 'destino', sev: 'ok', clave: info.clave, eco: info.eco,
+                titulo: 'LLEGO A DESTINO · ' + etq,
+                detalle: 'en ' + ciudad,
+                hablar: 'La unidad ' + etq + ' llego a su destino'
+            });
+        } else if (!enDestino && R.enDestino && st.vel > 10) {
+            R.enDestino = false;
+            pushAlert({
+                regla: 'destino', sev: 'bajo', clave: info.clave, eco: info.eco,
+                titulo: 'EN REGRESO · ' + etq,
+                detalle: 'salio de ' + destino + ' · ' + Math.round(st.vel) + ' km/h',
+                hablar: 'La unidad ' + etq + ' va en regreso'
+            });
+        }
+    }
+    async function reglaDesconexion(st, R, info, etq) {
+        if (!APP.config.reglas.desconexion || st.estado !== 'offline' || st.edadMin < APP.config.descoMin) return;
+        if (!R.descoAlerta) {
+            R.descoAlerta = true;
+            pushAlert({
+                regla: 'desconexion', sev: 'critico', clave: info.clave, eco: info.eco,
+                titulo: 'DESCONEXION PROLONGADA · ' + etq,
+                detalle: 'lleva ' + ageText(st.edadMin) + ' sin señal',
+                hablar: 'Atención, la unidad ' + etq + ' sigue desconectada'
+            });
+        }
+    }
+    function reglaVelocidad(st, R, info, etq) {
+        if (!APP.config.reglas.velocidad || !st.online) return;
+        const lim = limiteDe(info);
+        if (st.vel > lim) {
+            pushAlert({
+                regla: 'velocidad', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                titulo: 'EXCESO DE VELOCIDAD · ' + etq,
+                detalle: Math.round(st.vel) + ' km/h (límite ' + lim + ')',
+                hablar: 'La unidad ' + etq + ' excede la velocidad'
+            });
+        }
+    }
+    function reglaDemoraBase(st, R, info, etq) {
+        if (!APP.config.reglas.demoraBase) return;
+        if (!st.online || st.vel > 1) { R.demoraBaseAlerta = 0; return; }
+        if (!isBase(R.zona)) { R.demoraBaseAlerta = 0; return; }
+        if (R.enDestino || R.llego) return;
+        if (!R.demoraBaseAlerta) R.demoraBaseAlerta = Date.now() / 1000;
+        const min = (Date.now() / 1000 - R.demoraBaseAlerta) / 60;
+        if (min >= APP.config.demoraBaseMin) {
+            pushAlert({
+                regla: 'demoraBase', sev: 'bajo', clave: info.clave, eco: info.eco, soloHorario: true,
+                titulo: 'DEMORA EN BASE · ' + etq,
+                detalle: Math.round(min) + ' min parado en ' + R.zona,
+                hablar: 'La unidad ' + etq + ' lleva ' + Math.round(min) + ' minutos en base sin salir'
+            });
+            // Re-armar: la proxima alerta se disparara tras demoraBaseMin
+            // desde este momento (el cooldown de pushAlert evita duplicados).
+            R.demoraBaseAlerta = Date.now() / 1000;
+        }
+    }
+    function reglaRuta(st, R, info, etq) {
+        const ruta = rutaDe(info);
+        const sigueRuta = APP.config.reglas.desvio || APP.config.reglas.retorno || APP.config.reglas.giroU;
+        if (!ruta || !sigueRuta || !st.online || st.lat == null) return;
+        if (!APP.snapMemo[info.clave]) APP.snapMemo[info.clave] = { idx: 0 };
+        const s = snapRuta(st.lat, st.lon, ruta, APP.snapMemo[info.clave]);
+        if (!s) return;
+        R.rutaDist = Math.round(s.dist);
+        R.rutaProg = s.progreso;
+
+        if (APP.config.reglas.desvio) {
+            if (s.dist > APP.config.desvioM) {
+                if (!R.desviadoDesde) R.desviadoDesde = Date.now() / 1000;
+                const m = (Date.now() / 1000 - R.desviadoDesde) / 60;
+                if (m >= APP.config.desvioMin) {
+                    pushAlert({
+                        regla: 'desvio', sev: 'alto', clave: info.clave, eco: info.eco,
+                        titulo: 'DESVIO DE RUTA · ' + etq,
+                        detalle: Math.round(s.dist) + ' m de la ruta · ' + Math.round(m) + ' min',
+                        hablar: 'Atencion, la unidad ' + etq + ' se ha desviado de la ruta'
+                    });
+                }
+            } else {
+                R.desviadoDesde = null;
+            }
+        }
+
+        if (APP.config.reglas.retorno) {
+            if (s.progreso > (R.progMax || 0)) R.progMax = s.progreso;
+            const dOrigen = haversine(st.lat, st.lon, ruta.origen.lat, ruta.origen.lon);
+            const dDestino = haversine(st.lat, st.lon, ruta.destino.lat, ruta.destino.lon);
+            const retrocedio = (R.progMax - s.progreso) >= (APP.config.retornoPct / 100);
+            const enOrigen = dOrigen <= APP.config.retornoM && R.progMax >= 0.2;
+            if (dDestino <= APP.config.retornoM && s.progreso >= 0.85) {
+                if (!R.llego) {
+                    R.llego = true;
+                    R.retornoAlerta = false;
+                    pushAlert({
+                        regla: 'destino', sev: 'ok', clave: info.clave, eco: info.eco,
+                        titulo: 'LLEGO A DESTINO · ' + etq,
+                        detalle: ruta.destinoTexto ? 'en ' + ruta.destinoTexto : 'en el punto de destino',
+                        hablar: 'La unidad ' + etq + ' llego a su destino'
+                    });
+                }
+            }
+            if (!R.retornoAlerta && !R.llego && R.progMax >= 0.15 && (enOrigen || retrocedio)) {
+                R.retornoAlerta = true;
+                pushAlert({
+                    regla: 'retorno', sev: 'critico', clave: info.clave, eco: info.eco,
+                    titulo: 'POSIBLE VIAJE CANCELADO · ' + etq,
+                    detalle: (enOrigen ? 'volvio al origen' : 'retrocedio ' + Math.round((R.progMax - s.progreso) * 100) + '%') +
+                        ' · avance max ' + Math.round(R.progMax * 100) + '%',
+                    hablar: 'Atencion, la unidad ' + etq + ' regreso. El viaje puede estar cancelado'
+                });
+            }
+        }
+
+        if (APP.config.reglas.giroU && st.vel > 10) {
+            const dif = difAngulo(st.curso || 0, s.rumbo);
+            if (dif > APP.config.giroGrados) {
+                if (!R.rumboOpDesde) R.rumboOpDesde = Date.now() / 1000;
+                const m = (Date.now() / 1000 - R.rumboOpDesde) / 60;
+                if (m >= APP.config.giroMin) {
+                    pushAlert({
+                        regla: 'giroU', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
+                        titulo: 'GIRO EN U · ' + etq,
+                        detalle: 'rumbo opuesto a la ruta (' + Math.round(dif) + ' grados)',
+                        hablar: 'La unidad ' + etq + ' hizo un giro en U'
+                    });
+                }
+            } else {
+                R.rumboOpDesde = null;
+            }
+        }
+    }
+
     async function evaluateUnit(u, info, st, prev, ctx) {
         const clave = info.clave;
         const etq = (info.eco || info.placa || info.nombre || info.id || '');
@@ -1229,247 +1904,27 @@
             progMax: prev ? prev.progMax : 0,
             retornoAlerta: prev ? prev.retornoAlerta : false,
             rumboOpDesde: prev ? prev.rumboOpDesde : null,
+            demoraBaseAlerta: prev ? (prev.demoraBaseAlerta || 0) : 0,
             llego: prev ? prev.llego : false
         };
-
-        // a) sin senal
-        if (APP.config.reglas.offline) {
-            if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
-                pushAlert({
-                    regla: 'offline', sev: 'alto', clave, eco: info.eco,
-                    titulo: 'SIN SENAL · ' + etq,
-                    detalle: 'sin reportar hace ' + ageText(st.edadMin) + (R.zona ? ' · ' + R.zona : ''),
-                    hablar: 'Atención, la unidad ' + etq + ' se ha desconectado'
-                });
-            } else if (prev && prev.estado === 'offline' && st.estado !== 'offline') {
-                pushAlert({
-                    regla: 'offline', sev: 'ok', clave, eco: info.eco,
-                    titulo: 'RECONECTO · ' + etq,
-                    detalle: 'volvio a reportar · ' + Math.round(st.vel) + ' km/h',
-                    hablar: 'La unidad ' + etq + ' volvio a estar en linea'
-                });
-                R.descoAlerta = false;
-            }
+        try {
+            await reglaOffline(st, prev, R, info, etq);
+            // Si la unidad vuelve a reportar, rearma la alerta de desconexion
+            // aunque la regla general este desactivada.
+            if (st.estado !== 'offline') R.descoAlerta = false;
+            await reglaGpsPerdido(st, prev, R, info, etq);
+            await reglaDetenido(u, st, R, info, etq, ctx);
+            reglaZona(st, R, info, etq);
+            reglaGeocerca(st, prev, R, info, etq);
+            await reglaDestino(st, R, info, etq);
+            await reglaDesconexion(st, R, info, etq);
+            reglaVelocidad(st, R, info, etq);
+            reglaDemoraBase(st, R, info, etq);
+            reglaRuta(st, R, info, etq);
+        } catch (e) {
+            APP.stats.erroresReglas = (APP.stats.erroresReglas || 0) + 1;
+            if (APP.unlocked) console.warn('[HJP] regla', clave, e && e.message);
         }
-        // Si la unidad vuelve a reportar, se rearma la alerta de desconexion
-        // aunque la regla general de "sin senal" este desactivada.
-        if (st.estado !== 'offline') R.descoAlerta = false;
-
-        // b) GPS perdido en marcha
-        if (APP.config.reglas.gpsPerdido && prev && prev.estado !== 'offline') {
-            if (prev.vel > 5 && st.estado === 'offline' && st.edadMin >= APP.config.gpsMin) {
-                pushAlert({
-                    regla: 'gpsPerdido', sev: 'critico', clave, eco: info.eco,
-                    titulo: 'SENAL PERDIDA EN MARCHA · ' + etq,
-                    detalle: 'ultima velocidad ' + Math.round(prev.vel) + ' km/h · sin datos ' + ageText(st.edadMin) + (prev.zona ? ' · ' + prev.zona : ''),
-                    hablar: 'Atención, se perdio la señal de la unidad ' + etq + ' en marcha'
-                });
-            }
-        }
-
-        // c) Detenido en carretera
-        if (APP.config.reglas.detenido) {
-            if (st.online && st.vel <= 1) {
-                if (!R.detenidoDesde) {
-                    R.detenidoDesde = Date.now() / 1000;
-                    if (APP.config.historico && APP.consultaRestante > 0 && ctx.quotaOk) {
-                        APP.consultaRestante--;
-                        try {
-                            const um = await fetchLastMotion(u.id);
-                            if (um) R.detenidoDesde = um;
-                        } catch (_) { /* noop */ }
-                    }
-                }
-                const m = (Date.now() / 1000 - R.detenidoDesde) / 60;
-                if (m >= APP.config.stopMin && !isBase(R.zona)) {
-                    let ctxTxt = ctx.ubicaciones[clave];
-                    if (ctxTxt == null && ctx.quotaGeo) {
-                        const g = await reverseGeocode(st.lat, st.lon);
-                        ctx.ubicaciones[clave] = ctxTxt = g ? (g.texto || g.ciudad || '') : '';
-                    }
-                    pushAlert({
-                        regla: 'detenido', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                        titulo: 'DETENIDO ' + Math.round(m) + ' min · ' + etq,
-                        detalle: (R.zona ? 'zona: ' + R.zona : 'fuera de geocercas') + (ctxTxt ? ' · ' + ctxTxt : ''),
-                        hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos detenida'
-                    });
-                }
-            } else {
-                R.detenidoDesde = null;
-            }
-        }
-
-        // d) Zona no prevista
-        if (APP.config.reglas.zona) {
-            const z = R.zona;
-            if (z && !isBase(z)) {
-                const destino = watchDest(info);
-                const esperada = destino && norm(z).indexOf(norm(destino)) >= 0;
-                if (!esperada) {
-                    if (!R.zonaExt || R.zonaExt.n !== z) R.zonaExt = { n: z, desde: Date.now() / 1000 };
-                    const m = (Date.now() / 1000 - R.zonaExt.desde) / 60;
-                    if (m >= APP.config.zonaMin) {
-                        pushAlert({
-                            regla: 'zona', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                            titulo: 'ZONA NO PREVISTA ' + Math.round(m) + ' min · ' + etq,
-                            detalle: 'permanece en ' + z,
-                            hablar: 'La unidad ' + etq + ' lleva ' + Math.round(m) + ' minutos en zona no prevista'
-                        });
-                    }
-                } else {
-                    R.zonaExt = null;
-                }
-            } else {
-                R.zonaExt = null;
-            }
-        }
-
-        // e) Entrada / salida de geocerca
-        if (APP.config.reglas.geocerca && prev && prev.zona !== R.zona) {
-            if (R.zona) {
-                pushAlert({
-                    regla: 'geocerca', sev: 'bajo', clave, eco: info.eco,
-                    titulo: 'ENTRO · ' + etq,
-                    detalle: ICO.entra + ' ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
-                });
-            } else if (prev.zona) {
-                pushAlert({
-                    regla: 'geocerca', sev: 'bajo', clave, eco: info.eco,
-                    titulo: 'SALIO · ' + etq,
-                    detalle: ICO.sale + ' ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
-                });
-            }
-        }
-
-        // f) Destino / regreso
-        if (APP.config.reglas.destino) {
-            const destino = watchDest(info);
-            if (destino && st.online) {
-                const geo = await reverseGeocode(st.lat, st.lon);
-                const ciudad = geo ? geo.ciudad : '';
-                const enDestino = !!ciudad && (norm(ciudad).indexOf(norm(destino)) >= 0 || norm(destino).indexOf(norm(ciudad)) >= 0);
-                if (enDestino && !R.enDestino) {
-                    R.enDestino = true;
-                    pushAlert({
-                        regla: 'destino', sev: 'ok', clave, eco: info.eco,
-                        titulo: 'LLEGO A DESTINO · ' + etq,
-                        detalle: 'en ' + ciudad,
-                        hablar: 'La unidad ' + etq + ' llego a su destino'
-                    });
-                } else if (!enDestino && R.enDestino && st.vel > 10) {
-                    R.enDestino = false;
-                    pushAlert({
-                        regla: 'destino', sev: 'bajo', clave, eco: info.eco,
-                        titulo: 'EN REGRESO · ' + etq,
-                        detalle: 'salio de ' + destino + ' · ' + Math.round(st.vel) + ' km/h',
-                        hablar: 'La unidad ' + etq + ' va en regreso'
-                    });
-                }
-            }
-        }
-
-        // g) Desconexion prolongada
-        if (APP.config.reglas.desconexion && st.estado === 'offline' && st.edadMin >= APP.config.descoMin) {
-            if (!R.descoAlerta) {
-                R.descoAlerta = true;
-                pushAlert({
-                    regla: 'desconexion', sev: 'critico', clave, eco: info.eco,
-                    titulo: 'DESCONEXION PROLONGADA · ' + etq,
-                    detalle: 'lleva ' + ageText(st.edadMin) + ' sin senal',
-                    hablar: 'Atención, la unidad ' + etq + ' sigue desconectada'
-                });
-            }
-        }
-
-        // h) Exceso de velocidad (limite global o por unidad)
-        if (APP.config.reglas.velocidad && st.online) {
-            const lim = limiteDe(info);
-            if (st.vel > lim) {
-                pushAlert({
-                    regla: 'velocidad', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                    titulo: 'EXCESO DE VELOCIDAD · ' + etq,
-                    detalle: Math.round(st.vel) + ' km/h (limite ' + lim + ')',
-                    hablar: 'La unidad ' + etq + ' excede la velocidad'
-                });
-            }
-        }
-
-        // i) Ruta: desvio, retorno/viaje cancelado y giro en U
-        const ruta = rutaDe(info);
-        const sigueRuta = APP.config.reglas.desvio || APP.config.reglas.retorno || APP.config.reglas.giroU;
-        if (ruta && sigueRuta && st.online && st.lat != null) {
-            const s = snapRuta(st.lat, st.lon, ruta);
-            if (s) {
-                R.rutaDist = Math.round(s.dist);
-                R.rutaProg = s.progreso;
-
-                if (APP.config.reglas.desvio) {
-                    if (s.dist > APP.config.desvioM) {
-                        if (!R.desviadoDesde) R.desviadoDesde = Date.now() / 1000;
-                        const m = (Date.now() / 1000 - R.desviadoDesde) / 60;
-                        if (m >= APP.config.desvioMin) {
-                            pushAlert({
-                                regla: 'desvio', sev: 'alto', clave, eco: info.eco,
-                                titulo: 'DESVIO DE RUTA · ' + etq,
-                                detalle: Math.round(s.dist) + ' m de la ruta · ' + Math.round(m) + ' min',
-                                hablar: 'Atencion, la unidad ' + etq + ' se ha desviado de la ruta'
-                            });
-                        }
-                    } else {
-                        R.desviadoDesde = null;
-                    }
-                }
-
-                if (APP.config.reglas.retorno) {
-                    if (s.progreso > (R.progMax || 0)) R.progMax = s.progreso;
-                    const dOrigen = haversine(st.lat, st.lon, ruta.origen.lat, ruta.origen.lon);
-                    const dDestino = haversine(st.lat, st.lon, ruta.destino.lat, ruta.destino.lon);
-                    const retrocedio = (R.progMax - s.progreso) >= (APP.config.retornoPct / 100);
-                    const enOrigen = dOrigen <= APP.config.retornoM && R.progMax >= 0.2;
-                    if (dDestino <= APP.config.retornoM && s.progreso >= 0.85) {
-                        if (!R.llego) {
-                            R.llego = true;
-                            R.retornoAlerta = false;
-                            pushAlert({
-                                regla: 'destino', sev: 'ok', clave, eco: info.eco,
-                                titulo: 'LLEGO A DESTINO · ' + etq,
-                                detalle: ruta.destinoTexto ? 'en ' + ruta.destinoTexto : 'en el punto de destino',
-                                hablar: 'La unidad ' + etq + ' llego a su destino'
-                            });
-                        }
-                    }
-                    if (!R.retornoAlerta && !R.llego && R.progMax >= 0.15 && (enOrigen || retrocedio)) {
-                        R.retornoAlerta = true;
-                        pushAlert({
-                            regla: 'retorno', sev: 'critico', clave, eco: info.eco,
-                            titulo: 'POSIBLE VIAJE CANCELADO · ' + etq,
-                            detalle: (enOrigen ? 'volvio al origen' : 'retrocedio ' + Math.round((R.progMax - s.progreso) * 100) + '%') +
-                                ' · avance max ' + Math.round(R.progMax * 100) + '%',
-                            hablar: 'Atencion, la unidad ' + etq + ' regreso. El viaje puede estar cancelado'
-                        });
-                    }
-                }
-
-                if (APP.config.reglas.giroU && st.vel > 10) {
-                    const dif = difAngulo(st.curso || 0, s.rumbo);
-                    if (dif > APP.config.giroGrados) {
-                        if (!R.rumboOpDesde) R.rumboOpDesde = Date.now() / 1000;
-                        const m = (Date.now() / 1000 - R.rumboOpDesde) / 60;
-                        if (m >= APP.config.giroMin) {
-                            pushAlert({
-                                regla: 'giroU', sev: 'medio', clave, eco: info.eco, soloHorario: true,
-                                titulo: 'GIRO EN U · ' + etq,
-                                detalle: 'rumbo opuesto a la ruta (' + Math.round(dif) + ' grados)',
-                                hablar: 'La unidad ' + etq + ' hizo un giro en U'
-                            });
-                        }
-                    } else {
-                        R.rumboOpDesde = null;
-                    }
-                }
-            }
-        }
-
         return R;
     }
 
@@ -1501,6 +1956,7 @@
                 try {
                     const R = await evaluateUnit(u, info, st, prev, ctx);
                     nuevas[info.clave] = R;
+                    actualizarOdometro(info, st, prev);
                 } catch (e) {
                     if (APP.unlocked) { try { console.warn('[HJP] reg', info.clave, e && e.message); } catch (_) { /* noop */ } }
                 }
@@ -1551,7 +2007,7 @@
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
     function esUIPropia(el) {
         try {
-            return !!(el && el.closest && el.closest('#hjp-panel,#hjp-barra,#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto,#hjp-toasts,#hjp-aviso,#hjp-rail'));
+            return !!(el && el.closest && el.closest('#hjp-panel,#hjp-barra,#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto,#hjp-toasts,#hjp-aviso,#hjp-rail,#hjp-dialog'));
         } catch (_) { return false; }
     }
     function findSearchInput() {
@@ -2033,7 +2489,7 @@
         const list = openWindows();
         APP.seleccion = new Set(list.map((v) => v.eco).filter(Boolean));
         writeSession(SS.seleccion, Array.from(APP.seleccion));
-        advice('Seleccion capturada', APP.seleccion.size + ' ventana(s) / unidad(es)');
+        advice('Selección capturada', APP.seleccion.size + ' ventana(s) / unidad(es)');
         paintInfo();
         if (APP.tab === 'unidades') paintTabla();
         return APP.seleccion.size;
@@ -2062,7 +2518,7 @@
             }
         });
         writeSession(SS.seleccion, Array.from(APP.seleccion));
-        advice('Seleccion anadida', n + ' unidad(es) visible(s)');
+        advice('Selección añadida', n + ' unidad(es) visible(s)');
         paintInfo();
         paintTabla();
         return n;
@@ -2071,7 +2527,7 @@
         const n = APP.seleccion.size;
         APP.seleccion.clear();
         writeSession(SS.seleccion, Array.from(APP.seleccion));
-        advice('Seleccion vaciada', n + ' unidad(es) liberadas');
+        advice('Selección vaciada', n + ' unidad(es) liberadas');
         paintInfo();
         paintTabla();
     }
@@ -2091,9 +2547,9 @@
             }
             if (cerradas) {
                 paintCounters();
-                if (!silent) advice('Verificacion', cerradas + ' ventana(s) ajena(s) cerrada(s)');
+                if (!silent) advice('Verificación', cerradas + ' ventana(s) ajena(s) cerrada(s)');
             } else if (!silent) {
-                advice('Verificacion', 'Solo estan abiertas las ventanas seleccionadas');
+                advice('Verificación', 'Solo estan abiertas las ventanas seleccionadas');
             }
             return cerradas;
         } finally {
@@ -2114,7 +2570,7 @@
         b.classList.toggle('activo', !!APP.config.verificar);
         b.title = APP.config.verificar
             ? 'Verificacion activa: solo se mantienen las ventanas seleccionadas'
-            : 'Activar verificacion de ventanas';
+            : 'Activar verificación de ventanas';
     }
     async function execList(ecos) {
         // Respeta el orden configurado (pegado, numero o arrastrado).
@@ -2221,7 +2677,7 @@
             "  --hjp-bg:#1f2330; --hjp-bg-soft:#272d3c; --hjp-bg-strong:#313849;\n" +
             "  --hjp-border:#3a4252; --hjp-border-soft:#2f3645;\n" +
             "  --hjp-fg:#e8ecf3; --hjp-fg-dim:#9aa4b5; --hjp-fg-mute:#6f7888;\n" +
-            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44;\n" +
+            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44; --hjp-accent-rgb:133,13,34;\n" +
             "  --hjp-ok:#43a047; --hjp-ok-fg:#a5d6a7; --hjp-ok-bg:#1b3320;\n" +
             "  --hjp-warn:#f9a825; --hjp-warn-fg:#ffe082; --hjp-warn-bg:#33270e;\n" +
             "  --hjp-bad:#e53935; --hjp-bad-fg:#ef9a9a; --hjp-bad-bg:#2b1010;\n" +
@@ -2499,7 +2955,75 @@
             "#hjp-panel .kpi:hover{transform:translateY(-2px);box-shadow:var(--hjp-shadow)}\n" +
             "#hjp-panel .kpi{transition:transform .15s var(--hjp-easing),box-shadow .15s}\n" +
             "#hjp-barra{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
-            "#hjp-panel header{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n";
+            "#hjp-panel header{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
+            /* ── Estados vacios ── */
+            ".hjp-vacio{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:36px 22px;text-align:center;color:var(--hjp-fg-dim);animation:hjpFadeUp .3s var(--hjp-easing) both}\n" +
+            ".hjp-vacio .hjp-mi{font-size:40px;color:var(--hjp-fg-mute);opacity:.6;line-height:1}\n" +
+            ".hjp-vacio b{font-size:13px;color:var(--hjp-fg);font-weight:600}\n" +
+            ".hjp-vacio span{font-size:12px;max-width:380px;line-height:1.5}\n" +
+            ".hjp-vacio button{margin-top:6px}\n" +
+            /* ── Spinner / estado de carga ── */
+            "@keyframes hjpSpin{to{transform:rotate(360deg)}}\n" +
+            ".hjp-spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:hjpSpin .7s linear infinite;vertical-align:-2px}\n" +
+            "button.hjp-busy{opacity:.65;pointer-events:none;cursor:progress}\n" +
+            "[aria-busy='true']{cursor:progress}\n" +
+            /* ── Toasts: icono por severidad ── */
+            ".hjp-toast.ok .ico{color:var(--hjp-ok-fg)}\n" +
+            ".hjp-toast.medio .ico{color:var(--hjp-warn-fg)}\n" +
+            ".hjp-toast.alto .ico,.hjp-toast.critico .ico,.hjp-toast.err .ico{color:var(--hjp-bad-fg)}\n" +
+            /* ── Focus visible global ── */
+            "#hjp-panel button:focus-visible,#hjp-barra button:focus-visible,#hjp-modal button:focus-visible,#hjp-config button:focus-visible,#hjp-ayuda button:focus-visible,#hjp-contexto .op:focus-visible,#hjp-panel input:focus-visible,#hjp-config input:focus-visible,#hjp-config select:focus-visible,#hjp-dialog button:focus-visible,#hjp-dialog input:focus-visible{outline:2px solid var(--hjp-accent-2);outline-offset:1px}\n" +
+            /* ── Dialogo propio (confirm / prompt / bienvenida) ── */
+            "#hjp-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--hjp-bg-soft);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius);box-shadow:var(--hjp-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);font:13px var(--hjp-font);overflow:hidden}\n" +
+            "#hjp-dialog.abierto{display:flex;animation:hjpPop .18s var(--hjp-easing) both}\n" +
+            "@keyframes hjpPop{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}\n" +
+            "#hjp-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}\n" +
+            "#hjp-dialog .dlg-head .hjp-mi{color:var(--hjp-accent-2);font-size:20px}\n" +
+            "#hjp-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px}\n" +
+            "#hjp-dialog p{margin:0;font-size:12.5px;color:var(--hjp-fg-dim);line-height:1.5}\n" +
+            "#hjp-dialog input{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:7px;padding:8px 10px;font:13px var(--hjp-font);width:100%;box-sizing:border-box}\n" +
+            "#hjp-dialog input:focus{outline:none;border-color:var(--hjp-accent-2);box-shadow:0 0 0 3px rgba(var(--hjp-accent-rgb),.2)}\n" +
+            "#hjp-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-dialog .dlg-foot button{border-radius:7px;padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);border:1px solid transparent;transition:transform .12s,filter .15s,box-shadow .15s}\n" +
+            "#hjp-dialog .dlg-foot .dlg-cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border-color:var(--hjp-border)}\n" +
+            "#hjp-dialog .dlg-foot .dlg-ok{background:var(--hjp-accent-grad);color:#fff}\n" +
+            "#hjp-dialog .dlg-foot .dlg-ok.peligro{background:linear-gradient(135deg,#b71c1c,#e53935)}\n" +
+            "#hjp-dialog .dlg-foot button:hover{transform:translateY(-1px);filter:brightness(1.06)}\n" +
+            /* ── Bienvenida ── */
+            "#hjp-dialog.hjp-bienvenida{width:min(510px,94vw)}\n" +
+            "#hjp-dialog .pasos{display:grid;gap:8px}\n" +
+            "#hjp-dialog .paso{display:flex;gap:10px;align-items:flex-start;background:var(--hjp-bg);border:1px solid var(--hjp-border-soft);border-radius:9px;padding:10px 12px}\n" +
+            "#hjp-dialog .paso .n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--hjp-accent-grad);color:#fff;display:flex;align-items:center;justify-content:center;font:700 12px var(--hjp-font)}\n" +
+            "#hjp-dialog .paso b{display:block;font-size:12.5px;margin-bottom:2px}\n" +
+            "#hjp-dialog .paso span{font-size:11.5px;color:var(--hjp-fg-dim);line-height:1.45}\n" +
+            "#hjp-config .cfg-foot{align-items:center}\n" +
+            ".cfg-dirty{font-size:11px;color:var(--hjp-warn-fg);display:none;align-items:center;gap:5px;font-weight:600}\n" +
+            ".cfg-dirty.on{display:inline-flex}\n" +
+            ".cfg-dirty::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--hjp-warn)}\n" +
+            /* ── Tabla ordenable y pildoras de estado ── */
+            "#hjp-panel th.hjp-sortable{cursor:pointer;user-select:none;white-space:nowrap}\n" +
+            "#hjp-panel th.hjp-sortable:hover{color:var(--hjp-fg)}\n" +
+            "#hjp-panel th.hjp-sortable .hjp-sort{font-size:10px;color:var(--hjp-accent-2);margin-left:3px;opacity:.45}\n" +
+            "#hjp-panel th.hjp-sort-asc .hjp-sort,#hjp-panel th.hjp-sort-desc .hjp-sort{opacity:1}\n" +
+            ".hjp-pill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;font:600 10.5px var(--hjp-font);line-height:1.7;white-space:nowrap}\n" +
+            ".hjp-pill.on{background:var(--hjp-ok-bg);color:var(--hjp-ok-fg)}\n" +
+            ".hjp-pill.det{background:var(--hjp-warn-bg);color:var(--hjp-warn-fg)}\n" +
+            ".hjp-pill.off{background:var(--hjp-bad-bg);color:var(--hjp-bad-fg)}\n" +
+            /* ── Responsive ── */
+            "@media (max-width:720px){\n" +
+            "  #hjp-panel{min-width:0;max-width:96vw}\n" +
+            "  #hjp-config{width:min(96vw,560px)}\n" +
+            "  #hjp-ayuda{width:min(96vw,620px)}\n" +
+            "  #hjp-modal{width:min(96vw,520px)}\n" +
+            "  #hjp-panel .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}\n" +
+            "  #hjp-config .row-grid{grid-template-columns:1fr}\n" +
+            "  #hjp-dash{padding:10px}\n" +
+            "  #hjp-toasts{width:min(92vw,330px);right:8px;bottom:8px}\n" +
+            "}\n" +
+            "@media (max-width:480px){\n" +
+            "  #hjp-panel .tab .etqt{display:none}\n" +
+            "  #hjp-barra .hjp-modo-label{display:none}\n" +
+            "}\n";
 
         const style = makeEl('style');
         style.textContent = css;
@@ -2528,7 +3052,7 @@
         panelBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.panel + '</span> Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
         modoBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-modo-label">Flotante</span>', id: 'hjp-btn-modo', className: 'hjp-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
         closeBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
-        helpBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.ayuda + '</span>', id: 'hjp-btn-help', className: 'hjp-btn', title: 'Ayuda rapida (?)' });
+        helpBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.ayuda + '</span>', id: 'hjp-btn-help', className: 'hjp-btn', title: 'Ayuda rápida (?)' });
         updateBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.actualizar + '</span> Actualizar', id: 'hjp-btn-update', className: 'hjp-btn hjp-update', title: 'Nueva version disponible', style: 'display:none' });
         foldBtn = makeEl('button', { innerText: '▾', id: 'hjp-btn-fold', className: 'hjp-btn hjp-fold', title: 'Plegar barra' });
         gripEl = makeEl('span', { innerText: '⠿', id: 'hjp-grip', className: 'hjp-grip', title: 'Arrastrar barra · doble clic para orientar' });
@@ -2567,24 +3091,24 @@
             '<option value="todas">Todas</option>' +
             '<option value="moviendo">Moviendo</option>' +
             '<option value="detenida">Detenidas</option>' +
-            '<option value="offline">Sin senal</option>' +
+            '<option value="offline">Sin señal</option>' +
             '<option value="vigilada">Vigiladas</option>' +
             '<option value="silenciada">Silenciadas</option>' +
             '</select>' +
             '<select class="filtro" id="hjp-orden-sel" title="Orden de las ventanas de unidades">' +
-            '<option value="">Orden de ventanas...</option>' +
+            '<option value="">Orden de ventanas…</option>' +
             '<option value="pegado">Pegado</option>' +
-            '<option value="numero">Numero (menor a mayor)</option>' +
-            '<option value="numero-desc">Numero (mayor a menor)</option>' +
-            '<option value="alfabetico">Alfabetico A-Z</option>' +
+            '<option value="numero">Número (menor a mayor)</option>' +
+            '<option value="numero-desc">Número (mayor a menor)</option>' +
+            '<option value="alfabetico">Alfabético A-Z</option>' +
             '<option value="invertir">Invertir orden</option>' +
             '</select>' +
             '<button id="hjp-refresh" title="Refrescar"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
             '<button id="hjp-cfg-btn" title="Ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span></button>' +
             '<button id="hjp-csv" title="Exportar unidades"><span class="hjp-mi">' + ICO.descargar + '</span> CSV</button>' +
-            '<button id="hjp-csv-al" title="Exportar bitacora"><span class="hjp-mi">' + ICO.descargar + '</span> Bitacora</button>' +
+            '<button id="hjp-csv-al" title="Exportar el historial de avisos a CSV"><span class="hjp-mi">' + ICO.descargar + '</span> Avisos CSV</button>' +
             '<button id="hjp-informe" title="Generar informe del dia"><span class="hjp-mi">' + ICO.descargar + '</span> Informe</button>' +
-            '<button id="hjp-verif" title="Solo ventanas seleccionadas"><span class="hjp-mi">' + ICO.verif + '</span> Solo seleccion</button>' +
+            '<button id="hjp-verif" title="Solo ventanas seleccionadas"><span class="hjp-mi">' + ICO.verif + '</span> Solo selección</button>' +
             '<button id="hjp-captura" title="Capturar ventanas"><span class="hjp-mi">' + ICO.captura + '</span> Capturar</button>' +
             '<button id="hjp-verifica" title="Verificar ahora"><span class="hjp-mi">' + ICO.verifica + '</span> Aplicar</button>' +
             '<button id="hjp-sel-all" title="Seleccionar todas las unidades visibles"><span class="hjp-mi">' + ICO.selAll + '</span> Sel. visibles</button>' +
@@ -2593,19 +3117,27 @@
             '<div class="tabla" id="hjp-wrap-dash">' +
             '<div id="hjp-dash">' +
             '<div class="kpi-grid">' +
-            '<div class="kpi ok"><span class="etq">En linea</span><span class="valor" id="hjp-kpi-on">0</span><span class="resumen" id="hjp-kpi-on-pct">—</span></div>' +
-            '<div class="kpi bad"><span class="etq">Sin senal</span><span class="valor" id="hjp-kpi-off">0</span><span class="resumen" id="hjp-kpi-off-pct">—</span></div>' +
-            '<div class="kpi warn"><span class="etq">Detenidas</span><span class="valor" id="hjp-kpi-det">0</span><span class="resumen">VEL <= 3 km/h</span></div>' +
-            '<div class="kpi sub"><span class="etq">En movimiento</span><span class="valor" id="hjp-kpi-mov">0</span><span class="resumen" id="hjp-kpi-vel">— km/h prom.</span></div>' +
-            '<div class="kpi sub"><span class="etq">En zonas</span><span class="valor" id="hjp-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
-            '<div class="kpi"><span class="etq">Alertas hoy</span><span class="valor" id="hjp-kpi-aho">0</span><span class="resumen" id="hjp-kpi-criticos">0 criticas</span></div>' +
+            '<div class="kpi ok" title="Unidades que reportaron dentro del umbral de sin señal"><span class="etq">En línea</span><span class="valor" id="hjp-kpi-on">0</span><span class="resumen" id="hjp-kpi-on-pct">—</span></div>' +
+            '<div class="kpi bad" title="Unidades cuyo último reporte superó el umbral de sin señal"><span class="etq">Sin señal</span><span class="valor" id="hjp-kpi-off">0</span><span class="resumen" id="hjp-kpi-off-pct">—</span></div>' +
+            '<div class="kpi warn" title="Unidades en línea con velocidad muy baja"><span class="etq">Detenidas</span><span class="valor" id="hjp-kpi-det">0</span><span class="resumen">VEL <= 3 km/h</span></div>' +
+            '<div class="kpi sub" title="Unidades en línea con velocidad normal"><span class="etq">En movimiento</span><span class="valor" id="hjp-kpi-mov">0</span><span class="resumen" id="hjp-kpi-vel">— km/h prom.</span></div>' +
+            '<div class="kpi sub" title="Geocercas ocupadas por al menos una unidad online"><span class="etq">En zonas</span><span class="valor" id="hjp-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
+            '<div class="kpi" title="Avisos registrados desde la medianoche"><span class="etq">Avisos hoy</span><span class="valor" id="hjp-kpi-aho">0</span><span class="resumen" id="hjp-kpi-criticos">0 críticas</span></div>' +
             '</div>' +
             '<div><svg class="sparkline" id="hjp-spark" viewBox="0 0 200 36" preserveAspectRatio="none"></svg></div>' +
             '<div class="recent"><h4>Avisos recientes</h4><div id="hjp-kpi-recientes"></div></div>' +
             '</div>' +
             '</div>' +
             '<div class="tabla" id="hjp-wrap-unidades" style="display:none">' +
-            '<table><thead><tr><th title="Seleccionar">Sel</th><th></th><th>Eco</th><th>Placa</th><th>Estado</th><th>Ultimo</th><th>km/h</th><th>Zona</th><th></th></tr></thead>' +
+            '<table><thead><tr><th title="Seleccionar">Sel</th>' +
+            '<th class="hjp-sortable" data-sort="eco" title="Ordenar por economico">Eco<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="placa" title="Ordenar por placa">Placa<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="estado" title="Ordenar por estado">Estado<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="edad" title="Ordenar por antiguedad del ultimo reporte">Ultimo<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="vel" title="Ordenar por velocidad">km/h<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="zona" title="Ordenar por geocerca">Zona<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="odo" title="Odómetro acumulado (km)">km<span class="hjp-sort"></span></th>' +
+            '<th></th></tr></thead>' +
             '<tbody id="hjp-body"></tbody></table>' +
             '<div id="hjp-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--hjp-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de esta columna.</div>' +
             '</div>' +
@@ -2644,8 +3176,8 @@
             '<div class="hjp-order-tools">' +
             '<span class="etq">Orden de las ventanas:</span>' +
             '<button class="mini" id="hjp-orden-pegado" title="En el orden en que se pegaron">Pegado</button>' +
-            '<button class="mini" id="hjp-orden-numero" title="Por numero de economico (menor a mayor)">Numero</button>' +
-            '<button class="mini" id="hjp-orden-numero-desc" title="Por numero de economico (mayor a menor)">Numero inverso</button>' +
+            '<button class="mini" id="hjp-orden-numero" title="Por numero de economico (menor a mayor)">Número</button>' +
+            '<button class="mini" id="hjp-orden-numero-desc" title="Por numero de economico (mayor a menor)">Número inverso</button>' +
             '<button class="mini" id="hjp-orden-alfabetico" title="Orden alfabetico">A-Z</button>' +
             '<button class="mini" id="hjp-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
             '</div>' +
@@ -2667,7 +3199,7 @@
 
         cfgWinEl = makeEl('div', { id: 'hjp-config' });
         cfgWinEl.innerHTML = (
-            '<div class="cfg-head"><h3><span class="hjp-mi">' + ICO.ajustes + '</span> Configuracion</h3>' +
+            '<div class="cfg-head"><h3><span class="hjp-mi">' + ICO.ajustes + '</span> Configuración</h3>' +
             '<button class="hjp-iconbtn" id="hjp-cfg-cerrar-x" title="Cerrar">✕</button></div>' +
             '<div class="cfg-tabs" id="hjp-cfg-tabs">' +
             '<button class="cfg-tab activo" data-cfg="general">General</button>' +
@@ -2682,30 +3214,30 @@
             '<div class="cfg-pane" data-cfg="general">' +
             '<h4>General</h4>' +
             numRow('c-poll', 'Refresco (ms)') +
-            numRow('c-off', 'Sin senal > (min)') +
+            numRow('c-off', 'Sin señal > (min)') +
             numRow('c-cd', 'Cooldown alerta (min)') +
             checkRow('c-watchAll', 'Monitorear todas las unidades (ignora selección)') +
             checkRow('c-auto', 'Abrir al caer (critico)') +
             checkRow('c-zonas', 'Cargar geocercas') +
-            checkRow('c-geo', 'Geocodificacion inversa') +
-            checkRow('c-hist', 'Consultar historico de detencion') +
+            checkRow('c-geo', 'Geocodificación inversa') +
+            checkRow('c-hist', 'Consultar histórico de detención') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="reglas" style="display:none">' +
             '<h4>Umbrales</h4>' +
             numRow('c-gps', 'GPS perdido > (min)') +
             numRow('c-stop', 'Detenido > (min)') +
             numRow('c-zona', 'Zona no prevista > (min)') +
-            numRow('c-desco', 'Desconexion > (min)') +
-            numRow('c-vel', 'Velocidad maxima (km/h)') +
+            numRow('c-desco', 'Desconexión > (min)') +
+            numRow('c-vel', 'Velocidad máxima (km/h)') +
             '<h4>Reglas activas</h4>' +
             '<div class="row-grid">' +
-            checkRow('c-r-off', 'Sin senal') +
+            checkRow('c-r-off', 'Sin señal') +
             checkRow('c-r-gps', 'GPS en marcha') +
             checkRow('c-r-det', 'Detenido') +
             checkRow('c-r-zona', 'Zona') +
             checkRow('c-r-geo', 'Geocercas') +
             checkRow('c-r-des', 'Destino') +
-            checkRow('c-r-dis', 'Desconexion') +
+            checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
             '</div>' +
             '</div>' +
@@ -2713,21 +3245,21 @@
             '<h4>Avisos</h4>' +
             checkRow('c-voz', 'Voz') +
             '<label>Idioma de voz <select id="c-voz-lang">' +
-            '<option value="es-MX">Espanol (Mexico)</option>' +
-            '<option value="es-ES">Espanol (Espana)</option>' +
-            '<option value="es-US">Espanol (EE. UU.)</option>' +
-            '<option value="en-US">Ingles (EE. UU.)</option>' +
+            '<option value="es-MX">Español (México)</option>' +
+            '<option value="es-ES">Español (España)</option>' +
+            '<option value="es-US">Español (EE. UU.)</option>' +
+            '<option value="en-US">Inglés (EE. UU.)</option>' +
             '</select></label>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
             numRow('c-beep-vol', 'Volumen del pitido (0-1)') +
-            checkRow('c-desktop', 'Notificacion del navegador') +
-            numRow('c-toastSeg', 'Duracion de toasts (s)') +
-            '<label>Severidad minima en toasts' +
+            checkRow('c-desktop', 'Notificación del navegador') +
+            numRow('c-toastSeg', 'Duración de toasts (s)') +
+            '<label>Severidad mínima en toasts' +
             '<select id="c-sevmin">' +
             '<option value="bajo">Bajo y arriba</option>' +
             '<option value="medio">Medio y arriba</option>' +
             '<option value="alto">Alto y arriba</option>' +
-            '<option value="critico">Solo criticas</option>' +
+            '<option value="critico">Solo críticas</option>' +
             '</select>' +
             '</label>' +
             '<h4>Horario y vigilancia</h4>' +
@@ -2752,9 +3284,9 @@
             '<label>Color de acento <input type="color" id="c-acento"></label>' +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
-            numRow('c-contorno-horas', 'Antiguedad de contornos (h)') +
+            numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--hjp-fg-dim)">Atajos: <b>Alt+1..4</b> cambia pestanas · <b>Alt+P</b> panel · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra modales</span>' +
+            '<span style="font-size:11.5px;color:var(--hjp-fg-dim)">Atajos: <b>Alt+1..5</b> cambia pestañas · <b>Alt+P</b> panel · <b>Alt+L</b> lateral · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Panel</h4>' +
@@ -2768,7 +3300,7 @@
             '</select></label>' +
             numRow('c-panel-ancho', 'Ancho lateral (px)') +
             checkRow('c-panel-clicfuera', 'Ocultar la barra lateral al hacer clic fuera') +
-            checkRow('c-confirmar-cierre', 'Pedir confirmacion al cerrar todas las ventanas') +
+            checkRow('c-confirmar-cierre', 'Pedir confirmación al cerrar todas las ventanas') +
             '<p style="font-size:11px;color:var(--hjp-fg-dim);margin:2px 0 0">El panel recuerda el modo (flotante o lateral) y si estaba abierto.</p>' +
             '<h4>Barra de botones</h4>' +
             '<div class="row-grid">' +
@@ -2780,9 +3312,9 @@
             checkRow('c-b-vertical', 'Orientacion vertical') +
             '<div style="margin-top:6px"><button class="accbtn" id="hjp-b-reset" style="width:100%"><span class="hjp-mi">' + ICO.expandir + '</span> Recentrar barra</button></div>' +
             '<h4>Verificacion</h4>' +
-            checkRow('c-verif', 'Verificacion automatica') +
+            checkRow('c-verif', 'Verificación automática') +
             numRow('c-verif-seg', 'Revisar cada (seg)') +
-            '<h4>Tamano del panel</h4>' +
+            '<h4>Tamaño del panel</h4>' +
             '<button class="accbtn" id="hjp-reset-panel" style="width:100%"><span class="hjp-mi">' + ICO.colapsar + '</span> Restablecer tamano</button>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="rutas" style="display:none">' +
@@ -2792,24 +3324,26 @@
             checkRow('c-trazado', 'Registrar trazado del recorrido') +
             numRow('c-trazado-max', 'Puntos por traza') +
             '<h4>Alertas de ruta</h4>' +
-            checkRow('c-r-desvio', 'Desvio de ruta') +
-            numRow('c-desvio-m', 'Desvio mayor a (m)') +
-            numRow('c-desvio-min', 'Desvio sostenido (min)') +
+            checkRow('c-r-desvio', 'Desvío de ruta') +
+            numRow('c-desvio-m', 'Desvío mayor a (m)') +
+            numRow('c-desvio-min', 'Desvío sostenido (min)') +
             checkRow('c-r-retorno', 'Retorno / viaje cancelado') +
             numRow('c-retorno-m', 'Radio de origen (m)') +
-            numRow('c-retorno-pct', 'Retroceso minimo (%)') +
+            numRow('c-retorno-pct', 'Retroceso mínimo (%)') +
             checkRow('c-r-giro', 'Giro en U') +
-            numRow('c-giro-grados', 'Angulo de giro (grados)') +
+            numRow('c-giro-grados', 'Ángulo de giro (grados)') +
             numRow('c-giro-min', 'Giro sostenido (min)') +
-            '<h4>Analisis de viaje (historial)</h4>' +
+            checkRow('c-r-demora-base', 'Demora en base (parado en CEDIS/patio)') +
+            numRow('c-demora-base-min', 'Tiempo en base para alertar (min)') +
+            '<h4>Análisis de viaje (historial)</h4>' +
             numRow('c-partida-horas', 'Punto de partida: parada mayor a (h)') +
-            numRow('c-parada-min', 'Parada minima (min)') +
+            numRow('c-parada-min', 'Parada mínima (min)') +
             numRow('c-hist-horas', 'Historial a analizar (h)') +
-            checkRow('c-analizar-auto', 'Analizar automaticamente al planear ruta') +
+            checkRow('c-analizar-auto', 'Analizar automáticamente al planear ruta') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
-            '<div id="hjp-update-info" style="font-size:11.5px;color:var(--hjp-fg-dim);margin-bottom:6px">Version instalada: <b>' + VER + '</b></div>' +
+            '<div id="hjp-update-info" style="font-size:11.5px;color:var(--hjp-fg-dim);margin-bottom:6px">Versión instalada: <b>' + VER + '</b></div>' +
             '<button class="accbtn" id="hjp-check-update" style="width:100%"><span class="hjp-mi">' + ICO.refrescar + '</span> Buscar actualizaciones</button>' +
             '<h4>Datos y prueba</h4>' +
             '<div class="hjp-acciones">' +
@@ -2817,15 +3351,15 @@
             '<button class="accbtn" id="hjp-exportar-btn"><span class="hjp-mi">' + ICO.exportar + '</span> Exportar</button>' +
             '<button class="accbtn" id="hjp-importar-btn"><span class="hjp-mi">' + ICO.importar + '</span> Importar</button>' +
             '</div>' +
-            '<h4>Perfiles de configuracion</h4>' +
+            '<h4>Perfiles de configuración</h4>' +
             '<label>Perfil <select id="hjp-perfil-sel" style="flex:1"></select></label>' +
             '<div class="hjp-acciones" style="margin-top:6px">' +
             '<button class="accbtn" id="hjp-perfil-guardar">Guardar como...</button>' +
             '<button class="accbtn" id="hjp-perfil-cargar">Cargar</button>' +
             '<button class="accbtn" id="hjp-perfil-borrar" style="background:#b71c1c">Borrar</button>' +
             '</div>' +
-            '<h4>Bitacora</h4>' +
-            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:var(--hjp-accent)">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar bitacora</button>' +
+            '<h4>Historial de avisos</h4>' +
+            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:var(--hjp-accent)">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar historial</button>' +
             '<h4>Reseteo</h4>' +
             '<div class="hjp-acciones">' +
             '<button class="accbtn" id="hjp-borrar-memo" style="background:var(--hjp-accent)"><span class="hjp-mi">' + ICO.limpiar + '</span> Borrar estado</button>' +
@@ -2834,8 +3368,11 @@
             '</div>' +
             '</div>' +
             '<div class="cfg-foot">' +
+            '<span class="cfg-dirty" id="hjp-cfg-dirty" title="Tienes cambios sin guardar">Cambios sin guardar</span>' +
+            '<div style="display:flex;gap:8px">' +
             '<button class="cancel" id="hjp-cfg-cerrar">Cerrar</button>' +
             '<button class="accbtn" id="hjp-cfg-guardar">Guardar</button>' +
+            '</div>' +
             '</div>'
         );
 
@@ -2850,19 +3387,19 @@
             '<div class="paso"><b>2. Abre sus ventanas</b>Pulsa <i>Automatizar Unidades</i> (arriba a la derecha) para abrirlas y acomodarlas solas.</div>' +
             '<div class="paso"><b>3. Vigila los avisos</b>Las alertas aparecen como tarjetas, voz y pitido. Revisalas en <i>Avisos</i>.</div>' +
             '</div>' +
-            '<h4>Que hace cada pestana</h4>' +
+            '<h4>Qué hace cada pestaña</h4>' +
             '<ul>' +
-            '<li><b>Dashboard</b>: cuantas en linea, sin senal, detenidas y alertas del dia.</li>' +
+            '<li><b>Dashboard</b>: cuántas en línea, sin señal, detenidas y alertas del dia.</li>' +
             '<li><b>Unidades</b>: lista con estado, velocidad, zona y acciones. Clic para abrir su ventana; clic derecho para mas opciones.</li>' +
             '<li><b>Avisos</b>: historial filtrable por severidad. Exportable a CSV.</li>' +
-            '<li><b>Rutas</b>: progreso de cada ruta y desvios. Se planea desde el clic derecho de una unidad.</li>' +
+            '<li><b>Rutas</b>: progreso de cada ruta y desvíos. Se planea desde el clic derecho de una unidad.</li>' +
             '<li><b>Geocercas</b>: unidades dentro de cada geocerca.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +
             '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes &gt; Rutas.</p>' +
             '<h4>Atajos de teclado</h4>' +
             '<ul>' +
-            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>5</kbd>: cambiar de pestana.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>5</kbd>: cambiar de pestaña.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar el panel.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>L</kbd>: alternar entre panel flotante y barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
@@ -2871,7 +3408,7 @@
             '<h4>Actualizaciones</h4>' +
             '<p>El script revisa si hay una version nueva al iniciar y cada 30 minutos. Si la hay, aparece un indicador en la cabecera del panel; al pulsarlo se abre la URL para que Tampermonkey actualice el script.</p>' +
             '<h4>Consejo</h4>' +
-            '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestana en el borde (rail) que la trae de vuelta con un clic.</p>' +
+            '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestaña en el borde (rail) que la trae de vuelta con un clic.</p>' +
             '</div>' +
             '<div class="cfg-foot">' +
             '<button class="cancel" id="hjp-ayuda-cerrar">Cerrar</button>' +
@@ -2884,6 +3421,22 @@
         avisoEl = makeEl('div', { id: 'hjp-aviso' });
         railEl = makeEl('div', { id: 'hjp-rail' });
         railEl.title = 'Mostrar el panel';
+
+        // Accesibilidad base: dialogos, regiones vivas y tabs.
+        try {
+            [[modalEl, 'Lista de unidades'], [cfgWinEl, 'Configuración'], [ayudaEl, 'Ayuda rápida']].forEach(([el, lbl]) => {
+                el.setAttribute('role', 'dialog');
+                el.setAttribute('aria-modal', 'true');
+                el.setAttribute('aria-label', lbl);
+            });
+            toastsEl.setAttribute('role', 'status');
+            toastsEl.setAttribute('aria-live', 'polite');
+            avisoEl.setAttribute('role', 'alert');
+            // panelEl aun no esta en el DOM: se consulta sobre el propio nodo.
+            const tabsEl = panelEl.querySelector('#hjp-tabs');
+            if (tabsEl) tabsEl.setAttribute('role', 'tablist');
+            panelEl.querySelectorAll('#hjp-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
+        } catch (_) { /* noop */ }
 
         document.body.appendChild(barraEl);
         document.body.appendChild(panelEl);
@@ -3112,7 +3665,9 @@
             if (el) el.style.display = (n === name) ? '' : 'none';
         });
         document.querySelectorAll('#hjp-tabs .tab').forEach((t) => {
-            t.classList.toggle('activo', t.dataset.tab === name);
+            const act = t.dataset.tab === name;
+            t.classList.toggle('activo', act);
+            t.setAttribute('aria-selected', act ? 'true' : 'false');
         });
         if (name === 'dash') paintKPI();
         else if (name === 'unidades') paintTabla();
@@ -3158,7 +3713,7 @@
         b.className = 'hjp-badge-estado ' + cls;
         b.title = nmActivo()
             ? 'No molestar hasta ' + new Date(APP.noMolestar.hasta).toLocaleTimeString().slice(0, 5)
-            : 'criticos: ' + criticos + ' · sin senal: ' + off + ' · detenidas: ' + det;
+            : 'criticos: ' + criticos + ' · sin señal: ' + off + ' · detenidas: ' + det;
     }
     function paintKPI() {
         const watched = APP.unidades.filter(shouldWatch);
@@ -3184,7 +3739,7 @@
         kv('hjp-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '-');
         kv('hjp-kpi-zonas', enZona.size);
         kv('hjp-kpi-aho', aho);
-        kv('hjp-kpi-criticos', critAho + ' criticas');
+        kv('hjp-kpi-criticos', critAho + ' críticas');
         const resumenZ = document.querySelector('.kpi .valor#hjp-kpi-zonas + .resumen');
         if (resumenZ) resumenZ.textContent = 'de ' + APP.zonas.length + ' geocercas';
 
@@ -3207,25 +3762,56 @@
     function paintSparkline() {
         const svg = byId('hjp-spark');
         if (!svg) return;
-        const data = (APP.kpi.online || []).slice(-60);
-        if (data.length < 2) {
+        const on = (APP.kpi.online || []).slice(-60);
+        const off = (APP.kpi.offline || []).slice(-60);
+        if (on.length < 2) {
             svg.innerHTML = '<text x="100" y="22" text-anchor="middle" fill="currentColor" font-size="11">Recolectando datos...</text>';
             return;
         }
-        const max = Math.max.apply(null, data);
-        const min = Math.min.apply(null, data);
+        const todos = on.concat(off);
+        const max = Math.max.apply(null, todos);
+        const min = Math.min.apply(null, todos);
         const h = 32, w = 200;
-        const dx = w / (data.length - 1);
-        const puntos = data.map((v, i) => {
+        const dx = w / (on.length - 1);
+        const linea = (data) => data.map((v, i) => {
             const x = i * dx;
             const y = h - ((v - min) / Math.max(1, max - min)) * h;
             return (i ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
-        });
-        const area = puntos.join(' ') + ' L' + w + ',' + h + ' L0,' + h + ' Z';
+        }).join(' ');
+        const puntosOn = linea(on);
+        const areaOn = puntosOn + ' L' + w + ',' + h + ' L0,' + h + ' Z';
+        const puntosOff = off.length === on.length ? linea(off) : '';
         svg.innerHTML =
-            '<path d="' + area + '" fill="var(--hjp-accent-2)" fill-opacity="0.18" stroke="none"></path>' +
-            '<path d="' + puntos.join(' ') + '" stroke="var(--hjp-accent-2)"></path>' +
-            '<text x="6" y="14" fill="var(--hjp-fg-dim)" font-size="10">ONLINE · ' + data.length + ' ciclos · max ' + max + '</text>';
+            '<path d="' + areaOn + '" fill="var(--hjp-accent-2)" fill-opacity="0.18" stroke="none"></path>' +
+            '<path d="' + puntosOn + '" stroke="var(--hjp-accent-2)" stroke-width="1.6"></path>' +
+            (puntosOff ? '<path d="' + puntosOff + '" stroke="var(--hjp-fg-mute)" stroke-width="1" stroke-dasharray="3 3" fill="none"></path>' : '') +
+            '<text x="6" y="14" fill="var(--hjp-fg-dim)" font-size="10">ONLINE ' + on[on.length - 1] + ' · OFFLINE ' + (off[off.length - 1] != null ? off[off.length - 1] : '-') + '</text>';
+    }
+    // Valor de ordenamiento por columna de la tabla de unidades.
+    function valorOrden(x, col) {
+        switch (col) {
+            case 'eco': return x.info.eco || '';
+            case 'placa': return x.info.placa || '';
+            case 'estado': return x.st.estado || '';
+            case 'edad': return x.st.edadMin == null ? Infinity : x.st.edadMin;
+            case 'vel': return x.st.vel || 0;
+            case 'zona': return zoneAt(x.st.lat, x.st.lon) || '';
+            case 'odo': { const o = odometroDe(x.info); return o ? o.m : 0; }
+            default: return '';
+        }
+    }
+    function cmpOrd(a, b) {
+        if (typeof a === 'number' && typeof b === 'number') return a - b;
+        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+    }
+    function actualizarCabecerasOrden() {
+        document.querySelectorAll('#hjp-wrap-unidades th.hjp-sortable').forEach((th) => {
+            const act = APP.sortCol === th.dataset.sort;
+            th.classList.toggle('hjp-sort-asc', act && APP.sortDir !== 'desc');
+            th.classList.toggle('hjp-sort-desc', act && APP.sortDir === 'desc');
+            const s = th.querySelector('.hjp-sort');
+            if (s) s.textContent = act ? (APP.sortDir === 'desc' ? '▾' : '▴') : '⇅';
+        });
     }
     function paintTabla() {
         const body = byId('hjp-body');
@@ -3242,12 +3828,18 @@
                 if (est === 'silenciada' && !APP.dismissed.has(x.info.clave)) return false;
                 if (!APP.filtro) return true;
                 const f = APP.filtro.toLowerCase();
-                return (x.info.eco + ' ' + x.info.placa + ' ' + x.info.nombre).toLowerCase().indexOf(f) >= 0;
+                const zona = zoneAt(x.st.lat, x.st.lon);
+                return (x.info.eco + ' ' + x.info.placa + ' ' + x.info.nombre + ' ' + zona).toLowerCase().indexOf(f) >= 0;
             })
             .sort((a, b) => {
+                if (APP.sortCol) {
+                    const r = cmpOrd(valorOrden(a, APP.sortCol), valorOrden(b, APP.sortCol));
+                    if (r !== 0) return APP.sortDir === 'desc' ? -r : r;
+                    return a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
+                }
                 const peso = (e) => e === 'offline' ? 0 : (e === 'detenida' ? 1 : 2);
                 const d = peso(a.st.estado) - peso(b.st.estado);
-                return d !== 0 ? d : a.info.eco.localeCompare(b.info.eco);
+                return d !== 0 ? d : a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
             });
         body.innerHTML = lista.map(({ info, st }) => {
             const clave = info.clave;
@@ -3257,39 +3849,44 @@
             const zona = zoneAt(st.lat, st.lon);
             const clase = st.estado === 'offline' ? 'off' : (st.estado === 'detenida' ? 'det' : 'on');
             const ic = st.estado === 'offline' ? ICO.offline : (st.estado === 'detenida' ? ICO.detenida : ICO.moviendo);
-            const txt = st.estado === 'offline' ? 'sin senal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
+            const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
             const coords = (APP.config.mostrarCoords && st.lat != null)
                 ? ' <span style="color:var(--hjp-fg-mute);font-size:10px">' + st.lat.toFixed(3) + ',' + st.lon.toFixed(3) + '</span>' : '';
             const lim = limiteDe(info);
             const excede = st.online && st.vel > lim;
             const celVel = '<td' + (excede ? ' style="color:var(--hjp-bad-fg);font-weight:bold"' : '') + ' title="' +
-                (lim !== APP.config.velMax ? 'limite de la unidad: ' + lim + ' km/h' : 'limite global: ' + lim + ' km/h') + '">' +
+                (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h') + '">' +
                 Math.round(st.vel) + (lim !== APP.config.velMax ? ' <span style="font-size:10px">/' + lim + '</span>' : '') + '</td>';
+            const odo = odometroDe(info);
+            const km = odo ? Math.round(odo.m / 100) / 10 : 0;
+            const celOdo = '<td class="odo" title="Odómetro acumulado (clic derecho para reiniciar)">' + km.toFixed(1) + '</td>';
             return (
                 '<tr class="fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
                 '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
                 '<input type="checkbox" class="hjp-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
                 '</td>' +
-                '<td class="estadoicon ' + clase + '"><span class="hjp-mi">' + ic + '</span></td>' +
                 '<td class="eco">' + (vig ? '<span class="hjp-mi">' + ICO.bandera + '</span> ' : '') + esc(info.eco || '-') + '</td>' +
                 '<td>' + esc(info.placa || '') + '</td>' +
-                '<td>' + txt + '</td>' +
+                '<td><span class="hjp-pill ' + clase + '"><span class="hjp-mi">' + ic + '</span>' + txt + '</span></td>' +
                 '<td>' + ageText(st.edadMin) + '</td>' +
                 celVel +
                 '<td>' + esc(zona) + coords + '</td>' +
+                celOdo +
                 '<td><button class="mini hjp-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
                 '<span class="hjp-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
                 '</tr>'
             );
-        }).join('') || '<tr><td colspan="9" class="vacio">' + LANG.sinUni + '</td></tr>';
+        }).join('') || '<tr><td colspan="9">' + emptyState(ICO.panel, LANG.sinUni,
+            'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
+            '<button class="mini hjp-vacio-acc" data-acc="abrir-lista"><span class="hjp-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>';
         const aviso = byId('hjp-sel-vacio');
         if (aviso) {
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
             aviso.style.display = noHaySel ? 'block' : 'none';
         }
         byId('hjp-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
+        actualizarCabecerasOrden();
         paintInfo();
-        
     }
     function paintAlertas() {
         const cont = byId('hjp-lista-alertas');
@@ -3313,7 +3910,8 @@
                 '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
                 '</div>'
             )).join('')
-            : '<div class="vacio">Sin avisos registrados.</div>';
+            : emptyState(ICO.alertas, 'Sin avisos registrados',
+                'Aqui se acumula el historial de alertas. Cuando una regla se dispare, aparecera en esta lista.');
         paintSeverity();
     }
     function paintSeverity() {
@@ -3325,7 +3923,11 @@
         const body = byId('hjp-body-zonas');
         if (!body) return;
         if (!APP.config.loadZones || !APP.zonas.length) {
-            body.innerHTML = '<tr><td colspan="2" class="vacio">' + LANG.geoNone + '</td></tr>';
+            body.innerHTML = '<tr><td colspan="2">' + emptyState(ICO.geocercas, 'Sin geocercas cargadas',
+                APP.config.loadZones
+                    ? 'No se encontraron geocercas en tu cuenta de Wialon.'
+                    : 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.',
+                APP.config.loadZones ? '' : '<button class="mini hjp-vacio-acc" data-acc="ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>') + '</td></tr>';
             return;
         }
         const unidades = APP.unidades.filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
@@ -3348,16 +3950,17 @@
                 '</tr>'
             );
         }
-        body.innerHTML = rows.join('') || '<tr><td colspan="2" class="vacio">' + LANG.sinCoin + '</td></tr>';
+        body.innerHTML = rows.join('') || '<tr><td colspan="2">' + emptyState(ICO.filtro, LANG.sinCoin,
+            'Ninguna geocerca coincide con el filtro actual.') + '</td></tr>';
     }
     function paintViajes() {
         const cont = byId('hjp-lista-viajes');
         if (!cont) return;
         const ecos = Object.keys(APP.viajes);
         if (!ecos.length) {
-            cont.innerHTML = '<div style="padding:10px 12px;color:var(--hjp-fg-dim);font-size:12px">' +
-                'Sin viajes analizados. Clic derecho en una unidad (pestana Unidades) &gt; <b>Analizar viaje</b> para detectar el punto de partida (donde estuvo parada mas de '
-                + (APP.config.partidaHoras || 6) + ' h), el trayecto, las paradas y la carga.</div>';
+            cont.innerHTML = emptyState(ICO.tiempo, 'Sin viajes analizados',
+                'Clic derecho en una unidad &gt; <b>Analizar viaje</b> para detectar el punto de partida (parada de mas de '
+                + (APP.config.partidaHoras || 6) + ' h), el trayecto, las paradas y la carga.');
             return;
         }
         cont.innerHTML = ecos.map((eco) => {
@@ -3392,14 +3995,16 @@
         const filas = watched.filter((x) => rutaDe(x.info));
         const sinUnidad = Object.keys(APP.rutas).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
         if (!filas.length && !sinUnidad.length) {
-            cont.innerHTML = '<div class="vacio" style="padding:18px;text-align:center;color:var(--hjp-fg-dim)">' +
-                'Sin rutas planificadas. Usa el menú contextual de una unidad (clic derecho en Unidades) para planear una ruta con OpenStreetMap (OSRM o A*).</div>';
+            cont.innerHTML = emptyState(ICO.destino, 'Sin rutas planificadas',
+                'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
+                '<button class="mini hjp-vacio-acc" data-acc="tab-unidades"><span class="hjp-mi">' + ICO.panel + '</span> Ir a Unidades</button>');
             return;
         }
         const tarjeta = (info, st) => {
             const eco = info.clave;
             const r = rutaDe(info);
-            const s = (st && st.online && st.lat != null && r) ? snapRuta(st.lat, st.lon, r) : null;
+            const memo = APP.snapMemo[eco] || (APP.snapMemo[eco] = { idx: 0 });
+            const s = (st && st.online && st.lat != null && r) ? snapRuta(st.lat, st.lon, r, memo) : null;
             const desviado = !!(s && s.dist > APP.config.desvioM);
             const llego = !!(s && s.progreso >= 0.95);
             const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
@@ -3499,7 +4104,7 @@
         lineas.push('');
         lineas.push('Generado: ' + new Date().toLocaleString());
         lineas.push('Unidades vigiladas: ' + watched.length);
-        lineas.push('En linea: ' + (watched.length - off.length) + ' · Sin senal: ' + off.length);
+        lineas.push('En línea: ' + (watched.length - off.length) + ' · Sin señal: ' + off.length);
         lineas.push('');
         lineas.push('## Alertas de hoy (' + hoy.length + ')');
         const sevs = Object.keys(porSev).sort((a, b) => pickSeverity(b) - pickSeverity(a));
@@ -3516,7 +4121,7 @@
         if (ecos.length) ecos.forEach((e) => lineas.push('- ' + e + ': ' + porEco[e]));
         else lineas.push('- Sin datos.');
         lineas.push('');
-        lineas.push('## Unidades sin senal ahora');
+        lineas.push('## Unidades sin señal ahora');
         if (off.length) off.forEach((x) => lineas.push('- ' + (x.info.eco || x.info.nombre) + ' (' + ageText(x.st.edadMin) + ')'));
         else lineas.push('- Todas reportando.');
         lineas.push('');
@@ -3690,7 +4295,7 @@
         a.download = 'hjp_config_' + new Date().toISOString().slice(0, 10) + '.json';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
-        advice('Configuracion exportada');
+        adviceOk('Configuración exportada');
     }
     function importConfig() {
         const inp = document.createElement('input');
@@ -3720,9 +4325,9 @@
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
                     applyBar(); applyTheme(); placePanel();
                     refresh();
-                    advice('Configuracion importada');
+                    adviceOk('Configuración importada');
                 } catch (e) {
-                    advice('Error importando', (e && e.message) || '');
+                    adviceErr('Error importando', (e && e.message) || '');
                 }
             };
             r.readAsText(f);
@@ -3844,7 +4449,15 @@
                 }
             }
             if (e.key === 'Escape') {
-                [modalEl, cfgWinEl, ayudaEl, ctxEl].forEach((w) => { if (w) w.style.display = 'none'; });
+                // Cierra solo el dialogo superior: primero el flotante, luego
+                // el menu contextual, y por ultimo las ventanas modales.
+                if (dialogoAbierto()) { cerrarDialogo(); return; }
+                if (ctxEl && ctxEl.style.display === 'flex') { ctxEl.style.display = 'none'; return; }
+                const ventanas = [modalEl, cfgWinEl, ayudaEl];
+                for (let i = ventanas.length - 1; i >= 0; i--) {
+                    const w = ventanas[i];
+                    if (w && w.style.display && w.style.display !== 'none') { w.style.display = 'none'; return; }
+                }
             }
         });
     }
@@ -3875,7 +4488,7 @@
             if (ta) ta.value = '';
             pintarModalLista();
             paintInfo();
-            advice('Pegado', n + ' unidad(es) procesadas');
+            adviceOk('Pegado', n + ' unidad(es) procesadas');
         });
         byId('hjp-orden-pegado').addEventListener('click', () => aplicarOrdenModo('pegado'));
         byId('hjp-orden-numero').addEventListener('click', () => aplicarOrdenModo('numero'));
@@ -3901,12 +4514,13 @@
             if (ne) ne.focus();
         });
         byId('hjp-modal-vaciar').addEventListener('click', () => {
-            if (!window.confirm('¿Vaciar la lista? Esta accion no se puede deshacer.')) return;
-            APP.watchMap = {};
-            guardarLista();
-            pintarModalLista();
-            paintInfo();
-            advice('Lista vaciada');
+            hjpConfirm('Vaciar la lista', 'Se quitaran todas las unidades de la lista vigilada. Esta accion no se puede deshacer.', () => {
+                APP.watchMap = {};
+                guardarLista();
+                pintarModalLista();
+                paintInfo();
+                adviceOk('Lista vaciada');
+            }, { peligro: true, okText: 'Vaciar' });
         });
         document.getElementById('hjp-modal-lista').addEventListener('click', (e) => {
             const eco = e.target.dataset && e.target.dataset.eco;
@@ -3971,7 +4585,7 @@
             ayudaEl.style.display = 'none';
             abrirCfg();
         });
-        byId('hjp-refresh').addEventListener('click', refresh);
+        byId('hjp-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
         byId('hjp-csv').addEventListener('click', exportUnits);
         byId('hjp-csv-al').addEventListener('click', exportAlertas);
         byId('hjp-informe').addEventListener('click', exportInforme);
@@ -3981,8 +4595,11 @@
                 const b = e.target.closest && e.target.closest('button');
                 if (!b) return;
                 const eco = b.dataset.eco;
-                if (b.classList.contains('hjp-ruta-del')) eliminarRuta(eco);
-                else if (b.classList.contains('hjp-ruta-geo')) exportRutaGeoJSON(eco);
+                if (b.classList.contains('hjp-ruta-del')) {
+                    hjpConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
+                        if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
+                    }, { peligro: true, okText: 'Eliminar', icon: ICO.cerrar });
+                } else if (b.classList.contains('hjp-ruta-geo')) exportRutaGeoJSON(eco);
                 else if (b.classList.contains('hjp-traza-geo')) exportTraza(eco);
                 else if (b.classList.contains('hjp-ruta-calc')) {
                     const it = unitByEco(eco);
@@ -4001,15 +4618,15 @@
                 else if (b.classList.contains('hjp-viaje-re')) analizarViaje(eco, false);
             });
         }
-        byId('hjp-captura').addEventListener('click', captureSelection);
-        byId('hjp-verifica').addEventListener('click', () => { verifyWindows(false); });
+        byId('hjp-captura').addEventListener('click', (e) => conBusy(e.currentTarget, captureSelection));
+        byId('hjp-verifica').addEventListener('click', (e) => conBusy(e.currentTarget, () => verifyWindows(false)));
         byId('hjp-sel-all').addEventListener('click', () => { selectAllVisible(); });
         byId('hjp-sel-clear').addEventListener('click', () => { clearSelection(); });
         byId('hjp-verif').addEventListener('click', () => {
             APP.config.verificar = !APP.config.verificar;
             writeJSON(LS.cfg, APP.config);
             restartVerificationLoop();
-            advice('Verificacion ' + (APP.config.verificar ? 'activada' : 'desactivada'),
+            advice('Verificación ' + (APP.config.verificar ? 'activada' : 'desactivada'),
                 APP.config.verificar ? 'Solo se mantendran las ventanas seleccionadas' : '');
         });
         byId('hjp-filtro').addEventListener('input', (e) => {
@@ -4033,6 +4650,19 @@
                 const modo = e.target.value;
                 if (modo) aplicarOrdenModo(modo);
                 e.target.value = '';
+            });
+        }
+        const theadUnid = document.querySelector('#hjp-wrap-unidades thead');
+        if (theadUnid) {
+            theadUnid.addEventListener('click', (e) => {
+                const th = e.target.closest && e.target.closest('th.hjp-sortable');
+                if (!th) return;
+                const col = th.dataset.sort;
+                if (APP.sortCol === col) APP.sortDir = (APP.sortDir === 'desc') ? 'asc' : 'desc';
+                else { APP.sortCol = col; APP.sortDir = 'asc'; }
+                writeJSON(LS.sortCol, APP.sortCol);
+                writeJSON(LS.sortDir, APP.sortDir);
+                paintTabla();
             });
         }
         document.addEventListener('pointerdown', unlockAudio, { once: true });
@@ -4068,7 +4698,7 @@
                     ev.preventDefault();
                     APP.barra.botones[key] = false;
                     applyBar();
-                    advice('Boton oculto: ' + name, 'Reactivalo en Ajustes · Barra de botones');
+                    advice('Botón oculto: ' + name, 'Reactívalo en Ajustes · Barra de botones');
                 });
             });
 
@@ -4111,10 +4741,10 @@
             showMenu(e.clientX, e.clientY, [
                 { id: 'open', icon: ICO.panel, label: 'Abrir ventana' },
                 { id: 'sil', icon: silenciado ? ICO.sonido : ICO.silencio, label: silenciado ? 'Reactivar avisos' : 'Silenciar esta unidad' },
-                { id: 'verif', icon: ICO.verifica, label: 'Aplicar verificacion' },
+                { id: 'verif', icon: ICO.verifica, label: 'Aplicar verificación' },
                 { sep: 1 },
-                { id: 'lista', icon: ICO.bandera, label: enLista ? 'Quitar de lista vigilada' : 'Anadir a lista vigilada' },
-                { id: 'limite', icon: ICO.velocidad, label: 'Limite de velocidad (actual ' + lim + ' km/h)' },
+                { id: 'lista', icon: ICO.bandera, label: enLista ? 'Quitar de lista vigilada' : 'Añadir a lista vigilada' },
+                { id: 'limite', icon: ICO.velocidad, label: 'Límite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
                 { id: 'ruta-plan', icon: ICO.destino, label: 'Planear ruta (OSRM)' },
                 { id: 'ruta-astar', icon: ICO.destino, label: 'Planear ruta (A*)' },
@@ -4123,6 +4753,7 @@
                 { id: 'traza-geo', icon: ICO.descargar, label: 'Exportar traza GeoJSON' },
                 { id: 'viaje-analizar', icon: ICO.tiempo, label: 'Analizar viaje (historial)' },
                 { id: 'viaje-geo', icon: ICO.exportar, label: 'Exportar viaje GeoJSON' },
+                { id: 'odo-reset', icon: ICO.refrescar, label: 'Reiniciar odómetro' },
                 { sep: 1 },
                 { id: 'mapa-osm', icon: ICO.zona, label: 'Ver en OpenStreetMap' },
                 { id: 'mapa-google', icon: ICO.zona, label: 'Ver en Google Maps' },
@@ -4143,29 +4774,35 @@
                 paintTabla();
             } else if (acc === 'verif') verifyWindows(false);
             else if (acc === 'lista') {
-                if (APP.watchMap[eco] !== undefined) { quitarDeLista(eco); advice('Quitada de la lista', eco); }
-                else { agregarALista(eco, ''); advice('Anadida a la lista', eco); }
+                if (APP.watchMap[eco] !== undefined) { quitarDeLista(eco); adviceOk('Quitada de la lista', eco); }
+                else { agregarALista(eco, ''); adviceOk('Anadida a la lista', eco); }
                 paintTabla();
             } else if (acc === 'limite') {
                 const it = unitByEco(eco);
                 const actual = it ? limiteDe(it.info) : APP.config.velMax;
-                const val = window.prompt('Limite de velocidad para ' + eco + ' (km/h). Dejalo vacio para usar el global (' + APP.config.velMax + ').', actual);
-                if (val !== null) {
+                hjpPrompt('Límite de velocidad', 'Para ' + eco + '. Dejalo vacio para usar el global (' + APP.config.velMax + ' km/h).', actual, (val) => {
                     setLimite(eco, val);
-                    advice('Limite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
-                }
+                    adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
+                }, { type: 'number', icon: ICO.velocidad, okText: 'Guardar' });
             } else if (acc === 'ruta-plan' || acc === 'ruta-astar') {
                 if (acc === 'ruta-astar' && !APP.config.overpass) {
-                    advice('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
+                    adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
                 } else {
-                    const dest = window.prompt('Destino (lugar, direccion o "lat,lon"):', '');
-                    if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
+                    hjpPrompt('Planear ruta', 'Destino de ' + eco + ': un lugar, una dirección o "lat,lon".', '', (dest) => {
+                        if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
+                    }, { icon: ICO.destino, okText: 'Calcular', placeholder: 'Monterrey, NL  ·  o  25.68,-100.31' });
                 }
             } else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
-            else if (acc === 'ruta-del') { if (eliminarRuta(eco)) advice('Ruta eliminada', eco); else advice('Sin ruta', eco); }
-            else if (acc === 'traza-geo') exportTraza(eco);
+            else if (acc === 'ruta-del') {
+                hjpConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
+                    if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
+                }, { peligro: true, okText: 'Eliminar', icon: ICO.cerrar });
+            } else if (acc === 'traza-geo') exportTraza(eco);
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
+            else if (acc === 'odo-reset') {
+                hjpConfirm('Reiniciar odómetro', 'El odómetro acumulado de ' + eco + ' volverá a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: ICO.refrescar });
+            }
             else if (acc === 'mapa-osm') openMap(eco, 'osm');
             else if (acc === 'mapa-google') openMap(eco, 'google');
             else if (acc === 'copy-eco') { copyToClipboard(eco); advice('Copiado', eco); }
@@ -4177,7 +4814,7 @@
             } else if (acc === 'copy-coords') {
                 const it = unitByEco(eco);
                 const txt = (it && it.st.lat != null) ? (it.st.lat + ',' + it.st.lon) : '';
-                if (!txt) advice('Sin ubicacion', 'La unidad no reporta coordenadas');
+                if (!txt) adviceWarn('Sin ubicación', 'La unidad no reporta coordenadas');
                 else { copyToClipboard(txt); advice('Coordenadas copiadas', txt); }
             }
             hideMenu();
@@ -4193,6 +4830,7 @@
         }));
 
         function abrirCfg() {
+            limpiarCfgDirty();
             const g = (id) => byId(id);
             g('c-poll').value = APP.config.pollMs;
             g('c-off').value = APP.config.offlineMin;
@@ -4250,6 +4888,8 @@
             g('c-r-giro').checked = !!APP.config.reglas.giroU;
             g('c-giro-grados').value = APP.config.giroGrados;
             g('c-giro-min').value = APP.config.giroMin;
+            g('c-r-demora-base').checked = !!APP.config.reglas.demoraBase;
+            g('c-demora-base-min').value = APP.config.demoraBaseMin;
             g('c-partida-horas').value = APP.config.partidaHoras;
             g('c-parada-min').value = APP.config.paradaMin;
             g('c-hist-horas').value = APP.config.historialHoras;
@@ -4276,8 +4916,23 @@
             ).join('\n');
             abrirModalLista(prefill);
         });
-        byId('hjp-cfg-cerrar').addEventListener('click', () => { cfgWinEl.style.display = 'none'; });
-        byId('hjp-cfg-cerrar-x').addEventListener('click', () => { cfgWinEl.style.display = 'none'; });
+        function cerrarCfg() {
+            if (cfgDirty) {
+                hjpConfirm('Descartar cambios', 'Tienes cambios sin guardar en la configuracion. ¿Quieres descartarlos?', () => {
+                    limpiarCfgDirty();
+                    cfgWinEl.style.display = 'none';
+                }, { peligro: true, okText: 'Descartar', icon: ICO.ajustes });
+            } else {
+                cfgWinEl.style.display = 'none';
+            }
+        }
+        byId('hjp-cfg-cerrar').addEventListener('click', cerrarCfg);
+        byId('hjp-cfg-cerrar-x').addEventListener('click', cerrarCfg);
+        const cfgBody = byId('hjp-cfg-body');
+        if (cfgBody) {
+            cfgBody.addEventListener('input', marcarCfgDirty);
+            cfgBody.addEventListener('change', marcarCfgDirty);
+        }
         byId('hjp-cfg-guardar').addEventListener('click', () => {
             const g = (id) => byId(id);
             const cf = APP.config;
@@ -4326,6 +4981,8 @@
             cf.reglas.giroU = g('c-r-giro').checked;
             cf.giroGrados = clamp(isoNum(g('c-giro-grados').value, cf.giroGrados), 90, 180);
             cf.giroMin = Math.max(1, isoNum(g('c-giro-min').value, cf.giroMin));
+            cf.reglas.demoraBase = g('c-r-demora-base').checked;
+            cf.demoraBaseMin = Math.max(5, isoNum(g('c-demora-base-min').value, cf.demoraBaseMin));
             cf.partidaHoras = Math.max(1, isoNum(g('c-partida-horas').value, cf.partidaHoras));
             cf.paradaMin = Math.max(1, isoNum(g('c-parada-min').value, cf.paradaMin));
             cf.historialHoras = Math.max(2, isoNum(g('c-hist-horas').value, cf.historialHoras));
@@ -4356,72 +5013,90 @@
             applyTheme();
             aplicarModoPanel();
             restartTimers();
+            limpiarCfgDirty();
             cfgWinEl.style.display = 'none';
             refresh();
-            advice(LANG.guardado);
+            adviceOk(LANG.guardado);
         });
 
         byId('hjp-b-reset').addEventListener('click', () => {
             APP.barra.x = Math.max(4, window.innerWidth - barraEl.offsetWidth - 15);
             APP.barra.y = 80;
             applyBar();
-            advice('Barra recentrada');
+            adviceOk('Barra recentrada');
         });
         byId('hjp-reset-panel').addEventListener('click', () => {
             panelEl.style.width = '470px';
             panelEl.style.height = '440px';
             APP.panelSize = { w: 470, h: 440 };
             writeJSON(LS.panelsize, APP.panelSize);
-            advice('Tamano restablecido');
+            adviceOk('Tamaño restablecido');
         });
         byId('hjp-perfil-guardar').addEventListener('click', () => {
-            const n = window.prompt('Nombre del perfil de configuracion:', '');
-            if (n && n.trim()) {
-                guardarPerfil(n.trim());
-                advice('Perfil guardado', n.trim());
-            }
+            hjpPrompt('Guardar perfil', 'Ponle un nombre a la configuracion actual.', '', (n) => {
+                if (n && n.trim()) {
+                    guardarPerfil(n.trim());
+                    adviceOk('Perfil guardado', n.trim());
+                }
+            }, { icon: ICO.exportar, okText: 'Guardar', placeholder: 'Ej. Turno manana' });
         });
         byId('hjp-perfil-cargar').addEventListener('click', () => {
             const sel = byId('hjp-perfil-sel');
             const n = sel ? sel.value : '';
-            if (!n) { advice('Sin perfil', 'Guarda un perfil primero'); return; }
+            if (!n) { adviceWarn('Sin perfil', 'Guarda un perfil primero'); return; }
             if (cargarPerfil(n)) {
                 cfgWinEl.style.display = 'none';
-                advice('Perfil cargado', n);
+                adviceOk('Perfil cargado', n);
             }
         });
         byId('hjp-perfil-borrar').addEventListener('click', () => {
             const sel = byId('hjp-perfil-sel');
             const n = sel ? sel.value : '';
             if (!n) return;
-            if (!window.confirm('¿Borrar el perfil "' + n + '"?')) return;
-            borrarPerfil(n);
-            advice('Perfil borrado', n);
+            hjpConfirm('Borrar perfil', 'Se borrara el perfil "' + n + '".', () => {
+                borrarPerfil(n);
+                adviceOk('Perfil borrado', n);
+            }, { peligro: true, okText: 'Borrar', icon: ICO.cerrar });
         });
-        byId('hjp-check-update').addEventListener('click', async () => {
-            await comprobarActualizacion();
-            const u = APP.update;
-            if (u.state === 'available') advice('Nueva version disponible', u.remote + ' (instalada ' + VER + ')');
-            else if (u.state === 'current') advice('Estas al dia', 'Version instalada ' + VER + ' · remota ' + (u.remote || '?'));
-            else advice('No se pudo comprobar', u.lastError || 'sin conexion');
+        byId('hjp-check-update').addEventListener('click', async (e) => {
+            await conBusy(e.currentTarget, async () => {
+                await comprobarActualizacion();
+                const u = APP.update;
+                if (u.state === 'available') adviceOk('Nueva version disponible', u.remote + ' (instalada ' + VER + ')');
+                else if (u.state === 'current') adviceOk('Estas al dia', 'Versión instalada ' + VER + ' · remota ' + (u.remote || '?'));
+                else adviceErr('No se pudo comprobar', u.lastError || 'sin conexion');
+            });
         });
         byId('hjp-limpiar-hist').addEventListener('click', () => {
-            if (!APP.historial.length) { advice('Bitacora vacia', ''); return; }
-            if (!window.confirm('¿Borrar toda la bitacora de avisos?')) return;
-            limpiarBitacora();
-            advice('Bitacora limpiada');
+            if (!APP.historial.length) { adviceWarn('Sin avisos', 'El historial ya esta vacio'); return; }
+            hjpConfirm('Limpiar historial', 'Se borrarán todos los avisos registrados en esta pestaña.', () => {
+                limpiarBitacora();
+                adviceOk('Historial limpiado');
+            }, { peligro: true, okText: 'Limpiar', icon: ICO.limpiar });
         });
         byId('hjp-borrar-memo').addEventListener('click', () => {
-            APP.memo = {}; writeSession(SS.memo, APP.memo); refresh();
-            advice('Estado borrado');
+            hjpConfirm('Borrar estado', 'Se reinicia el estado interno de las reglas (detenciones, desvíos, etc.).', () => {
+                APP.memo = {}; writeSession(SS.memo, APP.memo); refresh();
+                adviceOk('Estado borrado');
+            }, { okText: 'Borrar', icon: ICO.limpiar });
         });
         byId('hjp-borrar-todo').addEventListener('click', () => {
-            if (!window.confirm('Borrar TODO (configuracion, estado, bitacora, historial)?')) return;
-            Object.keys(LS).forEach((k) => { try { localStorage.removeItem(LS[k]); } catch (_) { /* noop */ } });
-            Object.keys(SS).forEach((k) => { try { sessionStorage.removeItem(SS[k]); } catch (_) { /* noop */ } });
-            avisoEl.textContent = 'Estado borrado, recargando...';
-            avisoEl.style.display = 'block';
-            setTimeout(() => { try { location.reload(); } catch (_) { /* noop */ } }, 700);
+            hjpConfirm('Borrar TODO', 'Se borrará la configuración, el estado, el historial de avisos, rutas y odómetros. Esta accion no se puede deshacer.', () => {
+                Object.keys(LS).forEach((k) => { try { localStorage.removeItem(LS[k]); } catch (_) { /* noop */ } });
+                Object.keys(SS).forEach((k) => { try { sessionStorage.removeItem(SS[k]); } catch (_) { /* noop */ } });
+                avisoEl.textContent = 'Estado borrado, recargando...';
+                avisoEl.style.display = 'block';
+                setTimeout(() => { try { location.reload(); } catch (_) { /* noop */ } }, 700);
+            }, { peligro: true, okText: 'Borrar TODO' });
+        });
+        // Acciones de los estados vacios (delegado, un solo listener).
+        panelEl.addEventListener('click', (e) => {
+            const b = e.target.closest && e.target.closest('.hjp-vacio-acc');
+            if (!b) return;
+            const acc = b.dataset.acc;
+            if (acc === 'abrir-lista') mainBtn.click();
+            else if (acc === 'ajustes') abrirCfg();
+            else if (acc === 'tab-unidades') setTab('unidades');
         });
     }
 
@@ -4445,7 +5120,7 @@
         let intentos = 0;
         while (!currentUser() && intentos < 120) { await sleep(1000); intentos++; }
         if (!currentUser()) {
-            avisoEl.textContent = 'Sesion de Wialon no iniciada. Inicia sesion para monitorear.';
+            avisoEl.textContent = 'Sesión de Wialon no iniciada. Inicia sesión para monitorear.';
             avisoEl.style.display = 'block';
             APP.unlocked = true;
             return;
@@ -4460,7 +5135,7 @@
         await refresh();
         restartTimers();
         if (primerUso) {
-            setTimeout(() => advice('Bienvenido a HJP · Wialon', 'Pulsa ? (en la barra o en la cabecera del panel) para la ayuda rapida'), 900);
+            setTimeout(abrirBienvenida, 900);
         }
         setTimeout(comprobarActualizacion, 5000);
         setInterval(comprobarActualizacion, 30 * 60 * 1000);

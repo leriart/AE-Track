@@ -16,7 +16,12 @@ if (ini < 0 || fin < 0) {
     console.error('No se encontro el bloque de analisis de viaje en ' + ARCHIVO);
     process.exit(1);
 }
-const code = src.slice(ini, fin) + '\nreturn {detectarPuntoPartida, analizarParadas};';
+const code = 'const clamp=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);\n' +
+    'const RADIO_TIERRA=6371008.8;\n' +
+    'function rad(d){return d*Math.PI/180;}\n' +
+    'function haversine(a,b,c,d){const x=rad(c-a),y=rad(d-b);const s=Math.sin(x/2)*Math.sin(x/2)+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(y/2)*Math.sin(y/2);return 2*RADIO_TIERRA*Math.asin(Math.min(1,Math.sqrt(s)));}\n' +
+    src.slice(ini, fin) +
+    '\nreturn {detectarPuntoPartida, analizarParadas};';
 const mod = new Function(code)();
 
 let fallos = 0;
@@ -61,6 +66,20 @@ const paradas = mod.analizarParadas(trayecto, 0, 15, 6 * 3600);
 ok('analizarParadas: detecta 1 parada de 20 min', paradas.length === 1, 'n=' + paradas.length);
 ok('analizarParadas: duracion ~20 min', paradas.length === 1 && Math.abs(paradas[0].durMin - 20) <= 1, paradas[0] && paradas[0].durMin);
 ok('analizarParadas: ignora paradas cortas', mod.analizarParadas(trayecto, 0, 30, 6 * 3600).length === 0);
+
+// DBSCAN debe fusionar paradas fragmentadas por jitter GPS.
+// Antes de DBSCAN lecturas de velocidad baja alternando con breves picos
+// partian el tramo en varios segmentos; DBSCAN los une por cercania.
+const jitter = [];
+for (let i = 0; i < 6; i++) jitter.push(P(t0 + i * 60, 40));
+// 20 puntos con velocidades mezcladas (0-4) en el mismo sitio: una sola parada real.
+for (let i = 0; i < 20; i++) jitter.push(P(t0 + 360 + i * 60, [0, 2, 1, 3, 0, 4, 0, 2][i % 8]));
+for (let i = 0; i < 6; i++) jitter.push(P(t0 + 1680 + i * 60, 40));
+const pJit = mod.analizarParadas(jitter, 0, 15, 6 * 3600);
+ok('analizarParadas (DBSCAN): fusiona parada con jitter en una sola',
+    pJit.length === 1, 'n=' + pJit.length);
+ok('analizarParadas (DBSCAN): duracion ~20 min',
+    pJit.length === 1 && Math.abs(pJit[0].durMin - 20) <= 2, pJit[0] && pJit[0].durMin);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
