@@ -1,14 +1,12 @@
 /*
- * Pruebas de los helpers de UI: ordenamiento de la tabla de unidades y
- * estados vacios.
- * Uso:  node tests/ui.test.js
+ * Pruebas de los helpers de UI de Rondo: ordenamiento, estado vacio y escala.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 
-const ARCHIVO = path.join(__dirname, '..', 'HJP-Wialon.user.js');
+const ARCHIVO = path.join(__dirname, '..', 'rondo.user.js');
 const src = fs.readFileSync(ARCHIVO, 'utf8');
 
 function bloque(inicio, fin) {
@@ -21,7 +19,7 @@ function bloque(inicio, fin) {
     return src.slice(i, f);
 }
 
-// valorOrden usa zoneAt y odometroDe; se stubbean.
+// valorOrden + cmpOrd + actualizarCabecerasOrden usan zoneAt y odometroDe.
 const codeOrden =
     'function esc(v){return String(v==null?"":v).replace(/[&<>"\']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","\'":"&#39;"}[c];});}\n' +
     'const zoneAt = (lat, lon) => (lat == null ? "" : "ZONA_" + lat);\n' +
@@ -30,12 +28,18 @@ const codeOrden =
     '\nreturn {valorOrden, cmpOrd};';
 const mod = new Function(codeOrden)();
 
-// emptyState usa esc.
+// emptyState + setHtml + invalidarHtml.
 const codeEmpty =
     'function esc(v){return String(v==null?"":v).replace(/[&<>"\']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","\'":"&#39;"}[c];});}\n' +
     bloque('function emptyState', 'function abrirBienvenida') +
     '\nreturn {emptyState, setHtml, invalidarHtml};';
 const modEmpty = new Function(codeEmpty)();
+
+// normalizarEscala usa ESCALAS_UI.
+const codeEsc =
+    bloque('const ESCALAS_UI', 'function nmActivo') +
+    '\nreturn {normalizarEscala, ESCALAS_UI};';
+const modEsc = new Function(codeEsc)();
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -43,32 +47,29 @@ function ok(nombre, cond, extra) {
     else { fallos++; console.log('FALLO - ' + nombre + (extra ? ' (' + extra + ')' : '')); }
 }
 
-function U(eco, placa, estado, edad, vel, lat, kmi) {
-    return { info: { eco, placa, nombre: eco, kmi }, st: { estado, edadMin: edad, vel, lat, lon: 0 } };
-}
-
 // valorOrden por columna.
 ok('valorOrden eco devuelve el economico',
-    mod.valorOrden(U('4381', 'ABC', 'moviendo', 1, 40, 19, 5), 'eco') === '4381');
+    mod.valorOrden({ info: { eco: '4381' }, st: { lat: 0, lon: 0 } }, 'eco') === '4381');
 ok('valorOrden vel devuelve numero',
-    mod.valorOrden(U('4381', 'ABC', 'moviendo', 1, 40, 19, 5), 'vel') === 40);
+    mod.valorOrden({ info: { eco: '4381' }, st: { vel: 40, lat: 0, lon: 0 } }, 'vel') === 40);
 ok('valorOrden edad devuelve edadMin',
-    mod.valorOrden(U('4381', 'ABC', 'moviendo', 12, 40, 19, 5), 'edad') === 12);
+    mod.valorOrden({ info: { eco: '4381' }, st: { edadMin: 12, lat: 0, lon: 0 } }, 'edad') === 12);
 ok('valorOrden edad null -> Infinity',
-    mod.valorOrden(U('4381', 'ABC', 'offline', null, 0, null, 5), 'edad') === Infinity);
+    mod.valorOrden({ info: { eco: '4381' }, st: { edadMin: null, lat: 0, lon: 0 } }, 'edad') === Infinity);
 ok('valorOrden zona usa zoneAt',
-    mod.valorOrden(U('4381', 'ABC', 'moviendo', 1, 40, 19, 5), 'zona') === 'ZONA_19');
+    mod.valorOrden({ info: { eco: '4381' }, st: { lat: 19, lon: 0 } }, 'zona') === 'ZONA_19');
 ok('valorOrden odo convierte metros',
-    mod.valorOrden(U('4381', 'ABC', 'moviendo', 1, 40, 19, 7), 'odo') === 7000);
+    mod.valorOrden({ info: { eco: '4381', kmi: 7 }, st: { lat: 0, lon: 0 } }, 'odo') === 7000);
 
-// cmpOrd.
 ok('cmpOrd numerico ascendente', mod.cmpOrd(1, 2) < 0 && mod.cmpOrd(5, 3) > 0);
 ok('cmpOrd strings natural (ecos)', mod.cmpOrd('10', '2') > 0,
     'esperado 10 > 2 en orden natural');
 ok('cmpOrd strings alfabetico', mod.cmpOrd('ABC', 'ABD') < 0);
 ok('cmpOrd iguales', mod.cmpOrd(4, 4) === 0);
 
-// Ordenar una lista simulando el comparador de paintTabla.
+function U(eco, placa, estado, edad, vel, lat, kmi) {
+    return { info: { eco, placa, nombre: eco, kmi }, st: { estado, edadMin: edad, vel, lat, lon: 0 } };
+}
 const lista = [
     U('10', 'ZZZ', 'moviendo', 1, 10, 19, 1),
     U('2', 'AAA', 'detenida', 5, 0, 20, 30),
@@ -83,14 +84,13 @@ ok('orden por velocidad descendente: 10,0,0',
 
 // emptyState.
 const e = modEmpty.emptyState('X', 'Sin <unidades>', 'Prueba & demo');
-ok('emptyState incluye clase hjp-vacio', e.indexOf('hjp-vacio') >= 0);
+ok('emptyState incluye clase rondo-vacio', e.indexOf('rondo-vacio') >= 0);
 ok('emptyState escapa el titulo', e.indexOf('Sin &lt;unidades&gt;') >= 0, e);
 // La pista es HTML controlado por el script (admite <b>, etc.), no se escapa.
 ok('emptyState conserva HTML en la pista', e.indexOf('Prueba & demo') >= 0);
 ok('emptyState renderiza el icono', e.indexOf('>X<') >= 0);
 
-// setHtml: solo reescribe el DOM cuando el contenido cambia (evita el
-// parpadeo por reescritura identica cada segundo).
+// setHtml: solo reescribe el DOM cuando el contenido cambia.
 const fake = { id: 'probando', innerHTML: '' };
 ok('setHtml: primer render escribe', modEmpty.setHtml(fake, '<b>A</b>') === true && fake.innerHTML === '<b>A</b>');
 ok('setHtml: mismo HTML no reescribe', modEmpty.setHtml(fake, '<b>A</b>') === false && fake.innerHTML === '<b>A</b>');
@@ -98,6 +98,16 @@ ok('setHtml: HTML distinto si reescribe', modEmpty.setHtml(fake, '<b>B</b>') ===
 modEmpty.invalidarHtml('probando');
 ok('setHtml: invalidar fuerza reescritura', modEmpty.setHtml(fake, '<b>B</b>') === true);
 ok('setHtml: elemento nulo no rompe', modEmpty.setHtml(null, 'x') === false);
+
+// Escala de interfaz (accesibilidad).
+ok('normalizarEscala: 1 -> 1', modEsc.normalizarEscala(1) === 1);
+ok('normalizarEscala: "1.15" -> 1.15', modEsc.normalizarEscala('1.15') === 1.15);
+ok('normalizarEscala: 1.2 -> 1.15 (mas cercano)', modEsc.normalizarEscala(1.2) === 1.15);
+ok('normalizarEscala: 1.4 -> 1.3', modEsc.normalizarEscala(1.4) === 1.3);
+ok('normalizarEscala: 1.6 -> 1.5', modEsc.normalizarEscala(1.6) === 1.5);
+ok('normalizarEscala: no numerico -> 1', modEsc.normalizarEscala('x') === 1 && modEsc.normalizarEscala(undefined) === 1);
+ok('normalizarEscala: 999 -> 1.5', modEsc.normalizarEscala(999) === 1.5);
+ok('ESCALAS_UI tiene 4 niveles', modEsc.ESCALAS_UI.length === 4);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

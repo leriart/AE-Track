@@ -1,13 +1,12 @@
 /*
- * Pruebas de las utilidades de version y actualizacion.
- * Uso:  node tests/version.test.js
+ * Pruebas de las utilidades de version y actualizacion de Rondo.
  */
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
 
-const ARCHIVO = path.join(__dirname, '..', 'HJP-Wialon.user.js');
+const ARCHIVO = path.join(__dirname, '..', 'rondo.user.js');
 const src = fs.readFileSync(ARCHIVO, 'utf8');
 
 const ini = src.indexOf('function parseVersionHeader');
@@ -16,8 +15,8 @@ if (ini < 0 || fin < 0) {
     console.error('No se encontro el bloque de version en ' + ARCHIVO);
     process.exit(1);
 }
-
-const code = src.slice(ini, fin) + '\nreturn {parseVersionHeader, cmpVersion};';
+const code = src.slice(ini, fin) +
+    '\nreturn {parseVersionHeader, cmpVersion};';
 const mod = new Function(code)();
 
 let fallos = 0;
