@@ -9,7 +9,7 @@ Indice:
 - [Primeros pasos](#primeros-pasos)
 - [La barra de botones](#la-barra-de-botones)
 - [El panel: flotante o barra lateral](#el-panel-flotante-o-barra-lateral)
-- [Las cinco pestanas](#las-cinco-pestanas)
+- [Las seis pestanas](#las-seis-pestanas)
 - [Vigilar unidades (lista vigilada)](#vigilar-unidades-lista-vigilada)
 - [Reglas de alerta](#reglas-de-alerta)
 - [Notificaciones](#notificaciones)
@@ -120,7 +120,7 @@ El panel **recuerda como lo dejaste**: el modo (flotante o barra lateral), el
 lado, el ancho y si estaba abierto o cerrado. Al recargar la pagina se restaura
 en ese estado.
 
-## Las cinco pestanas
+## Las seis pestanas
 
 En la parte superior del panel:
 
@@ -142,6 +142,11 @@ En la parte superior del panel:
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
   trazado, ETA y acciones para recalcular, exportar o eliminar.
 - **Geocercas**: cuantas unidades hay dentro de cada geocerca y cuales.
+- **Caravana**: unidades vigiladas que acompanian a una unidad "lider"
+  en la misma ruta (proyeccion al eje) o dentro del radio de cercania.
+  Muestra distancia firmada (+450 m delante / -300 m detras), modo
+  "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
+  [Modo caravana](#modo-caravana).
 
 ## Vigilar unidades (lista vigilada)
 
@@ -299,6 +304,58 @@ En la columna **Ruta** de la pestana Unidades encontraras ademas una
 pildora con el mismo estado y una mini-barra de progreso: util para ver
 de un vistazo el avance de toda la flota sin abrir la pestana Rutas.
 
+### Modo caravana
+
+La pestana **Caravana** (atajo `Alt+6`) sirve para ver de un vistazo
+que unidades vigiladas estan muy cerca de una unidad "lider". Util
+para coordinar convoyes, escoltas o simplemento ver que vehiculos van
+juntos por la misma ruta.
+
+Como funciona:
+
+1. Elige la unidad lider en el selector superior. Por defecto se elige
+   la primera unidad vigilada que tenga una ruta trazada.
+2. La tarjeta del lider muestra si tiene ruta, su velocidad, el
+   porcentaje de avance y el estado online/offline.
+3. Debajo se listan las unidades acompanantes, ordenadas de mas cerca a
+   mas lejos (los que van detras primero, los que van delante al final).
+
+Reglas de inclusion:
+
+- **En ruta**: la unidad se proyecta sobre la ruta del lider y queda a
+  menos de la **tolerancia lateral** del eje (por defecto 300 m,
+  configurable en **Ajustes > Rutas > c-caravana-m**). En este caso se
+  muestra la distancia firmada sobre la polilinea (delante/detras).
+- **Cerca**: la unidad no toca la polilinea pero esta a menos del
+  **radio de cercania** del lider (por defecto 2000 m, configurable en
+  **c-caravana-cerca**). Se muestra la distancia directa por haversine.
+
+Pildoras y metricas:
+
+- **EN RUTA**: acompanante proyectado al eje.
+- **CERCA**: acompanante por cercania directa, fuera de la ruta.
+- **+450 m delante / -300 m detras**: distancia firmada sobre la
+  polilinea (positiva = delante, negativa = detras).
+- **a 1.2 km**: distancia directa cuando no toca la ruta.
+- **45 m del eje**: distancia lateral al eje de la ruta.
+- **SENTIDO CONTRARIO**: pildora roja cuando el rumbo de la unidad
+  difiere mas de 130 grados del rumbo del segmento donde se proyecta.
+  Es la misma regla que la deteccion de giro en U.
+- **online / offline** y velocidad actual.
+
+Notas:
+
+- Si el lider no tiene ruta trazada, la pestana solo usa el radio de
+  cercania directa (no hay eje sobre el que proyectar).
+- Si el lider no reporta posicion (offline o sin GPS), no hay
+  referencia para medir distancias y aparece el mensaje de "Ninguna
+  unidad vigilada cercana".
+- Click en una tarjeta de acompanante abre la ventana de Wialon de esa
+  unidad. La tarjeta del lider no es clickable.
+- La pestana es de solo lectura: la unidad seleccionada y los
+  acompanantes se recalculan en cada repaint periodico. No se guarda
+  estado persistente.
+
 ### Alertas de ruta
 
 Se activan en Ajustes, pestana **Rutas**:
@@ -411,6 +468,7 @@ te pedirá confirmación.
 | `Alt` + `3` | Avisos |
 | `Alt` + `4` | Rutas |
 | `Alt` + `5` | Geocercas |
+| `Alt` + `6` | Caravana |
 | `Alt` + `P` | Mostrar u ocultar el panel |
 | `Alt` + `L` | Panel flotante o barra lateral |
 | `Alt` + `H` | Plegar la barra de botones |

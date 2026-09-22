@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.1.0
+// @version      5.2.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -109,7 +109,8 @@
         selClear: 'E14A',
         arrowLeft: 'E314',
         arrowRight: 'E315',
-        actualizar: 'E5D5'
+        actualizar: 'E5D5',
+        caravana: 'E7FB'
     });
     function ico(name) {
         const h = MAT[name];
@@ -142,7 +143,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.1.0';
+    const VER = '5.2.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -257,6 +258,8 @@
         analizarAuto: true,
         autoRuta: false,
         autoRutaModo: 'osrm',
+        caravanaM: 300,
+        caravanaCercaM: 2000,
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -417,7 +420,8 @@
         update: { state: 'idle', remote: null, local: VER },
         unlocked: false,
         consultaRestante: 0,
-        stats: { erroresReglas: 0, astarCap: 0 }
+        stats: { erroresReglas: 0, astarCap: 0 },
+        caravanaEco: ''
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
@@ -1070,6 +1074,69 @@
         const estado = llego ? 'LLEGO' : (desviado ? 'DESV' : 'EN RUTA');
         return { estado, ruta: r, snap: s, llego, desviado };
     }
+    /* === BEGIN: unidadesEnCaravana === */
+    // Determina que unidades acompanial al "lider" en una misma ruta o muy
+    // cerca. Una unidad cuenta como miembro si se proyecta a menos de
+    // lateralM metros del eje (modo en ruta) o si esta a menos de cercaM
+    // metros del lider aunque no toque la polilinea. Ademas se marca como
+    // sentido contrario cuando su rumbo real difiere >130 grados del rumbo
+    // del segmento de ruta donde se proyecta.
+    function unidadesEnCaravana(infoLider, stLider) {
+        const rutaLider = rutaDe(infoLider);
+        const lateralM = Math.max(50, Number(APP.config.caravanaM) || 300);
+        const cercaM = Math.max(200, Number(APP.config.caravanaCercaM) || 2000);
+        // Sin posicion del lider no hay referencia para medir cercania; solo
+        // podemos usar la proyeccion sobre la ruta.
+        if (!stLider || !stLider.online || stLider.lat == null || stLider.lon == null) {
+            return { miembros: [], rutaLider: rutaLider, snapLider: null };
+        }
+        let snapLider = null;
+        if (rutaLider) {
+            const memo = APP.snapMemo[infoLider.clave] || (APP.snapMemo[infoLider.clave] = { idx: 0 });
+            snapLider = snapRuta(stLider.lat, stLider.lon, rutaLider, memo);
+        }
+        const miembros = [];
+        const lista = APP.unidades || [];
+        for (let i = 0; i < lista.length; i++) {
+            const it = lista[i];
+            if (!shouldWatch(it)) continue;
+            const info = parseUnitName(it);
+            if (!info || !info.clave) continue;
+            if (info.clave === infoLider.clave) continue;
+            const st = unitState(it);
+            if (!st || !st.online || st.lat == null || st.lon == null) continue;
+            const distDirecta = haversine(stLider.lat, stLider.lon, st.lat, st.lon);
+            let enRuta = false, contrario = false, snap = null;
+            if (rutaLider) {
+                snap = snapRuta(st.lat, st.lon, rutaLider, { idx: 0 });
+                if (snap && snap.dist <= lateralM) {
+                    enRuta = true;
+                    if (st.vel > 3 && snap.rumbo != null && st.curso != null) {
+                        contrario = difAngulo(st.curso, snap.rumbo) > 130;
+                    }
+                }
+            }
+            if (!enRuta && distDirecta > cercaM) continue;
+            miembros.push({
+                info: info,
+                st: st,
+                enRuta: enRuta,
+                contrario: contrario,
+                distDirecta: distDirecta,
+                distEje: snap ? snap.dist : null,
+                deltaRuta: (enRuta && snapLider) ? snap.recorrido - snapLider.recorrido : null,
+                rumboRuta: snap ? snap.rumbo : null,
+                snap: snap
+            });
+        }
+        miembros.sort(function (a, b) {
+            const da = (a.deltaRuta != null) ? a.deltaRuta : a.distDirecta;
+            const db = (b.deltaRuta != null) ? b.deltaRuta : b.distDirecta;
+            return da - db;
+        });
+        return { miembros: miembros, rutaLider: rutaLider, snapLider: snapLider };
+    }
+    /* === END: unidadesEnCaravana === */
     function descargarJSON(obj, nombre, tipo) {
         const a = makeEl('a', { href: URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: tipo || 'application/geo+json;charset=utf-8;' })) });
         a.download = nombre;
@@ -2973,8 +3040,8 @@
             "#rondo-panel .rondo-iconbtn:hover{background:var(--rondo-bg);border-color:var(--rondo-border);color:var(--rondo-fg);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
             "#rondo-panel .rondo-iconbtn:active{transform:translateY(0)}\n" +
             "#rondo-panel .rondo-iconbtn.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.4)}\n" +
-            "#rondo-panel .tabs{display:flex;gap:4px;background:var(--rondo-bg-soft);padding:6px 8px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
-            "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
+            "#rondo-panel .tabs{display:flex;gap:3px;background:var(--rondo-bg-soft);padding:5px 6px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:3px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:7px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
             "#rondo-panel .tab .etqt{font-size:11px;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
@@ -3022,6 +3089,22 @@
             "#rondo-dash .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}\n" +
             "#rondo-panel .tabla{padding:8px 4px}\n" +
             "#rondo-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
+            "#rondo-panel .rondo-caravana-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-panel .rondo-caravana-body{padding:8px 10px;display:flex;flex-direction:column;gap:8px}\n" +
+            "#rondo-panel .rondo-cv-card{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:8px 10px;display:flex;flex-direction:column;gap:4px}\n" +
+            "#rondo-panel .rondo-cv-card.lider{border-color:var(--rondo-accent-2);box-shadow:0 0 0 1px rgba(var(--rondo-accent-rgb),.25)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}\n" +
+            "#rondo-panel .rondo-cv-card .cv-eco{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-sub{font-size:10.5px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-dist{font:600 13px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-meta{display:flex;flex-wrap:wrap;gap:6px;font-size:10.5px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-meta .pill{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:9px;background:var(--rondo-bg-strong);color:var(--rondo-fg);font-weight:600}\n" +
+            "#rondo-panel .rondo-cv-card .cv-meta .pill.en-ruta{background:rgba(40,170,80,.18);color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-meta .pill.contrario{background:rgba(220,80,40,.22);color:var(--rondo-crit-fg)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-meta .pill.alerta{background:rgba(var(--rondo-warn-rgb),.18);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-cv-card .cv-meta .pill.dim{opacity:.75}\n" +
+            "#rondo-panel .rondo-cv-card.contrario{border-color:rgba(var(--rondo-crit-rgb),.6)}\n" +
+            "#rondo-panel .rondo-cv-empty{padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
             "#rondo-panel .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
             "#rondo-panel .kpi .etq{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
             "#rondo-panel .kpi .valor{font:600 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
@@ -3378,6 +3461,7 @@
             '<button class="tab" data-tab="alertas" title="Historial de avisos"><span class="rondo-mi">' + ICO.alertas + '</span><span class="etqt">Avisos</span><span class="contador" id="rondo-c-al">0</span></button>' +
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="rondo-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="rondo-c-zn">0</span></button>' +
+            '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-mi">' + ICO.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
             '<input class="filtro" id="rondo-filtro" placeholder="' + esc(LANG.busq) + '">' +
@@ -3460,6 +3544,13 @@
             '<div class="tabla" id="rondo-wrap-geocercas" style="display:none">' +
             '<table class="zone"><thead><tr><th>Geocerca</th><th>Dentro</th></tr></thead>' +
             '<tbody id="rondo-body-zonas"></tbody></table>' +
+            '</div>' +
+            '<div class="tabla" id="rondo-wrap-caravana" style="display:none">' +
+            '<div class="rondo-caravana-bar">' +
+            '<label for="rondo-caravana-sel" style="font-size:11px;color:var(--rondo-fg-dim)">Unidad vigilada:</label>' +
+            '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
+            '</div>' +
+            '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
             '</div>' +
             '<footer><span id="rondo-info">iniciando...</span><span id="rondo-upd"></span></footer>'
         );
@@ -3594,7 +3685,7 @@
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
             numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..5</b> cambia pestañas · <b>Alt+P</b> panel · <b>Alt+L</b> lateral · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..6</b> cambia pestañas · <b>Alt+P</b> panel · <b>Alt+L</b> lateral · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Panel</h4>' +
@@ -3643,6 +3734,10 @@
             '&#8226; <b>Destino</b>: traza la ruta hacia el destino guardado en la lista vigilada (resuelve el lugar con Nominatim si hace falta).<br>' +
             '&#8226; <b>Regreso</b>: detecta cuando la unidad vuelve al punto de partida tras haber llegado al destino, y avisa.<br>' +
             'Los calculos se hacen en background respetando los servicios publicos (OSRM/Nominatim).</p>' +
+            '<h4>Modo caravana</h4>' +
+            numRow('c-caravana-m', 'Tolerancia lateral al eje de la ruta (m)') +
+            numRow('c-caravana-cerca', 'Cercanía sin ruta (m)') +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 0 8px">En la pestaña <b>Caravana</b> se elige una unidad vigilada como lider y se listan las demas unidades que van muy cerca. Una unidad cuenta como acompañante si se proyecta a menos de la tolerancia lateral del eje de la ruta del lider; si la unidad no toca la polilinea pero esta dentro del radio de cercania tambien aparece (modo "cerca"). Las que avanzan en sentido contrario se marcan en rojo.</p>' +
             '<h4>Alertas de ruta</h4>' +
             checkRow('c-r-desvio', 'Desvío de ruta') +
             numRow('c-desvio-m', 'Desvío mayor a (m)') +
@@ -3714,12 +3809,13 @@
             '<li><b>Avisos</b>: historial filtrable por severidad. Exportable a CSV.</li>' +
             '<li><b>Rutas</b>: progreso de cada ruta y desvíos. Se planea desde el clic derecho de una unidad.</li>' +
             '<li><b>Geocercas</b>: unidades dentro de cada geocerca.</li>' +
+            '<li><b>Caravana</b>: unidades vigiladas cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania. Muestra sentido contrario y velocidad.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +
             '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes &gt; Rutas.</p>' +
             '<h4>Atajos de teclado</h4>' +
             '<ul>' +
-            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>5</kbd>: cambiar de pestaña.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>6</kbd>: cambiar de pestaña.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar el panel.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>L</kbd>: alternar entre panel flotante y barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
@@ -3979,7 +4075,7 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
-        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'geocercas'];
+        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
@@ -3994,6 +4090,7 @@
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
         else if (name === 'geocercas') paintGeocercas();
+        else if (name === 'caravana') paintCaravana();
         paintCounters();
         paintStateBadge();
         paintInfo();
@@ -4018,6 +4115,18 @@
         if (cAl) cAl.textContent = APP.historial.length;
         if (cRu) cRu.textContent = Object.keys(APP.rutas).length;
         if (cZn) cZn.textContent = APP.zonas.length;
+        const cCv = byId('rondo-c-cv');
+        if (cCv) cCv.textContent = APP.caravanaEco ? countCaravana() : 0;
+    }
+    function countCaravana() {
+        const it = unitByEco(APP.caravanaEco);
+        if (!it) return 0;
+        const info = parseUnitName(it.u);
+        const st = unitState(it.u);
+        try {
+            const r = unidadesEnCaravana(info, st);
+            return (r && r.miembros) ? r.miembros.length : 0;
+        } catch (_) { return 0; }
     }
     function paintStateBadge() {
         const b = byId('rondo-estado-barra');
@@ -4474,12 +4583,137 @@
     }
     function paintPanel() { setTab(APP.tab); }
 
+    /* === BEGIN: paintCaravana === */
+    function paintCaravana() {
+        const sel = byId('rondo-caravana-sel');
+        const body = byId('rondo-caravana-body');
+        if (!sel || !body) return;
+        const vigiladas = (APP.unidades || []).filter(shouldWatch);
+        if (!vigiladas.length) {
+            sel.innerHTML = '';
+            body.innerHTML = '<div class="rondo-cv-empty">No hay unidades vigiladas. Agrega unidades desde la lista para usar el modo caravana.</div>';
+            return;
+        }
+        // Reconstruye el <select> solo si cambia la lista de economicos (asi
+        // no se pierde la seleccion del usuario en cada repaint).
+        const ecosActuales = vigiladas.map((u) => (parseUnitName(u).eco || parseUnitName(u).placa || String(parseUnitName(u).id)));
+        const firma = ecosActuales.join('|');
+        if (sel.dataset.firma !== firma) {
+            const previo = APP.caravanaEco;
+            sel.innerHTML = ecosActuales.map((e) => '<option value="' + esc(e) + '">' + esc(e) + '</option>').join('');
+            let candidato = previo;
+            if (!candidato || !ecosActuales.includes(candidato)) {
+                const conRuta = vigiladas.find((u) => { const i = parseUnitName(u); return rutaDe(i); });
+                candidato = conRuta ? (parseUnitName(conRuta).eco || parseUnitName(conRuta).placa || String(parseUnitName(conRuta).id)) : ecosActuales[0];
+            }
+            APP.caravanaEco = candidato;
+            sel.value = candidato;
+            sel.dataset.firma = firma;
+        } else {
+            if (APP.caravanaEco && sel.value !== APP.caravanaEco) sel.value = APP.caravanaEco;
+        }
+        const it = unitByEco(APP.caravanaEco);
+        if (!it) { body.innerHTML = ''; return; }
+        const info = parseUnitName(it.u);
+        const st = unitState(it.u);
+        let res;
+        try { res = unidadesEnCaravana(info, st); }
+        catch (e) { body.innerHTML = '<div class="rondo-cv-empty">Error: ' + esc(e.message) + '</div>'; return; }
+        const miembros = res.miembros;
+        const ruta = res.rutaLider;
+        const html = [];
+        // Tarjeta del lider
+        html.push(renderCaravanaLider(info, st, ruta, res.snapLider));
+        if (!miembros.length) {
+            html.push('<div class="rondo-cv-empty">Ninguna unidad vigilada cercana a ' + esc(APP.caravanaEco) + '.</div>');
+        } else {
+            miembros.forEach((m) => { html.push(renderCaravanaMiembro(m)); });
+        }
+        setHtml(body, html.join(''));
+        const cCv = byId('rondo-c-cv');
+        if (cCv) cCv.textContent = miembros.length;
+    }
+    function renderCaravanaLider(info, st, ruta, snap) {
+        const eco = info.eco || info.placa || String(info.id);
+        const cls = ['rondo-cv-card', 'lider'];
+        const meta = [];
+        if (ruta) {
+            const totalKm = ruta.total ? (ruta.total / 1000).toFixed(1) + ' km' : '';
+            meta.push('<span class="pill en-ruta">EN RUTA ' + esc(totalKm) + '</span>');
+        } else {
+            meta.push('<span class="pill dim">SIN RUTA</span>');
+        }
+        meta.push('<span class="pill">' + (st.online ? 'online' : 'offline') + '</span>');
+        if (st.vel != null) meta.push('<span class="pill">' + Math.round(st.vel) + ' km/h</span>');
+        if (snap && Number.isFinite(snap.progreso)) {
+            meta.push('<span class="pill">' + Math.round(snap.progreso * 100) + '% ruta</span>');
+        }
+        return '<div class="' + cls.join(' ') + '">' +
+            '<div class="cv-head"><span class="cv-eco">' + esc(eco) + '</span><span>· lider</span></div>' +
+            '<div class="cv-meta">' + meta.join('') + '</div>' +
+            '</div>';
+    }
+    function fmtDistancia(d) {
+        if (!Number.isFinite(d)) return '';
+        if (d >= 1000) return (d / 1000).toFixed(2) + ' km';
+        return Math.round(d) + ' m';
+    }
+    function fmtDelta(d) {
+        if (d == null) return '';
+        const a = Math.abs(d);
+        const txt = fmtDistancia(a);
+        return (d >= 0 ? '+' : '−') + txt;
+    }
+    function renderCaravanaMiembro(m) {
+        const eco = m.info.eco || m.info.placa || String(m.info.id);
+        const cls = ['rondo-cv-card'];
+        if (m.contrario) cls.push('contrario');
+        const meta = [];
+        let distTxt = '';
+        if (m.enRuta && m.deltaRuta != null) {
+            if (Math.abs(m.deltaRuta) < 25) distTxt = 'a ' + fmtDistancia(Math.abs(m.deltaRuta));
+            else if (m.deltaRuta >= 0) distTxt = fmtDelta(m.deltaRuta) + ' delante';
+            else distTxt = fmtDelta(m.deltaRuta) + ' detras';
+        } else {
+            distTxt = 'a ' + fmtDistancia(m.distDirecta);
+        }
+        if (m.enRuta) meta.push('<span class="pill en-ruta">EN RUTA</span>');
+        else meta.push('<span class="pill dim">CERCA</span>');
+        meta.push('<span class="pill">' + (m.st.online ? 'online' : 'offline') + '</span>');
+        if (m.st.vel != null) meta.push('<span class="pill">' + Math.round(m.st.vel) + ' km/h</span>');
+        if (m.enRuta && m.distEje != null) meta.push('<span class="pill">' + Math.round(m.distEje) + ' m del eje</span>');
+        if (m.contrario) meta.push('<span class="pill contrario">SENTIDO CONTRARIO</span>');
+        return '<div class="' + cls.join(' ') + '" data-eco="' + esc(eco) + '">' +
+            '<div class="cv-head"><span class="cv-eco">' + esc(eco) + '</span><span class="cv-dist">' + esc(distTxt) + '</span></div>' +
+            '<div class="cv-meta">' + meta.join('') + '</div>' +
+            '</div>';
+    }
+    function bindCaravanaSelect() {
+        const sel = byId('rondo-caravana-sel');
+        if (!sel) return;
+        sel.addEventListener('change', () => {
+            APP.caravanaEco = sel.value || '';
+            paintCaravana();
+        });
+        const body = byId('rondo-caravana-body');
+        if (body) {
+            body.addEventListener('click', (ev) => {
+                const card = ev.target.closest('.rondo-cv-card');
+                if (!card || !card.dataset.eco) return;
+                if (card.classList.contains('lider')) return;
+                openUnitWindow(card.dataset.eco);
+            });
+        }
+    }
+    /* === END: paintCaravana === */
+
     setInterval(() => {
         if (panelEl.style.display === 'none') return;
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();
         if (APP.tab === 'rutas') paintRutas();
         if (APP.tab === 'geocercas') paintGeocercas();
+        if (APP.tab === 'caravana') paintCaravana();
         byId('rondo-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
         paintStateBadge();
@@ -4859,7 +5093,7 @@
     function bindKeys() {
         document.addEventListener('keydown', (e) => {
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'geocercas' };
+                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'geocercas', '6': 'caravana' };
                 if (tabs[e.key]) {
                     setTab(tabs[e.key]);
                     if (APP.panelHidden) togglePanel();
@@ -5367,6 +5601,8 @@
             g('c-trazado-max').value = APP.config.trazadoMax;
             g('c-auto-ruta').checked = APP.config.autoRuta !== false;
             g('c-auto-ruta-modo').value = APP.config.autoRutaModo || 'osrm';
+            g('c-caravana-m').value = APP.config.caravanaM;
+            g('c-caravana-cerca').value = APP.config.caravanaCercaM;
             g('c-hor-on').checked = !!APP.config.horario.on;
             g('c-hor-a').value = APP.config.horario.desde;
             g('c-hor-b').value = APP.config.horario.hasta;
@@ -5472,6 +5708,8 @@
             cf.autoRuta = g('c-auto-ruta').checked;
             const _modo = g('c-auto-ruta-modo').value;
             cf.autoRutaModo = (_modo === 'astar' && cf.overpass) ? 'astar' : 'osrm';
+            cf.caravanaM = Math.max(50, isoNum(g('c-caravana-m').value, DEFAULTS.caravanaM));
+            cf.caravanaCercaM = Math.max(200, isoNum(g('c-caravana-cerca').value, DEFAULTS.caravanaCercaM));
             // Si el usuario acaba de activar el trazado automatico, lanzamos
             // un pase inmediato para las unidades pendientes.
             const _autoAntes = APP.config.autoRuta;
@@ -5595,6 +5833,7 @@
         attachDraggables();
         bindKeys();
         bindEvents();
+        bindCaravanaSelect();
 
         const ok = await wialonReady();
         if (!ok) {
