@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.0.0
-// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Tamano de interfaz ajustable. Sin emojis.
+// @version      5.1.0
+// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
 // @copyright    Proyecto original de Hector Ramirez (https://github.com/HectorRamirez-cpu)
@@ -142,7 +142,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.0.0';
+    const VER = '5.1.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -255,6 +255,8 @@
         paradaMin: 15,
         historialHoras: 168,
         analizarAuto: true,
+        autoRuta: true,
+        autoRutaModo: 'osrm',
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -995,6 +997,73 @@
             return true;
         }
         return false;
+    }
+    // Traza automaticamente la ruta de toda unidad vigilada que tenga destino
+    // pero aun no tenga ruta (o cuya ruta apunte a un destino distinto).
+    // Devuelve la cantidad de rutas que se programaron para calcular.
+    function autoTrazarRutasPendientes() {
+        if (!APP.config.autoRuta) return [];
+        if (!APP.unidades || !APP.unidades.length) return [];
+        const modo = (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm';
+        if (modo === 'osrm' && !APP.config.osrm) return [];
+        const pendientes = [];
+        const vistos = new Set();
+        for (let i = 0; i < APP.unidades.length; i++) {
+            if (!shouldWatch(APP.unidades[i])) continue;
+            const info = parseUnitName(APP.unidades[i]);
+            const eco = info.eco || info.placa || String(info.id);
+            if (!eco || vistos.has(eco)) continue;
+            vistos.add(eco);
+            const destino = watchDest(info);
+            if (!destino) continue;
+            const r = rutaDe(info);
+            if (r && r.destinoTexto === destino && r.modo === modo) continue;
+            pendientes.push({ eco, destino, modo });
+        }
+        return pendientes;
+    }
+    // Despacha las pendientes una por una para no saturar los servicios publicos.
+    async function autoTrazarRutas() {
+        const pendientes = autoTrazarRutasPendientes();
+        if (!pendientes.length) return 0;
+        let ok = 0;
+        for (let i = 0; i < pendientes.length; i++) {
+            const p = pendientes[i];
+            try {
+                const r = await planearRuta(p.eco, p.destino, null, p.modo);
+                if (r) ok++;
+            } catch (_) { /* planearRuta ya muestra el error */ }
+            // Pausa entre peticiones para respetar el limite de Nominatim/OSRM.
+            if (i < pendientes.length - 1) await sleep(1200);
+        }
+        return ok;
+    }
+    // Tiempo estimado restante (segundos) usando la velocidad reportada o, en
+    // su defecto, una velocidad prudencial de carretera. Devuelve null si no
+    // hay datos suficientes.
+    function calcularETA(s, ruta, vel) {
+        if (!s || !ruta || !ruta.total) return null;
+        const restante = Math.max(0, ruta.total - (s.recorrido || 0));
+        const v = (Number.isFinite(vel) && vel > 5) ? vel : 50;
+        return restante / 1000 / v * 3600;
+    }
+    // Estado de la unidad respecto a su ruta, segun la posicion actual.
+    // Usa snapRuta cuando hay coordenadas validas; si la unidad esta offline
+    // o sin coordenadas lo refleja explicitamente. Ademas exige cercania real
+    // al destino: un snap con progreso alto pero distancia enorme (punto
+    // "pasado" del final de la polilinea) no cuenta como llegada.
+    function estadoRuta(info, st) {
+        const r = rutaDe(info);
+        if (!r) return { estado: 'SIN RUTA' };
+        if (!st || !st.online) return { estado: 'SIN POSICION', ruta: r };
+        if (st.lat == null || st.lon == null) return { estado: 'SIN POSICION', ruta: r };
+        const memo = APP.snapMemo[info.clave] || (APP.snapMemo[info.clave] = { idx: 0 });
+        const s = snapRuta(st.lat, st.lon, r, memo);
+        if (!s) return { estado: 'SIN POSICION', ruta: r };
+        const llego = s.progreso >= 0.95 && s.dist <= APP.config.retornoM;
+        const desviado = s.dist > APP.config.desvioM;
+        const estado = llego ? 'LLEGO' : (desviado ? 'DESV' : 'EN RUTA');
+        return { estado, ruta: r, snap: s, llego, desviado };
     }
     function descargarJSON(obj, nombre, tipo) {
         const a = makeEl('a', { href: URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: tipo || 'application/geo+json;charset=utf-8;' })) });
@@ -1820,15 +1889,41 @@
         if (!APP.config.reglas.destino) return;
         const destino = watchDest(info);
         if (!destino || !st.online) return;
-        const geo = await reverseGeocode(st.lat, st.lon);
-        const ciudad = geo ? geo.ciudad : '';
-        const enDestino = !!ciudad && (norm(ciudad).indexOf(norm(destino)) >= 0 || norm(destino).indexOf(norm(ciudad)) >= 0);
+        const ruta = rutaDe(info);
+        let enDestino = false;
+        let detalle = '';
+        // Preferimos la deteccion geometrica cuando hay ruta trazada: el
+        // avance sobre la polilinea es mas preciso y rapido que el geocoding
+        // inverso, y no depende del area行政 devuelta por Nominatim.
+        if (ruta && st.lat != null && st.lon != null) {
+            const memo = APP.snapMemo[info.clave] || (APP.snapMemo[info.clave] = { idx: 0 });
+            const s = snapRuta(st.lat, st.lon, ruta, memo);
+            if (s) {
+                if (s.progreso >= 0.95) {
+                    enDestino = true;
+                    detalle = 'a ' + Math.round(s.dist) + ' m del destino';
+                } else if (s.dist <= APP.config.retornoM) {
+                    // Muy cerca del destino aunque el progreso no este completo
+                    // (por ejemplo, llegada por un camino alterno).
+                    enDestino = true;
+                    detalle = 'cerca del destino (' + Math.round(s.dist) + ' m)';
+                }
+            }
+        }
+        if (!enDestino) {
+            const geo = await reverseGeocode(st.lat, st.lon);
+            const ciudad = geo ? geo.ciudad : '';
+            if (ciudad && (norm(ciudad).indexOf(norm(destino)) >= 0 || norm(destino).indexOf(norm(ciudad)) >= 0)) {
+                enDestino = true;
+                detalle = 'en ' + ciudad;
+            }
+        }
         if (enDestino && !R.enDestino) {
             R.enDestino = true;
             pushAlert({
                 regla: 'destino', sev: 'ok', clave: info.clave, eco: info.eco,
                 titulo: 'LLEGO A DESTINO · ' + etq,
-                detalle: 'en ' + ciudad,
+                detalle: detalle || 'cerca del destino',
                 hablar: 'La unidad ' + etq + ' llego a su destino'
             });
         } else if (!enDestino && R.enDestino && st.vel > 10) {
@@ -2465,10 +2560,22 @@
     function agregarALista(eco, destino) {
         eco = normEco(eco);
         if (!eco) return false;
+        const destinoPrev = APP.watchMap[eco] || '';
         APP.watchMap[eco] = (destino || APP.watchMap[eco] || '').trim();
         if (APP.orden.indexOf(eco) < 0) APP.orden.push(eco);
         guardarOrden();
         guardarLista();
+        // Si se anade o cambia un destino y esta el auto-trazado activo,
+        // se recalcula la ruta de esa unidad en background.
+        if (APP.config.autoRuta && APP.watchMap[eco] && APP.watchMap[eco] !== destinoPrev) {
+            const it = unitByEco(eco);
+            if (it) {
+                const r = rutaDe(it.info);
+                if (!r || r.destinoTexto !== APP.watchMap[eco]) {
+                    autoTrazarRutas();
+                }
+            }
+        }
         return true;
     }
     function quitarDeLista(eco) {
@@ -3093,6 +3200,16 @@
             ".rondo-pill.on{background:var(--rondo-ok-bg);color:var(--rondo-ok-fg)}\n" +
             ".rondo-pill.det{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
             ".rondo-pill.off{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg)}\n" +
+            ".rondo-pill.ok{background:var(--rondo-ok-bg);color:var(--rondo-ok-fg)}\n" +
+            ".rondo-pill.warn{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
+            ".rondo-pill.mute{background:var(--rondo-bg-alt);color:var(--rondo-fg-mute)}\n" +
+            /* ── Columna de Ruta en la tabla de unidades ── */
+            "#rondo-body td.ruta{min-width:128px;padding:5px 7px;line-height:1.2;vertical-align:middle}\n" +
+            "#rondo-body td.ruta .ronda-pill{font-size:10px}\n" +
+            "#rondo-body td.ruta .ruta-bar{margin-top:3px;height:4px;background:var(--rondo-bg-alt);border-radius:3px;overflow:hidden;min-width:96px}\n" +
+            "#rondo-body td.ruta .ruta-bar-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s ease}\n" +
+            "#rondo-body td.ruta .ruta-meta{margin-top:2px;font:500 10px monospace;color:var(--rondo-fg-dim);white-space:nowrap}\n" +
+            +
             /* ── Responsive ── */
             "@media (max-width:720px){\n" +
             "  #rondo-panel{min-width:0;max-width:96vw}\n" +
@@ -3300,6 +3417,7 @@
             '<th class="rondo-sortable" data-sort="vel" title="Ordenar por velocidad">km/h<span class="rondo-sort"></span></th>' +
             '<th class="rondo-sortable" data-sort="zona" title="Ordenar por geocerca">Zona<span class="rondo-sort"></span></th>' +
             '<th class="rondo-sortable" data-sort="odo" title="Odómetro acumulado (km)">km<span class="rondo-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="ruta" title="Estado de la ruta trazada">Ruta<span class="rondo-sort"></span></th>' +
             '<th></th></tr></thead>' +
             '<tbody id="rondo-body"></tbody></table>' +
             '<div id="rondo-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--rondo-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de esta columna.</div>' +
@@ -3492,6 +3610,14 @@
             checkRow('c-overpass', 'Permitir A* sobre datos OSM (Overpass, experimental)') +
             checkRow('c-trazado', 'Registrar trazado del recorrido') +
             numRow('c-trazado-max', 'Puntos por traza') +
+            '<h4>Trazado automático</h4>' +
+            checkRow('c-auto-ruta', 'Trazar ruta automáticamente al asignar un destino') +
+            '<label>Trazar con ' +
+            '<select id="c-auto-ruta-modo" style="flex:1">' +
+            '<option value="osrm">OSRM (rápido)</option>' +
+            '<option value="astar">A* sobre OSM (experimental)</option>' +
+            '</select></label>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 0 8px">Al guardar un destino en la lista vigilada, se calcula la ruta en background respetando los servicios públicos (OSRM/Nominatim).</p>' +
             '<h4>Alertas de ruta</h4>' +
             checkRow('c-r-desvio', 'Desvío de ruta') +
             numRow('c-desvio-m', 'Desvío mayor a (m)') +
@@ -3884,8 +4010,9 @@
             ? 'No molestar hasta ' + new Date(APP.noMolestar.hasta).toLocaleTimeString().slice(0, 5)
             : 'criticos: ' + criticos + ' · sin señal: ' + off + ' · detenidas: ' + det;
     }
-    // Lista "Requieren atención": unidades sin señal, con exceso, desviadas o
-    // detenidas, ordenadas por prioridad. Cada fila abre la ventana de la unidad.
+    // Lista "Requieren atención": unidades sin señal, con exceso, desviadas,
+    // detenidas o con ruta nueva sin trazar, ordenadas por prioridad. Cada fila
+    // abre la ventana de la unidad.
     function paintAtencion(watched) {
         const cont = byId('rondo-atencion');
         if (!cont) return;
@@ -3906,6 +4033,14 @@
                 const min = (ahora - memo.desviadoDesde) / 60;
                 items.push({ eco, tipo: 'desv', peso: 2000 + min, txt: 'desviada de su ruta hace ' + ageText(min) });
             }
+            // Pendiente de trazar ruta: el destino esta definido pero la ruta
+            // aun no esta calculada (o esta obsoleta). Es prioritario para que
+            // el operario sepa que la unidad esta sin guia de ruta.
+            const dest = watchDest(info);
+            const ruta = rutaDe(info);
+            if (dest && (!ruta || ruta.destinoTexto !== dest)) {
+                items.push({ eco, tipo: 'ruta-pend', peso: 1500, txt: 'sin ruta hacia ' + dest });
+            }
             if (st.estado === 'detenida' && memo.detenidoDesde) {
                 const min = (ahora - memo.detenidoDesde) / 60;
                 items.push({ eco, tipo: 'det', peso: 1000 + min, txt: 'detenida hace ' + ageText(min) });
@@ -3921,7 +4056,8 @@
             offline: { col: 'var(--rondo-bad-fg)', ic: ICO.offline },
             vel: { col: 'var(--rondo-warn-fg)', ic: ICO.velocidad },
             desv: { col: 'var(--rondo-warn-fg)', ic: ICO.destino },
-            det: { col: 'var(--rondo-accent-2)', ic: ICO.detenida }
+            det: { col: 'var(--rondo-accent-2)', ic: ICO.detenida },
+            'ruta-pend': { col: 'var(--rondo-warn-fg)', ic: ICO.destino }
         };
         setHtml(cont, top.map((it) => {
             const mm = meta[it.tipo] || meta.det;
@@ -4032,12 +4168,28 @@
             case 'vel': return x.st.vel || 0;
             case 'zona': return zoneAt(x.st.lat, x.st.lon) || '';
             case 'odo': { const o = odometroDe(x.info); return o ? o.m : 0; }
+            case 'ruta': {
+                // Orden por estado de ruta: primero "LLEGO", luego "DESV",
+                // "EN RUTA", "SIN RUTA" y al final "SIN POSICION".
+                const er = estadoRuta(x.info, x.st);
+                const peso = { 'LLEGO': 0, 'DESV': 1, 'EN RUTA': 2, 'SIN RUTA': 3, 'SIN POSICION': 4 };
+                return (peso[er.estado] != null) ? peso[er.estado] : 5;
+            }
             default: return '';
         }
     }
     function cmpOrd(a, b) {
         if (typeof a === 'number' && typeof b === 'number') return a - b;
         return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+    }
+    function rutaClasePill(estado) {
+        switch (estado) {
+            case 'LLEGO': return 'ok';
+            case 'DESV': return 'warn';
+            case 'EN RUTA': return 'on';
+            case 'SIN POSICION': return 'off';
+            default: return 'mute';
+        }
     }
     function actualizarCabecerasOrden() {
         document.querySelectorAll('#rondo-wrap-unidades th.rondo-sortable').forEach((th) => {
@@ -4095,6 +4247,23 @@
             const odo = odometroDe(info);
             const km = odo ? Math.round(odo.m / 100) / 10 : 0;
             const celOdo = '<td class="odo" title="Odómetro acumulado (clic derecho para reiniciar)">' + km.toFixed(1) + '</td>';
+            // Columna Ruta: estado preciso respecto a la ruta trazada
+            // (EN RUTA / LLEGO / DESV / SIN POSICION / SIN RUTA) con el
+            // porcentaje y ETA cuando estan disponibles.
+            const er = estadoRuta(info, st);
+            let celRuta = '<td class="ruta" title="' + esc(er.estado) + '"><span class="rondo-pill ' + rutaClasePill(er.estado) + '">' + esc(er.estado) + '</span>';
+            if (er.snap) {
+                const pct = Math.round(er.snap.progreso * 100);
+                celRuta += '<div class="ruta-bar"><div class="ruta-bar-fill" style="width:' + pct + '%"></div></div>';
+                const etaSeg = calcularETA(er.snap, er.ruta, st.vel);
+                const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min' : '-';
+                celRuta += '<div class="ruta-meta">' + pct + '% · ' + etaTxt + '</div>';
+            } else if (watchDest(info)) {
+                // Hay destino pero la unidad esta sin coordenadas: indica que
+                // se esta trazando la ruta o que falta ubicacion.
+                celRuta += '<div class="ruta-meta">trazando...</div>';
+            }
+            celRuta += '</td>';
             return (
                 '<tr class="fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
                 '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
@@ -4107,11 +4276,12 @@
                 celVel +
                 '<td>' + esc(zona) + coords + '</td>' +
                 celOdo +
+                celRuta +
                 '<td><button class="mini rondo-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
                 '<span class="rondo-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
                 '</tr>'
             );
-        }).join('') || '<tr><td colspan="9">' + emptyState(ICO.panel, LANG.sinUni,
+        }).join('') || '<tr><td colspan="10">' + emptyState(ICO.panel, LANG.sinUni,
             'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
             '<button class="mini rondo-vacio-acc" data-acc="abrir-lista"><span class="rondo-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>');
         const aviso = byId('rondo-sel-vacio');
@@ -4245,6 +4415,8 @@
             const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
             const color = llego ? 'var(--rondo-ok-fg)' : (desviado ? 'var(--rondo-bad-fg)' : 'var(--rondo-accent-2)');
             const dest = r.destinoTexto || (r.destino.lat.toFixed(4) + ',' + r.destino.lon.toFixed(4));
+            const etaSeg = s ? calcularETA(s, r, st.vel) : null;
+            const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min ETA' : '';
             return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
                 '<span class="ico rondo-mi" style="color:' + color + '">' + ICO.destino + '</span>' +
                 '<div class="cuerpo"><b>' + esc(eco || info.nombre) + ' · ' + est + '</b>' +
@@ -4252,7 +4424,8 @@
                 '<div class="meta">' +
                 '<span class="regla">' + (s ? 'progreso ' + Math.round(s.progreso * 100) + '%' : 'sin datos') + '</span>' +
                 (s ? '<span>' + Math.round(s.dist) + ' m de la ruta</span>' : '') +
-                (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min ETA</span>' : '') +
+                (etaTxt ? '<span>' + etaTxt + '</span>' : '') +
+                (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min OSRM</span>' : '') +
                 '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
                 '</div></div>' +
                 '<button class="mini rondo-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="rondo-mi">' + ICO.exportar + '</span></button>' +
@@ -4766,6 +4939,9 @@
                 paintInfo();
             }
         });
+        // Cola de destinos editados por el usuario para planear su ruta con un
+        // debounce (asi no se lanza una peticion a OSRM por cada pulsacion).
+        const _destinoDebounce = new Map();
         document.getElementById('rondo-modal-lista').addEventListener('input', (e) => {
             if (!e.target.classList || !e.target.classList.contains('rondo-dest')) return;
             const eco = e.target.dataset.eco;
@@ -4774,6 +4950,18 @@
                 APP.watchMap[eco] = destino;
                 guardarLista();
                 paintInfo();
+                if (APP.config.autoRuta && destino) {
+                    if (_destinoDebounce.has(eco)) clearTimeout(_destinoDebounce.get(eco));
+                    _destinoDebounce.set(eco, setTimeout(() => {
+                        _destinoDebounce.delete(eco);
+                        const it = unitByEco(eco);
+                        if (!it) return;
+                        const r = rutaDe(it.info);
+                        if (r && r.destinoTexto === destino) return;
+                        planearRuta(eco, destino, null,
+                            (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
+                    }, 1500));
+                }
             }
         });
         byId('rondo-ejecutar').addEventListener('click', async () => {
@@ -5152,6 +5340,8 @@
             g('c-overpass').checked = !!APP.config.overpass;
             g('c-trazado').checked = !!APP.config.trazado;
             g('c-trazado-max').value = APP.config.trazadoMax;
+            g('c-auto-ruta').checked = APP.config.autoRuta !== false;
+            g('c-auto-ruta-modo').value = APP.config.autoRutaModo || 'osrm';
             g('c-hor-on').checked = !!APP.config.horario.on;
             g('c-hor-a').value = APP.config.horario.desde;
             g('c-hor-b').value = APP.config.horario.hasta;
@@ -5254,6 +5444,15 @@
             cf.overpass = g('c-overpass').checked;
             cf.trazado = g('c-trazado').checked;
             cf.trazadoMax = Math.max(50, isoNum(g('c-trazado-max').value, cf.trazadoMax));
+            cf.autoRuta = g('c-auto-ruta').checked;
+            const _modo = g('c-auto-ruta-modo').value;
+            cf.autoRutaModo = (_modo === 'astar' && cf.overpass) ? 'astar' : 'osrm';
+            // Si el usuario acaba de activar el trazado automatico, lanzamos
+            // un pase inmediato para las unidades pendientes.
+            const _autoAntes = APP.config.autoRuta;
+            if (!_autoAntes && cf.autoRuta) {
+                setTimeout(() => autoTrazarRutas(), 200);
+            }
             cf.horario.on = g('c-hor-on').checked;
             cf.horario.desde = g('c-hor-a').value || DEFAULTS.horario.desde;
             cf.horario.hasta = g('c-hor-b').value || DEFAULTS.horario.hasta;
@@ -5405,6 +5604,10 @@
         // Las ventanas de unidad pueden restaurarse despues de cargar la pagina;
         // revalidamos el contorno varias veces al inicio.
         [1500, 4000, 8000, 15000].forEach((t) => setTimeout(revalidarContornos, t));
+        // Trazado automatico inicial: cualquier unidad vigilada con destino
+        // pendiente recibe su ruta en background. Si ya hay ruta valida para
+        // el destino actual, no se recalcula.
+        setTimeout(() => { autoTrazarRutas(); }, 2500);
     }
     function log() { try { console.log.apply(console, ['[Rondo]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 
