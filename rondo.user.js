@@ -1099,10 +1099,10 @@
         const lista = APP.unidades || [];
         for (let i = 0; i < lista.length; i++) {
             const it = lista[i];
-            if (!shouldWatch(it)) continue;
             const info = parseUnitName(it);
             if (!info || !info.clave) continue;
             if (info.clave === infoLider.clave) continue;
+            const vigilada = shouldWatch(it);
             const st = unitState(it);
             if (!st || !st.online || st.lat == null || st.lon == null) continue;
             const distDirecta = haversine(stLider.lat, stLider.lon, st.lat, st.lon);
@@ -1120,6 +1120,7 @@
             miembros.push({
                 info: info,
                 st: st,
+                vigilada: vigilada,
                 enRuta: enRuta,
                 contrario: contrario,
                 distDirecta: distDirecta,
@@ -3737,7 +3738,7 @@
             '<h4>Modo caravana</h4>' +
             numRow('c-caravana-m', 'Tolerancia lateral al eje de la ruta (m)') +
             numRow('c-caravana-cerca', 'Cercanía sin ruta (m)') +
-            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 0 8px">En la pestaña <b>Caravana</b> se elige una unidad vigilada como lider y se listan las demas unidades que van muy cerca. Una unidad cuenta como acompañante si se proyecta a menos de la tolerancia lateral del eje de la ruta del lider; si la unidad no toca la polilinea pero esta dentro del radio de cercania tambien aparece (modo "cerca"). Las que avanzan en sentido contrario se marcan en rojo.</p>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 0 8px">En la pestaña <b>Caravana</b> se elige una unidad vigilada como lider y se listan todas las unidades cercanas (vigiladas o no). Una unidad cuenta como acompañante si se proyecta a menos de la tolerancia lateral del eje de la ruta del lider; si la unidad no toca la polilinea pero esta dentro del radio de cercania tambien aparece (modo "cerca"). Las que no estan en tu lista vigilada se marcan con la pildora <b>NO VIGILADA</b>. Las que avanzan en sentido contrario se marcan en rojo.</p>' +
             '<h4>Alertas de ruta</h4>' +
             checkRow('c-r-desvio', 'Desvío de ruta') +
             numRow('c-desvio-m', 'Desvío mayor a (m)') +
@@ -3809,7 +3810,7 @@
             '<li><b>Avisos</b>: historial filtrable por severidad. Exportable a CSV.</li>' +
             '<li><b>Rutas</b>: progreso de cada ruta y desvíos. Se planea desde el clic derecho de una unidad.</li>' +
             '<li><b>Geocercas</b>: unidades dentro de cada geocerca.</li>' +
-            '<li><b>Caravana</b>: unidades vigiladas cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania. Muestra sentido contrario y velocidad.</li>' +
+            '<li><b>Caravana</b>: unidades (vigiladas o no) cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +
             '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes &gt; Rutas.</p>' +
@@ -4679,6 +4680,7 @@
         }
         if (m.enRuta) meta.push('<span class="pill en-ruta">EN RUTA</span>');
         else meta.push('<span class="pill dim">CERCA</span>');
+        if (!m.vigilada) meta.push('<span class="pill dim">NO VIGILADA</span>');
         meta.push('<span class="pill">' + (m.st.online ? 'online' : 'offline') + '</span>');
         if (m.st.vel != null) meta.push('<span class="pill">' + Math.round(m.st.vel) + ' km/h</span>');
         if (m.enRuta && m.distEje != null) meta.push('<span class="pill">' + Math.round(m.distEje) + ' m del eje</span>');
