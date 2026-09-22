@@ -1,6 +1,6 @@
-# Manual de usuario · HJP Wialon
+# Manual de usuario · Rondo
 
-Guia completa para usar el userscript HJP Wialon sobre AE-Track o Wialon.
+Guia completa para usar el userscript Rondo sobre AE-Track o Wialon.
 Para instalar el script revisa el [README](./README.md).
 
 Indice:
@@ -26,7 +26,7 @@ Indice:
 
 ## Que es y que necesitas
 
-HJP Wialon es una capa de vigilancia que se ejecuta dentro de tu navegador
+Rondo es una capa de vigilancia que se ejecuta dentro de tu navegador
 mientras usas AE-Track o Wialon. No necesitas servidores ni instalar nada en la
 plataforma: lee la API nativa de Wialon que ya carga la pagina y trabaja con los
 datos de tu propia sesion.

@@ -1,15 +1,15 @@
 // ==UserScript==
-// @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
+// @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.16.0
-// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, odómetro por unidad, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
-// @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
-// @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
-// @copyright    Proyecto original de Héctor Ramírez (https://github.com/HectorRamirez-cpu)
+// @version      5.0.0
+// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Tamano de interfaz ajustable. Sin emojis.
+// @author       lerit, Hector Ramirez (HectorRamirez-cpu)
+// @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
+// @copyright    Proyecto original de Hector Ramirez (https://github.com/HectorRamirez-cpu)
 // @homepageURL  https://github.com/leriart/AE-Track
 // @supportURL   https://github.com/leriart/AE-Track/issues
-// @updateURL    https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js
-// @downloadURL  https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js
+// @updateURL    https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js
+// @downloadURL  https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js
 // @match        *://*.ae-track.com/*
 // @match        *://ae-track.com/*
 // @match        *://*.wialon.com/*
@@ -19,17 +19,72 @@
 // ==/UserScript==
 
 /* ============================================================================
-   HJP-Wialon V4 — arquitectura
+   Rondo — arquitectura
 
    - Una sola IIFE, modo estricto.
    - El estado vive en un objeto APP (auditable y consistente).
    - Las funciones se declaran una sola vez; cero warnings de ESLint.
-   - Sin emojis: solo Unicode (◉ ◎ ✕ △ ◆ ◇ ✓ ⚑ ⌖ ⧗ ↻ ⇩ ⌂ ↦ ↤ ⓘ ▂▄▆█ ☾ ☼ ⎘ ⌫ ⤢ ⤡ ⚙).
+   - Sin emojis: solo Unicode (◉ ◎ × △ ◆ ◇ ✓ ⚑ ⌖ ⧗ ↻ ⇩ ⌂ ↦ ↤ ⓘ ▂▄▆█ ☾ ☼ ⎘ ⌫ ⤢ ⤡ ⚙).
    - Reentrante: si la API de Wialon no está lista, avisa y reintenta.
    ============================================================================ */
 
-(function HJPWialon() {
+(function Rondo() {
     'use strict';
+
+    /* ====================== MIGRACION DESDE HJP WIALON ======================
+     * Rondo es un proyecto nuevo (namespace/nombre distinto). Para que los
+     * usuarios existentes conserven su configuracion, lista vigilada, rutas,
+     * odometro y perfiles, copiamos las claves antiguas hjp.api.* -> rondo.api.*
+     * y hjp.api.s.* -> rondo.api.s.* la primera vez que arranca el script.
+     * COPIAMOS, no movemos: asi el script "HJP · Wialon" (si alguien conserva
+     * la version anterior instalada) sigue funcionando con sus propios datos.
+     * La marca de migracion evita repetir el trabajo en arranques sucesivos.
+     */
+    (function migrarDesdeHjp() {
+        try {
+            if (window.localStorage.getItem('rondo.api.migrated')) return;
+            const pares = [
+                ['hjp.api.cfg',      'rondo.api.cfg'],
+                ['hjp.api.watch',    'rondo.api.watch'],
+                ['hjp.api.memo',     'rondo.api.memo'],
+                ['hjp.api.dismissed','rondo.api.dismissed'],
+                ['hjp.api.hist',     'rondo.api.hist'],
+                ['hjp.api.geo',      'rondo.api.geo'],
+                ['hjp.api.barra',    'rondo.api.barra'],
+                ['hjp.api.panelpos', 'rondo.api.panelpos'],
+                ['hjp.api.panelsize','rondo.api.panelsize'],
+                ['hjp.api.nmolestar','rondo.api.nmolestar'],
+                ['hjp.api.expanded', 'rondo.api.expanded'],
+                ['hjp.api.fullscreen','rondo.api.fullscreen'],
+                ['hjp.api.limites',  'rondo.api.limites'],
+                ['hjp.api.perfiles', 'rondo.api.perfiles'],
+                ['hjp.api.filtEstado','rondo.api.filtEstado'],
+                ['hjp.api.sortCol',  'rondo.api.sortCol'],
+                ['hjp.api.sortDir',  'rondo.api.sortDir'],
+                ['hjp.api.rutas',    'rondo.api.rutas'],
+                ['hjp.api.odometro', 'rondo.api.odometro'],
+                ['hjp.api.s.watch',  'rondo.api.s.watch'],
+                ['hjp.api.s.memo',   'rondo.api.s.memo'],
+                ['hjp.api.s.dismissed','rondo.api.s.dismissed'],
+                ['hjp.api.s.hist',   'rondo.api.s.hist'],
+                ['hjp.api.s.geo',    'rondo.api.s.geo'],
+                ['hjp.api.s.seleccion','rondo.api.s.seleccion'],
+                ['hjp.api.s.kpi',    'rondo.api.s.kpi'],
+                ['hjp.api.s.limites', 'rondo.api.s.limites'],
+                ['hjp.api.s.orden',  'rondo.api.s.orden'],
+                ['hjp.api.s.viajes', 'rondo.api.s.viajes'],
+                ['hjp.api.s.filtEstado','rondo.api.s.filtEstado']
+            ];
+            for (let i = 0; i < pares.length; i++) {
+                const from = pares[i][0], to = pares[i][1];
+                const v = window.localStorage.getItem(from);
+                if (v == null) continue;
+                if (window.localStorage.getItem(to) == null) window.localStorage.setItem(to, v);
+                // No borramos la clave antigua para no romper la version vieja.
+            }
+            window.localStorage.setItem('rondo.api.migrated', '1');
+        } catch (_) { /* sin localStorage o bloqueado: continuar */ }
+    })();
 
     /* ====================== ICONOS (UAX#39, sin color emoji) ====================== */
     const MAT = Object.freeze({
@@ -72,7 +127,7 @@
 
     /* ============================== IDIOMA ============================== */
     const LANG = Object.freeze({
-        titlePanel: 'HJP · API Wialon',
+        titlePanel: 'Rondo',
         busq: 'Filtrar eco / placa / zona…',
         velProm: 'km/h prom.',
         criticasHoy: 'críticas',
@@ -87,9 +142,9 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.16.0';
-    const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
-    const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
+    const VER = '5.0.0';
+    const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
+    const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
         const m = text.match(/@version\s+(\S+)/);
         return m ? m[1] : null;
@@ -109,42 +164,42 @@
 
     /* ============================ LOCALSTORAGE ============================ */
     const LS = Object.freeze({
-        cfg: 'hjp.api.cfg',
-        watch: 'hjp.api.watch',
-        memo: 'hjp.api.memo',
-        dismissed: 'hjp.api.dismissed',
-        hist: 'hjp.api.hist',
-        geo: 'hjp.api.geo',
-        barra: 'hjp.api.barra',
-        panelpos: 'hjp.api.panelpos',
-        panelsize: 'hjp.api.panelsize',
-        seleccion: 'hjp.api.seleccion',
-        kpi: 'hjp.api.kpi',
-        nmolestar: 'hjp.api.nmolestar',
-        expanded: 'hjp.api.expanded',
-        fullscreen: 'hjp.api.fullscreen',
-        limites: 'hjp.api.limites',
-        perfiles: 'hjp.api.perfiles',
-        filtEstado: 'hjp.api.filtEstado',
-        sortCol: 'hjp.api.sortCol',
-        sortDir: 'hjp.api.sortDir',
-        rutas: 'hjp.api.rutas',
-        odometro: 'hjp.api.odometro'
+        cfg: 'rondo.api.cfg',
+        watch: 'rondo.api.watch',
+        memo: 'rondo.api.memo',
+        dismissed: 'rondo.api.dismissed',
+        hist: 'rondo.api.hist',
+        geo: 'rondo.api.geo',
+        barra: 'rondo.api.barra',
+        panelpos: 'rondo.api.panelpos',
+        panelsize: 'rondo.api.panelsize',
+        seleccion: 'rondo.api.seleccion',
+        kpi: 'rondo.api.kpi',
+        nmolestar: 'rondo.api.nmolestar',
+        expanded: 'rondo.api.expanded',
+        fullscreen: 'rondo.api.fullscreen',
+        limites: 'rondo.api.limites',
+        perfiles: 'rondo.api.perfiles',
+        filtEstado: 'rondo.api.filtEstado',
+        sortCol: 'rondo.api.sortCol',
+        sortDir: 'rondo.api.sortDir',
+        rutas: 'rondo.api.rutas',
+        odometro: 'rondo.api.odometro'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
     // Se migran desde LS en el primer acceso para no perder datos existentes.
     const SS = Object.freeze({
-        watch: 'hjp.api.s.watch',
-        memo: 'hjp.api.s.memo',
-        dismissed: 'hjp.api.s.dismissed',
-        hist: 'hjp.api.s.hist',
-        geo: 'hjp.api.s.geo',
-        seleccion: 'hjp.api.s.seleccion',
-        kpi: 'hjp.api.s.kpi',
-        limites: 'hjp.api.s.limites',
-        orden: 'hjp.api.s.orden',
-        viajes: 'hjp.api.s.viajes'
+        watch: 'rondo.api.s.watch',
+        memo: 'rondo.api.s.memo',
+        dismissed: 'rondo.api.s.dismissed',
+        hist: 'rondo.api.s.hist',
+        geo: 'rondo.api.s.geo',
+        seleccion: 'rondo.api.s.seleccion',
+        kpi: 'rondo.api.s.kpi',
+        limites: 'rondo.api.s.limites',
+        orden: 'rondo.api.s.orden',
+        viajes: 'rondo.api.s.viajes'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -959,7 +1014,7 @@
                 { type: 'Feature', properties: { tipo: 'destino', texto: r.destinoTexto || '' }, geometry: { type: 'Point', coordinates: [r.destino.lon, r.destino.lat] } }
             ]
         };
-        descargarJSON(geojson, 'hjp_ruta_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
+        descargarJSON(geojson, 'rondo_ruta_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
         adviceOk('Ruta exportada', Math.round(r.total / 1000) + ' km');
     }
     function registrarTraza(info, st) {
@@ -993,7 +1048,7 @@
                 geometry: { type: 'LineString', coordinates: arr.map((p) => [p.lon, p.lat]) }
             }]
         };
-        descargarJSON(geojson, 'hjp_traza_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
+        descargarJSON(geojson, 'rondo_traza_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
         adviceOk('Traza exportada', arr.length + ' puntos');
     }
 
@@ -1215,7 +1270,7 @@
         features.push({ type: 'Feature', properties: { tipo: 'partida', zona: v.zonaPartida || '' }, geometry: { type: 'Point', coordinates: [v.partida.lon, v.partida.lat] } });
         if (v.destino) features.push({ type: 'Feature', properties: { tipo: 'destino' }, geometry: { type: 'Point', coordinates: [v.destino.lon, v.destino.lat] } });
         v.paradas.forEach((p, i) => features.push({ type: 'Feature', properties: { tipo: 'parada', n: i + 1, minutos: Math.round(p.durMin) }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } }));
-        descargarJSON({ type: 'FeatureCollection', features }, 'hjp_viaje_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
+        descargarJSON({ type: 'FeatureCollection', features }, 'rondo_viaje_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
         adviceOk('Viaje exportado', eco);
     }
 
@@ -1457,17 +1512,17 @@
         paintStateBadge();
     }
     function toast(item) {
-        const cont = byId('hjp-toasts');
+        const cont = byId('rondo-toasts');
         if (!cont) return;
-        const card = makeEl('div', { className: 'hjp-toast' });
+        const card = makeEl('div', { className: 'rondo-toast' });
         card.style.borderLeftColor = COL[item.sev] || '#555';
         const color = COL[item.sev] || '#777';
         card.innerHTML =
-            '<span class="ico hjp-mi" style="color:' + color + '">' + item.icono + '</span>' +
+            '<span class="ico rondo-mi" style="color:' + color + '">' + item.icono + '</span>' +
             '<div class="cuerpo"><b>' + esc(item.titulo) + '</b>' +
             (item.detalle ? '<span>' + esc(item.detalle) + '</span>' : '') +
             '</div><span class="hora">' + new Date(item.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
-            '<button class="mini" data-acc="x">✕</button>';
+            '<button class="mini" data-acc="x">×</button>';
         card.querySelector('[data-acc="x"]').addEventListener('click', () => { if (card.parentNode) card.parentNode.removeChild(card); });
         cont.appendChild(card);
         setTimeout(() => {
@@ -1497,18 +1552,18 @@
     function setBusy(btn, on) {
         if (!btn) return;
         if (on) {
-            if (btn.dataset.hjpTxt == null) btn.dataset.hjpTxt = btn.innerHTML;
-            btn.classList.add('hjp-busy');
+            if (btn.dataset.rondoTxt == null) btn.dataset.rondoTxt = btn.innerHTML;
+            btn.classList.add('rondo-busy');
             btn.setAttribute('aria-busy', 'true');
             btn.disabled = true;
-            btn.innerHTML = '<span class="hjp-spin"></span>';
+            btn.innerHTML = '<span class="rondo-spin"></span>';
         } else {
-            btn.classList.remove('hjp-busy');
+            btn.classList.remove('rondo-busy');
             btn.removeAttribute('aria-busy');
             btn.disabled = false;
-            if (btn.dataset.hjpTxt != null) {
-                btn.innerHTML = btn.dataset.hjpTxt;
-                delete btn.dataset.hjpTxt;
+            if (btn.dataset.rondoTxt != null) {
+                btn.innerHTML = btn.dataset.rondoTxt;
+                delete btn.dataset.rondoTxt;
             }
         }
     }
@@ -1521,14 +1576,14 @@
     /* ====================== DIALOGO PROPIO ======================
      * Sustituye a window.confirm/window.prompt con la misma estetica del
      * panel. Api:
-     *   hjpConfirm(titulo, mensaje, onOk, {peligro, okText, icon})
-     *   hjpPrompt(titulo, label, valor, onOk, {placeholder, type, okText})
+     *   rondoConfirm(titulo, mensaje, onOk, {peligro, okText, icon})
+     *   rondoPrompt(titulo, label, valor, onOk, {placeholder, type, okText})
      *   abrirDialogo({...})  // generico
      */
     let dlgEl = null, dlgPrevFocus = null;
     function ensureDialog() {
         if (dlgEl && dlgEl.isConnected) return dlgEl;
-        dlgEl = makeEl('div', { id: 'hjp-dialog' });
+        dlgEl = makeEl('div', { id: 'rondo-dialog' });
         dlgEl.setAttribute('role', 'dialog');
         dlgEl.setAttribute('aria-modal', 'true');
         document.body.appendChild(dlgEl);
@@ -1547,10 +1602,10 @@
     function abrirDialogo(opts) {
         const el = ensureDialog();
         dlgPrevFocus = document.activeElement;
-        const inputId = opts.input ? 'hjp-dlg-input' : '';
+        const inputId = opts.input ? 'rondo-dlg-input' : '';
         const inp = opts.input || {};
         el.innerHTML =
-            '<div class="dlg-head"><span class="hjp-mi">' + (opts.icon || ICO.info) + '</span>' +
+            '<div class="dlg-head"><span class="rondo-mi">' + (opts.icon || ICO.info) + '</span>' +
             '<span>' + esc(opts.titulo) + '</span></div>' +
             '<div class="dlg-body">' +
             (opts.html || '') +
@@ -1578,7 +1633,7 @@
         });
         return el;
     }
-    function hjpConfirm(titulo, mensaje, onOk, opts) {
+    function rondoConfirm(titulo, mensaje, onOk, opts) {
         const o = opts || {};
         abrirDialogo({
             icon: o.icon || ICO.medio,
@@ -1589,7 +1644,7 @@
             onOk: onOk
         });
     }
-    function hjpPrompt(titulo, label, value, onOk, opts) {
+    function rondoPrompt(titulo, label, value, onOk, opts) {
         const o = opts || {};
         abrirDialogo({
             icon: o.icon || ICO.ajustes,
@@ -1606,17 +1661,17 @@
     let cfgDirty = false;
     function marcarCfgDirty() {
         cfgDirty = true;
-        const d = byId('hjp-cfg-dirty');
+        const d = byId('rondo-cfg-dirty');
         if (d) d.classList.add('on');
     }
     function limpiarCfgDirty() {
         cfgDirty = false;
-        const d = byId('hjp-cfg-dirty');
+        const d = byId('rondo-cfg-dirty');
         if (d) d.classList.remove('on');
     }
     function emptyState(icon, titulo, hint, accion) {
-        return '<div class="hjp-vacio">' +
-            '<span class="hjp-mi">' + icon + '</span>' +
+        return '<div class="rondo-vacio">' +
+            '<span class="rondo-mi">' + icon + '</span>' +
             '<b>' + esc(titulo) + '</b>' +
             (hint ? '<span>' + hint + '</span>' : '') +
             (accion || '') +
@@ -1639,7 +1694,7 @@
     function abrirBienvenida() {
         abrirDialogo({
             icon: ICO.automatizar,
-            titulo: 'Bienvenido a HJP · Wialon',
+            titulo: 'Bienvenido a Rondo',
             cancel: false,
             okText: 'Empezar',
             html:
@@ -1938,7 +1993,7 @@
             reglaRuta(st, R, info, etq);
         } catch (e) {
             APP.stats.erroresReglas = (APP.stats.erroresReglas || 0) + 1;
-            if (APP.unlocked) console.warn('[HJP] regla', clave, e && e.message);
+            if (APP.unlocked) console.warn('[Rondo] regla', clave, e && e.message);
         }
         return R;
     }
@@ -1973,7 +2028,7 @@
                     nuevas[info.clave] = R;
                     actualizarOdometro(info, st, prev);
                 } catch (e) {
-                    if (APP.unlocked) { try { console.warn('[HJP] reg', info.clave, e && e.message); } catch (_) { /* noop */ } }
+                    if (APP.unlocked) { try { console.warn('[Rondo] reg', info.clave, e && e.message); } catch (_) { /* noop */ } }
                 }
             }
             APP.memo = nuevas;
@@ -1988,7 +2043,7 @@
             paintPanel();
             revalidarContornos();
         } catch (e) {
-            if (APP.unlocked) { try { console.warn('[HJP] refresh', e && e.message); } catch (_) { /* noop */ } }
+            if (APP.unlocked) { try { console.warn('[Rondo] refresh', e && e.message); } catch (_) { /* noop */ } }
         } finally {
             APP.refBusy = false;
         }
@@ -2022,7 +2077,7 @@
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
     function esUIPropia(el) {
         try {
-            return !!(el && el.closest && el.closest('#hjp-panel,#hjp-barra,#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto,#hjp-toasts,#hjp-aviso,#hjp-rail,#hjp-dialog'));
+            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog'));
         } catch (_) { return false; }
     }
     function findSearchInput() {
@@ -2201,7 +2256,7 @@
         if (!abiertas.length) return;
         // Ordena las ventanas segun la lista (orden configurado/arrastrado).
         const list = ordenarPorLista(abiertas, (v) => v.eco);
-        // Algoritmo portado del HJP original: rejilla con origen fijo (380, 60),
+        // Algoritmo portado del proyecto original: rejilla con origen fijo (380, 60),
         // gap=15 y tamaño de celda tomado de la primera ventana. Coloca en filas
         // de izquierda a derecha y baja por filas hasta agotar el ancho.
         const startX = 380, startY = 60, gap = 15;
@@ -2219,7 +2274,7 @@
             const targetY = startY + row * (cellH + gap);
             // Posiciona respetando transform si la ventana está posicionada por
             // transform (algunas skins de Wialon lo hacen); de lo contrario usa
-            // left/top como el HJP original.
+            // left/top como el original.
             const cs = getComputedStyle(win);
             const t = cs.transform;
             const vis = (cabecerade(win) || win).getBoundingClientRect();
@@ -2288,7 +2343,7 @@
         if (!btn) { closeAllWindows(); return; }
         if (btn.dataset.armado !== '1') btn.dataset.prevHtml = btn.innerHTML;
         btn.dataset.armado = '1';
-        btn.innerHTML = '<span class="hjp-mi">' + ICO.alto + '</span> Confirmar';
+        btn.innerHTML = '<span class="rondo-mi">' + ICO.alto + '</span> Confirmar';
         btn.classList.add('armado');
         btn.title = 'Pulsa otra vez para cerrar todas las ventanas';
         clearTimeout(btn._tArmado);
@@ -2298,8 +2353,8 @@
         if (!btn) return;
         btn.classList.remove('armado');
         if (btn.dataset.prevHtml) btn.innerHTML = btn.dataset.prevHtml;
-        if (btn.id === 'hjp-btn-close') btn.title = 'Cerrar todas las ventanas de unidades';
-        if (btn.id === 'hjp-sb-close') btn.title = 'Cerrar todas las ventanas de unidades';
+        if (btn.id === 'rondo-btn-close') btn.title = 'Cerrar todas las ventanas de unidades';
+        if (btn.id === 'rondo-sb-close') btn.title = 'Cerrar todas las ventanas de unidades';
         delete btn.dataset.prevHtml;
     }
     function aplicarContorno(cont, color) {
@@ -2372,7 +2427,7 @@
     }
     function marcarModoOrden(modo) {
         ['pegado', 'numero', 'numero-desc', 'alfabetico'].forEach((m) => {
-            const b = byId('hjp-orden-' + m);
+            const b = byId('rondo-orden-' + m);
             if (b) b.classList.toggle('activo', m === modo);
         });
     }
@@ -2440,7 +2495,7 @@
         return n;
     }
     function pintarModalLista() {
-        const body = byId('hjp-modal-lista');
+        const body = byId('rondo-modal-lista');
         if (!body) return;
         sincronizarOrden();
         marcarModoOrden(APP.ordenModo || '');
@@ -2451,22 +2506,22 @@
         }
         body.innerHTML = ecos.map((eco, i) => (
             '<div class="lista-row" data-eco="' + esc(eco) + '">' +
-            '<span class="hjp-drag-handle" draggable="true" title="Arrastrar para cambiar el orden">⠿</span>' +
+            '<span class="rondo-drag-handle" draggable="true" title="Arrastrar para cambiar el orden">⠿</span>' +
             '<span class="orden-num">' + (i + 1) + '</span>' +
             '<span class="eco">' + esc(eco) + '</span>' +
-            '<input type="text" class="hjp-dest" data-eco="' + esc(eco) + '" value="' + esc(APP.watchMap[eco] || '') + '" placeholder="destino opcional">' +
-            '<button class="hjp-del" data-eco="' + esc(eco) + '" draggable="false" title="Quitar de la lista"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
+            '<input type="text" class="rondo-dest" data-eco="' + esc(eco) + '" value="' + esc(APP.watchMap[eco] || '') + '" placeholder="destino opcional">' +
+            '<button class="rondo-del" data-eco="' + esc(eco) + '" draggable="false" title="Quitar de la lista"><span class="rondo-mi">' + ICO.cerrar + '</span></button>' +
             '</div>'
         )).join('');
     }
     // Arrastrar y soltar para reordenar la lista.
     function inicializarDragLista() {
-        const cont = byId('hjp-modal-lista');
+        const cont = byId('rondo-modal-lista');
         if (!cont || cont._dragInit) return;
         cont._dragInit = true;
         let dragEco = null;
         cont.addEventListener('dragstart', (e) => {
-            const h = e.target.closest && e.target.closest('.hjp-drag-handle');
+            const h = e.target.closest && e.target.closest('.rondo-drag-handle');
             if (!h) { e.preventDefault(); return; }
             const row = h.closest('.lista-row');
             dragEco = row ? row.dataset.eco : null;
@@ -2522,7 +2577,7 @@
         paintInfo();
     }
     function selectAllVisible() {
-        const rows = document.querySelectorAll('#hjp-body tr.fila');
+        const rows = document.querySelectorAll('#rondo-body tr.fila');
         let n = 0;
         rows.forEach((tr) => {
             const eco = tr.dataset.eco;
@@ -2580,7 +2635,7 @@
         paintVerifyButton();
     }
     function paintVerifyButton() {
-        const b = byId('hjp-verif');
+        const b = byId('rondo-verif');
         if (!b) return;
         b.classList.toggle('activo', !!APP.config.verificar);
         b.title = APP.config.verificar
@@ -2595,9 +2650,9 @@
         writeSession(SS.seleccion, Array.from(APP.seleccion));
         paintInfo();
         for (let i = 0; i < ordenados.length; i++) {
-            const b = byId('hjp-btn-main');
+            const b = byId('rondo-btn-main');
             if (b) {
-                b.innerHTML = '<span class="hjp-mi">' + ICO.automatizar + '</span> Buscando (' + (i + 1) + '/' + ordenados.length + ')...';
+                b.innerHTML = '<span class="rondo-mi">' + ICO.automatizar + '</span> Buscando (' + (i + 1) + '/' + ordenados.length + ')...';
                 b.style.background = 'linear-gradient(135deg,#f57c00,#ff9800)';
             }
             await openUnitWindow(ordenados[i]);
@@ -2605,10 +2660,10 @@
         }
         const inp = findSearchInput();
         if (inp) clearInput(inp);
-        const b = byId('hjp-btn-main');
+        const b = byId('rondo-btn-main');
         if (b) {
-            b.innerHTML = '<span class="hjp-mi">' + ICO.panel + '</span> Organizando...';
-            b.style.background = 'var(--hjp-accent-grad)';
+            b.innerHTML = '<span class="rondo-mi">' + ICO.panel + '</span> Organizando...';
+            b.style.background = 'var(--rondo-accent-grad)';
         }
         await sleep(400);
         await organizeWindows();
@@ -2616,7 +2671,7 @@
         resetMainBtn();
     }
     function resetMainBtn() {
-        mainBtn.innerHTML = '<span class="hjp-mi">' + ICO.automatizar + '</span> Automatizar Unidades';
+        mainBtn.innerHTML = '<span class="rondo-mi">' + ICO.automatizar + '</span> Automatizar Unidades';
         mainBtn.style.background = '';
     }
 
@@ -2640,24 +2695,24 @@
         const theme = (c.theme === 'auto')
             ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'claro' : 'oscuro')
             : c.theme;
-        if (theme === 'claro') document.body.setAttribute('data-hjp-theme', 'claro');
-        else document.body.removeAttribute('data-hjp-theme');
-        const ti = document.querySelector('#hjp-tema .hjp-mi');
+        if (theme === 'claro') document.body.setAttribute('data-rondo-theme', 'claro');
+        else document.body.removeAttribute('data-rondo-theme');
+        const ti = document.querySelector('#rondo-tema .rondo-mi');
         if (ti) ti.textContent = (theme === 'claro') ? ICO.sol : ICO.luna;
-        const btnTema = byId('hjp-tema');
+        const btnTema = byId('rondo-tema');
         if (btnTema) btnTema.title = 'Tema: ' + theme;
         if (c.acento) {
             const a2 = aclarar(c.acento, 0.28);
-            document.documentElement.style.setProperty('--hjp-accent', c.acento);
-            document.documentElement.style.setProperty('--hjp-accent-2', a2);
-            document.documentElement.style.setProperty('--hjp-accent-grad', 'linear-gradient(135deg,' + c.acento + ',' + a2 + ')');
+            document.documentElement.style.setProperty('--rondo-accent', c.acento);
+            document.documentElement.style.setProperty('--rondo-accent-2', a2);
+            document.documentElement.style.setProperty('--rondo-accent-grad', 'linear-gradient(135deg,' + c.acento + ',' + a2 + ')');
             const rgb = hexToRgb(c.acento);
-            if (rgb) document.documentElement.style.setProperty('--hjp-accent-rgb', rgb.r + ',' + rgb.g + ',' + rgb.b);
+            if (rgb) document.documentElement.style.setProperty('--rondo-accent-rgb', rgb.r + ',' + rgb.g + ',' + rgb.b);
         }
-        const p = byId('hjp-panel');
+        const p = byId('rondo-panel');
         if (p) p.classList.toggle('density-compact', c.density === 'compact');
         // Escala de interfaz: un solo factor multiplica textos y controles.
-        document.documentElement.style.setProperty('--hjp-esc', String(normalizarEscala(c.escalaUI)));
+        document.documentElement.style.setProperty('--rondo-esc', String(normalizarEscala(c.escalaUI)));
     }
     // Normaliza el factor de escala de UI a uno de los valores permitidos.
     const ESCALAS_UI = [1, 1.15, 1.3, 1.5];
@@ -2687,7 +2742,7 @@
         paintStateBadge();
     }
     function updateNoMolestar() {
-        const b = byId('hjp-nmolestar');
+        const b = byId('rondo-nmolestar');
         if (!b) return;
         if (nmActivo()) {
             const m = Math.ceil((APP.noMolestar.hasta - Date.now()) / 60000);
@@ -2702,429 +2757,429 @@
     function injectCSS() {
         const css =
             ":root{\n" +
-            "  --hjp-bg:#1f2330; --hjp-bg-soft:#272d3c; --hjp-bg-strong:#313849;\n" +
-            "  --hjp-border:#3a4252; --hjp-border-soft:#2f3645;\n" +
-            "  --hjp-fg:#e8ecf3; --hjp-fg-dim:#9aa4b5; --hjp-fg-mute:#6f7888;\n" +
-            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44; --hjp-accent-rgb:133,13,34;\n" +
-            "  --hjp-ok:#43a047; --hjp-ok-fg:#a5d6a7; --hjp-ok-bg:#1b3320;\n" +
-            "  --hjp-warn:#f9a825; --hjp-warn-fg:#ffe082; --hjp-warn-bg:#33270e;\n" +
-            "  --hjp-bad:#e53935; --hjp-bad-fg:#ef9a9a; --hjp-bad-bg:#2b1010;\n" +
-            "  --hjp-shadow:0 4px 14px rgba(0,0,0,.32);\n" +
-            "  --hjp-radius:10px;\n" +
-            "  --hjp-radius-sm:7px;\n" +
-            "  --hjp-accent-grad:linear-gradient(135deg,#950f27,#B52C44);\n" +
-            "  --hjp-elev:0 10px 26px rgba(0,0,0,.42);\n" +
-            "  --hjp-font:'Inter','Roboto','Segoe UI','Helvetica Neue',Arial,sans-serif;\n" +
-            "  --hjp-easing:cubic-bezier(.4,0,.2,1);\n" +
-            "  --hjp-esc:1;\n" +
+            "  --rondo-bg:#1f2330; --rondo-bg-soft:#272d3c; --rondo-bg-strong:#313849;\n" +
+            "  --rondo-border:#3a4252; --rondo-border-soft:#2f3645;\n" +
+            "  --rondo-fg:#e8ecf3; --rondo-fg-dim:#9aa4b5; --rondo-fg-mute:#6f7888;\n" +
+            "  --rondo-accent:#850D22; --rondo-accent-2:#B52C44; --rondo-accent-rgb:133,13,34;\n" +
+            "  --rondo-ok:#43a047; --rondo-ok-fg:#a5d6a7; --rondo-ok-bg:#1b3320;\n" +
+            "  --rondo-warn:#f9a825; --rondo-warn-fg:#ffe082; --rondo-warn-bg:#33270e;\n" +
+            "  --rondo-bad:#e53935; --rondo-bad-fg:#ef9a9a; --rondo-bad-bg:#2b1010;\n" +
+            "  --rondo-shadow:0 4px 14px rgba(0,0,0,.32);\n" +
+            "  --rondo-radius:10px;\n" +
+            "  --rondo-radius-sm:7px;\n" +
+            "  --rondo-accent-grad:linear-gradient(135deg,#950f27,#B52C44);\n" +
+            "  --rondo-elev:0 10px 26px rgba(0,0,0,.42);\n" +
+            "  --rondo-font:'Inter','Roboto','Segoe UI','Helvetica Neue',Arial,sans-serif;\n" +
+            "  --rondo-easing:cubic-bezier(.4,0,.2,1);\n" +
+            "  --rondo-esc:1;\n" +
             "}\n" +
-            "body[data-hjp-theme='claro']{\n" +
-            "  --hjp-bg:#f5f7fa; --hjp-bg-soft:#ffffff; --hjp-bg-strong:#eef2f7;\n" +
-            "  --hjp-border:#dfe4ec; --hjp-border-soft:#ebeef3;\n" +
-            "  --hjp-fg:#1d2433; --hjp-fg-dim:#5b6577; --hjp-fg-mute:#8993a3;\n" +
-            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44;\n" +
-            "  --hjp-ok:#2e7d32; --hjp-ok-fg:#1b5e20; --hjp-ok-bg:#e8f5e9;\n" +
-            "  --hjp-warn:#f9a825; --hjp-warn-fg:#8d6b00; --hjp-warn-bg:#fff4d4;\n" +
-            "  --hjp-bad:#c62828; --hjp-bad-fg:#b71c1c; --hjp-bad-bg:#fde2e2;\n" +
-            "  --hjp-shadow:0 2px 8px rgba(20,30,50,.10);\n" +
-            "  --hjp-elev:0 8px 22px rgba(20,30,50,.16);\n" +
+            "body[data-rondo-theme='claro']{\n" +
+            "  --rondo-bg:#f5f7fa; --rondo-bg-soft:#ffffff; --rondo-bg-strong:#eef2f7;\n" +
+            "  --rondo-border:#dfe4ec; --rondo-border-soft:#ebeef3;\n" +
+            "  --rondo-fg:#1d2433; --rondo-fg-dim:#5b6577; --rondo-fg-mute:#8993a3;\n" +
+            "  --rondo-accent:#850D22; --rondo-accent-2:#B52C44;\n" +
+            "  --rondo-ok:#2e7d32; --rondo-ok-fg:#1b5e20; --rondo-ok-bg:#e8f5e9;\n" +
+            "  --rondo-warn:#f9a825; --rondo-warn-fg:#8d6b00; --rondo-warn-bg:#fff4d4;\n" +
+            "  --rondo-bad:#c62828; --rondo-bad-fg:#b71c1c; --rondo-bad-bg:#fde2e2;\n" +
+            "  --rondo-shadow:0 2px 8px rgba(20,30,50,.10);\n" +
+            "  --rondo-elev:0 8px 22px rgba(20,30,50,.16);\n" +
             "}\n" +
-            "#hjp-toasts{position:fixed;bottom:20px;right:15px;z-index:1000002;display:flex;flex-direction:column;gap:8px;width:330px;pointer-events:none;transition:opacity .2s}\n" +
-            ".hjp-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:9px;background:var(--hjp-bg-soft);color:var(--hjp-fg);\n" +
-            "  border-left:4px solid var(--hjp-accent);border-radius:var(--hjp-radius);padding:10px 12px;box-shadow:var(--hjp-shadow);\n" +
-            "  font:12.5px/1.35 var(--hjp-font);animation:hjpIn .28s var(--hjp-easing) both}\n" +
-            ".hjp-toast.sale{opacity:0;transform:translateX(40px);transition:all .35s var(--hjp-easing)}\n" +
-            "@keyframes hjpIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}\n" +
-            ".hjp-toast .ico{font-size:18px;line-height:1;width:18px;text-align:center}\n" +
-            ".hjp-toast .cuerpo{display:flex;flex-direction:column;flex:1;min-width:0}\n" +
-            ".hjp-toast .cuerpo b{font-size:12.5px}\n" +
-            ".hjp-toast .cuerpo span{color:var(--hjp-fg-dim);font-size:11.5px;margin-top:2px}\n" +
-            ".hjp-toast .hora{color:var(--hjp-fg-mute);font-size:10px}\n" +
-            ".hjp-toast .mini{background:transparent;border:none;color:var(--hjp-fg-mute);cursor:pointer;font-size:11px}\n" +
-            "#hjp-barra{position:fixed;top:80px;right:15px;z-index:999999;display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:6px;\n" +
-            "  background:rgba(28,30,36,.94);border:1px solid var(--hjp-border);border-radius:10px;padding:5px;\n" +
-            "  box-shadow:var(--hjp-shadow);font:12px var(--hjp-font);user-select:none;touch-action:none;max-width:95vw}\n" +
-            "#hjp-barra.vertical{flex-direction:column;align-items:stretch}\n" +
-            "#hjp-barra .hjp-grip{cursor:grab;color:var(--hjp-fg-mute);padding:0 3px;font-size:15px;line-height:1;letter-spacing:-2px;user-select:none}\n" +
-            "#hjp-barra .hjp-grip:active{cursor:grabbing}\n" +
-            "#hjp-barra .hjp-btn{display:inline-flex;align-items:center;gap:4px;background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border-soft);border-radius:var(--hjp-radius-sm);padding:7px 11px;\n" +
-            "  cursor:pointer;font:600 12px var(--hjp-font);white-space:nowrap;transition:filter .15s,transform .1s,box-shadow .15s}\n" +
-            "#hjp-barra .hjp-btn:hover{filter:brightness(1.15);transform:translateY(-1px);box-shadow:var(--hjp-shadow)}\n" +
-            "#hjp-barra .hjp-btn:active{transform:translateY(0)}\n" +
-            "#hjp-barra .hjp-fold{background:var(--hjp-bg);color:var(--hjp-fg-dim);padding:4px 9px}\n" +
-            "#hjp-barra.plegada .hjp-btn:not(.hjp-fold){display:none}\n" +
-            "#hjp-btn-main,#hjp-btn-panel,#hjp-btn-modo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent}\n" +
-            "#hjp-btn-close{background:var(--hjp-bg-strong);color:var(--hjp-fg-dim)}\n" +
-            "#hjp-btn-update{background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;border-color:transparent;box-shadow:0 0 0 0 rgba(67,160,71,.5);animation:hjpPulseGreen 2s infinite}\n" +
-            "#hjp-panel .hjp-tile.armado,#hjp-barra .hjp-btn.armado{background:linear-gradient(135deg,#b71c1c,#e53935)!important;color:#fff!important;border-color:transparent!important;animation:hjpArmPulse .7s ease infinite}\n" +
-            "@keyframes hjpArmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}\n" +
-            "@keyframes hjpPulseGreen{0%{box-shadow:0 0 0 0 rgba(67,160,71,.55)}70%{box-shadow:0 0 0 9px rgba(67,160,71,0)}100%{box-shadow:0 0 0 0 rgba(67,160,71,0)}}\n" +
-            "#hjp-panel .hjp-iconbtn.warn{color:var(--hjp-warn)}\n" +
-            "#hjp-panel{position:fixed;left:10px;bottom:10px;width:470px;height:440px;display:none;flex-direction:column;\n" +
-            "  background:var(--hjp-bg);color:var(--hjp-fg);font:12.5px/1.4 var(--hjp-font);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius);\n" +
-            "  box-shadow:var(--hjp-elev);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh;\n" +
-            "  transition:transform .3s var(--hjp-easing),opacity .2s ease,border-color .2s}\n" +
-            "#hjp-panel.visible{opacity:1}\n" +
-            "#hjp-panel.lateral{left:auto;right:0;top:0;bottom:0;height:100vh;max-height:100vh;border-radius:0;resize:none;\n" +
+            "#rondo-toasts{position:fixed;bottom:20px;right:15px;z-index:1000002;display:flex;flex-direction:column;gap:8px;width:330px;pointer-events:none;transition:opacity .2s}\n" +
+            ".rondo-toast{pointer-events:auto;display:flex;align-items:flex-start;gap:9px;background:var(--rondo-bg-soft);color:var(--rondo-fg);\n" +
+            "  border-left:4px solid var(--rondo-accent);border-radius:var(--rondo-radius);padding:10px 12px;box-shadow:var(--rondo-shadow);\n" +
+            "  font:12.5px/1.35 var(--rondo-font);animation: rondoIn .28s var(--rondo-easing) both}\n" +
+            ".rondo-toast.sale{opacity:0;transform:translateX(40px);transition:all .35s var(--rondo-easing)}\n" +
+            "@keyframes rondoIn{from{opacity:0;transform:translateX(40px)}to{opacity:1;transform:none}}\n" +
+            ".rondo-toast .ico{font-size:18px;line-height:1;width:18px;text-align:center}\n" +
+            ".rondo-toast .cuerpo{display:flex;flex-direction:column;flex:1;min-width:0}\n" +
+            ".rondo-toast .cuerpo b{font-size:12.5px}\n" +
+            ".rondo-toast .cuerpo span{color:var(--rondo-fg-dim);font-size:11.5px;margin-top:2px}\n" +
+            ".rondo-toast .hora{color:var(--rondo-fg-mute);font-size:10px}\n" +
+            ".rondo-toast .mini{background:transparent;border:none;color:var(--rondo-fg-mute);cursor:pointer;font-size:11px}\n" +
+            "#rondo-barra{position:fixed;top:80px;right:15px;z-index:999999;display:flex;flex-wrap:wrap;row-gap:4px;align-items:center;gap:6px;\n" +
+            "  background:rgba(28,30,36,.94);border:1px solid var(--rondo-border);border-radius:10px;padding:5px;\n" +
+            "  box-shadow:var(--rondo-shadow);font:12px var(--rondo-font);user-select:none;touch-action:none;max-width:95vw}\n" +
+            "#rondo-barra.vertical{flex-direction:column;align-items:stretch}\n" +
+            "#rondo-barra .rondo-grip{cursor:grab;color:var(--rondo-fg-mute);padding:0 3px;font-size:15px;line-height:1;letter-spacing:-2px;user-select:none}\n" +
+            "#rondo-barra .rondo-grip:active{cursor:grabbing}\n" +
+            "#rondo-barra .rondo-btn{display:inline-flex;align-items:center;gap:4px;background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:7px 11px;\n" +
+            "  cursor:pointer;font:600 12px var(--rondo-font);white-space:nowrap;transition:filter .15s,transform .1s,box-shadow .15s}\n" +
+            "#rondo-barra .rondo-btn:hover{filter:brightness(1.15);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-barra .rondo-btn:active{transform:translateY(0)}\n" +
+            "#rondo-barra .rondo-fold{background:var(--rondo-bg);color:var(--rondo-fg-dim);padding:4px 9px}\n" +
+            "#rondo-barra.plegada .rondo-btn:not(.rondo-fold){display:none}\n" +
+            "#rondo-btn-main,#rondo-btn-panel,#rondo-btn-modo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-btn-close{background:var(--rondo-bg-strong);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-btn-update{background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;border-color:transparent;box-shadow:0 0 0 0 rgba(67,160,71,.5);animation: rondoPulseGreen 2s infinite}\n" +
+            "#rondo-panel .rondo-tile.armado,#rondo-barra .rondo-btn.armado{background:linear-gradient(135deg,#b71c1c,#e53935)!important;color:#fff!important;border-color:transparent!important;animation: rondoArmPulse .7s ease infinite}\n" +
+            "@keyframes rondoArmPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.04)}}\n" +
+            "@keyframes rondoPulseGreen{0%{box-shadow:0 0 0 0 rgba(67,160,71,.55)}70%{box-shadow:0 0 0 9px rgba(67,160,71,0)}100%{box-shadow:0 0 0 0 rgba(67,160,71,0)}}\n" +
+            "#rondo-panel .rondo-iconbtn.warn{color:var(--rondo-warn)}\n" +
+            "#rondo-panel{position:fixed;left:10px;bottom:10px;width:470px;height:440px;display:none;flex-direction:column;\n" +
+            "  background:var(--rondo-bg);color:var(--rondo-fg);font:12.5px/1.4 var(--rondo-font);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);\n" +
+            "  box-shadow:var(--rondo-elev);z-index:1000000;overflow:hidden;resize:both;min-width:360px;min-height:260px;max-width:1000px;max-height:92vh;\n" +
+            "  transition:transform .3s var(--rondo-easing),opacity .2s ease,border-color .2s}\n" +
+            "#rondo-panel.visible{opacity:1}\n" +
+            "#rondo-panel.lateral{left:auto;right:0;top:0;bottom:0;height:100vh;max-height:100vh;border-radius:0;resize:none;\n" +
             "  box-shadow:-14px 0 34px rgba(0,0,0,.35);border-top:none;border-bottom:none;border-right:none;will-change:transform}\n" +
-            "#hjp-panel.lateral.izquierda{left:0;right:auto;box-shadow:14px 0 34px rgba(0,0,0,.35);border-left:none;border-right:1px solid var(--hjp-border)}\n" +
-            "#hjp-panel.lateral header{cursor:default}\n" +
-            "#hjp-panel.lateral.oculto{transform:translateX(100%);opacity:0;pointer-events:none}\n" +
-            "#hjp-panel.lateral.izquierda.oculto{transform:translateX(-100%)}\n" +
-            "#hjp-panel.dragging{transition:none;opacity:1}\n" +
-            "#hjp-rail{position:fixed;top:50%;transform:translateY(-50%);width:34px;height:104px;background:var(--hjp-accent-grad);\n" +
+            "#rondo-panel.lateral.izquierda{left:0;right:auto;box-shadow:14px 0 34px rgba(0,0,0,.35);border-left:none;border-right:1px solid var(--rondo-border)}\n" +
+            "#rondo-panel.lateral header{cursor:default}\n" +
+            "#rondo-panel.lateral.oculto{transform:translateX(100%);opacity:0;pointer-events:none}\n" +
+            "#rondo-panel.lateral.izquierda.oculto{transform:translateX(-100%)}\n" +
+            "#rondo-panel.dragging{transition:none;opacity:1}\n" +
+            "#rondo-rail{position:fixed;top:50%;transform:translateY(-50%);width:34px;height:104px;background:var(--rondo-accent-grad);\n" +
             "  border:none;border-radius:17px;display:none;align-items:center;justify-content:center;flex-direction:column;gap:2px;\n" +
-            "  cursor:pointer;z-index:999999;box-shadow:var(--hjp-elev);color:#fff;font:600 15px var(--hjp-font);\n" +
-            "  opacity:0;transition:transform .25s var(--hjp-easing),opacity .25s ease,filter .15s}\n" +
-            "#hjp-rail:hover{transform:translateY(-50%) scale(1.08);filter:brightness(1.12)}\n" +
-            "#hjp-rail.mostrar{display:flex;opacity:1;animation:hjpRailIn .3s var(--hjp-easing)}\n" +
-            "#hjp-rail .hjp-rail-txt{writing-mode:vertical-rl;text-orientation:mixed;font-size:9px;letter-spacing:1.5px;opacity:.85}\n" +
-            "#hjp-rail.derecha{right:0;border-radius:17px 0 0 17px;padding-right:2px}\n" +
-            "#hjp-rail.izquierda{left:0;border-radius:0 17px 17px 0;padding-left:2px}\n" +
-            "@keyframes hjpRailIn{from{opacity:0;transform:translateY(-50%) scale(.8)}to{opacity:1;transform:translateY(-50%) scale(1)}}\n" +
-            ".hjp-mi{font-family:'Material Icons','Material Symbols Outlined';font-weight:normal;font-style:normal;font-size:1.1em;line-height:1;vertical-align:-2px;display:inline-block;text-transform:none;letter-spacing:normal;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}\n" +
-            "#hjp-barra .hjp-btn .hjp-mi{font-size:1.05em;vertical-align:-2px;margin-right:1px}\n" +
-            "#hjp-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--hjp-bg-strong),var(--hjp-bg-soft));cursor:move;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
-            "#hjp-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px}\n" +
-            "#hjp-panel .hjp-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:var(--hjp-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--hjp-easing),color .15s,transform .1s,box-shadow .15s}\n" +
-            "#hjp-panel .hjp-iconbtn:hover{background:var(--hjp-bg);border-color:var(--hjp-border);color:var(--hjp-fg);transform:translateY(-1px);box-shadow:var(--hjp-shadow)}\n" +
-            "#hjp-panel .hjp-iconbtn:active{transform:translateY(0)}\n" +
-            "#hjp-panel .hjp-iconbtn.activo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--hjp-accent-rgb),.4)}\n" +
-            "#hjp-panel .tabs{display:flex;gap:4px;background:var(--hjp-bg-soft);padding:6px 8px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--hjp-font);border-radius:var(--hjp-radius-sm);letter-spacing:.2px;transition:background .18s var(--hjp-easing),color .18s,box-shadow .18s,transform .1s}\n" +
-            "#hjp-panel .tab .etqt{font-size:11px;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
-            "#hjp-panel .tab:hover{color:var(--hjp-fg);background:var(--hjp-bg-strong);transform:translateY(-1px)}\n" +
-            "#hjp-panel .tab.activo{color:#fff;background:var(--hjp-accent-grad);box-shadow:0 3px 10px rgba(var(--hjp-accent-rgb),.35)}\n" +
-            "#hjp-panel .tab .contador{font-size:10px;background:var(--hjp-bg-strong);color:var(--hjp-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
-            "#hjp-panel .tab.activo .contador{background:rgba(255,255,255,.25);color:#fff}\n" +
-            "#hjp-panel .tools{display:flex;gap:6px;padding:7px 9px;border-bottom:1px solid var(--hjp-border-soft);flex-wrap:wrap;align-items:center;background:var(--hjp-bg-soft)}\n" +
-            "#hjp-panel .tools button{display:inline-flex;align-items:center;gap:4px;background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border-soft);border-radius:var(--hjp-radius-sm);padding:5px 9px;cursor:pointer;font-size:11px;font-weight:600;transition:background .15s,transform .1s,box-shadow .15s,border-color .15s}\n" +
-            "#hjp-panel .tools button:hover{background:var(--hjp-bg);border-color:var(--hjp-fg-mute);transform:translateY(-1px);box-shadow:var(--hjp-shadow)}\n" +
-            "#hjp-panel .tools button:active{transform:translateY(0)}\n" +
-            "#hjp-panel .tools button.activo{background:var(--hjp-accent-grad);color:#fff;border-color:transparent}\n" +
-            "#hjp-panel input.filtro{flex:1;min-width:90px;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
-            "#hjp-panel input.filtro:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
-            "#hjp-panel select.filtro{flex:0 0 auto;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
-            "#hjp-panel select.filtro:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
-            "#hjp-panel .severidad-pick{display:flex;gap:3px;align-items:center;padding:6px 9px;background:var(--hjp-bg-soft);border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel .severidad-pick span{cursor:pointer;padding:2px 6px;border-radius:5px;font:600 11px var(--hjp-font);border:1px solid var(--hjp-border);color:var(--hjp-fg-dim)}\n" +
-            "#hjp-panel .severidad-pick span.activo{border-color:var(--hjp-accent-2);color:var(--hjp-fg)}\n" +
-            "#hjp-panel .tabla{overflow:auto;flex:1}\n" +
-            "#hjp-panel table{width:100%;border-collapse:collapse}\n" +
-            "#hjp-panel th{position:sticky;top:0;background:var(--hjp-bg-soft);text-align:left;padding:6px 9px;font-size:11px;color:var(--hjp-fg-dim);border-bottom:1px solid var(--hjp-border-soft);z-index:1;letter-spacing:.3px;text-transform:uppercase}\n" +
-            "#hjp-panel td{padding:5px 9px;border-top:1px solid var(--hjp-border-soft);white-space:nowrap;font-size:12px}\n" +
-            "#hjp-panel tr.fila{cursor:pointer;transition:background .1s}\n" +
-            "#hjp-panel tr.fila:hover{background:var(--hjp-bg-soft)}\n" +
-            "@keyframes hjpPulse{0%{background:var(--hjp-warn-bg)}to{background:transparent}}\n" +
-            "#hjp-panel tr.off td.eco{color:var(--hjp-bad-fg);font-weight:bold}\n" +
-            "#hjp-panel tr.det td.eco{color:var(--hjp-warn-fg)}\n" +
-            "#hjp-panel tr.on td.eco{color:var(--hjp-ok-fg)}\n" +
-            "#hjp-panel .estadoicon{display:inline-block;width:18px;text-align:center;font-size:13px}\n" +
-            "#hjp-panel .estadoicon.off{color:var(--hjp-bad-fg)}\n" +
-            "#hjp-panel .estadoicon.det{color:var(--hjp-warn-fg)}\n" +
-            "#hjp-panel .estadoicon.on{color:var(--hjp-ok-fg)}\n" +
-            "#hjp-panel .mini{display:inline-flex;align-items:center;justify-content:center;gap:3px;background:var(--hjp-bg-strong);border:1px solid var(--hjp-border-soft);color:var(--hjp-fg-dim);border-radius:var(--hjp-radius-sm);cursor:pointer;padding:3px 8px;font-size:11px;transition:background .15s,color .15s,transform .1s,border-color .15s}\n" +
-            "#hjp-panel .mini:hover{background:var(--hjp-bg);color:var(--hjp-fg);border-color:var(--hjp-fg-mute);transform:translateY(-1px)}\n" +
-            "#hjp-panel .minusil.on{background:var(--hjp-warn-bg);color:var(--hjp-warn-fg)}\n" +
-            "#hjp-panel .alerta{display:flex;gap:9px;padding:8px 10px;border-bottom:1px solid var(--hjp-border-soft);align-items:flex-start;transition:background .1s}\n" +
-            "#hjp-panel .alerta:hover{background:var(--hjp-bg-soft)}\n" +
-            "#hjp-panel .alerta .ico{font-size:16px;line-height:1.15;width:18px;text-align:center}\n" +
-            "#hjp-panel .alerta .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}\n" +
-            "#hjp-panel .alerta b{font-size:12px;letter-spacing:.2px}\n" +
-            "#hjp-panel .alerta span{color:var(--hjp-fg-dim);font-size:11.5px;margin-top:2px}\n" +
-            "#hjp-panel .alerta .hora{color:var(--hjp-fg-mute);font-size:10px}\n" +
-            "#hjp-panel .alerta .meta{display:flex;gap:6px;font-size:10px;color:var(--hjp-fg-mute);margin-top:3px;flex-wrap:wrap}\n" +
-            "#hjp-panel .alerta .meta .regla{background:var(--hjp-bg-strong);padding:1px 5px;border-radius:4px}\n" +
-            "#hjp-dash{display:flex;flex-direction:column;padding:14px;gap:12px;overflow:auto;flex:1;max-width:1200px;margin:0 auto;box-sizing:border-box}\n" +
-            "#hjp-dash .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}\n" +
-            "#hjp-panel .tabla{padding:8px 4px}\n" +
-            "#hjp-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
-            "#hjp-panel .kpi{background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
-            "#hjp-panel .kpi .etq{font-size:10px;color:var(--hjp-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
-            "#hjp-panel .kpi .valor{font:600 18px/1 var(--hjp-font);color:var(--hjp-fg)}\n" +
-            "#hjp-panel .kpi.ok .valor{color:var(--hjp-ok-fg)}\n" +
-            "#hjp-panel .kpi.warn .valor{color:var(--hjp-warn-fg)}\n" +
-            "#hjp-panel .kpi.bad .valor{color:var(--hjp-bad-fg)}\n" +
-            "#hjp-panel .kpi.sub .valor{color:var(--hjp-fg)}\n" +
-            "#hjp-panel .kpi .resumen{font-size:11px;color:var(--hjp-fg-dim)}\n" +
-            "#hjp-dash .sparkline{display:block;width:100%;height:44px;background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);border-radius:7px;padding:6px}\n" +
-            "#hjp-dash .sparkline path{fill:none;stroke-width:1.6}\n" +
-            "#hjp-dash .recent{padding:9px;background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);border-radius:8px}\n" +
-            "#hjp-dash .recent h4{margin:0 0 6px;font-size:11px;color:var(--hjp-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
-            "#hjp-dash .recent .alerta{padding:5px 0;border-bottom-color:var(--hjp-border-soft)}\n" +
-            "#hjp-panel table.zone td{padding:5px 9px}\n" +
-            "#hjp-panel table.zone tr.fila td:first-child{color:var(--hjp-accent-2);font-weight:600}\n" +
-            "#hjp-panel .zone .contador-unidades{color:var(--hjp-ok-fg);font-weight:600}\n" +
-            "#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--hjp-bg-soft);padding:14px;\n" +
-            "  border-radius:10px;box-shadow:var(--hjp-shadow);z-index:1000001;display:none;flex-direction:column;gap:10px;\n" +
-            "  width:340px;color:var(--hjp-fg);font:13px var(--hjp-font);border:1px solid var(--hjp-border)}\n" +
-            "#hjp-modal{width:520px;max-height:88vh;overflow-y:auto;overflow-x:hidden;padding:0}\n" +
-            "#hjp-modal > h3{padding:12px 14px 6px}\n" +
-            "#hjp-modal > p{padding:0 14px 8px}\n" +
-            "#hjp-modal > textarea{margin:0 14px 0;width:calc(100% - 28px);height:88px}\n" +
-            "#hjp-modal .hjp-modal-actions{display:flex;gap:6px;padding:6px 14px 0}\n" +
-            "#hjp-modal .hjp-modal-actions button{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:6px;padding:4px 10px;cursor:pointer;font:11.5px var(--hjp-font)}\n" +
-            "#hjp-modal .hjp-modal-actions button:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-fg-mute)}\n" +
-            "#hjp-modal .mini{display:inline-flex;align-items:center;justify-content:center;gap:3px;background:var(--hjp-bg-strong);border:1px solid var(--hjp-border-soft);color:var(--hjp-fg-dim);border-radius:var(--hjp-radius-sm);cursor:pointer;padding:4px 9px;font:600 11px var(--hjp-font);transition:background .15s,color .15s,transform .1s,border-color .15s,box-shadow .15s}\n" +
-            "#hjp-modal .mini:hover{background:var(--hjp-bg);color:var(--hjp-fg);border-color:var(--hjp-fg-mute);transform:translateY(-1px)}\n" +
-            "#hjp-modal-lista-wrap{margin:8px 14px 0;border:1px solid var(--hjp-border);border-radius:7px;max-height:200px;overflow:auto}\n" +
-            "#hjp-modal-lista .lista-row{display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-modal-lista .lista-row:last-child{border-bottom:none}\n" +
-            "#hjp-modal-lista .lista-row .eco{font:600 12px monospace;color:var(--hjp-accent-2);min-width:64px}\n" +
-            "#hjp-modal-lista .lista-row .hjp-dest{flex:1;background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:5px;padding:4px 7px;font-size:12px}\n" +
-            "#hjp-modal-lista .lista-row .hjp-dest:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
-            "#hjp-modal-lista .lista-row button{background:transparent;border:1px solid var(--hjp-border);color:var(--hjp-fg-dim);border-radius:5px;padding:2px 9px;cursor:pointer;font-size:11px}\n" +
-            "#hjp-modal-lista .lista-row button:hover{color:var(--hjp-bad-fg);border-color:var(--hjp-bad-fg)}\n" +
-            "#hjp-modal-lista .lista-empty{padding:14px;text-align:center;color:var(--hjp-fg-mute);font-size:12px}\n" +
-            "#hjp-modal-lista .lista-row.arrastrando{opacity:.5;background:var(--hjp-bg-strong)}\n" +
-            "#hjp-modal-lista .hjp-drag-handle{cursor:grab;color:var(--hjp-fg-mute);font-size:14px;letter-spacing:-2px;padding:0 4px;user-select:none;touch-action:none}\n" +
-            "#hjp-modal-lista .hjp-drag-handle:active{cursor:grabbing}\n" +
-            "#hjp-modal-lista .orden-num{font:600 10px monospace;color:var(--hjp-fg-mute);min-width:16px;text-align:right}\n" +
-            "#hjp-modal .hjp-order-tools{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:8px 14px 0;padding:7px 9px;background:var(--hjp-bg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);font-size:11px;color:var(--hjp-fg-dim)}\n" +
-            "#hjp-modal .hjp-order-tools .etq{font-weight:600;color:var(--hjp-fg)}\n" +
-            "#hjp-modal .hjp-order-tools button.activo{background:var(--hjp-accent);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--hjp-accent-rgb),.35)}\n" +
-            "#hjp-modal .hjp-modal-add{display:flex;gap:6px;padding:8px 14px 0}\n" +
-            "#hjp-modal .hjp-modal-add input{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:5px;padding:5px 7px;font-size:12px;flex:1;min-width:60px}\n" +
-            "#hjp-modal .hjp-modal-add input:focus{outline:none;border-color:var(--hjp-accent-2)}\n" +
-            "#hjp-modal > .hjp-acciones{margin-top:10px;padding:10px 14px;border-top:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-modal p code{background:var(--hjp-bg);padding:1px 4px;border-radius:3px;color:var(--hjp-accent-2)}\n" +
-            "#hjp-config{width:560px;max-height:88vh;overflow:hidden;padding:0}\n" +
-            "#hjp-ayuda{width:620px;max-width:94vw;max-height:88vh;overflow:hidden;padding:0}\n" +
-            "#hjp-ayuda .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--hjp-bg);border-bottom:1px solid var(--hjp-border-soft);border-radius:10px 10px 0 0}\n" +
-            "#hjp-ayuda .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
-            "#hjp-ayuda .ayuda-body{overflow:auto;padding:12px 14px;max-height:calc(88vh - 60px)}\n" +
-            "#hjp-ayuda h4{margin:12px 0 6px;font-size:11px;color:var(--hjp-accent-2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--hjp-border-soft);padding-bottom:4px}\n" +
-            "#hjp-ayuda h4:first-child{margin-top:0}\n" +
-            "#hjp-ayuda p,#hjp-ayuda li{font-size:12.5px;color:var(--hjp-fg);margin:4px 0}\n" +
-            "#hjp-ayuda ul{margin:4px 0 4px 18px;padding:0}\n" +
-            "#hjp-ayuda code,#hjp-ayuda kbd{background:var(--hjp-bg);padding:1px 5px;border-radius:4px;font:11.5px monospace;color:var(--hjp-accent-2);border:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-ayuda .pasos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:6px}\n" +
-            "#hjp-ayuda .paso{background:var(--hjp-bg);border:1px solid var(--hjp-border);border-radius:8px;padding:9px 11px}\n" +
-            "#hjp-ayuda .paso b{display:block;color:var(--hjp-accent-2);font-size:12px;margin-bottom:3px}\n" +
-            "#hjp-ayuda .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft);border-radius:0 0 10px 10px}\n" +
-            "#hjp-ayuda .hjp-iconbtn{background:transparent;border:1px solid transparent;color:var(--hjp-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1}\n" +
-            "#hjp-ayuda .hjp-iconbtn:hover{background:var(--hjp-bg-strong);border-color:var(--hjp-border);color:var(--hjp-fg)}\n" +
-            "#hjp-ayuda button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
-            "#hjp-ayuda button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--hjp-accent-rgb),.4);filter:brightness(1.05)}\n" +
-            "#hjp-ayuda button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
-            "#hjp-ayuda button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
-            "#hjp-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--hjp-bg);border-bottom:1px solid var(--hjp-border-soft);border-radius:10px 10px 0 0}\n" +
-            "#hjp-config .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
-            "#hjp-config .cfg-tabs{display:flex;background:var(--hjp-bg);padding:0 10px;border-bottom:1px solid var(--hjp-border-soft);gap:6px;flex-wrap:wrap}\n" +
-            "#hjp-config .cfg-tab{background:transparent;border:none;color:var(--hjp-fg-dim);padding:9px 12px;cursor:pointer;font:600 11.5px var(--hjp-font);border-bottom:2px solid transparent;letter-spacing:.4px;text-transform:uppercase}\n" +
-            "#hjp-config .cfg-tab.activo{color:var(--hjp-fg);border-bottom-color:var(--hjp-accent-2)}\n" +
-            "#hjp-config .cfg-body{overflow:auto;padding:12px;max-height:calc(88vh - 110px)}\n" +
-            "#hjp-config .cfg-body h4{margin:8px 0 6px;font-size:11px;color:var(--hjp-accent-2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--hjp-border-soft);padding-bottom:4px}\n" +
-            "#hjp-config .cfg-body h4:first-child{margin-top:0}\n" +
-            "#hjp-config label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;padding:3px 0}\n" +
-            "#hjp-config label.full{display:block}\n" +
-            "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time],\n" +
-            "#hjp-config input[type=color],#hjp-config textarea,#hjp-config select{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:5px;padding:4px 7px;font:12px var(--hjp-font)}\n" +
-            "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time]{width:90px}\n" +
-            "#hjp-config input[type=color]{width:55px;padding:0;height:30px}\n" +
-            "#hjp-config textarea{width:100%;height:90px;font:11.5px monospace;resize:vertical;box-sizing:border-box}\n" +
-            "#hjp-config .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft);border-radius:0 0 10px 10px}\n" +
-            "#hjp-config .row-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}\n" +
-            "#hjp-config .row-grid label{padding:1px 0}\n" +
-            "#hjp-config button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
-            "#hjp-config button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--hjp-accent-rgb),.4);filter:brightness(1.05)}\n" +
-            "#hjp-config button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
-            "#hjp-config button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
-            "#hjp-modal textarea{width:100%;height:160px;resize:none;padding:10px;border-radius:6px;border:1px solid var(--hjp-border);background:var(--hjp-bg);color:var(--hjp-fg);box-sizing:border-box;font:12px monospace}\n" +
-            "#hjp-modal h3{margin:0;text-align:center;font-size:13px;color:var(--hjp-fg)}\n" +
-            "#hjp-modal button.accbtn{background:var(--hjp-accent-grad);color:#fff;border:none;border-radius:var(--hjp-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
-            "#hjp-modal button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--hjp-accent-rgb),.4);filter:brightness(1.05)}\n" +
-            "#hjp-modal button.cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);transition:background .15s,transform .12s}\n" +
-            "#hjp-modal button.cancel:hover{background:var(--hjp-bg);transform:translateY(-1px)}\n" +
-            "#hjp-contexto{padding:4px;gap:0;width:auto;min-width:170px}\n" +
-            "#hjp-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--hjp-border-soft);display:flex;align-items:center;gap:8px}\n" +
-            "#hjp-contexto .op .hjp-mi{color:var(--hjp-accent-2);font-size:1.15em}\n" +
-            "#hjp-contexto .op:last-child{border-bottom:none}\n" +
-            "#hjp-contexto .op:hover{background:var(--hjp-bg-strong)}\n" +
-            "#hjp-contexto .sep{height:1px;background:var(--hjp-border-soft);margin:2px 0}\n" +
-            ".hjp-acciones{display:flex;justify-content:space-between;gap:8px}\n" +
-            "#hjp-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--hjp-bad);color:#fff;padding:6px 16px;\n" +
-            "  border-radius:5px;z-index:1000002;font:12px var(--hjp-font);display:none;box-shadow:var(--hjp-shadow)}\n" +
-            "body.hjp-lateral #hjp-barra{display:none}\n" +
-            "#hjp-panel .hjp-sidebar-tools{display:none;gap:8px;padding:10px;background:linear-gradient(180deg,var(--hjp-bg-strong),var(--hjp-bg-soft));border-bottom:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-panel.lateral .hjp-sidebar-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));border-top:3px solid var(--hjp-accent)}\n" +
-            "#hjp-panel .hjp-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-width:0;overflow:hidden;padding:11px 6px;border-radius:var(--hjp-radius);background:var(--hjp-bg-soft);border:1px solid var(--hjp-border-soft);color:var(--hjp-fg);cursor:pointer;font:600 10.5px var(--hjp-font);transition:background .16s var(--hjp-easing),transform .12s,box-shadow .16s,border-color .16s}\n" +
-            "#hjp-panel .hjp-tile:hover{background:var(--hjp-bg);border-color:var(--hjp-fg-mute);transform:translateY(-2px);box-shadow:var(--hjp-shadow)}\n" +
-            "#hjp-panel .hjp-tile:active{transform:translateY(0)}\n" +
-            "#hjp-panel .hjp-tile .hjp-mi{font-size:21px;color:var(--hjp-accent-2);line-height:1}\n" +
-            "#hjp-panel .hjp-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
-            "#hjp-panel .hjp-tile.primary{background:var(--hjp-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(var(--hjp-accent-rgb),.35)}\n" +
-            "#hjp-panel .hjp-tile.primary .hjp-mi{color:#fff}\n" +
-            "#hjp-barra .hjp-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
-            "#hjp-barra .hjp-badge-estado.ok{background:var(--hjp-ok)}\n" +
-            "#hjp-barra .hjp-badge-estado.warn{background:var(--hjp-warn)}\n" +
-            "#hjp-barra .hjp-badge-estado.bad{background:var(--hjp-bad)}\n" +
-            "#hjp-barra .hjp-badge-estado.nm{background:#7d8595;outline:2px dashed var(--hjp-warn)}\n" +
-            "#hjp-panel.density-compact .kpi{padding:6px 9px}\n" +
-            "#hjp-panel.density-compact .kpi .valor{font-size:16px}\n" +
-            "#hjp-panel.density-compact td,#hjp-panel.density-compact th{padding:3px 9px;font-size:11.5px}\n" +
-            "#hjp-panel .hjp-iconbtn:focus-visible,#hjp-panel .tab:focus-visible,#hjp-panel .tools button:focus-visible{outline:2px solid var(--hjp-accent-2);outline-offset:1px}\n" +
-            "#hjp-panel table .col-sel{width:28px;text-align:center;padding:4px 6px}\n" +
-            "#hjp-panel table .hjp-sel{accent-color:var(--hjp-accent);cursor:pointer;width:14px;height:14px}\n" +
-            "#hjp-panel tr.sel-row td{background:var(--hjp-ok-bg)}\n" +
-            "#hjp-panel tr.sel-row:hover td{background:linear-gradient(0deg,var(--hjp-ok-bg),var(--hjp-bg-soft))}\n" +
-            "#hjp-panel table th:first-child{padding-left:10px}\n" +
-            "#hjp-panel ::-webkit-scrollbar,#hjp-config ::-webkit-scrollbar,#hjp-modal ::-webkit-scrollbar,#hjp-ayuda ::-webkit-scrollbar{width:9px;height:9px}\n" +
-            "#hjp-panel ::-webkit-scrollbar-thumb,#hjp-config ::-webkit-scrollbar-thumb,#hjp-modal ::-webkit-scrollbar-thumb,#hjp-ayuda ::-webkit-scrollbar-thumb{background:var(--hjp-border);border-radius:8px;border:2px solid transparent;background-clip:content-box}\n" +
-            "#hjp-panel ::-webkit-scrollbar-thumb:hover,#hjp-config ::-webkit-scrollbar-thumb:hover,#hjp-modal ::-webkit-scrollbar-thumb:hover,#hjp-ayuda ::-webkit-scrollbar-thumb:hover{background:var(--hjp-fg-mute);background-clip:content-box}\n" +
-            "#hjp-panel ::-webkit-scrollbar-track{background:transparent}\n" +
-            "#hjp-panel .hjp-sidebar-tools .hjp-tile:focus-visible,#hjp-panel .mini:focus-visible{outline:2px solid var(--hjp-accent-2);outline-offset:1px}\n" +
-            "@keyframes hjpFadeUp{from{opacity:0}to{opacity:1}}\n" +
-            "#hjp-panel .kpi,#hjp-panel .recent,#hjp-panel .hjp-tile{animation:hjpFadeUp .3s var(--hjp-easing) both}\n" +
-            "#hjp-panel .kpi{position:relative;overflow:hidden}\n" +
-            "#hjp-panel .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--hjp-accent-grad);opacity:.7}\n" +
-            "#hjp-panel .kpi.ok::before{background:var(--hjp-ok)}\n" +
-            "#hjp-panel .kpi.warn::before{background:var(--hjp-warn)}\n" +
-            "#hjp-panel .kpi.bad::before{background:var(--hjp-bad)}\n" +
-            "#hjp-panel .kpi:hover{transform:translateY(-2px);box-shadow:var(--hjp-shadow)}\n" +
-            "#hjp-panel .kpi{transition:transform .15s var(--hjp-easing),box-shadow .15s}\n" +
-            "#hjp-barra{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
-            "#hjp-panel header{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
+            "  cursor:pointer;z-index:999999;box-shadow:var(--rondo-elev);color:#fff;font:600 15px var(--rondo-font);\n" +
+            "  opacity:0;transition:transform .25s var(--rondo-easing),opacity .25s ease,filter .15s}\n" +
+            "#rondo-rail:hover{transform:translateY(-50%) scale(1.08);filter:brightness(1.12)}\n" +
+            "#rondo-rail.mostrar{display:flex;opacity:1;animation: rondoRailIn .3s var(--rondo-easing)}\n" +
+            "#rondo-rail .rondo-rail-txt{writing-mode:vertical-rl;text-orientation:mixed;font-size:9px;letter-spacing:1.5px;opacity:.85}\n" +
+            "#rondo-rail.derecha{right:0;border-radius:17px 0 0 17px;padding-right:2px}\n" +
+            "#rondo-rail.izquierda{left:0;border-radius:0 17px 17px 0;padding-left:2px}\n" +
+            "@keyframes rondoRailIn{from{opacity:0;transform:translateY(-50%) scale(.8)}to{opacity:1;transform:translateY(-50%) scale(1)}}\n" +
+            ".rondo-mi{font-family:'Material Icons','Material Symbols Outlined';font-weight:normal;font-style:normal;font-size:1.1em;line-height:1;vertical-align:-2px;display:inline-block;text-transform:none;letter-spacing:normal;white-space:nowrap;word-wrap:normal;direction:ltr;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}\n" +
+            "#rondo-barra .rondo-btn .rondo-mi{font-size:1.05em;vertical-align:-2px;margin-right:1px}\n" +
+            "#rondo-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--rondo-bg-strong),var(--rondo-bg-soft));cursor:move;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
+            "#rondo-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px}\n" +
+            "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
+            "#rondo-panel .rondo-iconbtn:hover{background:var(--rondo-bg);border-color:var(--rondo-border);color:var(--rondo-fg);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .rondo-iconbtn:active{transform:translateY(0)}\n" +
+            "#rondo-panel .rondo-iconbtn.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.4)}\n" +
+            "#rondo-panel .tabs{display:flex;gap:4px;background:var(--rondo-bg-soft);padding:6px 8px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:8px 4px;cursor:pointer;font:600 11.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
+            "#rondo-panel .tab .etqt{font-size:11px;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
+            "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
+            "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
+            "#rondo-panel .tab.activo .contador{background:rgba(255,255,255,.25);color:#fff}\n" +
+            "#rondo-panel .tools{display:flex;gap:6px;padding:7px 9px;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;align-items:center;background:var(--rondo-bg-soft)}\n" +
+            "#rondo-panel .tools button{display:inline-flex;align-items:center;gap:4px;background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:5px 9px;cursor:pointer;font-size:11px;font-weight:600;transition:background .15s,transform .1s,box-shadow .15s,border-color .15s}\n" +
+            "#rondo-panel .tools button:hover{background:var(--rondo-bg);border-color:var(--rondo-fg-mute);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .tools button:active{transform:translateY(0)}\n" +
+            "#rondo-panel .tools button.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-panel input.filtro{flex:1;min-width:90px;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
+            "#rondo-panel input.filtro:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel select.filtro{flex:0 0 auto;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
+            "#rondo-panel select.filtro:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .severidad-pick{display:flex;gap:3px;align-items:center;padding:6px 9px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .severidad-pick span{cursor:pointer;padding:2px 6px;border-radius:5px;font:600 11px var(--rondo-font);border:1px solid var(--rondo-border);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .severidad-pick span.activo{border-color:var(--rondo-accent-2);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .tabla{overflow:auto;flex:1}\n" +
+            "#rondo-panel table{width:100%;border-collapse:collapse}\n" +
+            "#rondo-panel th{position:sticky;top:0;background:var(--rondo-bg-soft);text-align:left;padding:6px 9px;font-size:11px;color:var(--rondo-fg-dim);border-bottom:1px solid var(--rondo-border-soft);z-index:1;letter-spacing:.3px;text-transform:uppercase}\n" +
+            "#rondo-panel td{padding:5px 9px;border-top:1px solid var(--rondo-border-soft);white-space:nowrap;font-size:12px}\n" +
+            "#rondo-panel tr.fila{cursor:pointer;transition:background .1s}\n" +
+            "#rondo-panel tr.fila:hover{background:var(--rondo-bg-soft)}\n" +
+            "@keyframes rondoPulse{0%{background:var(--rondo-warn-bg)}to{background:transparent}}\n" +
+            "#rondo-panel tr.off td.eco{color:var(--rondo-bad-fg);font-weight:bold}\n" +
+            "#rondo-panel tr.det td.eco{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel tr.on td.eco{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .estadoicon{display:inline-block;width:18px;text-align:center;font-size:13px}\n" +
+            "#rondo-panel .estadoicon.off{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .estadoicon.det{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .estadoicon.on{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .mini{display:inline-flex;align-items:center;justify-content:center;gap:3px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:var(--rondo-radius-sm);cursor:pointer;padding:3px 8px;font-size:11px;transition:background .15s,color .15s,transform .1s,border-color .15s}\n" +
+            "#rondo-panel .mini:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-panel .minusil.on{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .alerta{display:flex;gap:9px;padding:8px 10px;border-bottom:1px solid var(--rondo-border-soft);align-items:flex-start;transition:background .1s}\n" +
+            "#rondo-panel .alerta:hover{background:var(--rondo-bg-soft)}\n" +
+            "#rondo-panel .alerta .ico{font-size:16px;line-height:1.15;width:18px;text-align:center}\n" +
+            "#rondo-panel .alerta .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column}\n" +
+            "#rondo-panel .alerta b{font-size:12px;letter-spacing:.2px}\n" +
+            "#rondo-panel .alerta span{color:var(--rondo-fg-dim);font-size:11.5px;margin-top:2px}\n" +
+            "#rondo-panel .alerta .hora{color:var(--rondo-fg-mute);font-size:10px}\n" +
+            "#rondo-panel .alerta .meta{display:flex;gap:6px;font-size:10px;color:var(--rondo-fg-mute);margin-top:3px;flex-wrap:wrap}\n" +
+            "#rondo-panel .alerta .meta .regla{background:var(--rondo-bg-strong);padding:1px 5px;border-radius:4px}\n" +
+            "#rondo-dash{display:flex;flex-direction:column;padding:14px;gap:12px;overflow:auto;flex:1;max-width:1200px;margin:0 auto;box-sizing:border-box}\n" +
+            "#rondo-dash .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}\n" +
+            "#rondo-panel .tabla{padding:8px 4px}\n" +
+            "#rondo-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
+            "#rondo-panel .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
+            "#rondo-panel .kpi .etq{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
+            "#rondo-panel .kpi .valor{font:600 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .kpi.ok .valor{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .kpi.warn .valor{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .kpi.bad .valor{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .kpi.sub .valor{color:var(--rondo-fg)}\n" +
+            "#rondo-panel .kpi .resumen{font-size:11px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-dash .sparkline{display:block;width:100%;height:44px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:7px;padding:6px}\n" +
+            "#rondo-dash .sparkline path{fill:none;stroke-width:1.6}\n" +
+            "#rondo-dash .recent{padding:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
+            "#rondo-dash .recent h4{margin:0 0 6px;font-size:11px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
+            "#rondo-dash .recent .alerta{padding:5px 0;border-bottom-color:var(--rondo-border-soft)}\n" +
+            "#rondo-panel table.zone td{padding:5px 9px}\n" +
+            "#rondo-panel table.zone tr.fila td:first-child{color:var(--rondo-accent-2);font-weight:600}\n" +
+            "#rondo-panel .zone .contador-unidades{color:var(--rondo-ok-fg);font-weight:600}\n" +
+            "#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);padding:14px;\n" +
+            "  border-radius:10px;box-shadow:var(--rondo-shadow);z-index:1000001;display:none;flex-direction:column;gap:10px;\n" +
+            "  width:340px;color:var(--rondo-fg);font:13px var(--rondo-font);border:1px solid var(--rondo-border)}\n" +
+            "#rondo-modal{width:520px;max-height:88vh;overflow-y:auto;overflow-x:hidden;padding:0}\n" +
+            "#rondo-modal > h3{padding:12px 14px 6px}\n" +
+            "#rondo-modal > p{padding:0 14px 8px}\n" +
+            "#rondo-modal > textarea{margin:0 14px 0;width:calc(100% - 28px);height:88px}\n" +
+            "#rondo-modal .rondo-modal-actions{display:flex;gap:6px;padding:6px 14px 0}\n" +
+            "#rondo-modal .rondo-modal-actions button{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 10px;cursor:pointer;font:11.5px var(--rondo-font)}\n" +
+            "#rondo-modal .rondo-modal-actions button:hover{background:var(--rondo-bg-strong);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-modal .mini{display:inline-flex;align-items:center;justify-content:center;gap:3px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:var(--rondo-radius-sm);cursor:pointer;padding:4px 9px;font:600 11px var(--rondo-font);transition:background .15s,color .15s,transform .1s,border-color .15s,box-shadow .15s}\n" +
+            "#rondo-modal .mini:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-modal-lista-wrap{margin:8px 14px 0;border:1px solid var(--rondo-border);border-radius:7px;max-height:200px;overflow:auto}\n" +
+            "#rondo-modal-lista .lista-row{display:flex;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-modal-lista .lista-row:last-child{border-bottom:none}\n" +
+            "#rondo-modal-lista .lista-row .eco{font:600 12px monospace;color:var(--rondo-accent-2);min-width:64px}\n" +
+            "#rondo-modal-lista .lista-row .rondo-dest{flex:1;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:5px;padding:4px 7px;font-size:12px}\n" +
+            "#rondo-modal-lista .lista-row .rondo-dest:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-modal-lista .lista-row button{background:transparent;border:1px solid var(--rondo-border);color:var(--rondo-fg-dim);border-radius:5px;padding:2px 9px;cursor:pointer;font-size:11px}\n" +
+            "#rondo-modal-lista .lista-row button:hover{color:var(--rondo-bad-fg);border-color:var(--rondo-bad-fg)}\n" +
+            "#rondo-modal-lista .lista-empty{padding:14px;text-align:center;color:var(--rondo-fg-mute);font-size:12px}\n" +
+            "#rondo-modal-lista .lista-row.arrastrando{opacity:.5;background:var(--rondo-bg-strong)}\n" +
+            "#rondo-modal-lista .rondo-drag-handle{cursor:grab;color:var(--rondo-fg-mute);font-size:14px;letter-spacing:-2px;padding:0 4px;user-select:none;touch-action:none}\n" +
+            "#rondo-modal-lista .rondo-drag-handle:active{cursor:grabbing}\n" +
+            "#rondo-modal-lista .orden-num{font:600 10px monospace;color:var(--rondo-fg-mute);min-width:16px;text-align:right}\n" +
+            "#rondo-modal .rondo-order-tools{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:8px 14px 0;padding:7px 9px;background:var(--rondo-bg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);font-size:11px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-modal .rondo-order-tools .etq{font-weight:600;color:var(--rondo-fg)}\n" +
+            "#rondo-modal .rondo-order-tools button.activo{background:var(--rondo-accent);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.35)}\n" +
+            "#rondo-modal .rondo-modal-add{display:flex;gap:6px;padding:8px 14px 0}\n" +
+            "#rondo-modal .rondo-modal-add input{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:5px;padding:5px 7px;font-size:12px;flex:1;min-width:60px}\n" +
+            "#rondo-modal .rondo-modal-add input:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-modal > .rondo-acciones{margin-top:10px;padding:10px 14px;border-top:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-modal p code{background:var(--rondo-bg);padding:1px 4px;border-radius:3px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-config{width:560px;max-height:88vh;overflow:hidden;padding:0}\n" +
+            "#rondo-ayuda{width:620px;max-width:94vw;max-height:88vh;overflow:hidden;padding:0}\n" +
+            "#rondo-ayuda .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--rondo-bg);border-bottom:1px solid var(--rondo-border-soft);border-radius:10px 10px 0 0}\n" +
+            "#rondo-ayuda .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
+            "#rondo-ayuda .ayuda-body{overflow:auto;padding:12px 14px;max-height:calc(88vh - 60px)}\n" +
+            "#rondo-ayuda h4{margin:12px 0 6px;font-size:11px;color:var(--rondo-accent-2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--rondo-border-soft);padding-bottom:4px}\n" +
+            "#rondo-ayuda h4:first-child{margin-top:0}\n" +
+            "#rondo-ayuda p,#rondo-ayuda li{font-size:12.5px;color:var(--rondo-fg);margin:4px 0}\n" +
+            "#rondo-ayuda ul{margin:4px 0 4px 18px;padding:0}\n" +
+            "#rondo-ayuda code,#rondo-ayuda kbd{background:var(--rondo-bg);padding:1px 5px;border-radius:4px;font:11.5px monospace;color:var(--rondo-accent-2);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-ayuda .pasos{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:8px;margin-top:6px}\n" +
+            "#rondo-ayuda .paso{background:var(--rondo-bg);border:1px solid var(--rondo-border);border-radius:8px;padding:9px 11px}\n" +
+            "#rondo-ayuda .paso b{display:block;color:var(--rondo-accent-2);font-size:12px;margin-bottom:3px}\n" +
+            "#rondo-ayuda .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--rondo-bg);border-top:1px solid var(--rondo-border-soft);border-radius:0 0 10px 10px}\n" +
+            "#rondo-ayuda .rondo-iconbtn{background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:6px;padding:3px 7px;font-size:13px;line-height:1}\n" +
+            "#rondo-ayuda .rondo-iconbtn:hover{background:var(--rondo-bg-strong);border-color:var(--rondo-border);color:var(--rondo-fg)}\n" +
+            "#rondo-ayuda button.accbtn{background:var(--rondo-accent-grad);color:#fff;border:none;border-radius:var(--rondo-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--rondo-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
+            "#rondo-ayuda button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--rondo-accent-rgb),.4);filter:brightness(1.05)}\n" +
+            "#rondo-ayuda button.cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--rondo-font);transition:background .15s,transform .12s}\n" +
+            "#rondo-ayuda button.cancel:hover{background:var(--rondo-bg);transform:translateY(-1px)}\n" +
+            "#rondo-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--rondo-bg);border-bottom:1px solid var(--rondo-border-soft);border-radius:10px 10px 0 0}\n" +
+            "#rondo-config .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
+            "#rondo-config .cfg-tabs{display:flex;background:var(--rondo-bg);padding:0 10px;border-bottom:1px solid var(--rondo-border-soft);gap:6px;flex-wrap:wrap}\n" +
+            "#rondo-config .cfg-tab{background:transparent;border:none;color:var(--rondo-fg-dim);padding:9px 12px;cursor:pointer;font:600 11.5px var(--rondo-font);border-bottom:2px solid transparent;letter-spacing:.4px;text-transform:uppercase}\n" +
+            "#rondo-config .cfg-tab.activo{color:var(--rondo-fg);border-bottom-color:var(--rondo-accent-2)}\n" +
+            "#rondo-config .cfg-body{overflow:auto;padding:12px;max-height:calc(88vh - 110px)}\n" +
+            "#rondo-config .cfg-body h4{margin:8px 0 6px;font-size:11px;color:var(--rondo-accent-2);text-transform:uppercase;letter-spacing:.6px;border-bottom:1px solid var(--rondo-border-soft);padding-bottom:4px}\n" +
+            "#rondo-config .cfg-body h4:first-child{margin-top:0}\n" +
+            "#rondo-config label{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;padding:3px 0}\n" +
+            "#rondo-config label.full{display:block}\n" +
+            "#rondo-config input[type=number],#rondo-config input[type=text],#rondo-config input[type=time],\n" +
+            "#rondo-config input[type=color],#rondo-config textarea,#rondo-config select{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:5px;padding:4px 7px;font:12px var(--rondo-font)}\n" +
+            "#rondo-config input[type=number],#rondo-config input[type=text],#rondo-config input[type=time]{width:90px}\n" +
+            "#rondo-config input[type=color]{width:55px;padding:0;height:30px}\n" +
+            "#rondo-config textarea{width:100%;height:90px;font:11.5px monospace;resize:vertical;box-sizing:border-box}\n" +
+            "#rondo-config .cfg-foot{display:flex;justify-content:space-between;gap:8px;padding:9px 12px;background:var(--rondo-bg);border-top:1px solid var(--rondo-border-soft);border-radius:0 0 10px 10px}\n" +
+            "#rondo-config .row-grid{display:grid;grid-template-columns:1fr 1fr;gap:2px 14px}\n" +
+            "#rondo-config .row-grid label{padding:1px 0}\n" +
+            "#rondo-config button.accbtn{background:var(--rondo-accent-grad);color:#fff;border:none;border-radius:var(--rondo-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--rondo-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
+            "#rondo-config button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--rondo-accent-rgb),.4);filter:brightness(1.05)}\n" +
+            "#rondo-config button.cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--rondo-font);transition:background .15s,transform .12s}\n" +
+            "#rondo-config button.cancel:hover{background:var(--rondo-bg);transform:translateY(-1px)}\n" +
+            "#rondo-modal textarea{width:100%;height:160px;resize:none;padding:10px;border-radius:6px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);box-sizing:border-box;font:12px monospace}\n" +
+            "#rondo-modal h3{margin:0;text-align:center;font-size:13px;color:var(--rondo-fg)}\n" +
+            "#rondo-modal button.accbtn{background:var(--rondo-accent-grad);color:#fff;border:none;border-radius:var(--rondo-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--rondo-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
+            "#rondo-modal button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--rondo-accent-rgb),.4);filter:brightness(1.05)}\n" +
+            "#rondo-modal button.cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--rondo-font);transition:background .15s,transform .12s}\n" +
+            "#rondo-modal button.cancel:hover{background:var(--rondo-bg);transform:translateY(-1px)}\n" +
+            "#rondo-contexto{padding:4px;gap:0;width:auto;min-width:170px}\n" +
+            "#rondo-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--rondo-border-soft);display:flex;align-items:center;gap:8px}\n" +
+            "#rondo-contexto .op .rondo-mi{color:var(--rondo-accent-2);font-size:1.15em}\n" +
+            "#rondo-contexto .op:last-child{border-bottom:none}\n" +
+            "#rondo-contexto .op:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-contexto .sep{height:1px;background:var(--rondo-border-soft);margin:2px 0}\n" +
+            ".rondo-acciones{display:flex;justify-content:space-between;gap:8px}\n" +
+            "#rondo-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--rondo-bad);color:#fff;padding:6px 16px;\n" +
+            "  border-radius:5px;z-index:1000002;font:12px var(--rondo-font);display:none;box-shadow:var(--rondo-shadow)}\n" +
+            "body.rondo-lateral #rondo-barra{display:none}\n" +
+            "#rondo-panel .rondo-sidebar-tools{display:none;gap:8px;padding:10px;background:linear-gradient(180deg,var(--rondo-bg-strong),var(--rondo-bg-soft));border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel.lateral .rondo-sidebar-tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(76px,1fr));border-top:3px solid var(--rondo-accent)}\n" +
+            "#rondo-panel .rondo-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-width:0;overflow:hidden;padding:11px 6px;border-radius:var(--rondo-radius);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg);cursor:pointer;font:600 10.5px var(--rondo-font);transition:background .16s var(--rondo-easing),transform .12s,box-shadow .16s,border-color .16s}\n" +
+            "#rondo-panel .rondo-tile:hover{background:var(--rondo-bg);border-color:var(--rondo-fg-mute);transform:translateY(-2px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .rondo-tile:active{transform:translateY(0)}\n" +
+            "#rondo-panel .rondo-tile .rondo-mi{font-size:21px;color:var(--rondo-accent-2);line-height:1}\n" +
+            "#rondo-panel .rondo-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
+            "#rondo-panel .rondo-tile.primary{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(var(--rondo-accent-rgb),.35)}\n" +
+            "#rondo-panel .rondo-tile.primary .rondo-mi{color:#fff}\n" +
+            "#rondo-barra .rondo-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
+            "#rondo-barra .rondo-badge-estado.ok{background:var(--rondo-ok)}\n" +
+            "#rondo-barra .rondo-badge-estado.warn{background:var(--rondo-warn)}\n" +
+            "#rondo-barra .rondo-badge-estado.bad{background:var(--rondo-bad)}\n" +
+            "#rondo-barra .rondo-badge-estado.nm{background:#7d8595;outline:2px dashed var(--rondo-warn)}\n" +
+            "#rondo-panel.density-compact .kpi{padding:6px 9px}\n" +
+            "#rondo-panel.density-compact .kpi .valor{font-size:16px}\n" +
+            "#rondo-panel.density-compact td,#rondo-panel.density-compact th{padding:3px 9px;font-size:11.5px}\n" +
+            "#rondo-panel .rondo-iconbtn:focus-visible,#rondo-panel .tab:focus-visible,#rondo-panel .tools button:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
+            "#rondo-panel table .col-sel{width:28px;text-align:center;padding:4px 6px}\n" +
+            "#rondo-panel table .rondo-sel{accent-color:var(--rondo-accent);cursor:pointer;width:14px;height:14px}\n" +
+            "#rondo-panel tr.sel-row td{background:var(--rondo-ok-bg)}\n" +
+            "#rondo-panel tr.sel-row:hover td{background:linear-gradient(0deg,var(--rondo-ok-bg),var(--rondo-bg-soft))}\n" +
+            "#rondo-panel table th:first-child{padding-left:10px}\n" +
+            "#rondo-panel ::-webkit-scrollbar,#rondo-config ::-webkit-scrollbar,#rondo-modal ::-webkit-scrollbar,#rondo-ayuda ::-webkit-scrollbar{width:9px;height:9px}\n" +
+            "#rondo-panel ::-webkit-scrollbar-thumb,#rondo-config ::-webkit-scrollbar-thumb,#rondo-modal ::-webkit-scrollbar-thumb,#rondo-ayuda ::-webkit-scrollbar-thumb{background:var(--rondo-border);border-radius:8px;border:2px solid transparent;background-clip:content-box}\n" +
+            "#rondo-panel ::-webkit-scrollbar-thumb:hover,#rondo-config ::-webkit-scrollbar-thumb:hover,#rondo-modal ::-webkit-scrollbar-thumb:hover,#rondo-ayuda ::-webkit-scrollbar-thumb:hover{background:var(--rondo-fg-mute);background-clip:content-box}\n" +
+            "#rondo-panel ::-webkit-scrollbar-track{background:transparent}\n" +
+            "#rondo-panel .rondo-sidebar-tools .rondo-tile:focus-visible,#rondo-panel .mini:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
+            "@keyframes rondoFadeUp{from{opacity:0}to{opacity:1}}\n" +
+            "#rondo-panel .kpi,#rondo-panel .recent,#rondo-panel .rondo-tile{animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            "#rondo-panel .kpi{position:relative;overflow:hidden}\n" +
+            "#rondo-panel .kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--rondo-accent-grad);opacity:.7}\n" +
+            "#rondo-panel .kpi.ok::before{background:var(--rondo-ok)}\n" +
+            "#rondo-panel .kpi.warn::before{background:var(--rondo-warn)}\n" +
+            "#rondo-panel .kpi.bad::before{background:var(--rondo-bad)}\n" +
+            "#rondo-panel .kpi:hover{transform:translateY(-2px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .kpi{transition:transform .15s var(--rondo-easing),box-shadow .15s}\n" +
+            "#rondo-barra{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
+            "#rondo-panel header{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
             /* ── Estados vacios ── */
-            ".hjp-vacio{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:36px 22px;text-align:center;color:var(--hjp-fg-dim);animation:hjpFadeUp .3s var(--hjp-easing) both}\n" +
-            ".hjp-vacio .hjp-mi{font-size:40px;color:var(--hjp-fg-mute);opacity:.6;line-height:1}\n" +
-            ".hjp-vacio b{font-size:13px;color:var(--hjp-fg);font-weight:600}\n" +
-            ".hjp-vacio span{font-size:12px;max-width:380px;line-height:1.5}\n" +
-            ".hjp-vacio button{margin-top:6px}\n" +
+            ".rondo-vacio{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:36px 22px;text-align:center;color:var(--rondo-fg-dim);animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            ".rondo-vacio .rondo-mi{font-size:40px;color:var(--rondo-fg-mute);opacity:.6;line-height:1}\n" +
+            ".rondo-vacio b{font-size:13px;color:var(--rondo-fg);font-weight:600}\n" +
+            ".rondo-vacio span{font-size:12px;max-width:380px;line-height:1.5}\n" +
+            ".rondo-vacio button{margin-top:6px}\n" +
             /* ── Spinner / estado de carga ── */
-            "@keyframes hjpSpin{to{transform:rotate(360deg)}}\n" +
-            ".hjp-spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:hjpSpin .7s linear infinite;vertical-align:-2px}\n" +
-            "button.hjp-busy{opacity:.65;pointer-events:none;cursor:progress}\n" +
+            "@keyframes rondoSpin{to{transform:rotate(360deg)}}\n" +
+            ".rondo-spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation: rondoSpin .7s linear infinite;vertical-align:-2px}\n" +
+            "button.rondo-busy{opacity:.65;pointer-events:none;cursor:progress}\n" +
             "[aria-busy='true']{cursor:progress}\n" +
             /* ── Toasts: icono por severidad ── */
-            ".hjp-toast.ok .ico{color:var(--hjp-ok-fg)}\n" +
-            ".hjp-toast.medio .ico{color:var(--hjp-warn-fg)}\n" +
-            ".hjp-toast.alto .ico,.hjp-toast.critico .ico,.hjp-toast.err .ico{color:var(--hjp-bad-fg)}\n" +
+            ".rondo-toast.ok .ico{color:var(--rondo-ok-fg)}\n" +
+            ".rondo-toast.medio .ico{color:var(--rondo-warn-fg)}\n" +
+            ".rondo-toast.alto .ico,.rondo-toast.critico .ico,.rondo-toast.err .ico{color:var(--rondo-bad-fg)}\n" +
             /* ── Focus visible global ── */
-            "#hjp-panel button:focus-visible,#hjp-barra button:focus-visible,#hjp-modal button:focus-visible,#hjp-config button:focus-visible,#hjp-ayuda button:focus-visible,#hjp-contexto .op:focus-visible,#hjp-panel input:focus-visible,#hjp-config input:focus-visible,#hjp-config select:focus-visible,#hjp-dialog button:focus-visible,#hjp-dialog input:focus-visible{outline:2px solid var(--hjp-accent-2);outline-offset:1px}\n" +
+            "#rondo-panel button:focus-visible,#rondo-barra button:focus-visible,#rondo-modal button:focus-visible,#rondo-config button:focus-visible,#rondo-ayuda button:focus-visible,#rondo-contexto .op:focus-visible,#rondo-panel input:focus-visible,#rondo-config input:focus-visible,#rondo-config select:focus-visible,#rondo-dialog button:focus-visible,#rondo-dialog input:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
             /* ── Dialogo propio (confirm / prompt / bienvenida) ── */
-            "#hjp-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--hjp-bg-soft);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius);box-shadow:var(--hjp-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);font:13px var(--hjp-font);overflow:hidden}\n" +
-            "#hjp-dialog.abierto{display:flex;animation:hjpPop .18s var(--hjp-easing) both}\n" +
-            "@keyframes hjpPop{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}\n" +
-            "#hjp-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}\n" +
-            "#hjp-dialog .dlg-head .hjp-mi{color:var(--hjp-accent-2);font-size:20px}\n" +
-            "#hjp-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px}\n" +
-            "#hjp-dialog p{margin:0;font-size:12.5px;color:var(--hjp-fg-dim);line-height:1.5}\n" +
-            "#hjp-dialog input{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:7px;padding:8px 10px;font:13px var(--hjp-font);width:100%;box-sizing:border-box}\n" +
-            "#hjp-dialog input:focus{outline:none;border-color:var(--hjp-accent-2);box-shadow:0 0 0 3px rgba(var(--hjp-accent-rgb),.2)}\n" +
-            "#hjp-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-dialog .dlg-foot button{border-radius:7px;padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);border:1px solid transparent;transition:transform .12s,filter .15s,box-shadow .15s}\n" +
-            "#hjp-dialog .dlg-foot .dlg-cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border-color:var(--hjp-border)}\n" +
-            "#hjp-dialog .dlg-foot .dlg-ok{background:var(--hjp-accent-grad);color:#fff}\n" +
-            "#hjp-dialog .dlg-foot .dlg-ok.peligro{background:linear-gradient(135deg,#b71c1c,#e53935)}\n" +
-            "#hjp-dialog .dlg-foot button:hover{transform:translateY(-1px);filter:brightness(1.06)}\n" +
+            "#rondo-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:var(--rondo-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);font:13px var(--rondo-font);overflow:hidden}\n" +
+            "#rondo-dialog.abierto{display:flex;animation: rondoPop .18s var(--rondo-easing) both}\n" +
+            "@keyframes rondoPop{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}\n" +
+            "#rondo-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}\n" +
+            "#rondo-dialog .dlg-head .rondo-mi{color:var(--rondo-accent-2);font-size:20px}\n" +
+            "#rondo-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px}\n" +
+            "#rondo-dialog p{margin:0;font-size:12.5px;color:var(--rondo-fg-dim);line-height:1.5}\n" +
+            "#rondo-dialog input{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:7px;padding:8px 10px;font:13px var(--rondo-font);width:100%;box-sizing:border-box}\n" +
+            "#rondo-dialog input:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 3px rgba(var(--rondo-accent-rgb),.2)}\n" +
+            "#rondo-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--rondo-bg);border-top:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .dlg-foot button{border-radius:7px;padding:8px 16px;cursor:pointer;font:600 12px var(--rondo-font);border:1px solid transparent;transition:transform .12s,filter .15s,box-shadow .15s}\n" +
+            "#rondo-dialog .dlg-foot .dlg-cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-dialog .dlg-foot .dlg-ok{background:var(--rondo-accent-grad);color:#fff}\n" +
+            "#rondo-dialog .dlg-foot .dlg-ok.peligro{background:linear-gradient(135deg,#b71c1c,#e53935)}\n" +
+            "#rondo-dialog .dlg-foot button:hover{transform:translateY(-1px);filter:brightness(1.06)}\n" +
             /* ── Bienvenida ── */
-            "#hjp-dialog.hjp-bienvenida{width:min(510px,94vw)}\n" +
-            "#hjp-dialog .pasos{display:grid;gap:8px}\n" +
-            "#hjp-dialog .paso{display:flex;gap:10px;align-items:flex-start;background:var(--hjp-bg);border:1px solid var(--hjp-border-soft);border-radius:9px;padding:10px 12px}\n" +
-            "#hjp-dialog .paso .n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--hjp-accent-grad);color:#fff;display:flex;align-items:center;justify-content:center;font:700 12px var(--hjp-font)}\n" +
-            "#hjp-dialog .paso b{display:block;font-size:12.5px;margin-bottom:2px}\n" +
-            "#hjp-dialog .paso span{font-size:11.5px;color:var(--hjp-fg-dim);line-height:1.45}\n" +
-            "#hjp-config .cfg-foot{align-items:center}\n" +
-            ".cfg-dirty{font-size:11px;color:var(--hjp-warn-fg);display:none;align-items:center;gap:5px;font-weight:600}\n" +
+            "#rondo-dialog.rondo-bienvenida{width:min(510px,94vw)}\n" +
+            "#rondo-dialog .pasos{display:grid;gap:8px}\n" +
+            "#rondo-dialog .paso{display:flex;gap:10px;align-items:flex-start;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:10px 12px}\n" +
+            "#rondo-dialog .paso .n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--rondo-accent-grad);color:#fff;display:flex;align-items:center;justify-content:center;font:700 12px var(--rondo-font)}\n" +
+            "#rondo-dialog .paso b{display:block;font-size:12.5px;margin-bottom:2px}\n" +
+            "#rondo-dialog .paso span{font-size:11.5px;color:var(--rondo-fg-dim);line-height:1.45}\n" +
+            "#rondo-config .cfg-foot{align-items:center}\n" +
+            ".cfg-dirty{font-size:11px;color:var(--rondo-warn-fg);display:none;align-items:center;gap:5px;font-weight:600}\n" +
             ".cfg-dirty.on{display:inline-flex}\n" +
-            ".cfg-dirty::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--hjp-warn)}\n" +
+            ".cfg-dirty::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--rondo-warn)}\n" +
             /* ── Tabla ordenable y pildoras de estado ── */
-            "#hjp-panel th.hjp-sortable{cursor:pointer;user-select:none;white-space:nowrap}\n" +
-            "#hjp-panel th.hjp-sortable:hover{color:var(--hjp-fg)}\n" +
-            "#hjp-panel th.hjp-sortable .hjp-sort{font-size:10px;color:var(--hjp-accent-2);margin-left:3px;opacity:.45}\n" +
-            "#hjp-panel th.hjp-sort-asc .hjp-sort,#hjp-panel th.hjp-sort-desc .hjp-sort{opacity:1}\n" +
-            ".hjp-pill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;font:600 10.5px var(--hjp-font);line-height:1.7;white-space:nowrap}\n" +
-            ".hjp-pill.on{background:var(--hjp-ok-bg);color:var(--hjp-ok-fg)}\n" +
-            ".hjp-pill.det{background:var(--hjp-warn-bg);color:var(--hjp-warn-fg)}\n" +
-            ".hjp-pill.off{background:var(--hjp-bad-bg);color:var(--hjp-bad-fg)}\n" +
+            "#rondo-panel th.rondo-sortable{cursor:pointer;user-select:none;white-space:nowrap}\n" +
+            "#rondo-panel th.rondo-sortable:hover{color:var(--rondo-fg)}\n" +
+            "#rondo-panel th.rondo-sortable .rondo-sort{font-size:10px;color:var(--rondo-accent-2);margin-left:3px;opacity:.45}\n" +
+            "#rondo-panel th.rondo-sort-asc .rondo-sort,#rondo-panel th.rondo-sort-desc .rondo-sort{opacity:1}\n" +
+            ".rondo-pill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;font:600 10.5px var(--rondo-font);line-height:1.7;white-space:nowrap}\n" +
+            ".rondo-pill.on{background:var(--rondo-ok-bg);color:var(--rondo-ok-fg)}\n" +
+            ".rondo-pill.det{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
+            ".rondo-pill.off{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg)}\n" +
             /* ── Responsive ── */
             "@media (max-width:720px){\n" +
-            "  #hjp-panel{min-width:0;max-width:96vw}\n" +
-            "  #hjp-config{width:min(96vw,560px)}\n" +
-            "  #hjp-ayuda{width:min(96vw,620px)}\n" +
-            "  #hjp-modal{width:min(96vw,520px)}\n" +
-            "  #hjp-panel .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}\n" +
-            "  #hjp-config .row-grid{grid-template-columns:1fr}\n" +
-            "  #hjp-dash{padding:10px}\n" +
-            "  #hjp-toasts{width:min(92vw,330px);right:8px;bottom:8px}\n" +
+            "  #rondo-panel{min-width:0;max-width:96vw}\n" +
+            "  #rondo-config{width:min(96vw,560px)}\n" +
+            "  #rondo-ayuda{width:min(96vw,620px)}\n" +
+            "  #rondo-modal{width:min(96vw,520px)}\n" +
+            "  #rondo-panel .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}\n" +
+            "  #rondo-config .row-grid{grid-template-columns:1fr}\n" +
+            "  #rondo-dash{padding:10px}\n" +
+            "  #rondo-toasts{width:min(92vw,330px);right:8px;bottom:8px}\n" +
             "}\n" +
             "@media (max-width:480px){\n" +
-            "  #hjp-panel .tab .etqt{display:none}\n" +
-            "  #hjp-barra .hjp-modo-label{display:none}\n" +
+            "  #rondo-panel .tab .etqt{display:none}\n" +
+            "  #rondo-barra .rondo-modo-label{display:none}\n" +
             "}\n" +
             /* ── Dashboard: distribucion y atencion ── */
-            "#hjp-dash .dist{display:flex;flex-direction:column;gap:7px}\n" +
-            "#hjp-dash .dist-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--hjp-bg);border:1px solid var(--hjp-border-soft)}\n" +
-            "#hjp-dash .dist-seg{height:100%;transition:width .4s var(--hjp-easing)}\n" +
-            "#hjp-dash .dist-seg.on{background:var(--hjp-ok)}\n" +
-            "#hjp-dash .dist-seg.det{background:var(--hjp-warn)}\n" +
-            "#hjp-dash .dist-seg.off{background:var(--hjp-bad)}\n" +
-            "#hjp-dash .dist-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--hjp-fg-dim)}\n" +
-            "#hjp-dash .dist-legend span{display:inline-flex;align-items:center;gap:5px}\n" +
-            "#hjp-dash .dist-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
-            "#hjp-dash .dist-legend i.on{background:var(--hjp-ok)}\n" +
-            "#hjp-dash .dist-legend i.det{background:var(--hjp-warn)}\n" +
-            "#hjp-dash .dist-legend i.off{background:var(--hjp-bad)}\n" +
-            "#hjp-dash .kpi[data-kpi]{cursor:pointer}\n" +
-            "#hjp-dash .kpi[data-kpi]::after{content:'›';position:absolute;right:9px;top:8px;color:var(--hjp-fg-mute);font-size:15px;opacity:.6}\n" +
-            "#hjp-dash .hjp-atencion-item:hover{background:var(--hjp-bg-strong)}\n" +
+            "#rondo-dash .dist{display:flex;flex-direction:column;gap:7px}\n" +
+            "#rondo-dash .dist-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dash .dist-seg{height:100%;transition:width .4s var(--rondo-easing)}\n" +
+            "#rondo-dash .dist-seg.on{background:var(--rondo-ok)}\n" +
+            "#rondo-dash .dist-seg.det{background:var(--rondo-warn)}\n" +
+            "#rondo-dash .dist-seg.off{background:var(--rondo-bad)}\n" +
+            "#rondo-dash .dist-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-dash .dist-legend span{display:inline-flex;align-items:center;gap:5px}\n" +
+            "#rondo-dash .dist-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
+            "#rondo-dash .dist-legend i.on{background:var(--rondo-ok)}\n" +
+            "#rondo-dash .dist-legend i.det{background:var(--rondo-warn)}\n" +
+            "#rondo-dash .dist-legend i.off{background:var(--rondo-bad)}\n" +
+            "#rondo-dash .kpi[data-kpi]{cursor:pointer}\n" +
+            "#rondo-dash .kpi[data-kpi]::after{content:'›';position:absolute;right:9px;top:8px;color:var(--rondo-fg-mute);font-size:15px;opacity:.6}\n" +
+            "#rondo-dash .rondo-atencion-item:hover{background:var(--rondo-bg-strong)}\n" +
             /* ── Escala de interfaz (accesibilidad visual) ──
-               Se controla con --hjp-esc. Todos los tamanos se multiplican por el
+               Se controla con --rondo-esc. Todos los tamanos se multiplican por el
                factor elegido en Ajustes > Visual. */
-            "#hjp-panel{font-size:calc(12.5px * var(--hjp-esc))}\n" +
-            "#hjp-panel header h3{font-size:calc(13px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-iconbtn{width:calc(30px * var(--hjp-esc));height:calc(30px * var(--hjp-esc));font-size:calc(13px * var(--hjp-esc))}\n" +
-            "#hjp-panel .tab{padding:calc(8px * var(--hjp-esc)) calc(4px * var(--hjp-esc));font-size:calc(11.5px * var(--hjp-esc))}\n" +
-            "#hjp-panel .tab .etqt{font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-panel .tab .contador{font-size:calc(10px * var(--hjp-esc));padding:calc(1px * var(--hjp-esc)) calc(5px * var(--hjp-esc))}\n" +
-            "#hjp-panel .tools button{padding:calc(5px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-panel input.filtro,#hjp-panel select.filtro{padding:calc(4px * var(--hjp-esc)) calc(7px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-panel th{padding:calc(6px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-panel td{padding:calc(5px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-panel .mini{padding:calc(3px * var(--hjp-esc)) calc(8px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-pill{font-size:calc(10.5px * var(--hjp-esc));padding:calc(1px * var(--hjp-esc)) calc(8px * var(--hjp-esc))}\n" +
-            "#hjp-panel .alerta{padding:calc(8px * var(--hjp-esc)) calc(10px * var(--hjp-esc))}\n" +
-            "#hjp-panel .alerta .ico{font-size:calc(16px * var(--hjp-esc))}\n" +
-            "#hjp-panel .alerta b{font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-panel .alerta span{font-size:calc(11.5px * var(--hjp-esc))}\n" +
-            "#hjp-panel .alerta .hora,#hjp-panel .alerta .meta{font-size:calc(10px * var(--hjp-esc))}\n" +
-            "#hjp-panel .kpi{padding:calc(9px * var(--hjp-esc)) calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-panel .kpi .etq{font-size:calc(10px * var(--hjp-esc))}\n" +
-            "#hjp-panel .kpi .valor{font-size:calc(18px * var(--hjp-esc))}\n" +
-            "#hjp-panel .kpi .resumen{font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-dash{padding:calc(14px * var(--hjp-esc));gap:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-dash .kpi-grid{gap:calc(10px * var(--hjp-esc))}\n" +
-            "#hjp-dash .sparkline{height:calc(44px * var(--hjp-esc))}\n" +
-            "#hjp-dash .recent{padding:calc(9px * var(--hjp-esc))}\n" +
-            "#hjp-dash .recent h4{font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-panel footer{font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-vacio{padding:calc(36px * var(--hjp-esc)) calc(22px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-vacio .hjp-mi{font-size:calc(40px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-vacio b{font-size:calc(13px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-vacio span{font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-tile{padding:calc(11px * var(--hjp-esc)) calc(6px * var(--hjp-esc));font-size:calc(10.5px * var(--hjp-esc))}\n" +
-            "#hjp-panel .hjp-tile .hjp-mi{font-size:calc(21px * var(--hjp-esc))}\n" +
-            "#hjp-barra{font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-barra .hjp-btn{padding:calc(7px * var(--hjp-esc)) calc(11px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
-            ".hjp-toast{font:calc(12.5px * var(--hjp-esc))/1.35 var(--hjp-font);padding:calc(10px * var(--hjp-esc)) calc(12px * var(--hjp-esc))}\n" +
-            ".hjp-toast .cuerpo b{font-size:calc(12.5px * var(--hjp-esc))}\n" +
-            ".hjp-toast .cuerpo span{font-size:calc(11.5px * var(--hjp-esc))}\n" +
-            "#hjp-config,#hjp-modal,#hjp-ayuda,#hjp-dialog{font-size:calc(13px * var(--hjp-esc))}\n" +
-            "#hjp-config label{font-size:calc(12px * var(--hjp-esc));padding:calc(3px * var(--hjp-esc)) 0}\n" +
-            "#hjp-config .cfg-tab{padding:calc(9px * var(--hjp-esc)) calc(12px * var(--hjp-esc));font-size:calc(11.5px * var(--hjp-esc))}\n" +
-            "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time],#hjp-config input[type=color],#hjp-config textarea,#hjp-config select{padding:calc(4px * var(--hjp-esc)) calc(7px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time]{width:calc(90px * var(--hjp-esc))}\n" +
-            "#hjp-config .cfg-body h4{font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-config button.accbtn,#hjp-config button.cancel{padding:calc(8px * var(--hjp-esc)) calc(14px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-modal h3,#hjp-modal > h3,.hjp-dialog .dlg-head{font-size:calc(14px * var(--hjp-esc))}\n" +
-            "#hjp-modal p,.hjp-dialog p{font-size:calc(12.5px * var(--hjp-esc))}\n" +
-            "#hjp-modal .mini{padding:calc(4px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-modal button.accbtn,#hjp-modal button.cancel{padding:calc(8px * var(--hjp-esc)) calc(16px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
-            "#hjp-ayuda p,#hjp-ayuda li{font-size:calc(12.5px * var(--hjp-esc))}\n" +
-            "#hjp-ayuda h4{font-size:calc(11px * var(--hjp-esc))}\n" +
-            "#hjp-contexto .op{padding:calc(7px * var(--hjp-esc)) calc(12px * var(--hjp-esc));font-size:calc(12.5px * var(--hjp-esc))}\n" +
-            "#hjp-dialog .dlg-foot button{padding:calc(8px * var(--hjp-esc)) calc(16px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n";
+            "#rondo-panel{font-size:calc(12.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel header h3{font-size:calc(13px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-iconbtn{width:calc(30px * var(--rondo-esc));height:calc(30px * var(--rondo-esc));font-size:calc(13px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tab{padding:calc(8px * var(--rondo-esc)) calc(4px * var(--rondo-esc));font-size:calc(11.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tab .etqt{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tab .contador{font-size:calc(10px * var(--rondo-esc));padding:calc(1px * var(--rondo-esc)) calc(5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tools button{padding:calc(5px * var(--rondo-esc)) calc(9px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel input.filtro,#rondo-panel select.filtro{padding:calc(4px * var(--rondo-esc)) calc(7px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-panel th{padding:calc(6px * var(--rondo-esc)) calc(9px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel td{padding:calc(5px * var(--rondo-esc)) calc(9px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-panel .mini{padding:calc(3px * var(--rondo-esc)) calc(8px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-pill{font-size:calc(10.5px * var(--rondo-esc));padding:calc(1px * var(--rondo-esc)) calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .alerta{padding:calc(8px * var(--rondo-esc)) calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-panel .alerta .ico{font-size:calc(16px * var(--rondo-esc))}\n" +
+            "#rondo-panel .alerta b{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-panel .alerta span{font-size:calc(11.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .alerta .hora,#rondo-panel .alerta .meta{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-panel .kpi{padding:calc(9px * var(--rondo-esc)) calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel .kpi .etq{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-panel .kpi .valor{font-size:calc(18px * var(--rondo-esc))}\n" +
+            "#rondo-panel .kpi .resumen{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-dash{padding:calc(14px * var(--rondo-esc));gap:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-dash .kpi-grid{gap:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-dash .sparkline{height:calc(44px * var(--rondo-esc))}\n" +
+            "#rondo-dash .recent{padding:calc(9px * var(--rondo-esc))}\n" +
+            "#rondo-dash .recent h4{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel footer{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-vacio{padding:calc(36px * var(--rondo-esc)) calc(22px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-vacio .rondo-mi{font-size:calc(40px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-vacio b{font-size:calc(13px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-vacio span{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-tile{padding:calc(11px * var(--rondo-esc)) calc(6px * var(--rondo-esc));font-size:calc(10.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-tile .rondo-mi{font-size:calc(21px * var(--rondo-esc))}\n" +
+            "#rondo-barra{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-barra .rondo-btn{padding:calc(7px * var(--rondo-esc)) calc(11px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
+            ".rondo-toast{font:calc(12.5px * var(--rondo-esc))/1.35 var(--rondo-font);padding:calc(10px * var(--rondo-esc)) calc(12px * var(--rondo-esc))}\n" +
+            ".rondo-toast .cuerpo b{font-size:calc(12.5px * var(--rondo-esc))}\n" +
+            ".rondo-toast .cuerpo span{font-size:calc(11.5px * var(--rondo-esc))}\n" +
+            "#rondo-config,#rondo-modal,#rondo-ayuda,#rondo-dialog{font-size:calc(13px * var(--rondo-esc))}\n" +
+            "#rondo-config label{font-size:calc(12px * var(--rondo-esc));padding:calc(3px * var(--rondo-esc)) 0}\n" +
+            "#rondo-config .cfg-tab{padding:calc(9px * var(--rondo-esc)) calc(12px * var(--rondo-esc));font-size:calc(11.5px * var(--rondo-esc))}\n" +
+            "#rondo-config input[type=number],#rondo-config input[type=text],#rondo-config input[type=time],#rondo-config input[type=color],#rondo-config textarea,#rondo-config select{padding:calc(4px * var(--rondo-esc)) calc(7px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-config input[type=number],#rondo-config input[type=text],#rondo-config input[type=time]{width:calc(90px * var(--rondo-esc))}\n" +
+            "#rondo-config .cfg-body h4{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-config button.accbtn,#rondo-config button.cancel{padding:calc(8px * var(--rondo-esc)) calc(14px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-modal h3,#rondo-modal > h3,.rondo-dialog .dlg-head{font-size:calc(14px * var(--rondo-esc))}\n" +
+            "#rondo-modal p,.rondo-dialog p{font-size:calc(12.5px * var(--rondo-esc))}\n" +
+            "#rondo-modal .mini{padding:calc(4px * var(--rondo-esc)) calc(9px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-modal button.accbtn,#rondo-modal button.cancel{padding:calc(8px * var(--rondo-esc)) calc(16px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-ayuda p,#rondo-ayuda li{font-size:calc(12.5px * var(--rondo-esc))}\n" +
+            "#rondo-ayuda h4{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-contexto .op{padding:calc(7px * var(--rondo-esc)) calc(12px * var(--rondo-esc));font-size:calc(12.5px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .dlg-foot button{padding:calc(8px * var(--rondo-esc)) calc(16px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n";
 
         const style = makeEl('style');
         style.textContent = css;
@@ -3149,46 +3204,46 @@
         iconFont.rel = 'stylesheet';
         iconFont.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
         try { document.head.appendChild(iconFont); } catch (_) { /* noop */ }
-        mainBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.automatizar + '</span> Automatizar Unidades', id: 'hjp-btn-main', className: 'hjp-btn', title: 'Abrir lista de unidades y automatizar ventanas' });
-        panelBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.panel + '</span> Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
-        modoBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-modo-label">Flotante</span>', id: 'hjp-btn-modo', className: 'hjp-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
-        closeBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
-        helpBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.ayuda + '</span>', id: 'hjp-btn-help', className: 'hjp-btn', title: 'Ayuda rápida (?)' });
-        updateBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.actualizar + '</span> Actualizar', id: 'hjp-btn-update', className: 'hjp-btn hjp-update', title: 'Nueva version disponible', style: 'display:none' });
-        foldBtn = makeEl('button', { innerText: '▾', id: 'hjp-btn-fold', className: 'hjp-btn hjp-fold', title: 'Plegar barra' });
-        gripEl = makeEl('span', { innerText: '⠿', id: 'hjp-grip', className: 'hjp-grip', title: 'Arrastrar barra · doble clic para orientar' });
-        barraEl = makeEl('div', { id: 'hjp-barra' });
+        mainBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.automatizar + '</span> Automatizar Unidades', id: 'rondo-btn-main', className: 'rondo-btn', title: 'Abrir lista de unidades y automatizar ventanas' });
+        panelBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.panel + '</span> Panel', id: 'rondo-btn-panel', className: 'rondo-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
+        modoBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.expandir + '</span> <span class="rondo-modo-label">Flotante</span>', id: 'rondo-btn-modo', className: 'rondo-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
+        closeBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'rondo-btn-close', className: 'rondo-btn', title: 'Cerrar todas las ventanas de unidades' });
+        helpBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.ayuda + '</span>', id: 'rondo-btn-help', className: 'rondo-btn', title: 'Ayuda rápida (?)' });
+        updateBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.actualizar + '</span> Actualizar', id: 'rondo-btn-update', className: 'rondo-btn rondo-update', title: 'Nueva version disponible', style: 'display:none' });
+        foldBtn = makeEl('button', { innerText: '▾', id: 'rondo-btn-fold', className: 'rondo-btn rondo-fold', title: 'Plegar barra' });
+        gripEl = makeEl('span', { innerText: '⠿', id: 'rondo-grip', className: 'rondo-grip', title: 'Arrastrar barra · doble clic para orientar' });
+        barraEl = makeEl('div', { id: 'rondo-barra' });
         barraEl.append(gripEl, updateBtn, mainBtn, panelBtn, modoBtn, helpBtn, closeBtn, foldBtn);
         if (APP.barra.vertical) barraEl.classList.add('vertical');
 
-        panelEl = makeEl('div', { id: 'hjp-panel' });
+        panelEl = makeEl('div', { id: 'rondo-panel' });
         panelEl.innerHTML = (
-            '<div class="hjp-sidebar-tools" id="hjp-sidebar-tools">' +
-            '<button class="hjp-tile primary" id="hjp-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="hjp-mi">' + ICO.automatizar + '</span><span class="tile-lbl">Automatizar</span></button>' +
-            '<button class="hjp-tile" id="hjp-sb-panel" title="Ocultar el panel (Alt+P)"><span class="hjp-mi">' + ICO.colapsar + '</span><span class="tile-lbl">Ocultar</span></button>' +
-            '<button class="hjp-tile" id="hjp-sb-modo" title="Volver al modo flotante"><span class="hjp-mi">' + ICO.expandir + '</span><span class="tile-lbl hjp-sb-modo-label">Flotante</span></button>' +
-            '<button class="hjp-tile" id="hjp-sb-close" title="Cerrar todas las ventanas de unidades"><span class="hjp-mi">' + ICO.cerrar + '</span><span class="tile-lbl">Cerrar</span></button>' +
+            '<div class="rondo-sidebar-tools" id="rondo-sidebar-tools">' +
+            '<button class="rondo-tile primary" id="rondo-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="rondo-mi">' + ICO.automatizar + '</span><span class="tile-lbl">Automatizar</span></button>' +
+            '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar el panel (Alt+P)"><span class="rondo-mi">' + ICO.colapsar + '</span><span class="tile-lbl">Ocultar</span></button>' +
+            '<button class="rondo-tile" id="rondo-sb-modo" title="Volver al modo flotante"><span class="rondo-mi">' + ICO.expandir + '</span><span class="tile-lbl rondo-sb-modo-label">Flotante</span></button>' +
+            '<button class="rondo-tile" id="rondo-sb-close" title="Cerrar todas las ventanas de unidades"><span class="rondo-mi">' + ICO.cerrar + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
-            '<header id="hjp-drag">' +
-            '<span id="hjp-estado-barra" class="hjp-badge-estado"></span>' +
+            '<header id="rondo-drag">' +
+            '<span id="rondo-estado-barra" class="rondo-badge-estado"></span>' +
             '<h3>' + esc(LANG.titlePanel) + '</h3>' +
-            '<button class="hjp-iconbtn" id="hjp-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--hjp-accent-2)"><span class="hjp-mi">' + ICO.actualizar + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-tema" title="Tema"><span class="hjp-mi">' + ICO.luna + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-nmolestar" title="No molestar"><span class="hjp-mi">' + ICO.silencioTotal + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-collapse" title="Colapsar/expandir barra lateral"><span class="hjp-mi">' + ICO.colapsar + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-ayuda-btn" title="Ayuda rápida"><span class="hjp-mi">' + ICO.ayuda + '</span></button>' +
-            '<button class="hjp-iconbtn" id="hjp-cerrar-panel" title="Cerrar panel"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-mi">' + ICO.actualizar + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-tema" title="Tema"><span class="rondo-mi">' + ICO.luna + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-nmolestar" title="No molestar"><span class="rondo-mi">' + ICO.silencioTotal + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-collapse" title="Colapsar/expandir barra lateral"><span class="rondo-mi">' + ICO.colapsar + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-ayuda-btn" title="Ayuda rápida"><span class="rondo-mi">' + ICO.ayuda + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-cerrar-panel" title="Cerrar panel"><span class="rondo-mi">' + ICO.cerrar + '</span></button>' +
             '</header>' +
-            '<div class="tabs" id="hjp-tabs">' +
-            '<button class="tab activo" data-tab="dash" title="Resumen general de la flota"><span class="hjp-mi">' + ICO.dashboard + '</span><span class="etqt">Dashboard</span><span class="contador" id="hjp-c-on">0</span></button>' +
-            '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones"><span class="hjp-mi">' + ICO.panel + '</span><span class="etqt">Unidades</span><span class="contador" id="hjp-c-tot">0</span></button>' +
-            '<button class="tab" data-tab="alertas" title="Historial de avisos"><span class="hjp-mi">' + ICO.alertas + '</span><span class="etqt">Avisos</span><span class="contador" id="hjp-c-al">0</span></button>' +
-            '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="hjp-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="hjp-c-ru">0</span></button>' +
-            '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="hjp-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="hjp-c-zn">0</span></button>' +
+            '<div class="tabs" id="rondo-tabs">' +
+            '<button class="tab activo" data-tab="dash" title="Resumen general de la flota"><span class="rondo-mi">' + ICO.dashboard + '</span><span class="etqt">Dashboard</span><span class="contador" id="rondo-c-on">0</span></button>' +
+            '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones"><span class="rondo-mi">' + ICO.panel + '</span><span class="etqt">Unidades</span><span class="contador" id="rondo-c-tot">0</span></button>' +
+            '<button class="tab" data-tab="alertas" title="Historial de avisos"><span class="rondo-mi">' + ICO.alertas + '</span><span class="etqt">Avisos</span><span class="contador" id="rondo-c-al">0</span></button>' +
+            '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
+            '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="rondo-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '</div>' +
-            '<div class="tools" id="hjp-tools">' +
-            '<input class="filtro" id="hjp-filtro" placeholder="' + esc(LANG.busq) + '">' +
-            '<select class="filtro" id="hjp-filtro-estado" title="Filtrar por estado">' +
+            '<div class="tools" id="rondo-tools">' +
+            '<input class="filtro" id="rondo-filtro" placeholder="' + esc(LANG.busq) + '">' +
+            '<select class="filtro" id="rondo-filtro-estado" title="Filtrar por estado">' +
             '<option value="todas">Todas</option>' +
             '<option value="moviendo">Moviendo</option>' +
             '<option value="detenida">Detenidas</option>' +
@@ -3196,7 +3251,7 @@
             '<option value="vigilada">Vigiladas</option>' +
             '<option value="silenciada">Silenciadas</option>' +
             '</select>' +
-            '<select class="filtro" id="hjp-orden-sel" title="Orden de las ventanas de unidades">' +
+            '<select class="filtro" id="rondo-orden-sel" title="Orden de las ventanas de unidades">' +
             '<option value="">Orden de ventanas…</option>' +
             '<option value="pegado">Pegado</option>' +
             '<option value="numero">Número (menor a mayor)</option>' +
@@ -3204,112 +3259,112 @@
             '<option value="alfabetico">Alfabético A-Z</option>' +
             '<option value="invertir">Invertir orden</option>' +
             '</select>' +
-            '<button id="hjp-refresh" title="Refrescar"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
-            '<button id="hjp-cfg-btn" title="Ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span></button>' +
-            '<button id="hjp-csv" title="Exportar unidades"><span class="hjp-mi">' + ICO.descargar + '</span> CSV</button>' +
-            '<button id="hjp-csv-al" title="Exportar el historial de avisos a CSV"><span class="hjp-mi">' + ICO.descargar + '</span> Avisos CSV</button>' +
-            '<button id="hjp-informe" title="Generar informe del dia"><span class="hjp-mi">' + ICO.descargar + '</span> Informe</button>' +
-            '<button id="hjp-verif" title="Solo ventanas seleccionadas"><span class="hjp-mi">' + ICO.verif + '</span> Solo selección</button>' +
-            '<button id="hjp-captura" title="Capturar ventanas"><span class="hjp-mi">' + ICO.captura + '</span> Capturar</button>' +
-            '<button id="hjp-verifica" title="Verificar ahora"><span class="hjp-mi">' + ICO.verifica + '</span> Aplicar</button>' +
-            '<button id="hjp-sel-all" title="Seleccionar todas las unidades visibles"><span class="hjp-mi">' + ICO.selAll + '</span> Sel. visibles</button>' +
-            '<button id="hjp-sel-clear" title="Quitar toda la selección"><span class="hjp-mi">' + ICO.selClear + '</span> Quitar selección</button>' +
+            '<button id="rondo-refresh" title="Refrescar"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
+            '<button id="rondo-cfg-btn" title="Ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span></button>' +
+            '<button id="rondo-csv" title="Exportar unidades"><span class="rondo-mi">' + ICO.descargar + '</span> CSV</button>' +
+            '<button id="rondo-csv-al" title="Exportar el historial de avisos a CSV"><span class="rondo-mi">' + ICO.descargar + '</span> Avisos CSV</button>' +
+            '<button id="rondo-informe" title="Generar informe del dia"><span class="rondo-mi">' + ICO.descargar + '</span> Informe</button>' +
+            '<button id="rondo-verif" title="Solo ventanas seleccionadas"><span class="rondo-mi">' + ICO.verif + '</span> Solo selección</button>' +
+            '<button id="rondo-captura" title="Capturar ventanas"><span class="rondo-mi">' + ICO.captura + '</span> Capturar</button>' +
+            '<button id="rondo-verifica" title="Verificar ahora"><span class="rondo-mi">' + ICO.verifica + '</span> Aplicar</button>' +
+            '<button id="rondo-sel-all" title="Seleccionar todas las unidades visibles"><span class="rondo-mi">' + ICO.selAll + '</span> Sel. visibles</button>' +
+            '<button id="rondo-sel-clear" title="Quitar toda la selección"><span class="rondo-mi">' + ICO.selClear + '</span> Quitar selección</button>' +
             '</div>' +
-            '<div class="tabla" id="hjp-wrap-dash">' +
-            '<div id="hjp-dash">' +
+            '<div class="tabla" id="rondo-wrap-dash">' +
+            '<div id="rondo-dash">' +
             '<div class="kpi-grid">' +
-            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin señal · clic para verlas"><span class="etq">En línea</span><span class="valor" id="hjp-kpi-on">0</span><span class="resumen" id="hjp-kpi-on-pct">—</span></div>' +
-            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo último reporte superó el umbral de sin señal · clic para verlas"><span class="etq">Sin señal</span><span class="valor" id="hjp-kpi-off">0</span><span class="resumen" id="hjp-kpi-off-pct">—</span></div>' +
-            '<div class="kpi warn" data-kpi="detenida" title="Unidades en línea con velocidad muy baja · clic para verlas"><span class="etq">Detenidas</span><span class="valor" id="hjp-kpi-det">0</span><span class="resumen">VEL &lt;= 3 km/h</span></div>' +
-            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en línea con velocidad normal · clic para verlas"><span class="etq">En movimiento</span><span class="valor" id="hjp-kpi-mov">0</span><span class="resumen" id="hjp-kpi-vel">— km/h prom.</span></div>' +
-            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas por al menos una unidad online · clic para verlas"><span class="etq">En zonas</span><span class="valor" id="hjp-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
-            '<div class="kpi" data-kpi="alertas" title="Avisos registrados desde la medianoche · clic para verlos"><span class="etq">Avisos hoy</span><span class="valor" id="hjp-kpi-aho">0</span><span class="resumen" id="hjp-kpi-criticos">0 críticas</span></div>' +
+            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin señal · clic para verlas"><span class="etq">En línea</span><span class="valor" id="rondo-kpi-on">0</span><span class="resumen" id="rondo-kpi-on-pct">—</span></div>' +
+            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo último reporte superó el umbral de sin señal · clic para verlas"><span class="etq">Sin señal</span><span class="valor" id="rondo-kpi-off">0</span><span class="resumen" id="rondo-kpi-off-pct">—</span></div>' +
+            '<div class="kpi warn" data-kpi="detenida" title="Unidades en línea con velocidad muy baja · clic para verlas"><span class="etq">Detenidas</span><span class="valor" id="rondo-kpi-det">0</span><span class="resumen">VEL &lt;= 3 km/h</span></div>' +
+            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en línea con velocidad normal · clic para verlas"><span class="etq">En movimiento</span><span class="valor" id="rondo-kpi-mov">0</span><span class="resumen" id="rondo-kpi-vel">— km/h prom.</span></div>' +
+            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas por al menos una unidad online · clic para verlas"><span class="etq">En zonas</span><span class="valor" id="rondo-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
+            '<div class="kpi" data-kpi="alertas" title="Avisos registrados desde la medianoche · clic para verlos"><span class="etq">Avisos hoy</span><span class="valor" id="rondo-kpi-aho">0</span><span class="resumen" id="rondo-kpi-criticos">0 críticas</span></div>' +
             '</div>' +
             '<div class="recent"><h4>Distribución de la flota</h4>' +
             '<div class="dist"><div class="dist-bar">' +
-            '<span class="dist-seg on" id="hjp-dist-on"></span>' +
-            '<span class="dist-seg det" id="hjp-dist-det"></span>' +
-            '<span class="dist-seg off" id="hjp-dist-off"></span>' +
-            '</div><div class="dist-legend" id="hjp-dist-legend"></div></div></div>' +
-            '<div><svg class="sparkline" id="hjp-spark" viewBox="0 0 200 36" preserveAspectRatio="none"></svg></div>' +
-            '<div class="recent"><h4>Requieren atención</h4><div id="hjp-atencion"></div></div>' +
-            '<div class="recent"><h4>Avisos recientes</h4><div id="hjp-kpi-recientes"></div></div>' +
+            '<span class="dist-seg on" id="rondo-dist-on"></span>' +
+            '<span class="dist-seg det" id="rondo-dist-det"></span>' +
+            '<span class="dist-seg off" id="rondo-dist-off"></span>' +
+            '</div><div class="dist-legend" id="rondo-dist-legend"></div></div></div>' +
+            '<div><svg class="sparkline" id="rondo-spark" viewBox="0 0 200 36" preserveAspectRatio="none"></svg></div>' +
+            '<div class="recent"><h4>Requieren atención</h4><div id="rondo-atencion"></div></div>' +
+            '<div class="recent"><h4>Avisos recientes</h4><div id="rondo-kpi-recientes"></div></div>' +
             '</div>' +
             '</div>' +
-            '<div class="tabla" id="hjp-wrap-unidades" style="display:none">' +
+            '<div class="tabla" id="rondo-wrap-unidades" style="display:none">' +
             '<table><thead><tr><th title="Seleccionar">Sel</th>' +
-            '<th class="hjp-sortable" data-sort="eco" title="Ordenar por economico">Eco<span class="hjp-sort"></span></th>' +
-            '<th class="hjp-sortable" data-sort="placa" title="Ordenar por placa">Placa<span class="hjp-sort"></span></th>' +
-            '<th class="hjp-sortable" data-sort="estado" title="Ordenar por estado">Estado<span class="hjp-sort"></span></th>' +
-            '<th class="hjp-sortable" data-sort="edad" title="Ordenar por antiguedad del ultimo reporte">Ultimo<span class="hjp-sort"></span></th>' +
-            '<th class="hjp-sortable" data-sort="vel" title="Ordenar por velocidad">km/h<span class="hjp-sort"></span></th>' +
-            '<th class="hjp-sortable" data-sort="zona" title="Ordenar por geocerca">Zona<span class="hjp-sort"></span></th>' +
-            '<th class="hjp-sortable" data-sort="odo" title="Odómetro acumulado (km)">km<span class="hjp-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="eco" title="Ordenar por economico">Eco<span class="rondo-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="placa" title="Ordenar por placa">Placa<span class="rondo-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="estado" title="Ordenar por estado">Estado<span class="rondo-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="edad" title="Ordenar por antiguedad del ultimo reporte">Ultimo<span class="rondo-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="vel" title="Ordenar por velocidad">km/h<span class="rondo-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="zona" title="Ordenar por geocerca">Zona<span class="rondo-sort"></span></th>' +
+            '<th class="rondo-sortable" data-sort="odo" title="Odómetro acumulado (km)">km<span class="rondo-sort"></span></th>' +
             '<th></th></tr></thead>' +
-            '<tbody id="hjp-body"></tbody></table>' +
-            '<div id="hjp-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--hjp-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de esta columna.</div>' +
+            '<tbody id="rondo-body"></tbody></table>' +
+            '<div id="rondo-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--rondo-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de esta columna.</div>' +
             '</div>' +
-            '<div class="tabla" id="hjp-wrap-alertas" style="display:none">' +
-            '<div class="severidad-pick" id="hjp-filtroseveridad">' +
+            '<div class="tabla" id="rondo-wrap-alertas" style="display:none">' +
+            '<div class="severidad-pick" id="rondo-filtroseveridad">' +
             '<span data-sev="todas" class="activo">Todas</span>' +
             '<span data-sev="critico">Criticas</span>' +
             '<span data-sev="alto">Altas</span>' +
             '<span data-sev="medio">Medias</span>' +
             '<span data-sev="bajo">Bajas</span>' +
             '</div>' +
-            '<div id="hjp-lista-alertas"></div>' +
+            '<div id="rondo-lista-alertas"></div>' +
             '</div>' +
-            '<div class="tabla" id="hjp-wrap-rutas" style="display:none">' +
-            '<div id="hjp-lista-rutas"></div>' +
-            '<div id="hjp-lista-viajes"></div>' +
+            '<div class="tabla" id="rondo-wrap-rutas" style="display:none">' +
+            '<div id="rondo-lista-rutas"></div>' +
+            '<div id="rondo-lista-viajes"></div>' +
             '</div>' +
-            '<div class="tabla" id="hjp-wrap-geocercas" style="display:none">' +
+            '<div class="tabla" id="rondo-wrap-geocercas" style="display:none">' +
             '<table class="zone"><thead><tr><th>Geocerca</th><th>Dentro</th></tr></thead>' +
-            '<tbody id="hjp-body-zonas"></tbody></table>' +
+            '<tbody id="rondo-body-zonas"></tbody></table>' +
             '</div>' +
-            '<footer><span id="hjp-info">iniciando...</span><span id="hjp-upd"></span></footer>'
+            '<footer><span id="rondo-info">iniciando...</span><span id="rondo-upd"></span></footer>'
         );
         panelEl.style.width = (APP.panelSize && APP.panelSize.w) ? APP.panelSize.w + 'px' : '470px';
         panelEl.style.height = (APP.panelSize && APP.panelSize.h) ? APP.panelSize.h + 'px' : '440px';
 
-        modalEl = makeEl('div', { id: 'hjp-modal' });
+        modalEl = makeEl('div', { id: 'rondo-modal' });
         modalEl.innerHTML = (
             '<h3>Lista de unidades</h3>' +
-            '<p style="font-size:11.5px;color:var(--hjp-fg-dim);margin:-4px 0 8px">Una sola lista para abrir ventanas, registrar destinos y filtrar las alertas. Pega <code>eco</code> o <code>eco=destino</code> por línea.</p>' +
-            '<textarea id="hjp-txt" placeholder="eco por línea, o eco=destino&#10;4381&#10;4132=Monterrey"></textarea>' +
-            '<div class="hjp-modal-actions">' +
-            '<button class="mini" id="hjp-modal-parse">⇭ Pegar a la lista</button>' +
-            '<button class="mini" id="hjp-modal-clear-txt">⌫ Limpiar área</button>' +
+            '<p style="font-size:11.5px;color:var(--rondo-fg-dim);margin:-4px 0 8px">Una sola lista para abrir ventanas, registrar destinos y filtrar las alertas. Pega <code>eco</code> o <code>eco=destino</code> por línea.</p>' +
+            '<textarea id="rondo-txt" placeholder="eco por línea, o eco=destino&#10;4381&#10;4132=Monterrey"></textarea>' +
+            '<div class="rondo-modal-actions">' +
+            '<button class="mini" id="rondo-modal-parse">⇭ Pegar a la lista</button>' +
+            '<button class="mini" id="rondo-modal-clear-txt">⌫ Limpiar área</button>' +
             '</div>' +
-            '<div class="hjp-order-tools">' +
+            '<div class="rondo-order-tools">' +
             '<span class="etq">Orden de las ventanas:</span>' +
-            '<button class="mini" id="hjp-orden-pegado" title="En el orden en que se pegaron">Pegado</button>' +
-            '<button class="mini" id="hjp-orden-numero" title="Por numero de economico (menor a mayor)">Número</button>' +
-            '<button class="mini" id="hjp-orden-numero-desc" title="Por numero de economico (mayor a menor)">Número inverso</button>' +
-            '<button class="mini" id="hjp-orden-alfabetico" title="Orden alfabetico">A-Z</button>' +
-            '<button class="mini" id="hjp-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
+            '<button class="mini" id="rondo-orden-pegado" title="En el orden en que se pegaron">Pegado</button>' +
+            '<button class="mini" id="rondo-orden-numero" title="Por numero de economico (menor a mayor)">Número</button>' +
+            '<button class="mini" id="rondo-orden-numero-desc" title="Por numero de economico (mayor a menor)">Número inverso</button>' +
+            '<button class="mini" id="rondo-orden-alfabetico" title="Orden alfabetico">A-Z</button>' +
+            '<button class="mini" id="rondo-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
             '</div>' +
-            '<div id="hjp-modal-lista-wrap">' +
-                '<div id="hjp-modal-lista"></div>' +
+            '<div id="rondo-modal-lista-wrap">' +
+                '<div id="rondo-modal-lista"></div>' +
             '</div>' +
-            '<p style="font-size:11px;color:var(--hjp-fg-dim);margin:4px 14px 0">Arrastra el asa ⠿ de cada unidad para cambiar el orden con el que se acomodan las ventanas.</p>' +
-            '<div class="hjp-modal-add">' +
-                '<input type="text" id="hjp-modal-new-eco" placeholder="eco (ej. 4381)">' +
-                '<input type="text" id="hjp-modal-new-dest" placeholder="destino (opcional)">' +
-                '<button class="accbtn" id="hjp-modal-add">+ Añadir</button>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 14px 0">Arrastra el asa ⠿ de cada unidad para cambiar el orden con el que se acomodan las ventanas.</p>' +
+            '<div class="rondo-modal-add">' +
+                '<input type="text" id="rondo-modal-new-eco" placeholder="eco (ej. 4381)">' +
+                '<input type="text" id="rondo-modal-new-dest" placeholder="destino (opcional)">' +
+                '<button class="accbtn" id="rondo-modal-add">+ Añadir</button>' +
             '</div>' +
-            '<div class="hjp-acciones">' +
-            '<button class="cancel" id="hjp-cancelar">Cancelar</button>' +
-            '<button class="mini" id="hjp-modal-vaciar" style="background:#b71c1c;color:#fff">⌫ Vaciar lista</button>' +
-            '<button class="accbtn" id="hjp-ejecutar">▶ Ejecutar (abrir ventanas)</button>' +
+            '<div class="rondo-acciones">' +
+            '<button class="cancel" id="rondo-cancelar">Cancelar</button>' +
+            '<button class="mini" id="rondo-modal-vaciar" style="background:#b71c1c;color:#fff">⌫ Vaciar lista</button>' +
+            '<button class="accbtn" id="rondo-ejecutar">▶ Ejecutar (abrir ventanas)</button>' +
             '</div>'
         );
 
-        cfgWinEl = makeEl('div', { id: 'hjp-config' });
+        cfgWinEl = makeEl('div', { id: 'rondo-config' });
         cfgWinEl.innerHTML = (
-            '<div class="cfg-head"><h3><span class="hjp-mi">' + ICO.ajustes + '</span> Configuración</h3>' +
-            '<button class="hjp-iconbtn" id="hjp-cfg-cerrar-x" title="Cerrar">✕</button></div>' +
-            '<div class="cfg-tabs" id="hjp-cfg-tabs">' +
+            '<div class="cfg-head"><h3><span class="rondo-mi">' + ICO.ajustes + '</span> Configuración</h3>' +
+            '<button class="rondo-iconbtn" id="rondo-cfg-cerrar-x" title="Cerrar">×</button></div>' +
+            '<div class="cfg-tabs" id="rondo-cfg-tabs">' +
             '<button class="cfg-tab activo" data-cfg="general">General</button>' +
             '<button class="cfg-tab" data-cfg="reglas">Reglas</button>' +
             '<button class="cfg-tab" data-cfg="avisos">Avisos</button>' +
@@ -3318,7 +3373,7 @@
             '<button class="cfg-tab" data-cfg="rutas">Rutas</button>' +
             '<button class="cfg-tab" data-cfg="avanzado">Avanzado</button>' +
             '</div>' +
-            '<div class="cfg-body" id="hjp-cfg-body">' +
+            '<div class="cfg-body" id="rondo-cfg-body">' +
             '<div class="cfg-pane" data-cfg="general">' +
             '<h4>General</h4>' +
             numRow('c-poll', 'Refresco (ms)') +
@@ -3374,7 +3429,7 @@
             '<label>Horario activo <input type="checkbox" id="c-hor-on"></label>' +
             '<label>Desde <input type="time" id="c-hor-a"></label>' +
             '<label>Hasta <input type="time" id="c-hor-b"></label>' +
-            '<div class="hjp-acciones" style="margin-top:8px">' +
+            '<div class="rondo-acciones" style="margin-top:8px">' +
                 '<button class="accbtn" id="c-lista-editar" style="flex:1">⎘ Editar lista de unidades</button>' +
             '</div>' +
             '</div>' +
@@ -3400,7 +3455,7 @@
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
             numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--hjp-fg-dim)">Atajos: <b>Alt+1..5</b> cambia pestañas · <b>Alt+P</b> panel · <b>Alt+L</b> lateral · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..5</b> cambia pestañas · <b>Alt+P</b> panel · <b>Alt+L</b> lateral · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Panel</h4>' +
@@ -3415,7 +3470,7 @@
             numRow('c-panel-ancho', 'Ancho lateral (px)') +
             checkRow('c-panel-clicfuera', 'Ocultar la barra lateral al hacer clic fuera') +
             checkRow('c-confirmar-cierre', 'Pedir confirmación al cerrar todas las ventanas') +
-            '<p style="font-size:11px;color:var(--hjp-fg-dim);margin:2px 0 0">El panel recuerda el modo (flotante o lateral) y si estaba abierto.</p>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:2px 0 0">El panel recuerda el modo (flotante o lateral) y si estaba abierto.</p>' +
             '<h4>Barra de botones</h4>' +
             '<div class="row-grid">' +
             checkRow('c-b-main', 'Automatizar') +
@@ -3424,12 +3479,12 @@
             '</div>' +
             checkRow('c-b-plegada', 'Barra plegada') +
             checkRow('c-b-vertical', 'Orientacion vertical') +
-            '<div style="margin-top:6px"><button class="accbtn" id="hjp-b-reset" style="width:100%"><span class="hjp-mi">' + ICO.expandir + '</span> Recentrar barra</button></div>' +
+            '<div style="margin-top:6px"><button class="accbtn" id="rondo-b-reset" style="width:100%"><span class="rondo-mi">' + ICO.expandir + '</span> Recentrar barra</button></div>' +
             '<h4>Verificacion</h4>' +
             checkRow('c-verif', 'Verificación automática') +
             numRow('c-verif-seg', 'Revisar cada (seg)') +
             '<h4>Tamaño del panel</h4>' +
-            '<button class="accbtn" id="hjp-reset-panel" style="width:100%"><span class="hjp-mi">' + ICO.colapsar + '</span> Restablecer tamano</button>' +
+            '<button class="accbtn" id="rondo-reset-panel" style="width:100%"><span class="rondo-mi">' + ICO.colapsar + '</span> Restablecer tamano</button>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="rutas" style="display:none">' +
             '<h4>Rutas y OpenStreetMap</h4>' +
@@ -3457,43 +3512,43 @@
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
-            '<div id="hjp-update-info" style="font-size:11.5px;color:var(--hjp-fg-dim);margin-bottom:6px">Versión instalada: <b>' + VER + '</b></div>' +
-            '<button class="accbtn" id="hjp-check-update" style="width:100%"><span class="hjp-mi">' + ICO.refrescar + '</span> Buscar actualizaciones</button>' +
+            '<div id="rondo-update-info" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-bottom:6px">Versión instalada: <b>' + VER + '</b></div>' +
+            '<button class="accbtn" id="rondo-check-update" style="width:100%"><span class="rondo-mi">' + ICO.refrescar + '</span> Buscar actualizaciones</button>' +
             '<h4>Datos y prueba</h4>' +
-            '<div class="hjp-acciones">' +
-            '<button class="accbtn" id="hjp-test-btn"><span class="hjp-mi">' + ICO.senal + '</span> Probar avisos</button>' +
-            '<button class="accbtn" id="hjp-exportar-btn"><span class="hjp-mi">' + ICO.exportar + '</span> Exportar</button>' +
-            '<button class="accbtn" id="hjp-importar-btn"><span class="hjp-mi">' + ICO.importar + '</span> Importar</button>' +
+            '<div class="rondo-acciones">' +
+            '<button class="accbtn" id="rondo-test-btn"><span class="rondo-mi">' + ICO.senal + '</span> Probar avisos</button>' +
+            '<button class="accbtn" id="rondo-exportar-btn"><span class="rondo-mi">' + ICO.exportar + '</span> Exportar</button>' +
+            '<button class="accbtn" id="rondo-importar-btn"><span class="rondo-mi">' + ICO.importar + '</span> Importar</button>' +
             '</div>' +
             '<h4>Perfiles de configuración</h4>' +
-            '<label>Perfil <select id="hjp-perfil-sel" style="flex:1"></select></label>' +
-            '<div class="hjp-acciones" style="margin-top:6px">' +
-            '<button class="accbtn" id="hjp-perfil-guardar">Guardar como...</button>' +
-            '<button class="accbtn" id="hjp-perfil-cargar">Cargar</button>' +
-            '<button class="accbtn" id="hjp-perfil-borrar" style="background:#b71c1c">Borrar</button>' +
+            '<label>Perfil <select id="rondo-perfil-sel" style="flex:1"></select></label>' +
+            '<div class="rondo-acciones" style="margin-top:6px">' +
+            '<button class="accbtn" id="rondo-perfil-guardar">Guardar como...</button>' +
+            '<button class="accbtn" id="rondo-perfil-cargar">Cargar</button>' +
+            '<button class="accbtn" id="rondo-perfil-borrar" style="background:#b71c1c">Borrar</button>' +
             '</div>' +
             '<h4>Historial de avisos</h4>' +
-            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:var(--hjp-accent)">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar historial</button>' +
+            '<button class="accbtn" id="rondo-limpiar-hist" style="width:100%;background:var(--rondo-accent)">' + '<span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar historial</button>' +
             '<h4>Reseteo</h4>' +
-            '<div class="hjp-acciones">' +
-            '<button class="accbtn" id="hjp-borrar-memo" style="background:var(--hjp-accent)"><span class="hjp-mi">' + ICO.limpiar + '</span> Borrar estado</button>' +
-            '<button class="accbtn" id="hjp-borrar-todo" style="background:#5d0007">Borrar TODO</button>' +
+            '<div class="rondo-acciones">' +
+            '<button class="accbtn" id="rondo-borrar-memo" style="background:var(--rondo-accent)"><span class="rondo-mi">' + ICO.limpiar + '</span> Borrar estado</button>' +
+            '<button class="accbtn" id="rondo-borrar-todo" style="background:#5d0007">Borrar TODO</button>' +
             '</div>' +
             '</div>' +
             '</div>' +
             '<div class="cfg-foot">' +
-            '<span class="cfg-dirty" id="hjp-cfg-dirty" title="Tienes cambios sin guardar">Cambios sin guardar</span>' +
+            '<span class="cfg-dirty" id="rondo-cfg-dirty" title="Tienes cambios sin guardar">Cambios sin guardar</span>' +
             '<div style="display:flex;gap:8px">' +
-            '<button class="cancel" id="hjp-cfg-cerrar">Cerrar</button>' +
-            '<button class="accbtn" id="hjp-cfg-guardar">Guardar</button>' +
+            '<button class="cancel" id="rondo-cfg-cerrar">Cerrar</button>' +
+            '<button class="accbtn" id="rondo-cfg-guardar">Guardar</button>' +
             '</div>' +
             '</div>'
         );
 
-        ayudaEl = makeEl('div', { id: 'hjp-ayuda' });
+        ayudaEl = makeEl('div', { id: 'rondo-ayuda' });
         ayudaEl.innerHTML = (
             '<div class="cfg-head"><h3>? Ayuda rapida</h3>' +
-            '<button class="hjp-iconbtn" id="hjp-ayuda-x" title="Cerrar">✕</button></div>' +
+            '<button class="rondo-iconbtn" id="rondo-ayuda-x" title="Cerrar">×</button></div>' +
             '<div class="ayuda-body">' +
             '<h4>En 3 pasos</h4>' +
             '<div class="pasos">' +
@@ -3525,15 +3580,15 @@
             '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestaña en el borde (rail) que la trae de vuelta con un clic.</p>' +
             '</div>' +
             '<div class="cfg-foot">' +
-            '<button class="cancel" id="hjp-ayuda-cerrar">Cerrar</button>' +
-            '<button class="accbtn" id="hjp-ayuda-config">Abrir ajustes</button>' +
+            '<button class="cancel" id="rondo-ayuda-cerrar">Cerrar</button>' +
+            '<button class="accbtn" id="rondo-ayuda-config">Abrir ajustes</button>' +
             '</div>'
         );
 
-        ctxEl = makeEl('div', { id: 'hjp-contexto' });
-        toastsEl = makeEl('div', { id: 'hjp-toasts' });
-        avisoEl = makeEl('div', { id: 'hjp-aviso' });
-        railEl = makeEl('div', { id: 'hjp-rail' });
+        ctxEl = makeEl('div', { id: 'rondo-contexto' });
+        toastsEl = makeEl('div', { id: 'rondo-toasts' });
+        avisoEl = makeEl('div', { id: 'rondo-aviso' });
+        railEl = makeEl('div', { id: 'rondo-rail' });
         railEl.title = 'Mostrar el panel';
 
         // Accesibilidad base: dialogos, regiones vivas y tabs.
@@ -3547,9 +3602,9 @@
             toastsEl.setAttribute('aria-live', 'polite');
             avisoEl.setAttribute('role', 'alert');
             // panelEl aun no esta en el DOM: se consulta sobre el propio nodo.
-            const tabsEl = panelEl.querySelector('#hjp-tabs');
+            const tabsEl = panelEl.querySelector('#rondo-tabs');
             if (tabsEl) tabsEl.setAttribute('role', 'tablist');
-            panelEl.querySelectorAll('#hjp-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
+            panelEl.querySelectorAll('#rondo-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
         } catch (_) { /* noop */ }
 
         document.body.appendChild(barraEl);
@@ -3595,7 +3650,7 @@
         const ancho = clamp(Number(APP.config.panelAncho) || 420, 360, Math.max(360, window.innerWidth - 20));
         panelEl.classList.toggle('lateral', esLateral());
         panelEl.classList.toggle('izquierda', esLateral() && lado === 'izquierda');
-        document.body.classList.toggle('hjp-lateral', esLateral());
+        document.body.classList.toggle('rondo-lateral', esLateral());
         if (esLateral()) {
             panelEl.style.top = '0px';
             panelEl.style.bottom = '0px';
@@ -3612,9 +3667,9 @@
             panelEl.style.height = ((APP.panelSize && APP.panelSize.h) ? APP.panelSize.h : 440) + 'px';
             panelEl.style.width = ((APP.panelSize && APP.panelSize.w) ? APP.panelSize.w : 470) + 'px';
         }
-        const colIcon = document.querySelector('#hjp-collapse .hjp-mi');
+        const colIcon = document.querySelector('#rondo-collapse .rondo-mi');
         if (colIcon) colIcon.textContent = esLateral() ? ICO.colapsar : ICO.expandir;
-        const colBtn = byId('hjp-collapse');
+        const colBtn = byId('rondo-collapse');
         if (colBtn) colBtn.title = esLateral() ? 'Ocultar barra lateral' : 'Ocultar panel';
         if (esLateral()) {
             panelEl.style.display = 'flex';
@@ -3636,17 +3691,17 @@
         advice('Panel', esLateral() ? 'modo barra lateral' : 'modo flotante');
     }
     function actualizarBotonesModo() {
-        const lbl = document.querySelector('#hjp-btn-modo .hjp-modo-label');
+        const lbl = document.querySelector('#rondo-btn-modo .rondo-modo-label');
         if (lbl) lbl.textContent = esLateral() ? 'Lateral' : 'Flotante';
-        const icon = document.querySelector('#hjp-btn-modo .hjp-mi');
+        const icon = document.querySelector('#rondo-btn-modo .rondo-mi');
         if (icon) icon.textContent = esLateral() ? ICO.colapsar : ICO.expandir;
-        const sbLbl = document.querySelector('#hjp-sb-modo .hjp-sb-modo-label');
+        const sbLbl = document.querySelector('#rondo-sb-modo .rondo-sb-modo-label');
         if (sbLbl) sbLbl.textContent = esLateral() ? 'Flotante' : 'Lateral';
-        const sbIcon = document.querySelector('#hjp-sb-modo .hjp-mi');
+        const sbIcon = document.querySelector('#rondo-sb-modo .rondo-mi');
         if (sbIcon) sbIcon.textContent = esLateral() ? ICO.expandir : ICO.colapsar;
-        const sbModo = byId('hjp-sb-modo');
+        const sbModo = byId('rondo-sb-modo');
         if (sbModo) sbModo.title = esLateral() ? 'Volver al modo flotante' : 'Pasar a barra lateral';
-        const panelLbl = byId('hjp-btn-panel');
+        const panelLbl = byId('rondo-btn-panel');
         if (panelLbl) panelLbl.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
     }
     function togglePanel() {
@@ -3658,9 +3713,9 @@
             panelEl.style.display = APP.panelHidden ? 'none' : 'flex';
         }
         aplicarModoPanel();
-        const icon = document.querySelector('#hjp-btn-panel .hjp-mi');
+        const icon = document.querySelector('#rondo-btn-panel .rondo-mi');
         if (icon) icon.textContent = APP.panelHidden ? ICO.panel : ICO.cerrar;
-        const t = byId('hjp-btn-panel');
+        const t = byId('rondo-btn-panel');
         if (t) t.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
         if (APP.panelHidden) advice('Panel', 'oculto · usa el boton de la barra o el rail para mostrarlo');
         actualizarBotonesModo();
@@ -3678,8 +3733,8 @@
         const lado = APP.config.panelLado || 'derecha';
         railEl.classList.toggle('izquierda', lado === 'izquierda');
         railEl.classList.toggle('derecha', lado !== 'izquierda');
-        railEl.innerHTML = '<span class="hjp-mi">' + (lado === 'izquierda' ? ICO.arrowRight : ICO.arrowLeft) + '</span>' +
-            '<span class="hjp-rail-txt">PANEL</span>';
+        railEl.innerHTML = '<span class="rondo-mi">' + (lado === 'izquierda' ? ICO.arrowRight : ICO.arrowLeft) + '</span>' +
+            '<span class="rondo-rail-txt">PANEL</span>';
         const show = esLateral() && APP.panelHidden;
         railEl.classList.toggle('mostrar', show);
     }
@@ -3695,7 +3750,7 @@
             let activo = false, dx = 0, dy = 0;
             barraEl.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
-                if (e.target.closest('button') && !e.target.closest('.hjp-grip')) return;
+                if (e.target.closest('button') && !e.target.closest('.rondo-grip')) return;
                 activo = true;
                 const r = barraEl.getBoundingClientRect();
                 dx = e.clientX - r.left; dy = e.clientY - r.top;
@@ -3719,11 +3774,11 @@
         })();
 
          (function dragPanel() {
-            const head = byId('hjp-drag');
+            const head = byId('rondo-drag');
             let activo = false, dx = 0, dy = 0;
             head.addEventListener('pointerdown', (e) => {
                 if (e.button !== 0) return;
-                if (e.target.closest('.hjp-iconbtn')) return;
+                if (e.target.closest('.rondo-iconbtn')) return;
                 if (esLateral()) return;
                 activo = true;
                 panelEl.classList.add('dragging');
@@ -3775,10 +3830,10 @@
         APP.tab = name;
         const ids = ['dash', 'unidades', 'alertas', 'rutas', 'geocercas'];
         ids.forEach((n) => {
-            const el = byId('hjp-wrap-' + n);
+            const el = byId('rondo-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
         });
-        document.querySelectorAll('#hjp-tabs .tab').forEach((t) => {
+        document.querySelectorAll('#rondo-tabs .tab').forEach((t) => {
             const act = t.dataset.tab === name;
             t.classList.toggle('activo', act);
             t.setAttribute('aria-selected', act ? 'true' : 'false');
@@ -3793,7 +3848,7 @@
         paintInfo();
     }
     function paintInfo() {
-        const info = byId('hjp-info');
+        const info = byId('rondo-info');
         if (!info) return;
         const n = APP.unidades.filter(shouldWatch).length;
         info.textContent = n + ' unidades · ' + (APP.config.watchAll ? 'monitor todas' : ('sel ' + APP.seleccion.size))
@@ -3802,11 +3857,11 @@
     function paintCounters() {
         const watched = APP.unidades.filter(shouldWatch);
         const on = watched.filter((u) => unitState(u).online).length;
-        const cOn = byId('hjp-c-on');
-        const cTot = byId('hjp-c-tot');
-        const cAl = byId('hjp-c-al');
-        const cRu = byId('hjp-c-ru');
-        const cZn = byId('hjp-c-zn');
+        const cOn = byId('rondo-c-on');
+        const cTot = byId('rondo-c-tot');
+        const cAl = byId('rondo-c-al');
+        const cRu = byId('rondo-c-ru');
+        const cZn = byId('rondo-c-zn');
         if (cOn) cOn.textContent = on;
         if (cTot) cTot.textContent = watched.length;
         if (cAl) cAl.textContent = APP.historial.length;
@@ -3814,7 +3869,7 @@
         if (cZn) cZn.textContent = APP.zonas.length;
     }
     function paintStateBadge() {
-        const b = byId('hjp-estado-barra');
+        const b = byId('rondo-estado-barra');
         if (!b) return;
         const watched = APP.unidades.filter(shouldWatch);
         const off = watched.filter((u) => !unitState(u).online).length;
@@ -3824,7 +3879,7 @@
         if (nmActivo()) cls = 'nm';
         else if (criticos > 0) cls = 'bad';
         else if (off > 0 || det > watched.length / 3) cls = 'warn';
-        b.className = 'hjp-badge-estado ' + cls;
+        b.className = 'rondo-badge-estado ' + cls;
         b.title = nmActivo()
             ? 'No molestar hasta ' + new Date(APP.noMolestar.hasta).toLocaleTimeString().slice(0, 5)
             : 'criticos: ' + criticos + ' · sin señal: ' + off + ' · detenidas: ' + det;
@@ -3832,7 +3887,7 @@
     // Lista "Requieren atención": unidades sin señal, con exceso, desviadas o
     // detenidas, ordenadas por prioridad. Cada fila abre la ventana de la unidad.
     function paintAtencion(watched) {
-        const cont = byId('hjp-atencion');
+        const cont = byId('rondo-atencion');
         if (!cont) return;
         const ahora = Date.now() / 1000;
         const items = [];
@@ -3859,21 +3914,21 @@
         items.sort((a, b) => b.peso - a.peso);
         const top = items.slice(0, 5);
         if (!top.length) {
-            setHtml(cont, '<div style="padding:8px;color:var(--hjp-fg-mute)">Todo en orden: ninguna unidad requiere atención.</div>');
+            setHtml(cont, '<div style="padding:8px;color:var(--rondo-fg-mute)">Todo en orden: ninguna unidad requiere atención.</div>');
             return;
         }
         const meta = {
-            offline: { col: 'var(--hjp-bad-fg)', ic: ICO.offline },
-            vel: { col: 'var(--hjp-warn-fg)', ic: ICO.velocidad },
-            desv: { col: 'var(--hjp-warn-fg)', ic: ICO.destino },
-            det: { col: 'var(--hjp-accent-2)', ic: ICO.detenida }
+            offline: { col: 'var(--rondo-bad-fg)', ic: ICO.offline },
+            vel: { col: 'var(--rondo-warn-fg)', ic: ICO.velocidad },
+            desv: { col: 'var(--rondo-warn-fg)', ic: ICO.destino },
+            det: { col: 'var(--rondo-accent-2)', ic: ICO.detenida }
         };
         setHtml(cont, top.map((it) => {
             const mm = meta[it.tipo] || meta.det;
-            return '<div class="alerta hjp-atencion-item" data-eco="' + esc(it.eco) + '" style="border-left:3px solid ' + mm.col + ';cursor:pointer" title="Abrir la ventana de ' + esc(it.eco) + '">' +
-                '<span class="ico hjp-mi" style="color:' + mm.col + '">' + mm.ic + '</span>' +
+            return '<div class="alerta rondo-atencion-item" data-eco="' + esc(it.eco) + '" style="border-left:3px solid ' + mm.col + ';cursor:pointer" title="Abrir la ventana de ' + esc(it.eco) + '">' +
+                '<span class="ico rondo-mi" style="color:' + mm.col + '">' + mm.ic + '</span>' +
                 '<div class="cuerpo"><b>' + esc(it.eco) + '</b><span>' + esc(it.txt) + '</span></div>' +
-                '<span class="hora hjp-mi" style="color:var(--hjp-fg-mute)">' + ICO.panel + '</span>' +
+                '<span class="hora rondo-mi" style="color:var(--rondo-fg-mute)">' + ICO.panel + '</span>' +
                 '</div>';
         }).join(''));
     }
@@ -3892,28 +3947,28 @@
         const aho = APP.historial.filter((a) => a.ts >= inicio.getTime()).length;
         const critAho = APP.historial.filter((a) => a.sev === 'critico' && a.ts >= inicio.getTime()).length;
         const kv = (id, v) => { const e = byId(id); if (e) e.textContent = v; };
-        kv('hjp-kpi-on', on);
-        kv('hjp-kpi-off', off);
-        kv('hjp-kpi-det', det);
-        kv('hjp-kpi-mov', mov);
-        kv('hjp-kpi-vel', Math.round(vel) + ' km/h prom.');
-        kv('hjp-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '-');
-        kv('hjp-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '-');
-        kv('hjp-kpi-zonas', enZona.size);
-        kv('hjp-kpi-aho', aho);
-        kv('hjp-kpi-criticos', critAho + ' críticas');
-        const resumenZ = document.querySelector('.kpi .valor#hjp-kpi-zonas + .resumen');
+        kv('rondo-kpi-on', on);
+        kv('rondo-kpi-off', off);
+        kv('rondo-kpi-det', det);
+        kv('rondo-kpi-mov', mov);
+        kv('rondo-kpi-vel', Math.round(vel) + ' km/h prom.');
+        kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '-');
+        kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '-');
+        kv('rondo-kpi-zonas', enZona.size);
+        kv('rondo-kpi-aho', aho);
+        kv('rondo-kpi-criticos', critAho + ' críticas');
+        const resumenZ = document.querySelector('.kpi .valor#rondo-kpi-zonas + .resumen');
         if (resumenZ) resumenZ.textContent = 'de ' + APP.zonas.length + ' geocercas';
 
         // Distribucion de la flota (barra + leyenda): movimiento / detenidas / sin señal.
         const totalD = Math.max(1, total);
-        const segOn = byId('hjp-dist-on');
-        const segDet = byId('hjp-dist-det');
-        const segOff = byId('hjp-dist-off');
+        const segOn = byId('rondo-dist-on');
+        const segDet = byId('rondo-dist-det');
+        const segOff = byId('rondo-dist-off');
         if (segOn) segOn.style.width = (mov / totalD * 100) + '%';
         if (segDet) segDet.style.width = (det / totalD * 100) + '%';
         if (segOff) segOff.style.width = (off / totalD * 100) + '%';
-        const legend = byId('hjp-dist-legend');
+        const legend = byId('rondo-dist-legend');
         if (legend) {
             const pct = (v) => (total ? Math.round((v / total) * 100) + '%' : '0%');
             setHtml(legend,
@@ -3923,24 +3978,24 @@
         }
         paintAtencion(watched);
 
-        const recientes = byId('hjp-kpi-recientes');
+        const recientes = byId('rondo-kpi-recientes');
         if (recientes) {
             const items = APP.historial.slice(0, 6);
             setHtml(recientes, items.length
                 ? items.map((a) => (
                     '<div class="alerta" style="border-left:3px solid ' + (COL[a.sev] || '#555') + '">' +
-                    '<span class="ico hjp-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
+                    '<span class="ico rondo-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
                     '<div class="cuerpo"><b>' + esc(a.titulo) + '</b>' +
                     (a.detalle ? '<span>' + esc(a.detalle) + '</span>' : '') + '</div>' +
                     '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
                     '</div>'
                 )).join('')
-                : '<div style="padding:8px;color:var(--hjp-fg-mute)">' + LANG.recientesNone + '</div>');
+                : '<div style="padding:8px;color:var(--rondo-fg-mute)">' + LANG.recientesNone + '</div>');
         }
         paintSparkline();
     }
     function paintSparkline() {
-        const svg = byId('hjp-spark');
+        const svg = byId('rondo-spark');
         if (!svg) return;
         const on = (APP.kpi.online || []).slice(-60);
         const off = (APP.kpi.offline || []).slice(-60);
@@ -3962,10 +4017,10 @@
         const areaOn = puntosOn + ' L' + w + ',' + h + ' L0,' + h + ' Z';
         const puntosOff = off.length === on.length ? linea(off) : '';
         setHtml(svg,
-            '<path d="' + areaOn + '" fill="var(--hjp-accent-2)" fill-opacity="0.18" stroke="none"></path>' +
-            '<path d="' + puntosOn + '" stroke="var(--hjp-accent-2)" stroke-width="1.6"></path>' +
-            (puntosOff ? '<path d="' + puntosOff + '" stroke="var(--hjp-fg-mute)" stroke-width="1" stroke-dasharray="3 3" fill="none"></path>' : '') +
-            '<text x="6" y="14" fill="var(--hjp-fg-dim)" font-size="10">ONLINE ' + on[on.length - 1] + ' · OFFLINE ' + (off[off.length - 1] != null ? off[off.length - 1] : '-') + '</text>');
+            '<path d="' + areaOn + '" fill="var(--rondo-accent-2)" fill-opacity="0.18" stroke="none"></path>' +
+            '<path d="' + puntosOn + '" stroke="var(--rondo-accent-2)" stroke-width="1.6"></path>' +
+            (puntosOff ? '<path d="' + puntosOff + '" stroke="var(--rondo-fg-mute)" stroke-width="1" stroke-dasharray="3 3" fill="none"></path>' : '') +
+            '<text x="6" y="14" fill="var(--rondo-fg-dim)" font-size="10">ONLINE ' + on[on.length - 1] + ' · OFFLINE ' + (off[off.length - 1] != null ? off[off.length - 1] : '-') + '</text>');
     }
     // Valor de ordenamiento por columna de la tabla de unidades.
     function valorOrden(x, col) {
@@ -3985,16 +4040,16 @@
         return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
     }
     function actualizarCabecerasOrden() {
-        document.querySelectorAll('#hjp-wrap-unidades th.hjp-sortable').forEach((th) => {
+        document.querySelectorAll('#rondo-wrap-unidades th.rondo-sortable').forEach((th) => {
             const act = APP.sortCol === th.dataset.sort;
-            th.classList.toggle('hjp-sort-asc', act && APP.sortDir !== 'desc');
-            th.classList.toggle('hjp-sort-desc', act && APP.sortDir === 'desc');
-            const s = th.querySelector('.hjp-sort');
+            th.classList.toggle('rondo-sort-asc', act && APP.sortDir !== 'desc');
+            th.classList.toggle('rondo-sort-desc', act && APP.sortDir === 'desc');
+            const s = th.querySelector('.rondo-sort');
             if (s) s.textContent = act ? (APP.sortDir === 'desc' ? '▾' : '▴') : '⇅';
         });
     }
     function paintTabla() {
-        const body = byId('hjp-body');
+        const body = byId('rondo-body');
         if (!body) return;
         const lista = APP.unidades
             .filter(shouldWatch)
@@ -4031,10 +4086,10 @@
             const ic = st.estado === 'offline' ? ICO.offline : (st.estado === 'detenida' ? ICO.detenida : ICO.moviendo);
             const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
             const coords = (APP.config.mostrarCoords && st.lat != null)
-                ? ' <span style="color:var(--hjp-fg-mute);font-size:10px">' + st.lat.toFixed(3) + ',' + st.lon.toFixed(3) + '</span>' : '';
+                ? ' <span style="color:var(--rondo-fg-mute);font-size:10px">' + st.lat.toFixed(3) + ',' + st.lon.toFixed(3) + '</span>' : '';
             const lim = limiteDe(info);
             const excede = st.online && st.vel > lim;
-            const celVel = '<td' + (excede ? ' style="color:var(--hjp-bad-fg);font-weight:bold"' : '') + ' title="' +
+            const celVel = '<td' + (excede ? ' style="color:var(--rondo-bad-fg);font-weight:bold"' : '') + ' title="' +
                 (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h') + '">' +
                 Math.round(st.vel) + (lim !== APP.config.velMax ? ' <span style="font-size:10px">/' + lim + '</span>' : '') + '</td>';
             const odo = odometroDe(info);
@@ -4043,33 +4098,33 @@
             return (
                 '<tr class="fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
                 '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
-                '<input type="checkbox" class="hjp-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
+                '<input type="checkbox" class="rondo-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
                 '</td>' +
-                '<td class="eco">' + (vig ? '<span class="hjp-mi">' + ICO.bandera + '</span> ' : '') + esc(info.eco || '-') + '</td>' +
+                '<td class="eco">' + (vig ? '<span class="rondo-mi">' + ICO.bandera + '</span> ' : '') + esc(info.eco || '-') + '</td>' +
                 '<td>' + esc(info.placa || '') + '</td>' +
-                '<td><span class="hjp-pill ' + clase + '"><span class="hjp-mi">' + ic + '</span>' + txt + '</span></td>' +
+                '<td><span class="rondo-pill ' + clase + '"><span class="rondo-mi">' + ic + '</span>' + txt + '</span></td>' +
                 '<td>' + ageText(st.edadMin) + '</td>' +
                 celVel +
                 '<td>' + esc(zona) + coords + '</td>' +
                 celOdo +
-                '<td><button class="mini hjp-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
-                '<span class="hjp-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
+                '<td><button class="mini rondo-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
+                '<span class="rondo-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
                 '</tr>'
             );
         }).join('') || '<tr><td colspan="9">' + emptyState(ICO.panel, LANG.sinUni,
             'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
-            '<button class="mini hjp-vacio-acc" data-acc="abrir-lista"><span class="hjp-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>');
-        const aviso = byId('hjp-sel-vacio');
+            '<button class="mini rondo-vacio-acc" data-acc="abrir-lista"><span class="rondo-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>');
+        const aviso = byId('rondo-sel-vacio');
         if (aviso) {
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
             aviso.style.display = noHaySel ? 'block' : 'none';
         }
-        byId('hjp-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
+        byId('rondo-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
         actualizarCabecerasOrden();
         paintInfo();
     }
     function paintAlertas() {
-        const cont = byId('hjp-lista-alertas');
+        const cont = byId('rondo-lista-alertas');
         if (!cont) return;
         const f = (APP.filtro || '').toLowerCase();
         const lista = APP.historial.filter((a) => {
@@ -4080,7 +4135,7 @@
         setHtml(cont, lista.length
             ? lista.map((a) => (
                 '<div class="alerta" style="border-left:4px solid ' + (COL[a.sev] || '#555') + '">' +
-                '<span class="ico hjp-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
+                '<span class="ico rondo-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
                 '<div class="cuerpo">' +
                 '<b>' + esc(a.titulo) + '</b>' +
                 (a.detalle ? '<span>' + esc(a.detalle) + '</span>' : '') +
@@ -4095,19 +4150,19 @@
         paintSeverity();
     }
     function paintSeverity() {
-        document.querySelectorAll('#hjp-filtroseveridad span[data-sev]').forEach((s) => {
+        document.querySelectorAll('#rondo-filtroseveridad span[data-sev]').forEach((s) => {
             s.classList.toggle('activo', s.dataset.sev === (APP.filtSever || 'todas'));
         });
     }
     function paintGeocercas() {
-        const body = byId('hjp-body-zonas');
+        const body = byId('rondo-body-zonas');
         if (!body) return;
         if (!APP.config.loadZones || !APP.zonas.length) {
             setHtml(body, '<tr><td colspan="2">' + emptyState(ICO.geocercas, 'Sin geocercas cargadas',
                 APP.config.loadZones
                     ? 'No se encontraron geocercas en tu cuenta de Wialon.'
                     : 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.',
-                APP.config.loadZones ? '' : '<button class="mini hjp-vacio-acc" data-acc="ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>') + '</td></tr>');
+                APP.config.loadZones ? '' : '<button class="mini rondo-vacio-acc" data-acc="ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>') + '</td></tr>');
             return;
         }
         const unidades = APP.unidades.filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
@@ -4134,7 +4189,7 @@
             'Ninguna geocerca coincide con el filtro actual.') + '</td></tr>');
     }
     function paintViajes() {
-        const cont = byId('hjp-lista-viajes');
+        const cont = byId('rondo-lista-viajes');
         if (!cont) return;
         const ecos = Object.keys(APP.viajes);
         if (!ecos.length) {
@@ -4150,9 +4205,9 @@
             if (v.paradas.length) flags.push(v.paradas.length + ' parada(s)');
             if (v.llego) flags.push('llego a destino');
             if (v.regreso) flags.push('en regreso');
-            const color = v.regreso ? 'var(--hjp-warn-fg)' : (v.llego ? 'var(--hjp-ok-fg)' : 'var(--hjp-accent-2)');
+            const color = v.regreso ? 'var(--rondo-warn-fg)' : (v.llego ? 'var(--rondo-ok-fg)' : 'var(--rondo-accent-2)');
             return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
-                '<span class="ico hjp-mi" style="color:' + color + '">' + ICO.tiempo + '</span>' +
+                '<span class="ico rondo-mi" style="color:' + color + '">' + ICO.tiempo + '</span>' +
                 '<div class="cuerpo"><b>' + esc(eco) + ' · VIAJE</b>' +
                 '<span>Partida ' + new Date(v.partida.t * 1000).toLocaleString().slice(0, 16) + (v.zonaPartida ? ' · ' + esc(v.zonaPartida) : '') + '</span>' +
                 '<div class="meta">' +
@@ -4162,14 +4217,14 @@
                 (flags.length ? '<span>' + esc(flags.join(' · ')) + '</span>' : '') +
                 '<span>' + new Date(v.analizado).toLocaleTimeString().slice(0, 5) + '</span>' +
                 '</div></div>' +
-                '<button class="mini hjp-viaje-geo" data-eco="' + esc(eco) + '" title="Exportar viaje GeoJSON"><span class="hjp-mi">' + ICO.exportar + '</span></button>' +
-                '<button class="mini hjp-viaje-re" data-eco="' + esc(eco) + '" title="Reanalizar viaje"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
+                '<button class="mini rondo-viaje-geo" data-eco="' + esc(eco) + '" title="Exportar viaje GeoJSON"><span class="rondo-mi">' + ICO.exportar + '</span></button>' +
+                '<button class="mini rondo-viaje-re" data-eco="' + esc(eco) + '" title="Reanalizar viaje"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
                 '</div>';
         }).join(''));
     }
     function paintRutas() {
         paintViajes();
-        const cont = byId('hjp-lista-rutas');
+        const cont = byId('rondo-lista-rutas');
         if (!cont) return;
         const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const filas = watched.filter((x) => rutaDe(x.info));
@@ -4177,7 +4232,7 @@
         if (!filas.length && !sinUnidad.length) {
             setHtml(cont, emptyState(ICO.destino, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
-                '<button class="mini hjp-vacio-acc" data-acc="tab-unidades"><span class="hjp-mi">' + ICO.panel + '</span> Ir a Unidades</button>'));
+                '<button class="mini rondo-vacio-acc" data-acc="tab-unidades"><span class="rondo-mi">' + ICO.panel + '</span> Ir a Unidades</button>'));
             return;
         }
         const tarjeta = (info, st) => {
@@ -4188,10 +4243,10 @@
             const desviado = !!(s && s.dist > APP.config.desvioM);
             const llego = !!(s && s.progreso >= 0.95);
             const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
-            const color = llego ? 'var(--hjp-ok-fg)' : (desviado ? 'var(--hjp-bad-fg)' : 'var(--hjp-accent-2)');
+            const color = llego ? 'var(--rondo-ok-fg)' : (desviado ? 'var(--rondo-bad-fg)' : 'var(--rondo-accent-2)');
             const dest = r.destinoTexto || (r.destino.lat.toFixed(4) + ',' + r.destino.lon.toFixed(4));
             return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
-                '<span class="ico hjp-mi" style="color:' + color + '">' + ICO.destino + '</span>' +
+                '<span class="ico rondo-mi" style="color:' + color + '">' + ICO.destino + '</span>' +
                 '<div class="cuerpo"><b>' + esc(eco || info.nombre) + ' · ' + est + '</b>' +
                 '<span>' + esc(dest) + ' · ' + Math.round(r.total / 1000) + ' km · ' + esc(r.modo || '') + '</span>' +
                 '<div class="meta">' +
@@ -4200,21 +4255,21 @@
                 (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min ETA</span>' : '') +
                 '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
                 '</div></div>' +
-                '<button class="mini hjp-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="hjp-mi">' + ICO.exportar + '</span></button>' +
-                '<button class="mini hjp-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="hjp-mi">' + ICO.descargar + '</span></button>' +
-                '<button class="mini hjp-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
-                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
+                '<button class="mini rondo-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="rondo-mi">' + ICO.exportar + '</span></button>' +
+                '<button class="mini rondo-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="rondo-mi">' + ICO.descargar + '</span></button>' +
+                '<button class="mini rondo-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
+                '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-mi">' + ICO.cerrar + '</span></button>' +
                 '</div>';
         };
         let html = filas.map((x) => tarjeta(x.info, x.st)).join('');
         sinUnidad.forEach((eco) => {
             const r = APP.rutas[eco];
             if (!r) return;
-            html += '<div class="alerta" style="border-left:4px solid var(--hjp-fg-mute);opacity:.75">' +
-                '<span class="ico hjp-mi">' + ICO.destino + '</span>' +
+            html += '<div class="alerta" style="border-left:4px solid var(--rondo-fg-mute);opacity:.75">' +
+                '<span class="ico rondo-mi">' + ICO.destino + '</span>' +
                 '<div class="cuerpo"><b>' + esc(eco) + ' · FUERA DE VIGILANCIA</b>' +
                 '<span>' + esc(r.destinoTexto || '') + ' · ' + Math.round(r.total / 1000) + ' km</span></div>' +
-                '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
+                '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-mi">' + ICO.cerrar + '</span></button>' +
                 '</div>';
         });
         setHtml(cont, html);
@@ -4227,7 +4282,7 @@
         if (APP.tab === 'dash') paintKPI();
         if (APP.tab === 'rutas') paintRutas();
         if (APP.tab === 'geocercas') paintGeocercas();
-        byId('hjp-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
+        byId('rondo-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
         paintStateBadge();
         paintInfo();
@@ -4280,7 +4335,7 @@
         const off = watched.filter((x) => !x.st.online);
 
         const lineas = [];
-        lineas.push('# Informe HJP · Wialon');
+        lineas.push('# Informe Rondo');
         lineas.push('');
         lineas.push('Generado: ' + new Date().toLocaleString());
         lineas.push('Unidades vigiladas: ' + watched.length);
@@ -4314,7 +4369,7 @@
             lineas.push('- Sin avisos.');
         }
         const a = makeEl('a', { href: URL.createObjectURL(new Blob([lineas.join('\n')], { type: 'text/markdown;charset=utf-8;' })) });
-        a.download = 'hjp_informe_' + new Date().toISOString().slice(0, 10) + '.md';
+        a.download = 'rondo_informe_' + new Date().toISOString().slice(0, 10) + '.md';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
         advice('Informe generado', hoy.length + ' alertas hoy');
@@ -4322,9 +4377,9 @@
 
     /* ====================== ACTUALIZACIONES ====================== */
     function pintarActualizacion() {
-        const b = byId('hjp-actualizar');
+        const b = byId('rondo-actualizar');
         const u = APP.update;
-        const bar = byId('hjp-btn-update');
+        const bar = byId('rondo-btn-update');
         if (bar) {
             const ver = (u.state === 'available');
             const visible = bar.style.display !== 'none';
@@ -4333,7 +4388,7 @@
                 try { placeBar(); } catch (_) { /* noop */ }
             }
             if (ver) {
-                bar.innerHTML = '<span class="hjp-mi">' + ICO.actualizar + '</span> Actualizar' + (u.remote ? ' ' + esc(u.remote) : '');
+                bar.innerHTML = '<span class="rondo-mi">' + ICO.actualizar + '</span> Actualizar' + (u.remote ? ' ' + esc(u.remote) : '');
                 bar.title = 'Actualizar a la version ' + esc(u.remote || '') + ' (instalada ' + u.local + ')';
             }
         }
@@ -4342,20 +4397,20 @@
             if (u.state === 'available') {
                 b.style.display = '';
                 b.classList.add('activo');
-                const icon = b.querySelector('.hjp-mi');
+                const icon = b.querySelector('.rondo-mi');
                 if (icon) icon.textContent = ICO.actualizar;
                 b.title = 'Actualizar a la version ' + u.remote + ' (instalada ' + u.local + ')';
             } else if (u.state === 'installed') {
                 b.style.display = '';
                 b.classList.add('activo');
-                const icon = b.querySelector('.hjp-mi');
+                const icon = b.querySelector('.rondo-mi');
                 if (icon) icon.textContent = ICO.refrescar;
                 b.title = 'Actualizacion instalada · recarga para aplicar';
             } else if (u.state === 'error') {
                 b.style.display = '';
                 b.classList.remove('activo');
                 b.classList.add('warn');
-                const icon = b.querySelector('.hjp-mi');
+                const icon = b.querySelector('.rondo-mi');
                 if (icon) icon.textContent = ICO.alto;
                 b.title = 'No se pudo comprobar actualizaciones' + (u.lastError ? ' (' + u.lastError + ')' : '') + ' · clic para reintentar';
             } else {
@@ -4366,16 +4421,16 @@
         pintarInfoUpdate();
     }
     function pintarInfoUpdate() {
-        const el = byId('hjp-update-info');
+        const el = byId('rondo-update-info');
         if (!el) return;
         const u = APP.update;
         let html = 'Version instalada: <b>' + VER + '</b>';
         if (u.remote) html += ' · remota: <b>' + esc(u.remote) + '</b>' + (u.canal ? ' (' + esc(u.canal) + ')' : '');
         if (u.state === 'checking') html += ' · comprobando...';
         else if (u.state === 'current' && u.lastCheck) html += ' · al dia (revisado ' + new Date(u.lastCheck).toLocaleTimeString() + ')';
-        else if (u.state === 'available') html += ' · <b style="color:var(--hjp-accent-2)">actualizacion disponible</b>';
-        else if (u.state === 'installed') html += ' · <b style="color:var(--hjp-accent-2)">actualizada · recarga</b>';
-        else if (u.state === 'error') html += ' · <b style="color:var(--hjp-warn-fg)">no se pudo comprobar</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
+        else if (u.state === 'available') html += ' · <b style="color:var(--rondo-accent-2)">actualizacion disponible</b>';
+        else if (u.state === 'installed') html += ' · <b style="color:var(--rondo-accent-2)">actualizada · recarga</b>';
+        else if (u.state === 'error') html += ' · <b style="color:var(--rondo-warn-fg)">no se pudo comprobar</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
         el.innerHTML = html;
     }
     async function fetchVersionRemota(url) {
@@ -4427,7 +4482,7 @@
         } catch (e) {
             APP.update.state = 'error';
             APP.update.lastError = (e && e.message) || 'sin conexion';
-            try { console.warn('[HJP] update check error:', APP.update.lastError); } catch (_) { /* noop */ }
+            try { console.warn('[Rondo] update check error:', APP.update.lastError); } catch (_) { /* noop */ }
             pintarActualizacion();
         }
     }
@@ -4472,7 +4527,7 @@
             panelPos: APP.panelPos, panelSize: APP.panelSize
         };
         const a = makeEl('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })) });
-        a.download = 'hjp_config_' + new Date().toISOString().slice(0, 10) + '.json';
+        a.download = 'rondo_config_' + new Date().toISOString().slice(0, 10) + '.json';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
         adviceOk('Configuración exportada');
@@ -4515,7 +4570,7 @@
         inp.click();
     }
     function pintarPerfiles() {
-        const sel = byId('hjp-perfil-sel');
+        const sel = byId('rondo-perfil-sel');
         if (!sel) return;
         const nombres = Object.keys(APP.perfiles).sort((a, b) => a.localeCompare(b));
         sel.innerHTML = nombres.length
@@ -4531,7 +4586,7 @@
         };
         writeJSON(LS.perfiles, APP.perfiles);
         pintarPerfiles();
-        const sel = byId('hjp-perfil-sel');
+        const sel = byId('rondo-perfil-sel');
         if (sel) sel.value = nombre;
         return true;
     }
@@ -4578,7 +4633,7 @@
     /* ====================== MENU CONTEXTUAL ====================== */
     function showMenu(x, y, options) {
         ctxEl.innerHTML = options.map((o) =>
-            o.sep ? '<div class="sep"></div>' : '<div class="op" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="hjp-mi">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
+            o.sep ? '<div class="sep"></div>' : '<div class="op" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="rondo-mi">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
         ).join('');
         ctxEl.style.display = 'flex';
         ctxEl.style.left = '0px'; ctxEl.style.top = '0px';
@@ -4644,45 +4699,45 @@
 /* ====================== EVENTOS ====================== */
     function bindEvents() {
         mainBtn.addEventListener('click', () => {
-            const ta = byId('hjp-txt'); if (ta) ta.value = '';
+            const ta = byId('rondo-txt'); if (ta) ta.value = '';
             pintarModalLista();
             modalEl.style.display = 'flex';
-            const ni = byId('hjp-modal-new-eco'); if (ni) ni.focus();
+            const ni = byId('rondo-modal-new-eco'); if (ni) ni.focus();
         });
         function abrirModalLista(prefill) {
-            const ta = byId('hjp-txt');
+            const ta = byId('rondo-txt');
             if (ta) ta.value = prefill ? prefill : '';
             pintarModalLista();
             modalEl.style.display = 'flex';
-            const ni = byId('hjp-modal-new-eco'); if (ni) ni.focus();
+            const ni = byId('rondo-modal-new-eco'); if (ni) ni.focus();
         }
-        byId('hjp-cancelar').addEventListener('click', () => {
+        byId('rondo-cancelar').addEventListener('click', () => {
             modalEl.style.display = 'none';
-            const ta = byId('hjp-txt'); if (ta) ta.value = '';
-            const ni = byId('hjp-modal-new-eco'); if (ni) ni.value = '';
-            const nd = byId('hjp-modal-new-dest'); if (nd) nd.value = '';
+            const ta = byId('rondo-txt'); if (ta) ta.value = '';
+            const ni = byId('rondo-modal-new-eco'); if (ni) ni.value = '';
+            const nd = byId('rondo-modal-new-dest'); if (nd) nd.value = '';
         });
-        byId('hjp-modal-parse').addEventListener('click', () => {
-            const ta = byId('hjp-txt');
+        byId('rondo-modal-parse').addEventListener('click', () => {
+            const ta = byId('rondo-txt');
             const n = parsearPegado(ta ? ta.value : '');
             if (ta) ta.value = '';
             pintarModalLista();
             paintInfo();
             adviceOk('Pegado', n + ' unidad(es) procesadas');
         });
-        byId('hjp-orden-pegado').addEventListener('click', () => aplicarOrdenModo('pegado'));
-        byId('hjp-orden-numero').addEventListener('click', () => aplicarOrdenModo('numero'));
-        byId('hjp-orden-numero-desc').addEventListener('click', () => aplicarOrdenModo('numero-desc'));
-        byId('hjp-orden-alfabetico').addEventListener('click', () => aplicarOrdenModo('alfabetico'));
-        byId('hjp-orden-invertir').addEventListener('click', () => aplicarOrdenModo('invertir'));
+        byId('rondo-orden-pegado').addEventListener('click', () => aplicarOrdenModo('pegado'));
+        byId('rondo-orden-numero').addEventListener('click', () => aplicarOrdenModo('numero'));
+        byId('rondo-orden-numero-desc').addEventListener('click', () => aplicarOrdenModo('numero-desc'));
+        byId('rondo-orden-alfabetico').addEventListener('click', () => aplicarOrdenModo('alfabetico'));
+        byId('rondo-orden-invertir').addEventListener('click', () => aplicarOrdenModo('invertir'));
         inicializarDragLista();
-        byId('hjp-modal-clear-txt').addEventListener('click', () => {
-            const ta = byId('hjp-txt'); if (ta) ta.value = '';
+        byId('rondo-modal-clear-txt').addEventListener('click', () => {
+            const ta = byId('rondo-txt'); if (ta) ta.value = '';
             ta && ta.focus();
         });
-        byId('hjp-modal-add').addEventListener('click', () => {
-            const ne = byId('hjp-modal-new-eco');
-            const nd = byId('hjp-modal-new-dest');
+        byId('rondo-modal-add').addEventListener('click', () => {
+            const ne = byId('rondo-modal-new-eco');
+            const nd = byId('rondo-modal-new-dest');
             const eco = ne ? ne.value.trim() : '';
             const destino = nd ? nd.value.trim() : '';
             if (!eco) return;
@@ -4693,8 +4748,8 @@
             paintInfo();
             if (ne) ne.focus();
         });
-        byId('hjp-modal-vaciar').addEventListener('click', () => {
-            hjpConfirm('Vaciar la lista', 'Se quitaran todas las unidades de la lista vigilada. Esta accion no se puede deshacer.', () => {
+        byId('rondo-modal-vaciar').addEventListener('click', () => {
+            rondoConfirm('Vaciar la lista', 'Se quitaran todas las unidades de la lista vigilada. Esta accion no se puede deshacer.', () => {
                 APP.watchMap = {};
                 guardarLista();
                 pintarModalLista();
@@ -4702,17 +4757,17 @@
                 adviceOk('Lista vaciada');
             }, { peligro: true, okText: 'Vaciar' });
         });
-        document.getElementById('hjp-modal-lista').addEventListener('click', (e) => {
+        document.getElementById('rondo-modal-lista').addEventListener('click', (e) => {
             const eco = e.target.dataset && e.target.dataset.eco;
             if (!eco) return;
-            if (e.target.classList.contains('hjp-del')) {
+            if (e.target.classList.contains('rondo-del')) {
                 quitarDeLista(eco);
                 pintarModalLista();
                 paintInfo();
             }
         });
-        document.getElementById('hjp-modal-lista').addEventListener('input', (e) => {
-            if (!e.target.classList || !e.target.classList.contains('hjp-dest')) return;
+        document.getElementById('rondo-modal-lista').addEventListener('input', (e) => {
+            if (!e.target.classList || !e.target.classList.contains('rondo-dest')) return;
             const eco = e.target.dataset.eco;
             const destino = e.target.value.trim();
             if (APP.watchMap[eco] !== undefined) {
@@ -4721,8 +4776,8 @@
                 paintInfo();
             }
         });
-        byId('hjp-ejecutar').addEventListener('click', async () => {
-            const ta = byId('hjp-txt');
+        byId('rondo-ejecutar').addEventListener('click', async () => {
+            const ta = byId('rondo-txt');
             const texto = ta ? ta.value : '';
             if (texto && texto.trim()) parsearPegado(texto);
             const ecos = Object.keys(APP.watchMap);
@@ -4741,10 +4796,10 @@
         });
         modoBtn.addEventListener('click', toggleSidebar);
         if (railEl) railEl.addEventListener('click', togglePanel);
-        byId('hjp-sb-main').addEventListener('click', () => mainBtn.click());
-        byId('hjp-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
-        byId('hjp-sb-modo').addEventListener('click', toggleSidebar);
-        byId('hjp-sb-panel').addEventListener('click', togglePanel);
+        byId('rondo-sb-main').addEventListener('click', () => mainBtn.click());
+        byId('rondo-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
+        byId('rondo-sb-modo').addEventListener('click', toggleSidebar);
+        byId('rondo-sb-panel').addEventListener('click', togglePanel);
         // Clic fuera del panel en modo barra lateral: se oculta.
         document.addEventListener('pointerdown', (e) => {
             if (!APP.config.ocultarAlClicFuera) return;
@@ -4755,67 +4810,67 @@
             if (esUIPropia(t)) return;
             ocultarSidebar();
         }, true);
-        byId('hjp-cerrar-panel').addEventListener('click', () => { if (!APP.panelHidden) togglePanel(); });
-        byId('hjp-collapse').addEventListener('click', togglePanel);
-        byId('hjp-ayuda-btn').addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
+        byId('rondo-cerrar-panel').addEventListener('click', () => { if (!APP.panelHidden) togglePanel(); });
+        byId('rondo-collapse').addEventListener('click', togglePanel);
+        byId('rondo-ayuda-btn').addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
         helpBtn.addEventListener('click', () => { ayudaEl.style.display = 'flex'; });
-        byId('hjp-ayuda-x').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
-        byId('hjp-ayuda-cerrar').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
-        byId('hjp-ayuda-config').addEventListener('click', () => {
+        byId('rondo-ayuda-x').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
+        byId('rondo-ayuda-cerrar').addEventListener('click', () => { ayudaEl.style.display = 'none'; });
+        byId('rondo-ayuda-config').addEventListener('click', () => {
             ayudaEl.style.display = 'none';
             abrirCfg();
         });
-        byId('hjp-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
-        byId('hjp-csv').addEventListener('click', exportUnits);
-        byId('hjp-csv-al').addEventListener('click', exportAlertas);
-        byId('hjp-informe').addEventListener('click', exportInforme);
-        const listaRutasEl = byId('hjp-lista-rutas');
+        byId('rondo-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
+        byId('rondo-csv').addEventListener('click', exportUnits);
+        byId('rondo-csv-al').addEventListener('click', exportAlertas);
+        byId('rondo-informe').addEventListener('click', exportInforme);
+        const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {
                 const b = e.target.closest && e.target.closest('button');
                 if (!b) return;
                 const eco = b.dataset.eco;
-                if (b.classList.contains('hjp-ruta-del')) {
-                    hjpConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
+                if (b.classList.contains('rondo-ruta-del')) {
+                    rondoConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
                         if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
                     }, { peligro: true, okText: 'Eliminar', icon: ICO.cerrar });
-                } else if (b.classList.contains('hjp-ruta-geo')) exportRutaGeoJSON(eco);
-                else if (b.classList.contains('hjp-traza-geo')) exportTraza(eco);
-                else if (b.classList.contains('hjp-ruta-calc')) {
+                } else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
+                else if (b.classList.contains('rondo-traza-geo')) exportTraza(eco);
+                else if (b.classList.contains('rondo-ruta-calc')) {
                     const it = unitByEco(eco);
                     const r = it ? rutaDe(it.info) : APP.rutas[eco];
                     if (r) planearRuta(eco, r.destinoTexto || (r.destino.lat + ',' + r.destino.lon), null, r.modo);
                 }
             });
         }
-        const listaViajesEl = byId('hjp-lista-viajes');
+        const listaViajesEl = byId('rondo-lista-viajes');
         if (listaViajesEl) {
             listaViajesEl.addEventListener('click', (e) => {
                 const b = e.target.closest && e.target.closest('button');
                 if (!b) return;
                 const eco = b.dataset.eco;
-                if (b.classList.contains('hjp-viaje-geo')) exportViajeGeoJSON(eco);
-                else if (b.classList.contains('hjp-viaje-re')) analizarViaje(eco, false);
+                if (b.classList.contains('rondo-viaje-geo')) exportViajeGeoJSON(eco);
+                else if (b.classList.contains('rondo-viaje-re')) analizarViaje(eco, false);
             });
         }
-        byId('hjp-captura').addEventListener('click', (e) => conBusy(e.currentTarget, captureSelection));
-        byId('hjp-verifica').addEventListener('click', (e) => conBusy(e.currentTarget, () => verifyWindows(false)));
-        byId('hjp-sel-all').addEventListener('click', () => { selectAllVisible(); });
-        byId('hjp-sel-clear').addEventListener('click', () => { clearSelection(); });
-        byId('hjp-verif').addEventListener('click', () => {
+        byId('rondo-captura').addEventListener('click', (e) => conBusy(e.currentTarget, captureSelection));
+        byId('rondo-verifica').addEventListener('click', (e) => conBusy(e.currentTarget, () => verifyWindows(false)));
+        byId('rondo-sel-all').addEventListener('click', () => { selectAllVisible(); });
+        byId('rondo-sel-clear').addEventListener('click', () => { clearSelection(); });
+        byId('rondo-verif').addEventListener('click', () => {
             APP.config.verificar = !APP.config.verificar;
             writeJSON(LS.cfg, APP.config);
             restartVerificationLoop();
             advice('Verificación ' + (APP.config.verificar ? 'activada' : 'desactivada'),
                 APP.config.verificar ? 'Solo se mantendran las ventanas seleccionadas' : '');
         });
-        byId('hjp-filtro').addEventListener('input', (e) => {
+        byId('rondo-filtro').addEventListener('input', (e) => {
             APP.filtro = e.target.value;
             if (APP.tab === 'alertas') paintAlertas();
             else if (APP.tab === 'unidades') paintTabla();
             else if (APP.tab === 'geocercas') paintGeocercas();
         });
-        const selEst = byId('hjp-filtro-estado');
+        const selEst = byId('rondo-filtro-estado');
         if (selEst) {
             selEst.value = APP.filtEstado || 'todas';
             selEst.addEventListener('change', (e) => {
@@ -4824,7 +4879,7 @@
                 if (APP.tab === 'unidades') paintTabla();
             });
         }
-        const selOrden = byId('hjp-orden-sel');
+        const selOrden = byId('rondo-orden-sel');
         if (selOrden) {
             selOrden.addEventListener('change', (e) => {
                 const modo = e.target.value;
@@ -4832,10 +4887,10 @@
                 e.target.value = '';
             });
         }
-        const theadUnid = document.querySelector('#hjp-wrap-unidades thead');
+        const theadUnid = document.querySelector('#rondo-wrap-unidades thead');
         if (theadUnid) {
             theadUnid.addEventListener('click', (e) => {
-                const th = e.target.closest && e.target.closest('th.hjp-sortable');
+                const th = e.target.closest && e.target.closest('th.rondo-sortable');
                 if (!th) return;
                 const col = th.dataset.sort;
                 if (APP.sortCol === col) APP.sortDir = (APP.sortDir === 'desc') ? 'asc' : 'desc';
@@ -4846,10 +4901,10 @@
             });
         }
         // Dashboard: KPI clicables (filtran Unidades) y filas de "Requieren atención".
-        const dashEl = byId('hjp-dash');
+        const dashEl = byId('rondo-dash');
         if (dashEl) {
             dashEl.addEventListener('click', (e) => {
-                const item = e.target.closest && e.target.closest('.hjp-atencion-item');
+                const item = e.target.closest && e.target.closest('.rondo-atencion-item');
                 if (item && item.dataset.eco) { openUnitWindow(item.dataset.eco); return; }
                 const kpi = e.target.closest && e.target.closest('.kpi[data-kpi]');
                 if (!kpi) return;
@@ -4857,7 +4912,7 @@
                 if (acc === 'alertas') { setTab('alertas'); return; }
                 if (acc === 'zonas') { setTab('geocercas'); return; }
                 APP.filtEstado = (acc === 'online') ? 'todas' : acc;
-                const selF = byId('hjp-filtro-estado');
+                const selF = byId('rondo-filtro-estado');
                 if (selF) selF.value = APP.filtEstado;
                 writeJSON(LS.filtEstado, APP.filtEstado);
                 setTab('unidades');
@@ -4865,22 +4920,22 @@
         }
         document.addEventListener('pointerdown', unlockAudio, { once: true });
         document.addEventListener('keydown', unlockAudio, { once: true });
-        document.querySelectorAll('#hjp-tabs .tab').forEach((t) =>
+        document.querySelectorAll('#rondo-tabs .tab').forEach((t) =>
             t.addEventListener('click', () => setTab(t.dataset.tab)));
-        document.querySelectorAll('#hjp-filtroseveridad span').forEach((s) =>
+        document.querySelectorAll('#rondo-filtroseveridad span').forEach((s) =>
             s.addEventListener('click', () => { APP.filtSever = s.dataset.sev; paintAlertas(); }));
-        byId('hjp-tema').addEventListener('click', () => {
+        byId('rondo-tema').addEventListener('click', () => {
             APP.config.theme = APP.config.theme === 'oscuro' ? 'claro' : (APP.config.theme === 'claro' ? 'auto' : 'oscuro');
             writeJSON(LS.cfg, APP.config);
             applyTheme();
             advice('Tema', APP.config.theme);
         });
-        byId('hjp-actualizar').addEventListener('click', aplicarActualizacion);
+        byId('rondo-actualizar').addEventListener('click', aplicarActualizacion);
         updateBtn.addEventListener('click', aplicarActualizacion);
-        byId('hjp-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
-        byId('hjp-test-btn').addEventListener('click', testNotify);
-        byId('hjp-exportar-btn').addEventListener('click', exportConfig);
-        byId('hjp-importar-btn').addEventListener('click', importConfig);
+        byId('rondo-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
+        byId('rondo-test-btn').addEventListener('click', testNotify);
+        byId('rondo-exportar-btn').addEventListener('click', exportConfig);
+        byId('rondo-importar-btn').addEventListener('click', importConfig);
         foldBtn.addEventListener('click', () => {
             APP.barra.plegada = !APP.barra.plegada;
             applyBar();
@@ -4900,8 +4955,8 @@
                 });
             });
 
-        document.getElementById('hjp-body').addEventListener('change', (e) => {
-            if (!e.target.classList.contains('hjp-sel')) return;
+        document.getElementById('rondo-body').addEventListener('change', (e) => {
+            if (!e.target.classList.contains('rondo-sel')) return;
             e.stopPropagation();
             const eco = e.target.dataset.eco || '';
             const placa = e.target.dataset.placa || '';
@@ -4910,8 +4965,8 @@
             const tr = e.target.closest('tr.fila');
             if (tr) tr.classList.toggle('sel-row', !!e.target.checked);
         });
-        document.getElementById('hjp-body').addEventListener('click', (e) => {
-            if (e.target.classList && (e.target.classList.contains('hjp-sel') || e.target.closest('label.col-sel'))) {
+        document.getElementById('rondo-body').addEventListener('click', (e) => {
+            if (e.target.classList && (e.target.classList.contains('rondo-sel') || e.target.closest('label.col-sel'))) {
                 e.stopPropagation();
                 return;
             }
@@ -4919,7 +4974,7 @@
             if (!tr) return;
             const eco = tr.dataset.eco;
             if (!eco) return;
-            if (e.target.classList && e.target.classList.contains('hjp-sil')) {
+            if (e.target.classList && e.target.classList.contains('rondo-sil')) {
                 if (APP.dismissed.has(eco)) APP.dismissed.delete(eco); else APP.dismissed.add(eco);
                 writeSession(SS.dismissed, Array.from(APP.dismissed));
                 paintTabla();
@@ -4927,7 +4982,7 @@
             }
             openUnitWindow(eco);
         });
-        document.getElementById('hjp-body').addEventListener('contextmenu', (e) => {
+        document.getElementById('rondo-body').addEventListener('contextmenu', (e) => {
             const tr = e.target.closest && e.target.closest('tr.fila');
             const eco = tr ? tr.dataset.eco : null;
             if (!eco) return;
@@ -4978,7 +5033,7 @@
             } else if (acc === 'limite') {
                 const it = unitByEco(eco);
                 const actual = it ? limiteDe(it.info) : APP.config.velMax;
-                hjpPrompt('Límite de velocidad', 'Para ' + eco + '. Dejalo vacio para usar el global (' + APP.config.velMax + ' km/h).', actual, (val) => {
+                rondoPrompt('Límite de velocidad', 'Para ' + eco + '. Dejalo vacio para usar el global (' + APP.config.velMax + ' km/h).', actual, (val) => {
                     setLimite(eco, val);
                     adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }, { type: 'number', icon: ICO.velocidad, okText: 'Guardar' });
@@ -4986,20 +5041,20 @@
                 if (acc === 'ruta-astar' && !APP.config.overpass) {
                     adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
                 } else {
-                    hjpPrompt('Planear ruta', 'Destino de ' + eco + ': un lugar, una dirección o "lat,lon".', '', (dest) => {
+                    rondoPrompt('Planear ruta', 'Destino de ' + eco + ': un lugar, una dirección o "lat,lon".', '', (dest) => {
                         if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
                     }, { icon: ICO.destino, okText: 'Calcular', placeholder: 'Monterrey, NL  ·  o  25.68,-100.31' });
                 }
             } else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
             else if (acc === 'ruta-del') {
-                hjpConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
+                rondoConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
                     if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
                 }, { peligro: true, okText: 'Eliminar', icon: ICO.cerrar });
             } else if (acc === 'traza-geo') exportTraza(eco);
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
             else if (acc === 'odo-reset') {
-                hjpConfirm('Reiniciar odómetro', 'El odómetro acumulado de ' + eco + ' volverá a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: ICO.refrescar });
+                rondoConfirm('Reiniciar odómetro', 'El odómetro acumulado de ' + eco + ' volverá a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: ICO.refrescar });
             }
             else if (acc === 'mapa-osm') openMap(eco, 'osm');
             else if (acc === 'mapa-google') openMap(eco, 'google');
@@ -5018,11 +5073,11 @@
             hideMenu();
         });
 
-        document.querySelectorAll('#hjp-cfg-tabs .cfg-tab').forEach((b) => b.addEventListener('click', () => {
-            document.querySelectorAll('#hjp-cfg-tabs .cfg-tab').forEach((x) => x.classList.remove('activo'));
+        document.querySelectorAll('#rondo-cfg-tabs .cfg-tab').forEach((b) => b.addEventListener('click', () => {
+            document.querySelectorAll('#rondo-cfg-tabs .cfg-tab').forEach((x) => x.classList.remove('activo'));
             b.classList.add('activo');
             const sel = b.dataset.cfg;
-            document.querySelectorAll('#hjp-config .cfg-pane').forEach((p) => {
+            document.querySelectorAll('#rondo-config .cfg-pane').forEach((p) => {
                 p.style.display = (p.dataset.cfg === sel) ? '' : 'none';
             });
         }));
@@ -5107,7 +5162,7 @@
             }
             cfgWinEl.style.display = 'flex';
         }
-        byId('hjp-cfg-btn').addEventListener('click', abrirCfg);
+        byId('rondo-cfg-btn').addEventListener('click', abrirCfg);
         byId('c-lista-editar').addEventListener('click', () => {
             cfgWinEl.style.display = 'none';
             const prefill = Object.keys(APP.watchMap).map((k) =>
@@ -5117,7 +5172,7 @@
         });
         function cerrarCfg() {
             if (cfgDirty) {
-                hjpConfirm('Descartar cambios', 'Tienes cambios sin guardar en la configuracion. ¿Quieres descartarlos?', () => {
+                rondoConfirm('Descartar cambios', 'Tienes cambios sin guardar en la configuracion. ¿Quieres descartarlos?', () => {
                     limpiarCfgDirty();
                     applyTheme(); // revierte la vista previa de escala/tema
                     cfgWinEl.style.display = 'none';
@@ -5126,9 +5181,9 @@
                 cfgWinEl.style.display = 'none';
             }
         }
-        byId('hjp-cfg-cerrar').addEventListener('click', cerrarCfg);
-        byId('hjp-cfg-cerrar-x').addEventListener('click', cerrarCfg);
-        const cfgBody = byId('hjp-cfg-body');
+        byId('rondo-cfg-cerrar').addEventListener('click', cerrarCfg);
+        byId('rondo-cfg-cerrar-x').addEventListener('click', cerrarCfg);
+        const cfgBody = byId('rondo-cfg-body');
         if (cfgBody) {
             cfgBody.addEventListener('input', marcarCfgDirty);
             cfgBody.addEventListener('change', marcarCfgDirty);
@@ -5137,10 +5192,10 @@
         const selEscala = byId('c-escala');
         if (selEscala) {
             selEscala.addEventListener('change', (e) => {
-                document.documentElement.style.setProperty('--hjp-esc', String(normalizarEscala(e.target.value)));
+                document.documentElement.style.setProperty('--rondo-esc', String(normalizarEscala(e.target.value)));
             });
         }
-        byId('hjp-cfg-guardar').addEventListener('click', () => {
+        byId('rondo-cfg-guardar').addEventListener('click', () => {
             const g = (id) => byId(id);
             const cf = APP.config;
             cf.pollMs = Math.max(2000, isoNum(g('c-poll').value, cf.pollMs));
@@ -5227,29 +5282,29 @@
             adviceOk(LANG.guardado);
         });
 
-        byId('hjp-b-reset').addEventListener('click', () => {
+        byId('rondo-b-reset').addEventListener('click', () => {
             APP.barra.x = Math.max(4, window.innerWidth - barraEl.offsetWidth - 15);
             APP.barra.y = 80;
             applyBar();
             adviceOk('Barra recentrada');
         });
-        byId('hjp-reset-panel').addEventListener('click', () => {
+        byId('rondo-reset-panel').addEventListener('click', () => {
             panelEl.style.width = '470px';
             panelEl.style.height = '440px';
             APP.panelSize = { w: 470, h: 440 };
             writeJSON(LS.panelsize, APP.panelSize);
             adviceOk('Tamaño restablecido');
         });
-        byId('hjp-perfil-guardar').addEventListener('click', () => {
-            hjpPrompt('Guardar perfil', 'Ponle un nombre a la configuracion actual.', '', (n) => {
+        byId('rondo-perfil-guardar').addEventListener('click', () => {
+            rondoPrompt('Guardar perfil', 'Ponle un nombre a la configuracion actual.', '', (n) => {
                 if (n && n.trim()) {
                     guardarPerfil(n.trim());
                     adviceOk('Perfil guardado', n.trim());
                 }
             }, { icon: ICO.exportar, okText: 'Guardar', placeholder: 'Ej. Turno manana' });
         });
-        byId('hjp-perfil-cargar').addEventListener('click', () => {
-            const sel = byId('hjp-perfil-sel');
+        byId('rondo-perfil-cargar').addEventListener('click', () => {
+            const sel = byId('rondo-perfil-sel');
             const n = sel ? sel.value : '';
             if (!n) { adviceWarn('Sin perfil', 'Guarda un perfil primero'); return; }
             if (cargarPerfil(n)) {
@@ -5257,16 +5312,16 @@
                 adviceOk('Perfil cargado', n);
             }
         });
-        byId('hjp-perfil-borrar').addEventListener('click', () => {
-            const sel = byId('hjp-perfil-sel');
+        byId('rondo-perfil-borrar').addEventListener('click', () => {
+            const sel = byId('rondo-perfil-sel');
             const n = sel ? sel.value : '';
             if (!n) return;
-            hjpConfirm('Borrar perfil', 'Se borrara el perfil "' + n + '".', () => {
+            rondoConfirm('Borrar perfil', 'Se borrara el perfil "' + n + '".', () => {
                 borrarPerfil(n);
                 adviceOk('Perfil borrado', n);
             }, { peligro: true, okText: 'Borrar', icon: ICO.cerrar });
         });
-        byId('hjp-check-update').addEventListener('click', async (e) => {
+        byId('rondo-check-update').addEventListener('click', async (e) => {
             await conBusy(e.currentTarget, async () => {
                 await comprobarActualizacion();
                 const u = APP.update;
@@ -5275,21 +5330,21 @@
                 else adviceErr('No se pudo comprobar', u.lastError || 'sin conexion');
             });
         });
-        byId('hjp-limpiar-hist').addEventListener('click', () => {
+        byId('rondo-limpiar-hist').addEventListener('click', () => {
             if (!APP.historial.length) { adviceWarn('Sin avisos', 'El historial ya esta vacio'); return; }
-            hjpConfirm('Limpiar historial', 'Se borrarán todos los avisos registrados en esta pestaña.', () => {
+            rondoConfirm('Limpiar historial', 'Se borrarán todos los avisos registrados en esta pestaña.', () => {
                 limpiarBitacora();
                 adviceOk('Historial limpiado');
             }, { peligro: true, okText: 'Limpiar', icon: ICO.limpiar });
         });
-        byId('hjp-borrar-memo').addEventListener('click', () => {
-            hjpConfirm('Borrar estado', 'Se reinicia el estado interno de las reglas (detenciones, desvíos, etc.).', () => {
+        byId('rondo-borrar-memo').addEventListener('click', () => {
+            rondoConfirm('Borrar estado', 'Se reinicia el estado interno de las reglas (detenciones, desvíos, etc.).', () => {
                 APP.memo = {}; writeSession(SS.memo, APP.memo); refresh();
                 adviceOk('Estado borrado');
             }, { okText: 'Borrar', icon: ICO.limpiar });
         });
-        byId('hjp-borrar-todo').addEventListener('click', () => {
-            hjpConfirm('Borrar TODO', 'Se borrará la configuración, el estado, el historial de avisos, rutas y odómetros. Esta accion no se puede deshacer.', () => {
+        byId('rondo-borrar-todo').addEventListener('click', () => {
+            rondoConfirm('Borrar TODO', 'Se borrará la configuración, el estado, el historial de avisos, rutas y odómetros. Esta accion no se puede deshacer.', () => {
                 Object.keys(LS).forEach((k) => { try { localStorage.removeItem(LS[k]); } catch (_) { /* noop */ } });
                 Object.keys(SS).forEach((k) => { try { sessionStorage.removeItem(SS[k]); } catch (_) { /* noop */ } });
                 avisoEl.textContent = 'Estado borrado, recargando...';
@@ -5299,7 +5354,7 @@
         });
         // Acciones de los estados vacios (delegado, un solo listener).
         panelEl.addEventListener('click', (e) => {
-            const b = e.target.closest && e.target.closest('.hjp-vacio-acc');
+            const b = e.target.closest && e.target.closest('.rondo-vacio-acc');
             if (!b) return;
             const acc = b.dataset.acc;
             if (acc === 'abrir-lista') mainBtn.click();
@@ -5351,7 +5406,7 @@
         // revalidamos el contorno varias veces al inicio.
         [1500, 4000, 8000, 15000].forEach((t) => setTimeout(revalidarContornos, t));
     }
-    function log() { try { console.log.apply(console, ['[HJP]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
+    function log() { try { console.log.apply(console, ['[Rondo]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 
     init();
 

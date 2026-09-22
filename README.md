@@ -1,64 +1,59 @@
 <div align="center">
 
-<h1>HJP · Wialon</h1>
+# Rondo
 
-<p><strong>Vigilancia de flota sobre la API nativa de Wialon y AE-Track, dentro de tu navegador.</strong></p>
+**El script de vigilancia de flota de AE-TrackRondo.**
 
-<p>Sin servidores, sin instalar nada en la plataforma: el userscript lee la API
-que ya carga tu sesión de Wialon y te avisa de todo lo importante.</p>
+Supervision en tiempo real sobre la API nativa de Wialon y AE-Track, directo en el navegador. Sin servidores propios, sin instalar nada en la plataforma: el userscript lee la API que ya carga tu sesion y te avisa de todo lo importante.
 
-<p>
-<a href="https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js"><img src="https://img.shields.io/badge/Instalar-HJP--Wialon-2ea44f?style=for-the-badge" alt="Instalar"></a>
-<a href="./MANUAL.md"><img src="https://img.shields.io/badge/Manual-usuario-1f6feb?style=for-the-badge" alt="Manual de usuario"></a>
-<a href="./changelogs/"><img src="https://img.shields.io/badge/Changelog-versiones-6f42c1?style=for-the-badge" alt="Changelog"></a>
-</p>
+[Rondo en tu navegador](#instalacion) &nbsp;&nbsp;&middot;&nbsp;&nbsp; [Manual de usuario](./MANUAL.md) &nbsp;&middot;&nbsp;&nbsp; [Changelog](./changelogs/) &nbsp;&middot;&nbsp;&nbsp; [AE-TrackRondo en GitHub](https://github.com/leriart/AE-Track)
 
-<p>
-<img src="https://img.shields.io/badge/version-4.16.0-2563eb?style=flat-square" alt="version">
-<img src="https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=flat-square" alt="Tampermonkey">
-<img src="https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=flat-square" alt="Violentmonkey">
-<img src="https://img.shields.io/badge/navegadores-Chrome%20%7C%20Edge%20%7C%20Firefox%20%7C%20Opera-2ea44f?style=flat-square" alt="navegadores">
-<img src="https://img.shields.io/badge/OpenStreetMap-OSRM%20%7C%20A*-6b8e23?style=flat-square" alt="OpenStreetMap">
-<img src="https://img.shields.io/badge/tests-passing-2ea44f?style=flat-square" alt="tests">
-</p>
+</div>
 
-<p>Proyecto original de <a href="https://github.com/HectorRamirez-cpu">Héctor Ramírez (HectorRamirez-cpu)</a>.</p>
+<div align="center">
+
+[![version](https://img.shields.io/badge/version-5.0.0-850D22?style=for-the-badge&labelColor=1f2330)](https://github.com/leriart/AE-Track/releases)
+[![tests](https://img.shields.io/badge/tests-passing-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
+[![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
+[![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
+[![sin emojis](https://img.shields.io/badge/sin-emoji-9aa4b5?style=for-the-badge&labelColor=1f2330)]()
 
 </div>
 
 ---
 
-## Tabla de contenido
+## Tabla de contenidos
 
 - [Que es](#que-es)
 - [Instalacion](#instalacion)
 - [La interfaz en un vistazo](#la-interfaz-en-un-vistazo)
 - [Rutas y algoritmos](#rutas-y-algoritmos)
-- [Ramas del repositorio](#ramas-del-repositorio)
 - [Estructura del proyecto](#estructura-del-proyecto)
 - [Pruebas](#pruebas)
+- [Ramas del repositorio](#ramas-del-repositorio)
 - [Creditos](#creditos)
-- [Soporte](#soporte)
-- [Lo que puedes hacer](#lo-que-puedes-hacer)
+- [Nota historica](#nota-historica)
 
 ---
 
 ## Que es
 
-HJP Wialon es un userscript (Tampermonkey o Violentmonkey) que añade una capa de
-vigilancia sobre AE-Track y Wialon. Trabaja con la sesión que ya tienes abierta:
+**Rondo** es el userscript (Tampermonkey o Violentmonkey) que añade una capa de supervision sobre AE-Track y Wialon. Trabaja con la sesion que ya tienes abierta:
 
-- Evalúa reglas de negocio sobre cada unidad y genera alertas.
-- Notifica por tarjeta, voz, pitido y notificación del navegador.
-- Automatiza la apertura y el acomodo de las ventanas de seguimiento.
-- Seguimiento de rutas sobre OpenStreetMap, con detección de desvíos y retorno.
-- Guarda toda la configuración en tu navegador, sin backend propio.
+- Evalua reglas de negocio sobre cada unidad y genera alertas.
+- Notifica por tarjeta, voz, pitido y notificacion del navegador.
+- Automatiza la apertura y el acomodo de las ventanas de unidades.
+- Mantiene abiertas solo las unidades que vigilas.
+- Planifica rutas con OpenStreetMap (OSRM o A*), detecta desvios y giros en U, mide distancia y odometro por unidad.
+
+Todo se guarda en tu navegador (localStorage). No se envia nada a servidores propios.
 
 ## Instalacion
 
 ### 1. Instala un gestor de userscripts
 
-| Navegador | Extensión | Enlace |
+| Navegador | Extension | Enlace |
 | --- | --- | --- |
 | Chrome / Chromium / Brave / Vivaldi | Tampermonkey | [Chrome Web Store](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) |
 | Microsoft Edge | Tampermonkey | [Edge Add-ons](https://www.tampermonkey.net/?browser=edge) |
@@ -68,107 +63,79 @@ vigilancia sobre AE-Track y Wialon. Trabaja con la sesión que ya tienes abierta
 
 Alternativas:
 
-| Navegador | Extensión | Enlace |
+| Navegador | Extension | Enlace |
 | --- | --- | --- |
 | Chrome / Edge | Violentmonkey | [Chrome Web Store](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegednnccohejagnlnfdag) |
 | Firefox | Violentmonkey | [Firefox Add-ons](https://addons.mozilla.org/firefox/addon/violentmonkey/) |
 
-### 2. Instala el script
+### 2. Instala Rondo
 
-Con el gestor ya instalado, abre el enlace. Se mostrará la pantalla de
-instalación:
+Con el gestor ya instalado, abre el enlace. Se mostrara la pantalla de instalacion:
 
 <div align="center">
 
-<a href="https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js"><img src="https://img.shields.io/badge/Instalar%20HJP%20Wialon-2ea44f?style=for-the-badge" alt="Instalar HJP Wialon"></a>
+[Rondo para Wialon / AE-Track](https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js)
 
 </div>
 
-### 3. Actualizaciones automáticas
+### 3. Actualizaciones automaticas
 
-El script declara `@updateURL` y `@downloadURL` apuntando a la rama `main`. Cada
-vez que se publique una `@version` nueva en `main`, Tampermonkey la instalará
-sola (revisa cada 24 horas, o manualmente en
-`Utilidades > Buscar actualizaciones de userscripts`).
+El script declara `@updateURL` y `@downloadURL` apuntando a `main`. Cada vez que se publique una `@version` nueva en `main`, Tampermonkey la instalara sola (revisa cada 24 horas, o manualmente en *Utilidades &middot; Buscar actualizaciones de userscripts*).
 
-> Requisitos: tener sesión iniciada en AE-Track o Wialon y, si quieres
-> notificaciones del sistema, aceptar el permiso del navegador.
+> Requisitos: tener sesion iniciada en AE-Track o Wialon y, si quieres notificaciones del sistema, aceptar el permiso del navegador.
 
 ## La interfaz en un vistazo
 
-El panel puede ser **flotante** (movible y redimensionable) o una **barra
-lateral** a pantalla completa a la derecha o a la izquierda. Se cambia con el
-botón de la cabecera o con `Alt+L`.
+El panel puede ser **flotante** (movible y redimensionable) o una **barra lateral** a pantalla completa a la derecha o a la izquierda. Se cambia con el boton de la barra o con `Alt+L`.
 
-| Pestaña | Para qué sirve |
+| Pestana | Para que sirve |
 | --- | --- |
-| Dashboard | En línea, sin señal, detenidas, en movimiento, en zonas y alertas del día |
-| Unidades | Lista con estado, velocidad, zona y acciones; clic derecho para más opciones |
-| Avisos | Historial de alertas filtrable por severidad, exportable a CSV |
-| Rutas | Progreso, distancia al trazado, ETA y desvíos de cada ruta planificada |
-| Geocercas | Cuántas unidades hay dentro de cada geocerca |
+| Dashboard | Resumen general: en linea, sin senal, detenidas, en movimiento y avisos del dia |
+| Unidades | Lista con estado, velocidad, geocerca y acciones; clic para abrir su ventana |
+| Avisos | Historial de alertas con filtro por severidad y exportable a CSV |
+| Rutas | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada |
+| Geocercas | Cuantas unidades hay dentro de cada geocerca |
 
-Atajos: `Alt+1`..`Alt+5` cambian de pestaña, `Alt+P` muestra u oculta el panel,
-`Alt+L` alterna barra lateral, `Alt+H` pliega la barra y `Esc` cierra ventanas.
+Atajos: `Alt+1..5` cambian de pestana, `Alt+P` muestra u oculta el panel, `Alt+L` alterna lateral, `Alt+H` pliega la barra y `Esc` cierra el dialogo superior.
 
 ## Rutas y algoritmos
 
-<details>
-<summary>Ver detalle del modulo de rutas (OpenStreetMap, OSRM y A*)</summary>
-
-El módulo de rutas usa servicios públicos de OpenStreetMap:
+El modulo de rutas usa servicios publicos de OpenStreetMap:
 
 - **Nominatim** convierte direcciones o lugares en coordenadas.
-- **OSRM** calcula la ruta de conducción con su geometría completa.
+- **OSRM** calcula la ruta de conduccion con su geometria completa.
 - **Overpass** descarga el grafo vial que usa el algoritmo **A***.
 
 Algoritmos de bajo nivel incluidos en el script:
 
-- Distancia **haversine** y **rumbo** entre puntos.
-- **Distancia punto-segmento** con proyección equirectangular local.
-- **Simplificación de polilínea** para reducir el trazado.
-- **Proyección sobre la ruta** (`snapRuta`): distancia al trazado, progreso y
-  rumbo del tramo.
-- **Cola de prioridad binaria** (`MinHeap`) y **A*** con heurística haversine.
+- Distancia **haversine** y **rumbo** entre puntos, geodesicos para segmentos largos.
+- **Distancia punto-segmento** con proyeccion local o cross-track esferico.
+- **Simplificacion de polilinea** con **Douglas-Peucker** para conservar la forma.
+- **Proyeccion sobre la ruta** (`snapRuta`): distancia al trazado, progreso y rumbo del tramo, memoizada.
+- **Cola de prioridad binaria** (`MinHeap`) y **A*** con heuristica haversina, que respeta `oneway` y `maxspeed` de OSM.
 
 Con una ruta planificada, el motor avisa de:
 
-| Alerta | Condición |
+| Alerta | Condicion |
 | --- | --- |
-| Desvío de ruta | Se aleja más de 250 m del trazado durante 5 min |
+| Desvio de ruta | Se aleja mas de 250 m del trazado durante 5 min |
 | Giro en U | Rumbo opuesto al de la ruta (130 grados) durante 3 min |
 | Retorno / viaje cancelado | Retrocede 25 % o vuelve a 400 m del origen |
 | Llegada a destino | Alcanza el punto de destino |
 
-También guarda el trazado del recorrido y permite exportar la ruta y la traza a
-GeoJSON.
+Tambien guarda el trazado del recorrido y permite exportar la ruta y la traza a GeoJSON.
 
-> Los servicios públicos de OpenStreetMap tienen límites de uso. El script
-> cachea el grafo y el geocodificado, y solo usa A* cuando lo activas.
-
-</details>
-
-## Ramas del repositorio
-
-| Rama | Uso | Actualización automática |
-| --- | --- | --- |
-| `main` | Versión estable | Sí, es la que apunta el script |
-| `dev` | Desarrollo y pruebas | No |
-
-Versión de desarrollo:
-
-```
-https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js
-```
+> Los servicios publicos de OpenStreetMap tienen limites de uso. Rondo cachea el grafo y el geocodificado, y solo usa A* cuando lo activas.
 
 ## Estructura del proyecto
 
 ```
-HJP-Wialon.user.js        Userscript completo (un solo archivo, IIFE en modo estricto)
-MANUAL.md                 Manual de usuario completo
-README.md                 Este documento
-changelogs/               Historial de cambios, un archivo por versión
-tests/                    Pruebas de algoritmos, versión y análisis de viaje
+rondo.user.js          Userscript completo (un solo archivo, IIFE en modo estricto)
+MANUAL.md              Manual de usuario completo
+LICENSE                Licencia MIT
+README.md              Este documento
+changelogs/            Historial de cambios, un archivo por version
+tests/                 Pruebas de algoritmos, version, analisis de viaje y UI
 ```
 
 ## Pruebas
@@ -183,33 +150,42 @@ node tests/odometro.test.js
 node tests/ui.test.js
 ```
 
+## Ramas del repositorio
+
+| Rama | Uso | Actualizacion automatica |
+| --- | --- | --- |
+| `main` | Version estable | Si, es la que apunta el script |
+| `dev` | Desarrollo y pruebas | No |
+
+Version de desarrollo:
+
+```
+https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js
+```
+
+## Privacidad y datos
+
+- Todo se ejecuta en tu navegador y se guarda en `localStorage` con el prefijo `rondo.api.*`.
+- La primera vez que Rondo se inicia, si tienes instalada la version anterior ("HJP Wialon"), migra automaticamente tu configuracion, lista vigilada, rutas, odometro y perfiles para que no pierdas nada.
+- No se envia ningun dato a servidores propios. Solo se usan los servicios publicos de OpenStreetMap (Nominatim, OSRM, Overpass) cuando lo necesitas.
+
 ## Creditos
 
-- Proyecto original y autoría de la idea: **Héctor Ramírez**
-  ([HectorRamirez-cpu](https://github.com/HectorRamirez-cpu)).
-- Adaptación, mantenimiento y nuevas funciones: **lerit**.
+- Proyecto original y autoria de la idea: **Hector Ramirez** ([HectorRamirez-cpu](https://github.com/HectorRamirez-cpu)).
+- Adaptacion, mantenimiento y nuevas funciones: **lerit**.
 
 Historial detallado en [`changelogs/`](./changelogs/).
 
-## Soporte
+## Licencia
 
-Reporta fallos o solicita cambios en
-[GitHub Issues](https://github.com/leriart/AE-Track/issues). Incluye navegador,
-versión de Tampermonkey, `@version` del script y pasos para reproducir.
+MIT. Puedes usar, modificar y distribuir respetando los terminos de la licencia.
 
----
+## Nota historica
 
-## Lo que puedes hacer
+Antes de la version **5.0.0** este proyecto se llamaba **HJP Wialon** y el archivo del userscript era `HJP-Wialon.user.js`. Rondo es la continuacion natural del mismo proyecto con un nuevo nombre, una nueva identidad y un conjunto ampliado de algoritmos (geodesica, Douglas-Peucker, DBSCAN, A* ponderado, snap memoizado, etc.). Si actualizas desde la version anterior, Rondo migra tu configuracion automaticamente la primera vez.
 
-| Área | Capacidades |
-| --- | --- |
-| Vigilancia | Reglas de sin señal, GPS perdido, detenido, zonas, geocercas, destino, desconexión, velocidad, desvío, giro en U y retorno |
-| Avisos | Tarjetas, voz, pitido, notificación del navegador, severidad mínima, horario y modo No molestar |
-| Ventanas | Apertura y acomodo automático, resaltado, cierre y verificación de solo las seleccionadas |
-| Rutas | Planeación con OSRM o A*, seguimiento de progreso, exportación a GeoJSON y trazado del recorrido |
-| Unidades | Límite de velocidad por unidad, filtros por estado, lista vigilada con destinos y menú contextual |
-| Datos | Informes a CSV y Markdown, respaldo y restauración de configuración, y perfiles con nombre |
-| Interfaz | Panel flotante o barra lateral, tema oscuro o claro, densidad y color de acento |
-| Ayuda | Ayuda rápida integrada, manual de usuario y atajos de teclado |
+<div align="center">
 
-Guía detallada en el [manual de usuario](./MANUAL.md).
+Hecho con cuidado para la comunidad de AE-Track y Wialon.
+
+</div>
