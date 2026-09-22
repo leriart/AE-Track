@@ -324,8 +324,19 @@ Sobre una unidad en la pestana Unidades:
 - Limite de velocidad.
 - Planear ruta (OSRM), planear ruta (A*), exportar ruta GeoJSON, eliminar ruta,
   exportar traza GeoJSON.
+- Analizar viaje (historial), exportar viaje GeoJSON.
+- Reiniciar odometro.
 - Ver en OpenStreetMap, ver en Google Maps.
 - Copiar economico, copiar placa, copiar coordenadas.
+
+## Odometro por unidad
+
+La columna **km** de la lista de unidades muestra la distancia acumulada
+desde la primera vez que se vio esa unidad (o desde el ultimo reinicio).
+Solo se suma distancia cuando la unidad se mueve a mas de 1 km/h y los
+saltos GPS anomalos (> 5 km en 1 min) se descartan para no inflarlo.
+Persiste entre sesiones en `localStorage`. Reinicialo desde el menu
+contextual ("Reiniciar odometro") cuando hagas un servicio mayor.
 
 ## Atajos de teclado
 
