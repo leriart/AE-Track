@@ -2,7 +2,7 @@
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
 // @version      4.14.0
-// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Bitácora, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
+// @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, odómetro por unidad, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
 // @copyright    Proyecto original de Héctor Ramírez (https://github.com/HectorRamirez-cpu)
@@ -126,6 +126,8 @@
         limites: 'hjp.api.limites',
         perfiles: 'hjp.api.perfiles',
         filtEstado: 'hjp.api.filtEstado',
+        sortCol: 'hjp.api.sortCol',
+        sortDir: 'hjp.api.sortDir',
         rutas: 'hjp.api.rutas',
         odometro: 'hjp.api.odometro'
     });
@@ -351,6 +353,8 @@
         filtSever: 'todas',
         filtro: '',
         filtEstado: readJSON(LS.filtEstado, 'todas'),
+        sortCol: readJSON(LS.sortCol, ''),
+        sortDir: readJSON(LS.sortDir, 'asc'),
         panelHidden: true,
         update: { state: 'idle', remote: null, local: VER },
         unlocked: false,
@@ -832,7 +836,7 @@
     async function astarRoute(origen, destino) {
         const spanLat = Math.abs(origen.lat - destino.lat);
         const spanLon = Math.abs(origen.lon - destino.lon);
-        if (spanLat > 1.5 || spanLon > 1.5) throw new Error('Ruta demasiado larga para A* (limite ~150 km)');
+        if (spanLat > 1.5 || spanLon > 1.5) throw new Error('Ruta demasiado larga para A* (límite ~150 km)');
         const pad = 0.015;
         const grafo = await overpassGrafo(
             Math.min(origen.lat, destino.lat) - pad, Math.min(origen.lon, destino.lon) - pad,
@@ -887,7 +891,7 @@
             } catch (_) { /* noop */ }
         }
         if (!origen) origen = (it.st.lat != null ? { lat: it.st.lat, lon: it.st.lon } : null);
-        if (!origen) { adviceWarn('Sin origen', 'La unidad no reporta posicion actual ni historial'); return null; }
+        if (!origen) { adviceWarn('Sin origen', 'La unidad no reporta posición actual ni historial'); return null; }
         let destino = null;
         const txt = String(destinoTexto || '').trim();
         if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(txt)) {
@@ -1149,7 +1153,7 @@
         catch (e) { if (!silencioso) adviceWarn('Sin historial', (e && e.message) || 'sin conexion'); return null; }
         if (puntos.length < 3) { if (!silencioso) adviceWarn('Sin datos', 'No hay suficiente historial'); return null; }
         const partida = detectarPuntoPartida(puntos, partidaHoras);
-        if (!partida) { if (!silencioso) advice('Sin punto de partida', 'No se hallo una parada de mas de ' + partidaHoras + ' h'); return null; }
+        if (!partida) { if (!silencioso) advice('Sin punto de partida', 'No se halló una parada de más de ' + partidaHoras + ' h'); return null; }
         const desde = partida.finIdx;
         const trayecto = puntos.slice(desde);
         const paradas = analizarParadas(puntos, desde, paradaMin, partidaHoras * 3600);
@@ -1202,7 +1206,7 @@
     }
     function exportViajeGeoJSON(eco) {
         const v = APP.viajes[eco];
-        if (!v) { adviceWarn('Sin analisis', 'Analiza el viaje primero'); return; }
+        if (!v) { adviceWarn('Sin análisis', 'Analiza el viaje primero'); return; }
         const features = [];
         if (v.traza && v.traza.length > 1) {
             features.push({ type: 'Feature', properties: { tipo: 'trayecto', eco, distancia_km: v.distanciaKm }, geometry: { type: 'LineString', coordinates: v.traza } });
@@ -1278,7 +1282,7 @@
     function openMap(eco, kind) {
         const it = unitByEco(eco);
         if (!it || it.st.lat == null || it.st.lon == null) {
-            adviceWarn('Sin ubicacion', 'La unidad no reporta coordenadas');
+            adviceWarn('Sin ubicación', 'La unidad no reporta coordenadas');
             return;
         }
         const lat = it.st.lat, lon = it.st.lon;
@@ -1321,7 +1325,7 @@
         if (!it) return;
         APP.odometro[it.info.clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null };
         writeJSON(LS.odometro, APP.odometro);
-        adviceOk('Odometro reiniciado', it.info.eco);
+        adviceOk('Odómetro reiniciado', it.info.eco);
     }
     function odometroDe(info) {
         if (!info || !info.clave) return null;
@@ -1522,6 +1526,8 @@
     function ensureDialog() {
         if (dlgEl && dlgEl.isConnected) return dlgEl;
         dlgEl = makeEl('div', { id: 'hjp-dialog' });
+        dlgEl.setAttribute('role', 'dialog');
+        dlgEl.setAttribute('aria-modal', 'true');
         document.body.appendChild(dlgEl);
         return dlgEl;
     }
@@ -1625,9 +1631,9 @@
                 '<div class="paso"><span class="n">1</span><div><b>Elige unidades</b>' +
                 '<span>En <i>Automatizar Unidades</i> pega los economicos, o activa <i>Monitorear todas</i> en Ajustes.</span></div></div>' +
                 '<div class="paso"><span class="n">2</span><div><b>Evalua reglas</b>' +
-                '<span>El script vigila sin senal, detenciones, zonas, geocercas, velocidad y rutas. Ajustalo en Ajustes.</span></div></div>' +
+                '<span>El script vigila sin señal, detenciones, zonas, geocercas, velocidad y rutas. Ajustalo en Ajustes.</span></div></div>' +
                 '<div class="paso"><span class="n">3</span><div><b>Vigila los avisos</b>' +
-                '<span>Tarjetas, voz, pitido y notificacion. Revisa el historial en la pestana <i>Avisos</i>.</span></div></div>' +
+                '<span>Tarjetas, voz, pitido y notificación. Revisa el historial en la pestaña <i>Avisos</i>.</span></div></div>' +
                 '</div>'
         });
     }
@@ -1650,8 +1656,8 @@
             pushAlert({
                 regla: 'offline', sev: 'ok', clave: info.clave, eco: info.eco,
                 titulo: 'RECONECTO · ' + etq,
-                detalle: 'volvio a reportar · ' + Math.round(st.vel) + ' km/h',
-                hablar: 'La unidad ' + etq + ' volvio a estar en linea'
+                detalle: 'volvió a reportar · ' + Math.round(st.vel) + ' km/h',
+                hablar: 'La unidad ' + etq + ' volvió a estar en línea'
             });
             R.descoAlerta = false;
         }
@@ -1770,7 +1776,7 @@
             pushAlert({
                 regla: 'desconexion', sev: 'critico', clave: info.clave, eco: info.eco,
                 titulo: 'DESCONEXION PROLONGADA · ' + etq,
-                detalle: 'lleva ' + ageText(st.edadMin) + ' sin senal',
+                detalle: 'lleva ' + ageText(st.edadMin) + ' sin señal',
                 hablar: 'Atención, la unidad ' + etq + ' sigue desconectada'
             });
         }
@@ -1782,7 +1788,7 @@
             pushAlert({
                 regla: 'velocidad', sev: 'medio', clave: info.clave, eco: info.eco, soloHorario: true,
                 titulo: 'EXCESO DE VELOCIDAD · ' + etq,
-                detalle: Math.round(st.vel) + ' km/h (limite ' + lim + ')',
+                detalle: Math.round(st.vel) + ' km/h (límite ' + lim + ')',
                 hablar: 'La unidad ' + etq + ' excede la velocidad'
             });
         }
@@ -1999,7 +2005,7 @@
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
     function esUIPropia(el) {
         try {
-            return !!(el && el.closest && el.closest('#hjp-panel,#hjp-barra,#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto,#hjp-toasts,#hjp-aviso,#hjp-rail'));
+            return !!(el && el.closest && el.closest('#hjp-panel,#hjp-barra,#hjp-modal,#hjp-config,#hjp-ayuda,#hjp-contexto,#hjp-toasts,#hjp-aviso,#hjp-rail,#hjp-dialog'));
         } catch (_) { return false; }
     }
     function findSearchInput() {
@@ -2481,7 +2487,7 @@
         const list = openWindows();
         APP.seleccion = new Set(list.map((v) => v.eco).filter(Boolean));
         writeSession(SS.seleccion, Array.from(APP.seleccion));
-        advice('Seleccion capturada', APP.seleccion.size + ' ventana(s) / unidad(es)');
+        advice('Selección capturada', APP.seleccion.size + ' ventana(s) / unidad(es)');
         paintInfo();
         if (APP.tab === 'unidades') paintTabla();
         return APP.seleccion.size;
@@ -2510,7 +2516,7 @@
             }
         });
         writeSession(SS.seleccion, Array.from(APP.seleccion));
-        advice('Seleccion anadida', n + ' unidad(es) visible(s)');
+        advice('Selección añadida', n + ' unidad(es) visible(s)');
         paintInfo();
         paintTabla();
         return n;
@@ -2519,7 +2525,7 @@
         const n = APP.seleccion.size;
         APP.seleccion.clear();
         writeSession(SS.seleccion, Array.from(APP.seleccion));
-        advice('Seleccion vaciada', n + ' unidad(es) liberadas');
+        advice('Selección vaciada', n + ' unidad(es) liberadas');
         paintInfo();
         paintTabla();
     }
@@ -2539,9 +2545,9 @@
             }
             if (cerradas) {
                 paintCounters();
-                if (!silent) advice('Verificacion', cerradas + ' ventana(s) ajena(s) cerrada(s)');
+                if (!silent) advice('Verificación', cerradas + ' ventana(s) ajena(s) cerrada(s)');
             } else if (!silent) {
-                advice('Verificacion', 'Solo estan abiertas las ventanas seleccionadas');
+                advice('Verificación', 'Solo estan abiertas las ventanas seleccionadas');
             }
             return cerradas;
         } finally {
@@ -2562,7 +2568,7 @@
         b.classList.toggle('activo', !!APP.config.verificar);
         b.title = APP.config.verificar
             ? 'Verificacion activa: solo se mantienen las ventanas seleccionadas'
-            : 'Activar verificacion de ventanas';
+            : 'Activar verificación de ventanas';
     }
     async function execList(ecos) {
         // Respeta el orden configurado (pegado, numero o arrastrado).
@@ -3044,7 +3050,7 @@
         panelBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.panel + '</span> Panel', id: 'hjp-btn-panel', className: 'hjp-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
         modoBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.expandir + '</span> <span class="hjp-modo-label">Flotante</span>', id: 'hjp-btn-modo', className: 'hjp-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
         closeBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'hjp-btn-close', className: 'hjp-btn', title: 'Cerrar todas las ventanas de unidades' });
-        helpBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.ayuda + '</span>', id: 'hjp-btn-help', className: 'hjp-btn', title: 'Ayuda rapida (?)' });
+        helpBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.ayuda + '</span>', id: 'hjp-btn-help', className: 'hjp-btn', title: 'Ayuda rápida (?)' });
         updateBtn = makeEl('button', { innerHTML: '<span class="hjp-mi">' + ICO.actualizar + '</span> Actualizar', id: 'hjp-btn-update', className: 'hjp-btn hjp-update', title: 'Nueva version disponible', style: 'display:none' });
         foldBtn = makeEl('button', { innerText: '▾', id: 'hjp-btn-fold', className: 'hjp-btn hjp-fold', title: 'Plegar barra' });
         gripEl = makeEl('span', { innerText: '⠿', id: 'hjp-grip', className: 'hjp-grip', title: 'Arrastrar barra · doble clic para orientar' });
@@ -3083,24 +3089,24 @@
             '<option value="todas">Todas</option>' +
             '<option value="moviendo">Moviendo</option>' +
             '<option value="detenida">Detenidas</option>' +
-            '<option value="offline">Sin senal</option>' +
+            '<option value="offline">Sin señal</option>' +
             '<option value="vigilada">Vigiladas</option>' +
             '<option value="silenciada">Silenciadas</option>' +
             '</select>' +
             '<select class="filtro" id="hjp-orden-sel" title="Orden de las ventanas de unidades">' +
-            '<option value="">Orden de ventanas...</option>' +
+            '<option value="">Orden de ventanas…</option>' +
             '<option value="pegado">Pegado</option>' +
-            '<option value="numero">Numero (menor a mayor)</option>' +
-            '<option value="numero-desc">Numero (mayor a menor)</option>' +
-            '<option value="alfabetico">Alfabetico A-Z</option>' +
+            '<option value="numero">Número (menor a mayor)</option>' +
+            '<option value="numero-desc">Número (mayor a menor)</option>' +
+            '<option value="alfabetico">Alfabético A-Z</option>' +
             '<option value="invertir">Invertir orden</option>' +
             '</select>' +
             '<button id="hjp-refresh" title="Refrescar"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
             '<button id="hjp-cfg-btn" title="Ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span></button>' +
             '<button id="hjp-csv" title="Exportar unidades"><span class="hjp-mi">' + ICO.descargar + '</span> CSV</button>' +
-            '<button id="hjp-csv-al" title="Exportar bitacora"><span class="hjp-mi">' + ICO.descargar + '</span> Bitacora</button>' +
+            '<button id="hjp-csv-al" title="Exportar el historial de avisos a CSV"><span class="hjp-mi">' + ICO.descargar + '</span> Avisos CSV</button>' +
             '<button id="hjp-informe" title="Generar informe del dia"><span class="hjp-mi">' + ICO.descargar + '</span> Informe</button>' +
-            '<button id="hjp-verif" title="Solo ventanas seleccionadas"><span class="hjp-mi">' + ICO.verif + '</span> Solo seleccion</button>' +
+            '<button id="hjp-verif" title="Solo ventanas seleccionadas"><span class="hjp-mi">' + ICO.verif + '</span> Solo selección</button>' +
             '<button id="hjp-captura" title="Capturar ventanas"><span class="hjp-mi">' + ICO.captura + '</span> Capturar</button>' +
             '<button id="hjp-verifica" title="Verificar ahora"><span class="hjp-mi">' + ICO.verifica + '</span> Aplicar</button>' +
             '<button id="hjp-sel-all" title="Seleccionar todas las unidades visibles"><span class="hjp-mi">' + ICO.selAll + '</span> Sel. visibles</button>' +
@@ -3109,19 +3115,27 @@
             '<div class="tabla" id="hjp-wrap-dash">' +
             '<div id="hjp-dash">' +
             '<div class="kpi-grid">' +
-            '<div class="kpi ok"><span class="etq">En linea</span><span class="valor" id="hjp-kpi-on">0</span><span class="resumen" id="hjp-kpi-on-pct">—</span></div>' +
-            '<div class="kpi bad"><span class="etq">Sin senal</span><span class="valor" id="hjp-kpi-off">0</span><span class="resumen" id="hjp-kpi-off-pct">—</span></div>' +
-            '<div class="kpi warn"><span class="etq">Detenidas</span><span class="valor" id="hjp-kpi-det">0</span><span class="resumen">VEL <= 3 km/h</span></div>' +
-            '<div class="kpi sub"><span class="etq">En movimiento</span><span class="valor" id="hjp-kpi-mov">0</span><span class="resumen" id="hjp-kpi-vel">— km/h prom.</span></div>' +
-            '<div class="kpi sub"><span class="etq">En zonas</span><span class="valor" id="hjp-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
-            '<div class="kpi"><span class="etq">Alertas hoy</span><span class="valor" id="hjp-kpi-aho">0</span><span class="resumen" id="hjp-kpi-criticos">0 criticas</span></div>' +
+            '<div class="kpi ok" title="Unidades que reportaron dentro del umbral de sin señal"><span class="etq">En línea</span><span class="valor" id="hjp-kpi-on">0</span><span class="resumen" id="hjp-kpi-on-pct">—</span></div>' +
+            '<div class="kpi bad" title="Unidades cuyo último reporte superó el umbral de sin señal"><span class="etq">Sin señal</span><span class="valor" id="hjp-kpi-off">0</span><span class="resumen" id="hjp-kpi-off-pct">—</span></div>' +
+            '<div class="kpi warn" title="Unidades en línea con velocidad muy baja"><span class="etq">Detenidas</span><span class="valor" id="hjp-kpi-det">0</span><span class="resumen">VEL <= 3 km/h</span></div>' +
+            '<div class="kpi sub" title="Unidades en línea con velocidad normal"><span class="etq">En movimiento</span><span class="valor" id="hjp-kpi-mov">0</span><span class="resumen" id="hjp-kpi-vel">— km/h prom.</span></div>' +
+            '<div class="kpi sub" title="Geocercas ocupadas por al menos una unidad online"><span class="etq">En zonas</span><span class="valor" id="hjp-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
+            '<div class="kpi" title="Avisos registrados desde la medianoche"><span class="etq">Avisos hoy</span><span class="valor" id="hjp-kpi-aho">0</span><span class="resumen" id="hjp-kpi-criticos">0 críticas</span></div>' +
             '</div>' +
             '<div><svg class="sparkline" id="hjp-spark" viewBox="0 0 200 36" preserveAspectRatio="none"></svg></div>' +
             '<div class="recent"><h4>Avisos recientes</h4><div id="hjp-kpi-recientes"></div></div>' +
             '</div>' +
             '</div>' +
             '<div class="tabla" id="hjp-wrap-unidades" style="display:none">' +
-            '<table><thead><tr><th title="Seleccionar">Sel</th><th></th><th>Eco</th><th>Placa</th><th>Estado</th><th>Ultimo</th><th>km/h</th><th>Zona</th><th title="Odometro acumulado (km)">km</th><th></th></tr></thead>' +
+            '<table><thead><tr><th title="Seleccionar">Sel</th>' +
+            '<th class="hjp-sortable" data-sort="eco" title="Ordenar por economico">Eco<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="placa" title="Ordenar por placa">Placa<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="estado" title="Ordenar por estado">Estado<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="edad" title="Ordenar por antiguedad del ultimo reporte">Ultimo<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="vel" title="Ordenar por velocidad">km/h<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="zona" title="Ordenar por geocerca">Zona<span class="hjp-sort"></span></th>' +
+            '<th class="hjp-sortable" data-sort="odo" title="Odómetro acumulado (km)">km<span class="hjp-sort"></span></th>' +
+            '<th></th></tr></thead>' +
             '<tbody id="hjp-body"></tbody></table>' +
             '<div id="hjp-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--hjp-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de esta columna.</div>' +
             '</div>' +
@@ -3160,8 +3174,8 @@
             '<div class="hjp-order-tools">' +
             '<span class="etq">Orden de las ventanas:</span>' +
             '<button class="mini" id="hjp-orden-pegado" title="En el orden en que se pegaron">Pegado</button>' +
-            '<button class="mini" id="hjp-orden-numero" title="Por numero de economico (menor a mayor)">Numero</button>' +
-            '<button class="mini" id="hjp-orden-numero-desc" title="Por numero de economico (mayor a menor)">Numero inverso</button>' +
+            '<button class="mini" id="hjp-orden-numero" title="Por numero de economico (menor a mayor)">Número</button>' +
+            '<button class="mini" id="hjp-orden-numero-desc" title="Por numero de economico (mayor a menor)">Número inverso</button>' +
             '<button class="mini" id="hjp-orden-alfabetico" title="Orden alfabetico">A-Z</button>' +
             '<button class="mini" id="hjp-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
             '</div>' +
@@ -3183,7 +3197,7 @@
 
         cfgWinEl = makeEl('div', { id: 'hjp-config' });
         cfgWinEl.innerHTML = (
-            '<div class="cfg-head"><h3><span class="hjp-mi">' + ICO.ajustes + '</span> Configuracion</h3>' +
+            '<div class="cfg-head"><h3><span class="hjp-mi">' + ICO.ajustes + '</span> Configuración</h3>' +
             '<button class="hjp-iconbtn" id="hjp-cfg-cerrar-x" title="Cerrar">✕</button></div>' +
             '<div class="cfg-tabs" id="hjp-cfg-tabs">' +
             '<button class="cfg-tab activo" data-cfg="general">General</button>' +
@@ -3198,30 +3212,30 @@
             '<div class="cfg-pane" data-cfg="general">' +
             '<h4>General</h4>' +
             numRow('c-poll', 'Refresco (ms)') +
-            numRow('c-off', 'Sin senal > (min)') +
+            numRow('c-off', 'Sin señal > (min)') +
             numRow('c-cd', 'Cooldown alerta (min)') +
             checkRow('c-watchAll', 'Monitorear todas las unidades (ignora selección)') +
             checkRow('c-auto', 'Abrir al caer (critico)') +
             checkRow('c-zonas', 'Cargar geocercas') +
-            checkRow('c-geo', 'Geocodificacion inversa') +
-            checkRow('c-hist', 'Consultar historico de detencion') +
+            checkRow('c-geo', 'Geocodificación inversa') +
+            checkRow('c-hist', 'Consultar histórico de detención') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="reglas" style="display:none">' +
             '<h4>Umbrales</h4>' +
             numRow('c-gps', 'GPS perdido > (min)') +
             numRow('c-stop', 'Detenido > (min)') +
             numRow('c-zona', 'Zona no prevista > (min)') +
-            numRow('c-desco', 'Desconexion > (min)') +
-            numRow('c-vel', 'Velocidad maxima (km/h)') +
+            numRow('c-desco', 'Desconexión > (min)') +
+            numRow('c-vel', 'Velocidad máxima (km/h)') +
             '<h4>Reglas activas</h4>' +
             '<div class="row-grid">' +
-            checkRow('c-r-off', 'Sin senal') +
+            checkRow('c-r-off', 'Sin señal') +
             checkRow('c-r-gps', 'GPS en marcha') +
             checkRow('c-r-det', 'Detenido') +
             checkRow('c-r-zona', 'Zona') +
             checkRow('c-r-geo', 'Geocercas') +
             checkRow('c-r-des', 'Destino') +
-            checkRow('c-r-dis', 'Desconexion') +
+            checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
             '</div>' +
             '</div>' +
@@ -3229,21 +3243,21 @@
             '<h4>Avisos</h4>' +
             checkRow('c-voz', 'Voz') +
             '<label>Idioma de voz <select id="c-voz-lang">' +
-            '<option value="es-MX">Espanol (Mexico)</option>' +
-            '<option value="es-ES">Espanol (Espana)</option>' +
-            '<option value="es-US">Espanol (EE. UU.)</option>' +
-            '<option value="en-US">Ingles (EE. UU.)</option>' +
+            '<option value="es-MX">Español (México)</option>' +
+            '<option value="es-ES">Español (España)</option>' +
+            '<option value="es-US">Español (EE. UU.)</option>' +
+            '<option value="en-US">Inglés (EE. UU.)</option>' +
             '</select></label>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
             numRow('c-beep-vol', 'Volumen del pitido (0-1)') +
-            checkRow('c-desktop', 'Notificacion del navegador') +
-            numRow('c-toastSeg', 'Duracion de toasts (s)') +
-            '<label>Severidad minima en toasts' +
+            checkRow('c-desktop', 'Notificación del navegador') +
+            numRow('c-toastSeg', 'Duración de toasts (s)') +
+            '<label>Severidad mínima en toasts' +
             '<select id="c-sevmin">' +
             '<option value="bajo">Bajo y arriba</option>' +
             '<option value="medio">Medio y arriba</option>' +
             '<option value="alto">Alto y arriba</option>' +
-            '<option value="critico">Solo criticas</option>' +
+            '<option value="critico">Solo críticas</option>' +
             '</select>' +
             '</label>' +
             '<h4>Horario y vigilancia</h4>' +
@@ -3268,9 +3282,9 @@
             '<label>Color de acento <input type="color" id="c-acento"></label>' +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
-            numRow('c-contorno-horas', 'Antiguedad de contornos (h)') +
+            numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--hjp-fg-dim)">Atajos: <b>Alt+1..4</b> cambia pestanas · <b>Alt+P</b> panel · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra modales</span>' +
+            '<span style="font-size:11.5px;color:var(--hjp-fg-dim)">Atajos: <b>Alt+1..5</b> cambia pestañas · <b>Alt+P</b> panel · <b>Alt+L</b> lateral · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Panel</h4>' +
@@ -3284,7 +3298,7 @@
             '</select></label>' +
             numRow('c-panel-ancho', 'Ancho lateral (px)') +
             checkRow('c-panel-clicfuera', 'Ocultar la barra lateral al hacer clic fuera') +
-            checkRow('c-confirmar-cierre', 'Pedir confirmacion al cerrar todas las ventanas') +
+            checkRow('c-confirmar-cierre', 'Pedir confirmación al cerrar todas las ventanas') +
             '<p style="font-size:11px;color:var(--hjp-fg-dim);margin:2px 0 0">El panel recuerda el modo (flotante o lateral) y si estaba abierto.</p>' +
             '<h4>Barra de botones</h4>' +
             '<div class="row-grid">' +
@@ -3296,9 +3310,9 @@
             checkRow('c-b-vertical', 'Orientacion vertical') +
             '<div style="margin-top:6px"><button class="accbtn" id="hjp-b-reset" style="width:100%"><span class="hjp-mi">' + ICO.expandir + '</span> Recentrar barra</button></div>' +
             '<h4>Verificacion</h4>' +
-            checkRow('c-verif', 'Verificacion automatica') +
+            checkRow('c-verif', 'Verificación automática') +
             numRow('c-verif-seg', 'Revisar cada (seg)') +
-            '<h4>Tamano del panel</h4>' +
+            '<h4>Tamaño del panel</h4>' +
             '<button class="accbtn" id="hjp-reset-panel" style="width:100%"><span class="hjp-mi">' + ICO.colapsar + '</span> Restablecer tamano</button>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="rutas" style="display:none">' +
@@ -3308,26 +3322,26 @@
             checkRow('c-trazado', 'Registrar trazado del recorrido') +
             numRow('c-trazado-max', 'Puntos por traza') +
             '<h4>Alertas de ruta</h4>' +
-            checkRow('c-r-desvio', 'Desvio de ruta') +
-            numRow('c-desvio-m', 'Desvio mayor a (m)') +
-            numRow('c-desvio-min', 'Desvio sostenido (min)') +
+            checkRow('c-r-desvio', 'Desvío de ruta') +
+            numRow('c-desvio-m', 'Desvío mayor a (m)') +
+            numRow('c-desvio-min', 'Desvío sostenido (min)') +
             checkRow('c-r-retorno', 'Retorno / viaje cancelado') +
             numRow('c-retorno-m', 'Radio de origen (m)') +
-            numRow('c-retorno-pct', 'Retroceso minimo (%)') +
+            numRow('c-retorno-pct', 'Retroceso mínimo (%)') +
             checkRow('c-r-giro', 'Giro en U') +
-            numRow('c-giro-grados', 'Angulo de giro (grados)') +
+            numRow('c-giro-grados', 'Ángulo de giro (grados)') +
             numRow('c-giro-min', 'Giro sostenido (min)') +
             checkRow('c-r-demora-base', 'Demora en base (parado en CEDIS/patio)') +
             numRow('c-demora-base-min', 'Tiempo en base para alertar (min)') +
-            '<h4>Analisis de viaje (historial)</h4>' +
+            '<h4>Análisis de viaje (historial)</h4>' +
             numRow('c-partida-horas', 'Punto de partida: parada mayor a (h)') +
-            numRow('c-parada-min', 'Parada minima (min)') +
+            numRow('c-parada-min', 'Parada mínima (min)') +
             numRow('c-hist-horas', 'Historial a analizar (h)') +
-            checkRow('c-analizar-auto', 'Analizar automaticamente al planear ruta') +
+            checkRow('c-analizar-auto', 'Analizar automáticamente al planear ruta') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
-            '<div id="hjp-update-info" style="font-size:11.5px;color:var(--hjp-fg-dim);margin-bottom:6px">Version instalada: <b>' + VER + '</b></div>' +
+            '<div id="hjp-update-info" style="font-size:11.5px;color:var(--hjp-fg-dim);margin-bottom:6px">Versión instalada: <b>' + VER + '</b></div>' +
             '<button class="accbtn" id="hjp-check-update" style="width:100%"><span class="hjp-mi">' + ICO.refrescar + '</span> Buscar actualizaciones</button>' +
             '<h4>Datos y prueba</h4>' +
             '<div class="hjp-acciones">' +
@@ -3335,15 +3349,15 @@
             '<button class="accbtn" id="hjp-exportar-btn"><span class="hjp-mi">' + ICO.exportar + '</span> Exportar</button>' +
             '<button class="accbtn" id="hjp-importar-btn"><span class="hjp-mi">' + ICO.importar + '</span> Importar</button>' +
             '</div>' +
-            '<h4>Perfiles de configuracion</h4>' +
+            '<h4>Perfiles de configuración</h4>' +
             '<label>Perfil <select id="hjp-perfil-sel" style="flex:1"></select></label>' +
             '<div class="hjp-acciones" style="margin-top:6px">' +
             '<button class="accbtn" id="hjp-perfil-guardar">Guardar como...</button>' +
             '<button class="accbtn" id="hjp-perfil-cargar">Cargar</button>' +
             '<button class="accbtn" id="hjp-perfil-borrar" style="background:#b71c1c">Borrar</button>' +
             '</div>' +
-            '<h4>Bitacora</h4>' +
-            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:var(--hjp-accent)">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar bitacora</button>' +
+            '<h4>Historial de avisos</h4>' +
+            '<button class="accbtn" id="hjp-limpiar-hist" style="width:100%;background:var(--hjp-accent)">' + '<span class="hjp-mi">' + ICO.limpiar + '</span> Limpiar historial</button>' +
             '<h4>Reseteo</h4>' +
             '<div class="hjp-acciones">' +
             '<button class="accbtn" id="hjp-borrar-memo" style="background:var(--hjp-accent)"><span class="hjp-mi">' + ICO.limpiar + '</span> Borrar estado</button>' +
@@ -3371,19 +3385,19 @@
             '<div class="paso"><b>2. Abre sus ventanas</b>Pulsa <i>Automatizar Unidades</i> (arriba a la derecha) para abrirlas y acomodarlas solas.</div>' +
             '<div class="paso"><b>3. Vigila los avisos</b>Las alertas aparecen como tarjetas, voz y pitido. Revisalas en <i>Avisos</i>.</div>' +
             '</div>' +
-            '<h4>Que hace cada pestana</h4>' +
+            '<h4>Qué hace cada pestaña</h4>' +
             '<ul>' +
-            '<li><b>Dashboard</b>: cuantas en linea, sin senal, detenidas y alertas del dia.</li>' +
+            '<li><b>Dashboard</b>: cuántas en línea, sin señal, detenidas y alertas del dia.</li>' +
             '<li><b>Unidades</b>: lista con estado, velocidad, zona y acciones. Clic para abrir su ventana; clic derecho para mas opciones.</li>' +
             '<li><b>Avisos</b>: historial filtrable por severidad. Exportable a CSV.</li>' +
-            '<li><b>Rutas</b>: progreso de cada ruta y desvios. Se planea desde el clic derecho de una unidad.</li>' +
+            '<li><b>Rutas</b>: progreso de cada ruta y desvíos. Se planea desde el clic derecho de una unidad.</li>' +
             '<li><b>Geocercas</b>: unidades dentro de cada geocerca.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +
             '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes &gt; Rutas.</p>' +
             '<h4>Atajos de teclado</h4>' +
             '<ul>' +
-            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>5</kbd>: cambiar de pestana.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>5</kbd>: cambiar de pestaña.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar el panel.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>L</kbd>: alternar entre panel flotante y barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
@@ -3392,7 +3406,7 @@
             '<h4>Actualizaciones</h4>' +
             '<p>El script revisa si hay una version nueva al iniciar y cada 30 minutos. Si la hay, aparece un indicador en la cabecera del panel; al pulsarlo se abre la URL para que Tampermonkey actualice el script.</p>' +
             '<h4>Consejo</h4>' +
-            '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestana en el borde (rail) que la trae de vuelta con un clic.</p>' +
+            '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestaña en el borde (rail) que la trae de vuelta con un clic.</p>' +
             '</div>' +
             '<div class="cfg-foot">' +
             '<button class="cancel" id="hjp-ayuda-cerrar">Cerrar</button>' +
@@ -3405,6 +3419,21 @@
         avisoEl = makeEl('div', { id: 'hjp-aviso' });
         railEl = makeEl('div', { id: 'hjp-rail' });
         railEl.title = 'Mostrar el panel';
+
+        // Accesibilidad base: dialogos, regiones vivas y tabs.
+        try {
+            [[modalEl, 'Lista de unidades'], [cfgWinEl, 'Configuración'], [ayudaEl, 'Ayuda rápida']].forEach(([el, lbl]) => {
+                el.setAttribute('role', 'dialog');
+                el.setAttribute('aria-modal', 'true');
+                el.setAttribute('aria-label', lbl);
+            });
+            toastsEl.setAttribute('role', 'status');
+            toastsEl.setAttribute('aria-live', 'polite');
+            avisoEl.setAttribute('role', 'alert');
+            const tabsEl = byId('hjp-tabs');
+            if (tabsEl) tabsEl.setAttribute('role', 'tablist');
+            document.querySelectorAll('#hjp-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
+        } catch (_) { /* noop */ }
 
         document.body.appendChild(barraEl);
         document.body.appendChild(panelEl);
@@ -3633,7 +3662,9 @@
             if (el) el.style.display = (n === name) ? '' : 'none';
         });
         document.querySelectorAll('#hjp-tabs .tab').forEach((t) => {
-            t.classList.toggle('activo', t.dataset.tab === name);
+            const act = t.dataset.tab === name;
+            t.classList.toggle('activo', act);
+            t.setAttribute('aria-selected', act ? 'true' : 'false');
         });
         if (name === 'dash') paintKPI();
         else if (name === 'unidades') paintTabla();
@@ -3679,7 +3710,7 @@
         b.className = 'hjp-badge-estado ' + cls;
         b.title = nmActivo()
             ? 'No molestar hasta ' + new Date(APP.noMolestar.hasta).toLocaleTimeString().slice(0, 5)
-            : 'criticos: ' + criticos + ' · sin senal: ' + off + ' · detenidas: ' + det;
+            : 'criticos: ' + criticos + ' · sin señal: ' + off + ' · detenidas: ' + det;
     }
     function paintKPI() {
         const watched = APP.unidades.filter(shouldWatch);
@@ -3705,7 +3736,7 @@
         kv('hjp-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '-');
         kv('hjp-kpi-zonas', enZona.size);
         kv('hjp-kpi-aho', aho);
-        kv('hjp-kpi-criticos', critAho + ' criticas');
+        kv('hjp-kpi-criticos', critAho + ' críticas');
         const resumenZ = document.querySelector('.kpi .valor#hjp-kpi-zonas + .resumen');
         if (resumenZ) resumenZ.textContent = 'de ' + APP.zonas.length + ' geocercas';
 
@@ -3728,25 +3759,56 @@
     function paintSparkline() {
         const svg = byId('hjp-spark');
         if (!svg) return;
-        const data = (APP.kpi.online || []).slice(-60);
-        if (data.length < 2) {
+        const on = (APP.kpi.online || []).slice(-60);
+        const off = (APP.kpi.offline || []).slice(-60);
+        if (on.length < 2) {
             svg.innerHTML = '<text x="100" y="22" text-anchor="middle" fill="currentColor" font-size="11">Recolectando datos...</text>';
             return;
         }
-        const max = Math.max.apply(null, data);
-        const min = Math.min.apply(null, data);
+        const todos = on.concat(off);
+        const max = Math.max.apply(null, todos);
+        const min = Math.min.apply(null, todos);
         const h = 32, w = 200;
-        const dx = w / (data.length - 1);
-        const puntos = data.map((v, i) => {
+        const dx = w / (on.length - 1);
+        const linea = (data) => data.map((v, i) => {
             const x = i * dx;
             const y = h - ((v - min) / Math.max(1, max - min)) * h;
             return (i ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1);
-        });
-        const area = puntos.join(' ') + ' L' + w + ',' + h + ' L0,' + h + ' Z';
+        }).join(' ');
+        const puntosOn = linea(on);
+        const areaOn = puntosOn + ' L' + w + ',' + h + ' L0,' + h + ' Z';
+        const puntosOff = off.length === on.length ? linea(off) : '';
         svg.innerHTML =
-            '<path d="' + area + '" fill="var(--hjp-accent-2)" fill-opacity="0.18" stroke="none"></path>' +
-            '<path d="' + puntos.join(' ') + '" stroke="var(--hjp-accent-2)"></path>' +
-            '<text x="6" y="14" fill="var(--hjp-fg-dim)" font-size="10">ONLINE · ' + data.length + ' ciclos · max ' + max + '</text>';
+            '<path d="' + areaOn + '" fill="var(--hjp-accent-2)" fill-opacity="0.18" stroke="none"></path>' +
+            '<path d="' + puntosOn + '" stroke="var(--hjp-accent-2)" stroke-width="1.6"></path>' +
+            (puntosOff ? '<path d="' + puntosOff + '" stroke="var(--hjp-fg-mute)" stroke-width="1" stroke-dasharray="3 3" fill="none"></path>' : '') +
+            '<text x="6" y="14" fill="var(--hjp-fg-dim)" font-size="10">ONLINE ' + on[on.length - 1] + ' · OFFLINE ' + (off[off.length - 1] != null ? off[off.length - 1] : '-') + '</text>';
+    }
+    // Valor de ordenamiento por columna de la tabla de unidades.
+    function valorOrden(x, col) {
+        switch (col) {
+            case 'eco': return x.info.eco || '';
+            case 'placa': return x.info.placa || '';
+            case 'estado': return x.st.estado || '';
+            case 'edad': return x.st.edadMin == null ? Infinity : x.st.edadMin;
+            case 'vel': return x.st.vel || 0;
+            case 'zona': return zoneAt(x.st.lat, x.st.lon) || '';
+            case 'odo': { const o = odometroDe(x.info); return o ? o.m : 0; }
+            default: return '';
+        }
+    }
+    function cmpOrd(a, b) {
+        if (typeof a === 'number' && typeof b === 'number') return a - b;
+        return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
+    }
+    function actualizarCabecerasOrden() {
+        document.querySelectorAll('#hjp-wrap-unidades th.hjp-sortable').forEach((th) => {
+            const act = APP.sortCol === th.dataset.sort;
+            th.classList.toggle('hjp-sort-asc', act && APP.sortDir !== 'desc');
+            th.classList.toggle('hjp-sort-desc', act && APP.sortDir === 'desc');
+            const s = th.querySelector('.hjp-sort');
+            if (s) s.textContent = act ? (APP.sortDir === 'desc' ? '▾' : '▴') : '⇅';
+        });
     }
     function paintTabla() {
         const body = byId('hjp-body');
@@ -3763,12 +3825,18 @@
                 if (est === 'silenciada' && !APP.dismissed.has(x.info.clave)) return false;
                 if (!APP.filtro) return true;
                 const f = APP.filtro.toLowerCase();
-                return (x.info.eco + ' ' + x.info.placa + ' ' + x.info.nombre).toLowerCase().indexOf(f) >= 0;
+                const zona = zoneAt(x.st.lat, x.st.lon);
+                return (x.info.eco + ' ' + x.info.placa + ' ' + x.info.nombre + ' ' + zona).toLowerCase().indexOf(f) >= 0;
             })
             .sort((a, b) => {
+                if (APP.sortCol) {
+                    const r = cmpOrd(valorOrden(a, APP.sortCol), valorOrden(b, APP.sortCol));
+                    if (r !== 0) return APP.sortDir === 'desc' ? -r : r;
+                    return a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
+                }
                 const peso = (e) => e === 'offline' ? 0 : (e === 'detenida' ? 1 : 2);
                 const d = peso(a.st.estado) - peso(b.st.estado);
-                return d !== 0 ? d : a.info.eco.localeCompare(b.info.eco);
+                return d !== 0 ? d : a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
             });
         body.innerHTML = lista.map(({ info, st }) => {
             const clave = info.clave;
@@ -3778,26 +3846,25 @@
             const zona = zoneAt(st.lat, st.lon);
             const clase = st.estado === 'offline' ? 'off' : (st.estado === 'detenida' ? 'det' : 'on');
             const ic = st.estado === 'offline' ? ICO.offline : (st.estado === 'detenida' ? ICO.detenida : ICO.moviendo);
-            const txt = st.estado === 'offline' ? 'sin senal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
+            const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
             const coords = (APP.config.mostrarCoords && st.lat != null)
                 ? ' <span style="color:var(--hjp-fg-mute);font-size:10px">' + st.lat.toFixed(3) + ',' + st.lon.toFixed(3) + '</span>' : '';
             const lim = limiteDe(info);
             const excede = st.online && st.vel > lim;
             const celVel = '<td' + (excede ? ' style="color:var(--hjp-bad-fg);font-weight:bold"' : '') + ' title="' +
-                (lim !== APP.config.velMax ? 'limite de la unidad: ' + lim + ' km/h' : 'limite global: ' + lim + ' km/h') + '">' +
+                (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h') + '">' +
                 Math.round(st.vel) + (lim !== APP.config.velMax ? ' <span style="font-size:10px">/' + lim + '</span>' : '') + '</td>';
             const odo = odometroDe(info);
             const km = odo ? Math.round(odo.m / 100) / 10 : 0;
-            const celOdo = '<td class="odo" title="Odometro acumulado (clic derecho para reiniciar)">' + km.toFixed(1) + '</td>';
+            const celOdo = '<td class="odo" title="Odómetro acumulado (clic derecho para reiniciar)">' + km.toFixed(1) + '</td>';
             return (
                 '<tr class="fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
                 '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
                 '<input type="checkbox" class="hjp-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
                 '</td>' +
-                '<td class="estadoicon ' + clase + '"><span class="hjp-mi">' + ic + '</span></td>' +
                 '<td class="eco">' + (vig ? '<span class="hjp-mi">' + ICO.bandera + '</span> ' : '') + esc(info.eco || '-') + '</td>' +
                 '<td>' + esc(info.placa || '') + '</td>' +
-                '<td>' + txt + '</td>' +
+                '<td><span class="hjp-pill ' + clase + '"><span class="hjp-mi">' + ic + '</span>' + txt + '</span></td>' +
                 '<td>' + ageText(st.edadMin) + '</td>' +
                 celVel +
                 '<td>' + esc(zona) + coords + '</td>' +
@@ -3806,7 +3873,7 @@
                 '<span class="hjp-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
                 '</tr>'
             );
-        }).join('') || '<tr><td colspan="10">' + emptyState(ICO.panel, LANG.sinUni,
+        }).join('') || '<tr><td colspan="9">' + emptyState(ICO.panel, LANG.sinUni,
             'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
             '<button class="mini hjp-vacio-acc" data-acc="abrir-lista"><span class="hjp-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>';
         const aviso = byId('hjp-sel-vacio');
@@ -3815,8 +3882,8 @@
             aviso.style.display = noHaySel ? 'block' : 'none';
         }
         byId('hjp-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
+        actualizarCabecerasOrden();
         paintInfo();
-        
     }
     function paintAlertas() {
         const cont = byId('hjp-lista-alertas');
@@ -3926,7 +3993,7 @@
         const sinUnidad = Object.keys(APP.rutas).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
         if (!filas.length && !sinUnidad.length) {
             cont.innerHTML = emptyState(ICO.destino, 'Sin rutas planificadas',
-                'Haz <b>clic derecho</b> en una unidad de la pestana Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aqui veras el progreso, la distancia y los desvios.',
+                'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
                 '<button class="mini hjp-vacio-acc" data-acc="tab-unidades"><span class="hjp-mi">' + ICO.panel + '</span> Ir a Unidades</button>');
             return;
         }
@@ -4034,7 +4101,7 @@
         lineas.push('');
         lineas.push('Generado: ' + new Date().toLocaleString());
         lineas.push('Unidades vigiladas: ' + watched.length);
-        lineas.push('En linea: ' + (watched.length - off.length) + ' · Sin senal: ' + off.length);
+        lineas.push('En línea: ' + (watched.length - off.length) + ' · Sin señal: ' + off.length);
         lineas.push('');
         lineas.push('## Alertas de hoy (' + hoy.length + ')');
         const sevs = Object.keys(porSev).sort((a, b) => pickSeverity(b) - pickSeverity(a));
@@ -4051,7 +4118,7 @@
         if (ecos.length) ecos.forEach((e) => lineas.push('- ' + e + ': ' + porEco[e]));
         else lineas.push('- Sin datos.');
         lineas.push('');
-        lineas.push('## Unidades sin senal ahora');
+        lineas.push('## Unidades sin señal ahora');
         if (off.length) off.forEach((x) => lineas.push('- ' + (x.info.eco || x.info.nombre) + ' (' + ageText(x.st.edadMin) + ')'));
         else lineas.push('- Todas reportando.');
         lineas.push('');
@@ -4225,7 +4292,7 @@
         a.download = 'hjp_config_' + new Date().toISOString().slice(0, 10) + '.json';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
-        advice('Configuracion exportada');
+        adviceOk('Configuración exportada');
     }
     function importConfig() {
         const inp = document.createElement('input');
@@ -4255,7 +4322,7 @@
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
                     applyBar(); applyTheme(); placePanel();
                     refresh();
-                    adviceOk('Configuracion importada');
+                    adviceOk('Configuración importada');
                 } catch (e) {
                     adviceErr('Error importando', (e && e.message) || '');
                 }
@@ -4379,7 +4446,15 @@
                 }
             }
             if (e.key === 'Escape') {
-                [modalEl, cfgWinEl, ayudaEl, ctxEl].forEach((w) => { if (w) w.style.display = 'none'; });
+                // Cierra solo el dialogo superior: primero el flotante, luego
+                // el menu contextual, y por ultimo las ventanas modales.
+                if (dialogoAbierto()) { cerrarDialogo(); return; }
+                if (ctxEl && ctxEl.style.display === 'flex') { ctxEl.style.display = 'none'; return; }
+                const ventanas = [modalEl, cfgWinEl, ayudaEl];
+                for (let i = ventanas.length - 1; i >= 0; i--) {
+                    const w = ventanas[i];
+                    if (w && w.style.display && w.style.display !== 'none') { w.style.display = 'none'; return; }
+                }
             }
         });
     }
@@ -4548,7 +4623,7 @@
             APP.config.verificar = !APP.config.verificar;
             writeJSON(LS.cfg, APP.config);
             restartVerificationLoop();
-            advice('Verificacion ' + (APP.config.verificar ? 'activada' : 'desactivada'),
+            advice('Verificación ' + (APP.config.verificar ? 'activada' : 'desactivada'),
                 APP.config.verificar ? 'Solo se mantendran las ventanas seleccionadas' : '');
         });
         byId('hjp-filtro').addEventListener('input', (e) => {
@@ -4572,6 +4647,19 @@
                 const modo = e.target.value;
                 if (modo) aplicarOrdenModo(modo);
                 e.target.value = '';
+            });
+        }
+        const theadUnid = document.querySelector('#hjp-wrap-unidades thead');
+        if (theadUnid) {
+            theadUnid.addEventListener('click', (e) => {
+                const th = e.target.closest && e.target.closest('th.hjp-sortable');
+                if (!th) return;
+                const col = th.dataset.sort;
+                if (APP.sortCol === col) APP.sortDir = (APP.sortDir === 'desc') ? 'asc' : 'desc';
+                else { APP.sortCol = col; APP.sortDir = 'asc'; }
+                writeJSON(LS.sortCol, APP.sortCol);
+                writeJSON(LS.sortDir, APP.sortDir);
+                paintTabla();
             });
         }
         document.addEventListener('pointerdown', unlockAudio, { once: true });
@@ -4607,7 +4695,7 @@
                     ev.preventDefault();
                     APP.barra.botones[key] = false;
                     applyBar();
-                    advice('Boton oculto: ' + name, 'Reactivalo en Ajustes · Barra de botones');
+                    advice('Botón oculto: ' + name, 'Reactívalo en Ajustes · Barra de botones');
                 });
             });
 
@@ -4650,10 +4738,10 @@
             showMenu(e.clientX, e.clientY, [
                 { id: 'open', icon: ICO.panel, label: 'Abrir ventana' },
                 { id: 'sil', icon: silenciado ? ICO.sonido : ICO.silencio, label: silenciado ? 'Reactivar avisos' : 'Silenciar esta unidad' },
-                { id: 'verif', icon: ICO.verifica, label: 'Aplicar verificacion' },
+                { id: 'verif', icon: ICO.verifica, label: 'Aplicar verificación' },
                 { sep: 1 },
-                { id: 'lista', icon: ICO.bandera, label: enLista ? 'Quitar de lista vigilada' : 'Anadir a lista vigilada' },
-                { id: 'limite', icon: ICO.velocidad, label: 'Limite de velocidad (actual ' + lim + ' km/h)' },
+                { id: 'lista', icon: ICO.bandera, label: enLista ? 'Quitar de lista vigilada' : 'Añadir a lista vigilada' },
+                { id: 'limite', icon: ICO.velocidad, label: 'Límite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
                 { id: 'ruta-plan', icon: ICO.destino, label: 'Planear ruta (OSRM)' },
                 { id: 'ruta-astar', icon: ICO.destino, label: 'Planear ruta (A*)' },
@@ -4662,7 +4750,7 @@
                 { id: 'traza-geo', icon: ICO.descargar, label: 'Exportar traza GeoJSON' },
                 { id: 'viaje-analizar', icon: ICO.tiempo, label: 'Analizar viaje (historial)' },
                 { id: 'viaje-geo', icon: ICO.exportar, label: 'Exportar viaje GeoJSON' },
-                { id: 'odo-reset', icon: ICO.refrescar, label: 'Reiniciar odometro' },
+                { id: 'odo-reset', icon: ICO.refrescar, label: 'Reiniciar odómetro' },
                 { sep: 1 },
                 { id: 'mapa-osm', icon: ICO.zona, label: 'Ver en OpenStreetMap' },
                 { id: 'mapa-google', icon: ICO.zona, label: 'Ver en Google Maps' },
@@ -4689,15 +4777,15 @@
             } else if (acc === 'limite') {
                 const it = unitByEco(eco);
                 const actual = it ? limiteDe(it.info) : APP.config.velMax;
-                hjpPrompt('Limite de velocidad', 'Para ' + eco + '. Dejalo vacio para usar el global (' + APP.config.velMax + ' km/h).', actual, (val) => {
+                hjpPrompt('Límite de velocidad', 'Para ' + eco + '. Dejalo vacio para usar el global (' + APP.config.velMax + ' km/h).', actual, (val) => {
                     setLimite(eco, val);
-                    adviceOk('Limite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
+                    adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }, { type: 'number', icon: ICO.velocidad, okText: 'Guardar' });
             } else if (acc === 'ruta-plan' || acc === 'ruta-astar') {
                 if (acc === 'ruta-astar' && !APP.config.overpass) {
                     adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
                 } else {
-                    hjpPrompt('Planear ruta', 'Destino de ' + eco + ': un lugar, una direccion o "lat,lon".', '', (dest) => {
+                    hjpPrompt('Planear ruta', 'Destino de ' + eco + ': un lugar, una dirección o "lat,lon".', '', (dest) => {
                         if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
                     }, { icon: ICO.destino, okText: 'Calcular', placeholder: 'Monterrey, NL  ·  o  25.68,-100.31' });
                 }
@@ -4710,7 +4798,7 @@
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
             else if (acc === 'odo-reset') {
-                hjpConfirm('Reiniciar odometro', 'El odometro acumulado de ' + eco + ' volvera a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: ICO.refrescar });
+                hjpConfirm('Reiniciar odómetro', 'El odómetro acumulado de ' + eco + ' volverá a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: ICO.refrescar });
             }
             else if (acc === 'mapa-osm') openMap(eco, 'osm');
             else if (acc === 'mapa-google') openMap(eco, 'google');
@@ -4723,7 +4811,7 @@
             } else if (acc === 'copy-coords') {
                 const it = unitByEco(eco);
                 const txt = (it && it.st.lat != null) ? (it.st.lat + ',' + it.st.lon) : '';
-                if (!txt) adviceWarn('Sin ubicacion', 'La unidad no reporta coordenadas');
+                if (!txt) adviceWarn('Sin ubicación', 'La unidad no reporta coordenadas');
                 else { copyToClipboard(txt); advice('Coordenadas copiadas', txt); }
             }
             hideMenu();
@@ -4939,7 +5027,7 @@
             panelEl.style.height = '440px';
             APP.panelSize = { w: 470, h: 440 };
             writeJSON(LS.panelsize, APP.panelSize);
-            adviceOk('Tamano restablecido');
+            adviceOk('Tamaño restablecido');
         });
         byId('hjp-perfil-guardar').addEventListener('click', () => {
             hjpPrompt('Guardar perfil', 'Ponle un nombre a la configuracion actual.', '', (n) => {
@@ -4972,25 +5060,25 @@
                 await comprobarActualizacion();
                 const u = APP.update;
                 if (u.state === 'available') adviceOk('Nueva version disponible', u.remote + ' (instalada ' + VER + ')');
-                else if (u.state === 'current') adviceOk('Estas al dia', 'Version instalada ' + VER + ' · remota ' + (u.remote || '?'));
+                else if (u.state === 'current') adviceOk('Estas al dia', 'Versión instalada ' + VER + ' · remota ' + (u.remote || '?'));
                 else adviceErr('No se pudo comprobar', u.lastError || 'sin conexion');
             });
         });
         byId('hjp-limpiar-hist').addEventListener('click', () => {
             if (!APP.historial.length) { adviceWarn('Sin avisos', 'El historial ya esta vacio'); return; }
-            hjpConfirm('Limpiar historial', 'Se borraran todos los avisos registrados en esta pestana.', () => {
+            hjpConfirm('Limpiar historial', 'Se borrarán todos los avisos registrados en esta pestaña.', () => {
                 limpiarBitacora();
                 adviceOk('Historial limpiado');
             }, { peligro: true, okText: 'Limpiar', icon: ICO.limpiar });
         });
         byId('hjp-borrar-memo').addEventListener('click', () => {
-            hjpConfirm('Borrar estado', 'Se reinicia el estado interno de las reglas (detenciones, desvios, etc.).', () => {
+            hjpConfirm('Borrar estado', 'Se reinicia el estado interno de las reglas (detenciones, desvíos, etc.).', () => {
                 APP.memo = {}; writeSession(SS.memo, APP.memo); refresh();
                 adviceOk('Estado borrado');
             }, { okText: 'Borrar', icon: ICO.limpiar });
         });
         byId('hjp-borrar-todo').addEventListener('click', () => {
-            hjpConfirm('Borrar TODO', 'Se borrara la configuracion, el estado, el historial de avisos, rutas y odometros. Esta accion no se puede deshacer.', () => {
+            hjpConfirm('Borrar TODO', 'Se borrará la configuración, el estado, el historial de avisos, rutas y odómetros. Esta accion no se puede deshacer.', () => {
                 Object.keys(LS).forEach((k) => { try { localStorage.removeItem(LS[k]); } catch (_) { /* noop */ } });
                 Object.keys(SS).forEach((k) => { try { sessionStorage.removeItem(SS[k]); } catch (_) { /* noop */ } });
                 avisoEl.textContent = 'Estado borrado, recargando...';
@@ -5029,7 +5117,7 @@
         let intentos = 0;
         while (!currentUser() && intentos < 120) { await sleep(1000); intentos++; }
         if (!currentUser()) {
-            avisoEl.textContent = 'Sesion de Wialon no iniciada. Inicia sesion para monitorear.';
+            avisoEl.textContent = 'Sesión de Wialon no iniciada. Inicia sesión para monitorear.';
             avisoEl.style.display = 'block';
             APP.unlocked = true;
             return;
