@@ -49,9 +49,11 @@ const code =
     'const RADIO_TIERRA=6371008.8;\n' +
     'function rad(d){return d*Math.PI/180;}\n' +
     'function haversine(a,b,c,d){const x=rad(c-a),y=rad(d-b);const s=Math.sin(x/2)*Math.sin(x/2)+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(y/2)*Math.sin(y/2);return 2*RADIO_TIERRA*Math.asin(Math.min(1,Math.sqrt(s)));}\n' +
-    // APP y stubs. watchAll=true para que shouldWatch devuelva siempre true.
-    'const APP={config:{caravanaM:300,caravanaCercaM:2000,watchAll:true},unidades:[],rutas:{},snapMemo:{},seleccion:new Set()};\n' +
-    'function shouldWatch(u){return APP.config.watchAll===true;}\n' +
+    // APP y stubs. watchedSet: ids marcados como vigilados; si watchAll=true
+    // o si el id esta en watchedSet, shouldWatch devuelve true. Asi podemos
+    // simular la mezcla "algunas unidades vigiladas, otras no".
+    'const APP={config:{caravanaM:300,caravanaCercaM:2000,watchAll:false},unidades:[],rutas:{},snapMemo:{},seleccion:new Set(),watchedSet:new Set()};\n' +
+    'function shouldWatch(u){return APP.config.watchAll===true || APP.watchedSet.has(u.id);}\n' +
     'function parseUnitName(u){const m=(u.nm||"").match(/\\.\\s*0*(\\d{3,5})/);return{id:u.id,nombre:u.nm,eco:m?m[1]:"",placa:"",clave:m?m[1]:String(u.id)};}\n' +
     'function unitState(u){return{u:u,online:u.online!==false,lat:u.lat,lon:u.lon,vel:u.vel||0,curso:u.curso||0};}\n' +
     'function rutaDe(info){return APP.rutas[info.clave]||APP.rutas[info.eco]||null;}\n' +
@@ -83,6 +85,8 @@ mod.APP.unidades = [
     { id: 6, nm: 'UN.04386', online: false, lat: 0, lon: 0.0005, vel: 0, curso: 90 },   // offline -> no cuenta
     { id: 7, nm: 'UN.04387', online: true, lat: 0.02, lon: 0.02, vel: 0, curso: 0 }       // muy lejos -> no cuenta
 ];
+// Caso base: todas las unidades estan vigiladas.
+mod.APP.watchedSet = new Set([1, 2, 3, 4, 5, 6, 7]);
 
 const info = { id: 1, nombre: 'UN.04381', eco: '4381', placa: '', clave: '4381' };
 const st = { online: true, lat: 0, lon: 0, vel: 40, curso: 90 };
@@ -148,6 +152,30 @@ mod.APP.config.caravanaM = 300;
 ok('tolerancia lateral: con 50 m el miembro 4385 (lejos del eje) no cuenta por ruta',
     r4.miembros.find((m) => m.info.eco === '4385') && r4.miembros.find((m) => m.info.eco === '4385').enRuta === false,
     'enRuta85=' + (r4.miembros.find((m) => m.info.eco === '4385') || {}).enRuta);
+
+// --- inclusion de unidades NO vigiladas ---
+// watchAll=false, solo el lider (1) esta vigilado. El resto de unidades
+// online y dentro de los umbrales siguen apareciendo, marcadas con
+// vigilada=false.
+mod.APP.rutas = { '4381': ruta };
+mod.APP.snapMemo = {};
+mod.APP.watchedSet = new Set([1]);
+const r5 = mod.unidadesEnCaravana(info, st);
+ok('incluye no vigiladas: aparecen aun con watchAll=false', r5.miembros.length >= 4, 'n=' + r5.miembros.length);
+const m85nv = r5.miembros.find((m) => m.info.eco === '4385');
+ok('incluye no vigiladas: 4385 (no vigilada) sigue en la lista', m85nv != null);
+ok('incluye no vigiladas: 4385 marcado como vigilada=false', m85nv && m85nv.vigilada === false);
+const m82v = r5.miembros.find((m) => m.info.eco === '4382');
+ok('incluye no vigiladas: 4382 (no vigilada) marcado como vigilada=false', m82v && m82v.vigilada === false);
+ok('incluye no vigiladas: unidades lejanas (4387) siguen fuera',
+    r5.miembros.find((m) => m.info.eco === '4387') == null);
+ok('incluye no vigiladas: unidades offline (4386) siguen fuera',
+    r5.miembros.find((m) => m.info.eco === '4386') == null);
+// El campo vigilada distingue miembros de la lista vigilada.
+const vCount = r5.miembros.filter((m) => m.vigilada).length;
+const nvCount = r5.miembros.filter((m) => !m.vigilada).length;
+ok('incluye no vigiladas: hay vigiladas y no vigiladas en la misma salida',
+    vCount === 0 && nvCount >= 4, 'v=' + vCount + ' nv=' + nvCount);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

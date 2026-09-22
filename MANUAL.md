@@ -142,9 +142,9 @@ En la parte superior del panel:
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
   trazado, ETA y acciones para recalcular, exportar o eliminar.
 - **Geocercas**: cuantas unidades hay dentro de cada geocerca y cuales.
-- **Caravana**: unidades vigiladas que acompanian a una unidad "lider"
-  en la misma ruta (proyeccion al eje) o dentro del radio de cercania.
-  Muestra distancia firmada (+450 m delante / -300 m detras), modo
+- **Caravana**: unidades (vigiladas o no) que acompanian a una unidad
+  "lider" en la misma ruta (proyeccion al eje) o dentro del radio de
+  cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
 
@@ -307,18 +307,22 @@ de un vistazo el avance de toda la flota sin abrir la pestana Rutas.
 ### Modo caravana
 
 La pestana **Caravana** (atajo `Alt+6`) sirve para ver de un vistazo
-que unidades vigiladas estan muy cerca de una unidad "lider". Util
-para coordinar convoyes, escoltas o simplemento ver que vehiculos van
-juntos por la misma ruta.
+que unidades estan muy cerca de una unidad vigilada "lider". Util para
+coordinar convoyes, escoltas o simplemento ver que vehiculos van
+juntos por la misma ruta, sean o no parte de tu lista vigilada.
 
 Como funciona:
 
-1. Elige la unidad lider en el selector superior. Por defecto se elige
-   la primera unidad vigilada que tenga una ruta trazada.
+1. Elige la unidad lider en el selector superior (solo unidades
+   vigiladas). Por defecto se elige la primera unidad vigilada que
+   tenga una ruta trazada.
 2. La tarjeta del lider muestra si tiene ruta, su velocidad, el
    porcentaje de avance y el estado online/offline.
-3. Debajo se listan las unidades acompanantes, ordenadas de mas cerca a
-   mas lejos (los que van detras primero, los que van delante al final).
+3. Debajo se listan **todas las unidades cercanas** (vigiladas o no),
+   ordenadas de mas cerca a mas lejos (los que van detras primero, los
+   que van delante al final). Las que no estan vigiladas se marcan
+   con la pildora **NO VIGILADA** para que sepas que no las tienes en
+   seguimiento.
 
 Reglas de inclusion:
 
@@ -329,6 +333,9 @@ Reglas de inclusion:
 - **Cerca**: la unidad no toca la polilinea pero esta a menos del
   **radio de cercania** del lider (por defecto 2000 m, configurable en
   **c-caravana-cerca**). Se muestra la distancia directa por haversine.
+- Tanto las unidades **vigiladas** como las que no estan en tu lista
+  vigilada pueden aparecer. Las no vigiladas se distinguen por la
+  pildora **NO VIGILADA**.
 
 Pildoras y metricas:
 

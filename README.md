@@ -67,10 +67,11 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   vigilada: cuando una unidad tiene `eco=destino`, Rondo calcula la ruta
   en background y actualiza una columna "Ruta" en la tabla de unidades
   con estado (EN RUTA / LLEGO / DESV), progreso y ETA.
-- **Modo caravana**: pestana dedicada que muestra las unidades vigiladas
-  cerca de una unidad "lider" en la misma ruta (distancia firmada
+- **Modo caravana**: pestana dedicada que muestra las unidades (vigiladas
+  o no) cerca de una unidad "lider" en la misma ruta (distancia firmada
   delante/detras) o dentro del radio de cercania, con marca de sentido
-  contrario y velocidad. Util para convoyes y escoltas.
+  contrario, velocidad y la pildora **NO VIGILADA** para las que no
+  estan en tu lista. Util para convoyes y escoltas.
 - **Analisis de viaje**: punto de partida (donde estuvo parada mas de N
   horas), trayecto, paradas y carga detectada.
 - **Odometro por unidad** persistente, con deteccion de saltos GPS anomalos.
@@ -134,7 +135,7 @@ el boton de la barra o con `Alt+L`.
 | **Avisos** | Historial de alertas con filtro por severidad y exportable a CSV o Markdown. |
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
 | **Geocercas** | Cuantas unidades hay dentro de cada geocerca y cuales son. |
-| **Caravana** | Unidades vigiladas que acompanian a una unidad "lider" en la misma ruta (distancia firmada delante/detras) o dentro del radio de cercania. Marca sentido contrario y velocidad. |
+| **Caravana** | Unidades (vigiladas o no) que acompanian a una unidad "lider" en la misma ruta (distancia firmada delante/detras) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada. |
 
 Atajos de teclado: `Alt+1..6` cambian de pestana, `Alt+P` muestra u oculta
 el panel, `Alt+L` alterna lateral, `Alt+H` pliega la barra, `Esc` cierra el
