@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.15.0
+// @version      4.15.1
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, odómetro por unidad, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.15.0';
+    const VER = '4.15.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -1621,6 +1621,20 @@
             (accion || '') +
             '</div>';
     }
+    // Solo reescribe innerHTML si el contenido cambio. El panel se repinta cada
+    // segundo; reasignar el mismo HTML destruye y recrea los nodos, lo que
+    // reinicia las animaciones CSS de entrada (parpadeo). La clave es el id del
+    // contenedor.
+    const _htmlMemo = Object.create(null);
+    function setHtml(el, html) {
+        if (!el) return false;
+        const key = el.id || '';
+        if (_htmlMemo[key] === html) return false;
+        _htmlMemo[key] = html;
+        el.innerHTML = html;
+        return true;
+    }
+    function invalidarHtml(id) { delete _htmlMemo[id]; }
     function abrirBienvenida() {
         abrirDialogo({
             icon: ICO.automatizar,
@@ -3746,7 +3760,7 @@
         const recientes = byId('hjp-kpi-recientes');
         if (recientes) {
             const items = APP.historial.slice(0, 6);
-            recientes.innerHTML = items.length
+            setHtml(recientes, items.length
                 ? items.map((a) => (
                     '<div class="alerta" style="border-left:3px solid ' + (COL[a.sev] || '#555') + '">' +
                     '<span class="ico hjp-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
@@ -3755,7 +3769,7 @@
                     '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
                     '</div>'
                 )).join('')
-                : '<div style="padding:8px;color:var(--hjp-fg-mute)">' + LANG.recientesNone + '</div>';
+                : '<div style="padding:8px;color:var(--hjp-fg-mute)">' + LANG.recientesNone + '</div>');
         }
         paintSparkline();
     }
@@ -3765,7 +3779,7 @@
         const on = (APP.kpi.online || []).slice(-60);
         const off = (APP.kpi.offline || []).slice(-60);
         if (on.length < 2) {
-            svg.innerHTML = '<text x="100" y="22" text-anchor="middle" fill="currentColor" font-size="11">Recolectando datos...</text>';
+            setHtml(svg, '<text x="100" y="22" text-anchor="middle" fill="currentColor" font-size="11">Recolectando datos...</text>');
             return;
         }
         const todos = on.concat(off);
@@ -3781,11 +3795,11 @@
         const puntosOn = linea(on);
         const areaOn = puntosOn + ' L' + w + ',' + h + ' L0,' + h + ' Z';
         const puntosOff = off.length === on.length ? linea(off) : '';
-        svg.innerHTML =
+        setHtml(svg,
             '<path d="' + areaOn + '" fill="var(--hjp-accent-2)" fill-opacity="0.18" stroke="none"></path>' +
             '<path d="' + puntosOn + '" stroke="var(--hjp-accent-2)" stroke-width="1.6"></path>' +
             (puntosOff ? '<path d="' + puntosOff + '" stroke="var(--hjp-fg-mute)" stroke-width="1" stroke-dasharray="3 3" fill="none"></path>' : '') +
-            '<text x="6" y="14" fill="var(--hjp-fg-dim)" font-size="10">ONLINE ' + on[on.length - 1] + ' · OFFLINE ' + (off[off.length - 1] != null ? off[off.length - 1] : '-') + '</text>';
+            '<text x="6" y="14" fill="var(--hjp-fg-dim)" font-size="10">ONLINE ' + on[on.length - 1] + ' · OFFLINE ' + (off[off.length - 1] != null ? off[off.length - 1] : '-') + '</text>');
     }
     // Valor de ordenamiento por columna de la tabla de unidades.
     function valorOrden(x, col) {
@@ -3841,7 +3855,7 @@
                 const d = peso(a.st.estado) - peso(b.st.estado);
                 return d !== 0 ? d : a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
             });
-        body.innerHTML = lista.map(({ info, st }) => {
+        setHtml(body, lista.map(({ info, st }) => {
             const clave = info.clave;
             const sel = APP.seleccion.has(info.eco) || APP.seleccion.has(info.placa);
             const sil = APP.dismissed.has(clave);
@@ -3878,7 +3892,7 @@
             );
         }).join('') || '<tr><td colspan="9">' + emptyState(ICO.panel, LANG.sinUni,
             'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
-            '<button class="mini hjp-vacio-acc" data-acc="abrir-lista"><span class="hjp-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>';
+            '<button class="mini hjp-vacio-acc" data-acc="abrir-lista"><span class="hjp-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>');
         const aviso = byId('hjp-sel-vacio');
         if (aviso) {
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
@@ -3897,7 +3911,7 @@
             if (!f) return true;
             return (a.titulo + ' ' + (a.detalle || '') + ' ' + (a.eco || '')).toLowerCase().indexOf(f) >= 0;
         });
-        cont.innerHTML = lista.length
+        setHtml(cont, lista.length
             ? lista.map((a) => (
                 '<div class="alerta" style="border-left:4px solid ' + (COL[a.sev] || '#555') + '">' +
                 '<span class="ico hjp-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
@@ -3911,7 +3925,7 @@
                 '</div>'
             )).join('')
             : emptyState(ICO.alertas, 'Sin avisos registrados',
-                'Aqui se acumula el historial de alertas. Cuando una regla se dispare, aparecera en esta lista.');
+                'Aqui se acumula el historial de alertas. Cuando una regla se dispare, aparecera en esta lista.'));
         paintSeverity();
     }
     function paintSeverity() {
@@ -3923,11 +3937,11 @@
         const body = byId('hjp-body-zonas');
         if (!body) return;
         if (!APP.config.loadZones || !APP.zonas.length) {
-            body.innerHTML = '<tr><td colspan="2">' + emptyState(ICO.geocercas, 'Sin geocercas cargadas',
+            setHtml(body, '<tr><td colspan="2">' + emptyState(ICO.geocercas, 'Sin geocercas cargadas',
                 APP.config.loadZones
                     ? 'No se encontraron geocercas en tu cuenta de Wialon.'
                     : 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.',
-                APP.config.loadZones ? '' : '<button class="mini hjp-vacio-acc" data-acc="ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>') + '</td></tr>';
+                APP.config.loadZones ? '' : '<button class="mini hjp-vacio-acc" data-acc="ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>') + '</td></tr>');
             return;
         }
         const unidades = APP.unidades.filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
@@ -3950,20 +3964,20 @@
                 '</tr>'
             );
         }
-        body.innerHTML = rows.join('') || '<tr><td colspan="2">' + emptyState(ICO.filtro, LANG.sinCoin,
-            'Ninguna geocerca coincide con el filtro actual.') + '</td></tr>';
+        setHtml(body, rows.join('') || '<tr><td colspan="2">' + emptyState(ICO.filtro, LANG.sinCoin,
+            'Ninguna geocerca coincide con el filtro actual.') + '</td></tr>');
     }
     function paintViajes() {
         const cont = byId('hjp-lista-viajes');
         if (!cont) return;
         const ecos = Object.keys(APP.viajes);
         if (!ecos.length) {
-            cont.innerHTML = emptyState(ICO.tiempo, 'Sin viajes analizados',
+            setHtml(cont, emptyState(ICO.tiempo, 'Sin viajes analizados',
                 'Clic derecho en una unidad &gt; <b>Analizar viaje</b> para detectar el punto de partida (parada de mas de '
-                + (APP.config.partidaHoras || 6) + ' h), el trayecto, las paradas y la carga.');
+                + (APP.config.partidaHoras || 6) + ' h), el trayecto, las paradas y la carga.'));
             return;
         }
-        cont.innerHTML = ecos.map((eco) => {
+        setHtml(cont, ecos.map((eco) => {
             const v = APP.viajes[eco];
             const flags = [];
             if (v.cargo) flags.push('carga');
@@ -3985,7 +3999,7 @@
                 '<button class="mini hjp-viaje-geo" data-eco="' + esc(eco) + '" title="Exportar viaje GeoJSON"><span class="hjp-mi">' + ICO.exportar + '</span></button>' +
                 '<button class="mini hjp-viaje-re" data-eco="' + esc(eco) + '" title="Reanalizar viaje"><span class="hjp-mi">' + ICO.refrescar + '</span></button>' +
                 '</div>';
-        }).join('');
+        }).join(''));
     }
     function paintRutas() {
         paintViajes();
@@ -3995,9 +4009,9 @@
         const filas = watched.filter((x) => rutaDe(x.info));
         const sinUnidad = Object.keys(APP.rutas).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
         if (!filas.length && !sinUnidad.length) {
-            cont.innerHTML = emptyState(ICO.destino, 'Sin rutas planificadas',
+            setHtml(cont, emptyState(ICO.destino, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
-                '<button class="mini hjp-vacio-acc" data-acc="tab-unidades"><span class="hjp-mi">' + ICO.panel + '</span> Ir a Unidades</button>');
+                '<button class="mini hjp-vacio-acc" data-acc="tab-unidades"><span class="hjp-mi">' + ICO.panel + '</span> Ir a Unidades</button>'));
             return;
         }
         const tarjeta = (info, st) => {
@@ -4037,7 +4051,7 @@
                 '<button class="mini hjp-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="hjp-mi">' + ICO.cerrar + '</span></button>' +
                 '</div>';
         });
-        cont.innerHTML = html;
+        setHtml(cont, html);
     }
     function paintPanel() { setTab(APP.tab); }
 

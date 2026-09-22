@@ -34,7 +34,7 @@ const mod = new Function(codeOrden)();
 const codeEmpty =
     'function esc(v){return String(v==null?"":v).replace(/[&<>"\']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","\'":"&#39;"}[c];});}\n' +
     bloque('function emptyState', 'function abrirBienvenida') +
-    '\nreturn {emptyState};';
+    '\nreturn {emptyState, setHtml, invalidarHtml};';
 const modEmpty = new Function(codeEmpty)();
 
 let fallos = 0;
@@ -88,6 +88,16 @@ ok('emptyState escapa el titulo', e.indexOf('Sin &lt;unidades&gt;') >= 0, e);
 // La pista es HTML controlado por el script (admite <b>, etc.), no se escapa.
 ok('emptyState conserva HTML en la pista', e.indexOf('Prueba & demo') >= 0);
 ok('emptyState renderiza el icono', e.indexOf('>X<') >= 0);
+
+// setHtml: solo reescribe el DOM cuando el contenido cambia (evita el
+// parpadeo por reescritura identica cada segundo).
+const fake = { id: 'probando', innerHTML: '' };
+ok('setHtml: primer render escribe', modEmpty.setHtml(fake, '<b>A</b>') === true && fake.innerHTML === '<b>A</b>');
+ok('setHtml: mismo HTML no reescribe', modEmpty.setHtml(fake, '<b>A</b>') === false && fake.innerHTML === '<b>A</b>');
+ok('setHtml: HTML distinto si reescribe', modEmpty.setHtml(fake, '<b>B</b>') === true && fake.innerHTML === '<b>B</b>');
+modEmpty.invalidarHtml('probando');
+ok('setHtml: invalidar fuerza reescritura', modEmpty.setHtml(fake, '<b>B</b>') === true);
+ok('setHtml: elemento nulo no rompe', modEmpty.setHtml(null, 'x') === false);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
