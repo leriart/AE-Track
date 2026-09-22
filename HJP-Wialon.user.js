@@ -877,7 +877,7 @@
     }
     async function planearRuta(eco, destinoTexto, origenOv, modo) {
         const it = unitByEco(eco);
-        if (!it) { advice('Unidad no encontrada', eco); return null; }
+        if (!it) { adviceErr('Unidad no encontrada', eco); return null; }
         let origen = origenOv || null;
         if (!origen && APP.config.analizarAuto) {
             // Punto de partida detectado en el historial (parada > partidaHoras).
@@ -887,7 +887,7 @@
             } catch (_) { /* noop */ }
         }
         if (!origen) origen = (it.st.lat != null ? { lat: it.st.lat, lon: it.st.lon } : null);
-        if (!origen) { advice('Sin origen', 'La unidad no reporta posicion actual ni historial'); return null; }
+        if (!origen) { adviceWarn('Sin origen', 'La unidad no reporta posicion actual ni historial'); return null; }
         let destino = null;
         const txt = String(destinoTexto || '').trim();
         if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(txt)) {
@@ -896,7 +896,7 @@
         } else if (txt) {
             destino = await geocodificarLugar(txt);
         }
-        if (!destino) { advice('Destino no resuelto', 'Escribe un lugar o "lat,lon"'); return null; }
+        if (!destino) { adviceErr('Destino no resuelto', 'Escribe un lugar o "lat,lon"'); return null; }
         advice('Calculando ruta', (modo === 'astar' ? 'A* sobre OSM' : 'OSRM') + '...');
         try {
             const calc = (modo === 'astar') ? await astarRoute(origen, destino) : await osrmRoute(origen, destino);
@@ -912,13 +912,13 @@
             APP.rutas[clave] = ruta;
             guardarRutas();
             resetEstadoRuta(clave);
-            advice('Ruta creada', Math.round(ruta.total / 1000) + ' km · ' + ruta.modo);
+            adviceOk('Ruta creada', Math.round(ruta.total / 1000) + ' km · ' + ruta.modo);
             if (APP.tab === 'rutas') paintRutas();
             // Reanaliza el viaje ahora que existe destino (llegada/regreso/carga).
             analizarViaje(eco, true);
             return ruta;
         } catch (e) {
-            advice('Error de ruta', (e && e.message) || 'sin conexion');
+            adviceErr('Error de ruta', (e && e.message) || 'sin conexion');
             return null;
         }
     }
@@ -945,7 +945,7 @@
     function exportRutaGeoJSON(eco) {
         const it = unitByEco(eco);
         const r = it ? rutaDe(it.info) : null;
-        if (!r) { advice('Sin ruta', eco); return; }
+        if (!r) { adviceWarn('Sin ruta', eco); return; }
         const geojson = {
             type: 'FeatureCollection',
             features: [
@@ -955,7 +955,7 @@
             ]
         };
         descargarJSON(geojson, 'hjp_ruta_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
-        advice('Ruta exportada', Math.round(r.total / 1000) + ' km');
+        adviceOk('Ruta exportada', Math.round(r.total / 1000) + ' km');
     }
     function registrarTraza(info, st) {
         if (!APP.config.trazado || !st.online || st.lat == null) return;
@@ -989,7 +989,7 @@
             }]
         };
         descargarJSON(geojson, 'hjp_traza_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
-        advice('Traza exportada', arr.length + ' puntos');
+        adviceOk('Traza exportada', arr.length + ' puntos');
     }
 
     /* ====================== ANALISIS DE VIAJE (historial) ====================== */
@@ -1139,15 +1139,15 @@
     }
     async function analizarViaje(eco, silencioso) {
         const it = unitByEco(eco);
-        if (!it) { if (!silencioso) advice('Unidad no encontrada', eco); return null; }
+        if (!it) { if (!silencioso) adviceErr('Unidad no encontrada', eco); return null; }
         const horas = Math.max(2, Number(APP.config.historialHoras) || 168);
         const partidaHoras = Math.max(1, Number(APP.config.partidaHoras) || 6);
         const paradaMin = Math.max(1, Number(APP.config.paradaMin) || 15);
         if (!silencioso) advice('Analizando viaje', 'historial de ' + horas + ' h...');
         let puntos = [];
         try { puntos = await fetchHistorial(it.u.id, horas); }
-        catch (e) { if (!silencioso) advice('Sin historial', (e && e.message) || 'sin conexion'); return null; }
-        if (puntos.length < 3) { if (!silencioso) advice('Sin datos', 'No hay suficiente historial'); return null; }
+        catch (e) { if (!silencioso) adviceWarn('Sin historial', (e && e.message) || 'sin conexion'); return null; }
+        if (puntos.length < 3) { if (!silencioso) adviceWarn('Sin datos', 'No hay suficiente historial'); return null; }
         const partida = detectarPuntoPartida(puntos, partidaHoras);
         if (!partida) { if (!silencioso) advice('Sin punto de partida', 'No se hallo una parada de mas de ' + partidaHoras + ' h'); return null; }
         const desde = partida.finIdx;
@@ -1195,14 +1195,14 @@
         writeSession(SS.viajes, APP.viajes);
         if (APP.tab === 'rutas') paintRutas();
         if (!silencioso) {
-            advice('Viaje analizado', v.distanciaKm + ' km · ' + v.paradas.length + ' parada(s)'
+            adviceOk('Viaje analizado', v.distanciaKm + ' km · ' + v.paradas.length + ' parada(s)'
                 + (cargo ? ' · carga' : '') + (llego ? ' · llego a destino' : '') + (regreso ? ' · en regreso' : ''));
         }
         return v;
     }
     function exportViajeGeoJSON(eco) {
         const v = APP.viajes[eco];
-        if (!v) { advice('Sin analisis', 'Analiza el viaje primero'); return; }
+        if (!v) { adviceWarn('Sin analisis', 'Analiza el viaje primero'); return; }
         const features = [];
         if (v.traza && v.traza.length > 1) {
             features.push({ type: 'Feature', properties: { tipo: 'trayecto', eco, distancia_km: v.distanciaKm }, geometry: { type: 'LineString', coordinates: v.traza } });
@@ -1211,7 +1211,7 @@
         if (v.destino) features.push({ type: 'Feature', properties: { tipo: 'destino' }, geometry: { type: 'Point', coordinates: [v.destino.lon, v.destino.lat] } });
         v.paradas.forEach((p, i) => features.push({ type: 'Feature', properties: { tipo: 'parada', n: i + 1, minutos: Math.round(p.durMin) }, geometry: { type: 'Point', coordinates: [p.lon, p.lat] } }));
         descargarJSON({ type: 'FeatureCollection', features }, 'hjp_viaje_' + eco + '_' + new Date().toISOString().slice(0, 10) + '.geojson');
-        advice('Viaje exportado', eco);
+        adviceOk('Viaje exportado', eco);
     }
 
     /* ====================== NOMBRE + ESTADO ====================== */
@@ -1278,7 +1278,7 @@
     function openMap(eco, kind) {
         const it = unitByEco(eco);
         if (!it || it.st.lat == null || it.st.lon == null) {
-            advice('Sin ubicacion', 'La unidad no reporta coordenadas');
+            adviceWarn('Sin ubicacion', 'La unidad no reporta coordenadas');
             return;
         }
         const lat = it.st.lat, lon = it.st.lon;
@@ -1321,7 +1321,7 @@
         if (!it) return;
         APP.odometro[it.info.clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null };
         writeJSON(LS.odometro, APP.odometro);
-        advice('Odometro reiniciado', it.info.eco);
+        adviceOk('Odometro reiniciado', it.info.eco);
     }
     function odometroDe(info) {
         if (!info || !info.clave) return null;
@@ -1471,8 +1471,165 @@
         }, APP.config.toastSeg * 1000);
         while (cont.children.length > 6) cont.removeChild(cont.firstChild);
     }
-    function advice(titulo, detalle) {
-        toast({ sev: 'bajo', icono: ICO.info, titulo, detalle: detalle || '', ts: Date.now() });
+    // Toasts informativos con severidad opcional: 'info' (default), 'ok',
+    // 'warn'/'medio', 'err'/'critico'. El color del borde y del icono sale de
+    // COL, por lo que cada severidad se distingue de un vistazo.
+    function advice(titulo, detalle, sev) {
+        const s = sev || 'info';
+        const ic = (s === 'ok') ? ICO.ok
+            : (s === 'warn' || s === 'medio') ? ICO.medio
+                : (s === 'err' || s === 'critico' || s === 'alto') ? ICO.critico
+                    : ICO.info;
+        toast({ sev: s, icono: ic, titulo, detalle: detalle || '', ts: Date.now() });
+    }
+    function adviceOk(t, d) { advice(t, d, 'ok'); }
+    function adviceWarn(t, d) { advice(t, d, 'medio'); }
+    function adviceErr(t, d) { advice(t, d, 'critico'); }
+    // Pone un boton en estado ocupado: spinner, aria-busy y deshabilitado.
+    // Restaura el contenido original al terminar.
+    function setBusy(btn, on) {
+        if (!btn) return;
+        if (on) {
+            if (btn.dataset.hjpTxt == null) btn.dataset.hjpTxt = btn.innerHTML;
+            btn.classList.add('hjp-busy');
+            btn.setAttribute('aria-busy', 'true');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="hjp-spin"></span>';
+        } else {
+            btn.classList.remove('hjp-busy');
+            btn.removeAttribute('aria-busy');
+            btn.disabled = false;
+            if (btn.dataset.hjpTxt != null) {
+                btn.innerHTML = btn.dataset.hjpTxt;
+                delete btn.dataset.hjpTxt;
+            }
+        }
+    }
+    // Ejecuta una accion async mostrando el boton ocupado hasta que termine.
+    async function conBusy(btn, fn) {
+        setBusy(btn, true);
+        try { return await fn(); } finally { setBusy(btn, false); }
+    }
+
+    /* ====================== DIALOGO PROPIO ======================
+     * Sustituye a window.confirm/window.prompt con la misma estetica del
+     * panel. Api:
+     *   hjpConfirm(titulo, mensaje, onOk, {peligro, okText, icon})
+     *   hjpPrompt(titulo, label, valor, onOk, {placeholder, type, okText})
+     *   abrirDialogo({...})  // generico
+     */
+    let dlgEl = null, dlgPrevFocus = null;
+    function ensureDialog() {
+        if (dlgEl && dlgEl.isConnected) return dlgEl;
+        dlgEl = makeEl('div', { id: 'hjp-dialog' });
+        document.body.appendChild(dlgEl);
+        return dlgEl;
+    }
+    function dialogoAbierto() { return !!(dlgEl && dlgEl.classList.contains('abierto')); }
+    function cerrarDialogo() {
+        if (!dlgEl) return;
+        dlgEl.classList.remove('abierto');
+        dlgEl.innerHTML = '';
+        if (dlgPrevFocus && dlgPrevFocus.focus && dlgPrevFocus.isConnected) {
+            try { dlgPrevFocus.focus(); } catch (_) { /* noop */ }
+        }
+        dlgPrevFocus = null;
+    }
+    function abrirDialogo(opts) {
+        const el = ensureDialog();
+        dlgPrevFocus = document.activeElement;
+        const inputId = opts.input ? 'hjp-dlg-input' : '';
+        const inp = opts.input || {};
+        el.innerHTML =
+            '<div class="dlg-head"><span class="hjp-mi">' + (opts.icon || ICO.info) + '</span>' +
+            '<span>' + esc(opts.titulo) + '</span></div>' +
+            '<div class="dlg-body">' +
+            (opts.html || '') +
+            (opts.input ? '<input id="' + inputId + '" type="' + (inp.type || 'text') + '" placeholder="' +
+                esc(inp.placeholder || '') + '" value="' + esc(inp.value == null ? '' : inp.value) + '">' : '') +
+            '</div>' +
+            '<div class="dlg-foot">' +
+            (opts.cancel === false ? '' : '<button class="dlg-cancel">' + esc(opts.cancelText || 'Cancelar') + '</button>') +
+            '<button class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + esc(opts.okText || 'Aceptar') + '</button>' +
+            '</div>';
+        el.classList.add('abierto');
+        const okBtn = el.querySelector('.dlg-ok');
+        const cancelBtn = el.querySelector('.dlg-cancel');
+        const inpEl = opts.input ? byId(inputId) : null;
+        if (inpEl) { inpEl.focus(); if (inpEl.select) inpEl.select(); }
+        else if (okBtn) okBtn.focus();
+        okBtn.addEventListener('click', () => {
+            const val = inpEl ? inpEl.value : undefined;
+            cerrarDialogo();
+            if (opts.onOk) opts.onOk(val);
+        });
+        if (cancelBtn) cancelBtn.addEventListener('click', cerrarDialogo);
+        if (inpEl) inpEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }
+        });
+        return el;
+    }
+    function hjpConfirm(titulo, mensaje, onOk, opts) {
+        const o = opts || {};
+        abrirDialogo({
+            icon: o.icon || ICO.medio,
+            titulo: titulo,
+            html: '<p>' + esc(mensaje) + '</p>',
+            okText: o.okText || 'Confirmar',
+            peligro: !!o.peligro,
+            onOk: onOk
+        });
+    }
+    function hjpPrompt(titulo, label, value, onOk, opts) {
+        const o = opts || {};
+        abrirDialogo({
+            icon: o.icon || ICO.ajustes,
+            titulo: titulo,
+            html: label ? '<p>' + esc(label) + '</p>' : '',
+            input: { value: value == null ? '' : value, placeholder: o.placeholder || '', type: o.type || 'text' },
+            okText: o.okText || 'Aceptar',
+            onOk: (val) => { if (val !== null && val !== undefined) onOk(val); }
+        });
+    }
+    // Estado vacio reutilizable: icono + titulo + pista + accion opcional.
+    // `hint` admite HTML controlado; `accion` es HTML de botones.
+    // Indicador de cambios sin guardar en la ventana de ajustes.
+    let cfgDirty = false;
+    function marcarCfgDirty() {
+        cfgDirty = true;
+        const d = byId('hjp-cfg-dirty');
+        if (d) d.classList.add('on');
+    }
+    function limpiarCfgDirty() {
+        cfgDirty = false;
+        const d = byId('hjp-cfg-dirty');
+        if (d) d.classList.remove('on');
+    }
+    function emptyState(icon, titulo, hint, accion) {
+        return '<div class="hjp-vacio">' +
+            '<span class="hjp-mi">' + icon + '</span>' +
+            '<b>' + esc(titulo) + '</b>' +
+            (hint ? '<span>' + hint + '</span>' : '') +
+            (accion || '') +
+            '</div>';
+    }
+    function abrirBienvenida() {
+        abrirDialogo({
+            icon: ICO.automatizar,
+            titulo: 'Bienvenido a HJP · Wialon',
+            cancel: false,
+            okText: 'Empezar',
+            html:
+                '<p>Vigilancia de flota sobre Wialon, directo en el navegador. En 3 pasos:</p>' +
+                '<div class="pasos">' +
+                '<div class="paso"><span class="n">1</span><div><b>Elige unidades</b>' +
+                '<span>En <i>Automatizar Unidades</i> pega los economicos, o activa <i>Monitorear todas</i> en Ajustes.</span></div></div>' +
+                '<div class="paso"><span class="n">2</span><div><b>Evalua reglas</b>' +
+                '<span>El script vigila sin senal, detenciones, zonas, geocercas, velocidad y rutas. Ajustalo en Ajustes.</span></div></div>' +
+                '<div class="paso"><span class="n">3</span><div><b>Vigila los avisos</b>' +
+                '<span>Tarjetas, voz, pitido y notificacion. Revisa el historial en la pestana <i>Avisos</i>.</span></div></div>' +
+                '</div>'
+        });
     }
 /* ====================== MOTOR DE REGLAS ======================
  * Cada regla recibe (u, st, prev, R, info, etq, ctx), muta R con su estado
@@ -2512,7 +2669,7 @@
             "  --hjp-bg:#1f2330; --hjp-bg-soft:#272d3c; --hjp-bg-strong:#313849;\n" +
             "  --hjp-border:#3a4252; --hjp-border-soft:#2f3645;\n" +
             "  --hjp-fg:#e8ecf3; --hjp-fg-dim:#9aa4b5; --hjp-fg-mute:#6f7888;\n" +
-            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44;\n" +
+            "  --hjp-accent:#850D22; --hjp-accent-2:#B52C44; --hjp-accent-rgb:133,13,34;\n" +
             "  --hjp-ok:#43a047; --hjp-ok-fg:#a5d6a7; --hjp-ok-bg:#1b3320;\n" +
             "  --hjp-warn:#f9a825; --hjp-warn-fg:#ffe082; --hjp-warn-bg:#33270e;\n" +
             "  --hjp-bad:#e53935; --hjp-bad-fg:#ef9a9a; --hjp-bad-bg:#2b1010;\n" +
@@ -2790,7 +2947,75 @@
             "#hjp-panel .kpi:hover{transform:translateY(-2px);box-shadow:var(--hjp-shadow)}\n" +
             "#hjp-panel .kpi{transition:transform .15s var(--hjp-easing),box-shadow .15s}\n" +
             "#hjp-barra{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
-            "#hjp-panel header{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n";
+            "#hjp-panel header{backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}\n" +
+            /* ── Estados vacios ── */
+            ".hjp-vacio{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:36px 22px;text-align:center;color:var(--hjp-fg-dim);animation:hjpFadeUp .3s var(--hjp-easing) both}\n" +
+            ".hjp-vacio .hjp-mi{font-size:40px;color:var(--hjp-fg-mute);opacity:.6;line-height:1}\n" +
+            ".hjp-vacio b{font-size:13px;color:var(--hjp-fg);font-weight:600}\n" +
+            ".hjp-vacio span{font-size:12px;max-width:380px;line-height:1.5}\n" +
+            ".hjp-vacio button{margin-top:6px}\n" +
+            /* ── Spinner / estado de carga ── */
+            "@keyframes hjpSpin{to{transform:rotate(360deg)}}\n" +
+            ".hjp-spin{display:inline-block;width:13px;height:13px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:hjpSpin .7s linear infinite;vertical-align:-2px}\n" +
+            "button.hjp-busy{opacity:.65;pointer-events:none;cursor:progress}\n" +
+            "[aria-busy='true']{cursor:progress}\n" +
+            /* ── Toasts: icono por severidad ── */
+            ".hjp-toast.ok .ico{color:var(--hjp-ok-fg)}\n" +
+            ".hjp-toast.medio .ico{color:var(--hjp-warn-fg)}\n" +
+            ".hjp-toast.alto .ico,.hjp-toast.critico .ico,.hjp-toast.err .ico{color:var(--hjp-bad-fg)}\n" +
+            /* ── Focus visible global ── */
+            "#hjp-panel button:focus-visible,#hjp-barra button:focus-visible,#hjp-modal button:focus-visible,#hjp-config button:focus-visible,#hjp-ayuda button:focus-visible,#hjp-contexto .op:focus-visible,#hjp-panel input:focus-visible,#hjp-config input:focus-visible,#hjp-config select:focus-visible,#hjp-dialog button:focus-visible,#hjp-dialog input:focus-visible{outline:2px solid var(--hjp-accent-2);outline-offset:1px}\n" +
+            /* ── Dialogo propio (confirm / prompt / bienvenida) ── */
+            "#hjp-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--hjp-bg-soft);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:var(--hjp-radius);box-shadow:var(--hjp-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);font:13px var(--hjp-font);overflow:hidden}\n" +
+            "#hjp-dialog.abierto{display:flex;animation:hjpPop .18s var(--hjp-easing) both}\n" +
+            "@keyframes hjpPop{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}\n" +
+            "#hjp-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}\n" +
+            "#hjp-dialog .dlg-head .hjp-mi{color:var(--hjp-accent-2);font-size:20px}\n" +
+            "#hjp-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px}\n" +
+            "#hjp-dialog p{margin:0;font-size:12.5px;color:var(--hjp-fg-dim);line-height:1.5}\n" +
+            "#hjp-dialog input{background:var(--hjp-bg);color:var(--hjp-fg);border:1px solid var(--hjp-border);border-radius:7px;padding:8px 10px;font:13px var(--hjp-font);width:100%;box-sizing:border-box}\n" +
+            "#hjp-dialog input:focus{outline:none;border-color:var(--hjp-accent-2);box-shadow:0 0 0 3px rgba(var(--hjp-accent-rgb),.2)}\n" +
+            "#hjp-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--hjp-bg);border-top:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-dialog .dlg-foot button{border-radius:7px;padding:8px 16px;cursor:pointer;font:600 12px var(--hjp-font);border:1px solid transparent;transition:transform .12s,filter .15s,box-shadow .15s}\n" +
+            "#hjp-dialog .dlg-foot .dlg-cancel{background:var(--hjp-bg-strong);color:var(--hjp-fg);border-color:var(--hjp-border)}\n" +
+            "#hjp-dialog .dlg-foot .dlg-ok{background:var(--hjp-accent-grad);color:#fff}\n" +
+            "#hjp-dialog .dlg-foot .dlg-ok.peligro{background:linear-gradient(135deg,#b71c1c,#e53935)}\n" +
+            "#hjp-dialog .dlg-foot button:hover{transform:translateY(-1px);filter:brightness(1.06)}\n" +
+            /* ── Bienvenida ── */
+            "#hjp-dialog.hjp-bienvenida{width:min(510px,94vw)}\n" +
+            "#hjp-dialog .pasos{display:grid;gap:8px}\n" +
+            "#hjp-dialog .paso{display:flex;gap:10px;align-items:flex-start;background:var(--hjp-bg);border:1px solid var(--hjp-border-soft);border-radius:9px;padding:10px 12px}\n" +
+            "#hjp-dialog .paso .n{flex:0 0 24px;height:24px;border-radius:50%;background:var(--hjp-accent-grad);color:#fff;display:flex;align-items:center;justify-content:center;font:700 12px var(--hjp-font)}\n" +
+            "#hjp-dialog .paso b{display:block;font-size:12.5px;margin-bottom:2px}\n" +
+            "#hjp-dialog .paso span{font-size:11.5px;color:var(--hjp-fg-dim);line-height:1.45}\n" +
+            "#hjp-config .cfg-foot{align-items:center}\n" +
+            ".cfg-dirty{font-size:11px;color:var(--hjp-warn-fg);display:none;align-items:center;gap:5px;font-weight:600}\n" +
+            ".cfg-dirty.on{display:inline-flex}\n" +
+            ".cfg-dirty::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--hjp-warn)}\n" +
+            /* ── Tabla ordenable y pildoras de estado ── */
+            "#hjp-panel th.hjp-sortable{cursor:pointer;user-select:none;white-space:nowrap}\n" +
+            "#hjp-panel th.hjp-sortable:hover{color:var(--hjp-fg)}\n" +
+            "#hjp-panel th.hjp-sortable .hjp-sort{font-size:10px;color:var(--hjp-accent-2);margin-left:3px;opacity:.45}\n" +
+            "#hjp-panel th.hjp-sort-asc .hjp-sort,#hjp-panel th.hjp-sort-desc .hjp-sort{opacity:1}\n" +
+            ".hjp-pill{display:inline-flex;align-items:center;gap:4px;padding:1px 8px;border-radius:999px;font:600 10.5px var(--hjp-font);line-height:1.7;white-space:nowrap}\n" +
+            ".hjp-pill.on{background:var(--hjp-ok-bg);color:var(--hjp-ok-fg)}\n" +
+            ".hjp-pill.det{background:var(--hjp-warn-bg);color:var(--hjp-warn-fg)}\n" +
+            ".hjp-pill.off{background:var(--hjp-bad-bg);color:var(--hjp-bad-fg)}\n" +
+            /* ── Responsive ── */
+            "@media (max-width:720px){\n" +
+            "  #hjp-panel{min-width:0;width:min(96vw,470px)}\n" +
+            "  #hjp-config{width:min(96vw,560px)}\n" +
+            "  #hjp-ayuda{width:min(96vw,620px)}\n" +
+            "  #hjp-modal{width:min(96vw,520px)}\n" +
+            "  #hjp-panel .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}\n" +
+            "  #hjp-config .row-grid{grid-template-columns:1fr}\n" +
+            "  #hjp-dash{padding:10px}\n" +
+            "  #hjp-toasts{width:min(92vw,330px);right:8px;bottom:8px}\n" +
+            "}\n" +
+            "@media (max-width:480px){\n" +
+            "  #hjp-panel .tab .etqt{display:none}\n" +
+            "  #hjp-barra .hjp-modo-label{display:none}\n" +
+            "}\n";
 
         const style = makeEl('style');
         style.textContent = css;
@@ -3127,8 +3352,11 @@
             '</div>' +
             '</div>' +
             '<div class="cfg-foot">' +
+            '<span class="cfg-dirty" id="hjp-cfg-dirty" title="Tienes cambios sin guardar">Cambios sin guardar</span>' +
+            '<div style="display:flex;gap:8px">' +
             '<button class="cancel" id="hjp-cfg-cerrar">Cerrar</button>' +
             '<button class="accbtn" id="hjp-cfg-guardar">Guardar</button>' +
+            '</div>' +
             '</div>'
         );
 
@@ -3578,7 +3806,9 @@
                 '<span class="hjp-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
                 '</tr>'
             );
-        }).join('') || '<tr><td colspan="10" class="vacio">' + LANG.sinUni + '</td></tr>';
+        }).join('') || '<tr><td colspan="10">' + emptyState(ICO.panel, LANG.sinUni,
+            'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
+            '<button class="mini hjp-vacio-acc" data-acc="abrir-lista"><span class="hjp-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>';
         const aviso = byId('hjp-sel-vacio');
         if (aviso) {
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
@@ -3610,7 +3840,8 @@
                 '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
                 '</div>'
             )).join('')
-            : '<div class="vacio">Sin avisos registrados.</div>';
+            : emptyState(ICO.alertas, 'Sin avisos registrados',
+                'Aqui se acumula el historial de alertas. Cuando una regla se dispare, aparecera en esta lista.');
         paintSeverity();
     }
     function paintSeverity() {
@@ -3622,7 +3853,11 @@
         const body = byId('hjp-body-zonas');
         if (!body) return;
         if (!APP.config.loadZones || !APP.zonas.length) {
-            body.innerHTML = '<tr><td colspan="2" class="vacio">' + LANG.geoNone + '</td></tr>';
+            body.innerHTML = '<tr><td colspan="2">' + emptyState(ICO.geocercas, 'Sin geocercas cargadas',
+                APP.config.loadZones
+                    ? 'No se encontraron geocercas en tu cuenta de Wialon.'
+                    : 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.',
+                APP.config.loadZones ? '' : '<button class="mini hjp-vacio-acc" data-acc="ajustes"><span class="hjp-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>') + '</td></tr>';
             return;
         }
         const unidades = APP.unidades.filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
@@ -3645,16 +3880,17 @@
                 '</tr>'
             );
         }
-        body.innerHTML = rows.join('') || '<tr><td colspan="2" class="vacio">' + LANG.sinCoin + '</td></tr>';
+        body.innerHTML = rows.join('') || '<tr><td colspan="2">' + emptyState(ICO.filtro, LANG.sinCoin,
+            'Ninguna geocerca coincide con el filtro actual.') + '</td></tr>';
     }
     function paintViajes() {
         const cont = byId('hjp-lista-viajes');
         if (!cont) return;
         const ecos = Object.keys(APP.viajes);
         if (!ecos.length) {
-            cont.innerHTML = '<div style="padding:10px 12px;color:var(--hjp-fg-dim);font-size:12px">' +
-                'Sin viajes analizados. Clic derecho en una unidad (pestana Unidades) &gt; <b>Analizar viaje</b> para detectar el punto de partida (donde estuvo parada mas de '
-                + (APP.config.partidaHoras || 6) + ' h), el trayecto, las paradas y la carga.</div>';
+            cont.innerHTML = emptyState(ICO.tiempo, 'Sin viajes analizados',
+                'Clic derecho en una unidad &gt; <b>Analizar viaje</b> para detectar el punto de partida (parada de mas de '
+                + (APP.config.partidaHoras || 6) + ' h), el trayecto, las paradas y la carga.');
             return;
         }
         cont.innerHTML = ecos.map((eco) => {
@@ -3689,8 +3925,9 @@
         const filas = watched.filter((x) => rutaDe(x.info));
         const sinUnidad = Object.keys(APP.rutas).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
         if (!filas.length && !sinUnidad.length) {
-            cont.innerHTML = '<div class="vacio" style="padding:18px;text-align:center;color:var(--hjp-fg-dim)">' +
-                'Sin rutas planificadas. Usa el menú contextual de una unidad (clic derecho en Unidades) para planear una ruta con OpenStreetMap (OSRM o A*).</div>';
+            cont.innerHTML = emptyState(ICO.destino, 'Sin rutas planificadas',
+                'Haz <b>clic derecho</b> en una unidad de la pestana Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aqui veras el progreso, la distancia y los desvios.',
+                '<button class="mini hjp-vacio-acc" data-acc="tab-unidades"><span class="hjp-mi">' + ICO.panel + '</span> Ir a Unidades</button>');
             return;
         }
         const tarjeta = (info, st) => {
@@ -4018,9 +4255,9 @@
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
                     applyBar(); applyTheme(); placePanel();
                     refresh();
-                    advice('Configuracion importada');
+                    adviceOk('Configuracion importada');
                 } catch (e) {
-                    advice('Error importando', (e && e.message) || '');
+                    adviceErr('Error importando', (e && e.message) || '');
                 }
             };
             r.readAsText(f);
@@ -4173,7 +4410,7 @@
             if (ta) ta.value = '';
             pintarModalLista();
             paintInfo();
-            advice('Pegado', n + ' unidad(es) procesadas');
+            adviceOk('Pegado', n + ' unidad(es) procesadas');
         });
         byId('hjp-orden-pegado').addEventListener('click', () => aplicarOrdenModo('pegado'));
         byId('hjp-orden-numero').addEventListener('click', () => aplicarOrdenModo('numero'));
@@ -4199,12 +4436,13 @@
             if (ne) ne.focus();
         });
         byId('hjp-modal-vaciar').addEventListener('click', () => {
-            if (!window.confirm('¿Vaciar la lista? Esta accion no se puede deshacer.')) return;
-            APP.watchMap = {};
-            guardarLista();
-            pintarModalLista();
-            paintInfo();
-            advice('Lista vaciada');
+            hjpConfirm('Vaciar la lista', 'Se quitaran todas las unidades de la lista vigilada. Esta accion no se puede deshacer.', () => {
+                APP.watchMap = {};
+                guardarLista();
+                pintarModalLista();
+                paintInfo();
+                adviceOk('Lista vaciada');
+            }, { peligro: true, okText: 'Vaciar' });
         });
         document.getElementById('hjp-modal-lista').addEventListener('click', (e) => {
             const eco = e.target.dataset && e.target.dataset.eco;
@@ -4269,7 +4507,7 @@
             ayudaEl.style.display = 'none';
             abrirCfg();
         });
-        byId('hjp-refresh').addEventListener('click', refresh);
+        byId('hjp-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
         byId('hjp-csv').addEventListener('click', exportUnits);
         byId('hjp-csv-al').addEventListener('click', exportAlertas);
         byId('hjp-informe').addEventListener('click', exportInforme);
@@ -4279,8 +4517,11 @@
                 const b = e.target.closest && e.target.closest('button');
                 if (!b) return;
                 const eco = b.dataset.eco;
-                if (b.classList.contains('hjp-ruta-del')) eliminarRuta(eco);
-                else if (b.classList.contains('hjp-ruta-geo')) exportRutaGeoJSON(eco);
+                if (b.classList.contains('hjp-ruta-del')) {
+                    hjpConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
+                        if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
+                    }, { peligro: true, okText: 'Eliminar', icon: ICO.cerrar });
+                } else if (b.classList.contains('hjp-ruta-geo')) exportRutaGeoJSON(eco);
                 else if (b.classList.contains('hjp-traza-geo')) exportTraza(eco);
                 else if (b.classList.contains('hjp-ruta-calc')) {
                     const it = unitByEco(eco);
@@ -4299,8 +4540,8 @@
                 else if (b.classList.contains('hjp-viaje-re')) analizarViaje(eco, false);
             });
         }
-        byId('hjp-captura').addEventListener('click', captureSelection);
-        byId('hjp-verifica').addEventListener('click', () => { verifyWindows(false); });
+        byId('hjp-captura').addEventListener('click', (e) => conBusy(e.currentTarget, captureSelection));
+        byId('hjp-verifica').addEventListener('click', (e) => conBusy(e.currentTarget, () => verifyWindows(false)));
         byId('hjp-sel-all').addEventListener('click', () => { selectAllVisible(); });
         byId('hjp-sel-clear').addEventListener('click', () => { clearSelection(); });
         byId('hjp-verif').addEventListener('click', () => {
@@ -4442,30 +4683,35 @@
                 paintTabla();
             } else if (acc === 'verif') verifyWindows(false);
             else if (acc === 'lista') {
-                if (APP.watchMap[eco] !== undefined) { quitarDeLista(eco); advice('Quitada de la lista', eco); }
-                else { agregarALista(eco, ''); advice('Anadida a la lista', eco); }
+                if (APP.watchMap[eco] !== undefined) { quitarDeLista(eco); adviceOk('Quitada de la lista', eco); }
+                else { agregarALista(eco, ''); adviceOk('Anadida a la lista', eco); }
                 paintTabla();
             } else if (acc === 'limite') {
                 const it = unitByEco(eco);
                 const actual = it ? limiteDe(it.info) : APP.config.velMax;
-                const val = window.prompt('Limite de velocidad para ' + eco + ' (km/h). Dejalo vacio para usar el global (' + APP.config.velMax + ').', actual);
-                if (val !== null) {
+                hjpPrompt('Limite de velocidad', 'Para ' + eco + '. Dejalo vacio para usar el global (' + APP.config.velMax + ' km/h).', actual, (val) => {
                     setLimite(eco, val);
-                    advice('Limite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
-                }
+                    adviceOk('Limite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
+                }, { type: 'number', icon: ICO.velocidad, okText: 'Guardar' });
             } else if (acc === 'ruta-plan' || acc === 'ruta-astar') {
                 if (acc === 'ruta-astar' && !APP.config.overpass) {
-                    advice('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
+                    adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
                 } else {
-                    const dest = window.prompt('Destino (lugar, direccion o "lat,lon"):', '');
-                    if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
+                    hjpPrompt('Planear ruta', 'Destino de ' + eco + ': un lugar, una direccion o "lat,lon".', '', (dest) => {
+                        if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
+                    }, { icon: ICO.destino, okText: 'Calcular', placeholder: 'Monterrey, NL  ·  o  25.68,-100.31' });
                 }
             } else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
-            else if (acc === 'ruta-del') { if (eliminarRuta(eco)) advice('Ruta eliminada', eco); else advice('Sin ruta', eco); }
-            else if (acc === 'traza-geo') exportTraza(eco);
+            else if (acc === 'ruta-del') {
+                hjpConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
+                    if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
+                }, { peligro: true, okText: 'Eliminar', icon: ICO.cerrar });
+            } else if (acc === 'traza-geo') exportTraza(eco);
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
-            else if (acc === 'odo-reset') resetOdometro(eco);
+            else if (acc === 'odo-reset') {
+                hjpConfirm('Reiniciar odometro', 'El odometro acumulado de ' + eco + ' volvera a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: ICO.refrescar });
+            }
             else if (acc === 'mapa-osm') openMap(eco, 'osm');
             else if (acc === 'mapa-google') openMap(eco, 'google');
             else if (acc === 'copy-eco') { copyToClipboard(eco); advice('Copiado', eco); }
@@ -4477,7 +4723,7 @@
             } else if (acc === 'copy-coords') {
                 const it = unitByEco(eco);
                 const txt = (it && it.st.lat != null) ? (it.st.lat + ',' + it.st.lon) : '';
-                if (!txt) advice('Sin ubicacion', 'La unidad no reporta coordenadas');
+                if (!txt) adviceWarn('Sin ubicacion', 'La unidad no reporta coordenadas');
                 else { copyToClipboard(txt); advice('Coordenadas copiadas', txt); }
             }
             hideMenu();
@@ -4493,6 +4739,7 @@
         }));
 
         function abrirCfg() {
+            limpiarCfgDirty();
             const g = (id) => byId(id);
             g('c-poll').value = APP.config.pollMs;
             g('c-off').value = APP.config.offlineMin;
@@ -4578,8 +4825,23 @@
             ).join('\n');
             abrirModalLista(prefill);
         });
-        byId('hjp-cfg-cerrar').addEventListener('click', () => { cfgWinEl.style.display = 'none'; });
-        byId('hjp-cfg-cerrar-x').addEventListener('click', () => { cfgWinEl.style.display = 'none'; });
+        function cerrarCfg() {
+            if (cfgDirty) {
+                hjpConfirm('Descartar cambios', 'Tienes cambios sin guardar en la configuracion. ¿Quieres descartarlos?', () => {
+                    limpiarCfgDirty();
+                    cfgWinEl.style.display = 'none';
+                }, { peligro: true, okText: 'Descartar', icon: ICO.ajustes });
+            } else {
+                cfgWinEl.style.display = 'none';
+            }
+        }
+        byId('hjp-cfg-cerrar').addEventListener('click', cerrarCfg);
+        byId('hjp-cfg-cerrar-x').addEventListener('click', cerrarCfg);
+        const cfgBody = byId('hjp-cfg-body');
+        if (cfgBody) {
+            cfgBody.addEventListener('input', marcarCfgDirty);
+            cfgBody.addEventListener('change', marcarCfgDirty);
+        }
         byId('hjp-cfg-guardar').addEventListener('click', () => {
             const g = (id) => byId(id);
             const cf = APP.config;
@@ -4660,72 +4922,90 @@
             applyTheme();
             aplicarModoPanel();
             restartTimers();
+            limpiarCfgDirty();
             cfgWinEl.style.display = 'none';
             refresh();
-            advice(LANG.guardado);
+            adviceOk(LANG.guardado);
         });
 
         byId('hjp-b-reset').addEventListener('click', () => {
             APP.barra.x = Math.max(4, window.innerWidth - barraEl.offsetWidth - 15);
             APP.barra.y = 80;
             applyBar();
-            advice('Barra recentrada');
+            adviceOk('Barra recentrada');
         });
         byId('hjp-reset-panel').addEventListener('click', () => {
             panelEl.style.width = '470px';
             panelEl.style.height = '440px';
             APP.panelSize = { w: 470, h: 440 };
             writeJSON(LS.panelsize, APP.panelSize);
-            advice('Tamano restablecido');
+            adviceOk('Tamano restablecido');
         });
         byId('hjp-perfil-guardar').addEventListener('click', () => {
-            const n = window.prompt('Nombre del perfil de configuracion:', '');
-            if (n && n.trim()) {
-                guardarPerfil(n.trim());
-                advice('Perfil guardado', n.trim());
-            }
+            hjpPrompt('Guardar perfil', 'Ponle un nombre a la configuracion actual.', '', (n) => {
+                if (n && n.trim()) {
+                    guardarPerfil(n.trim());
+                    adviceOk('Perfil guardado', n.trim());
+                }
+            }, { icon: ICO.exportar, okText: 'Guardar', placeholder: 'Ej. Turno manana' });
         });
         byId('hjp-perfil-cargar').addEventListener('click', () => {
             const sel = byId('hjp-perfil-sel');
             const n = sel ? sel.value : '';
-            if (!n) { advice('Sin perfil', 'Guarda un perfil primero'); return; }
+            if (!n) { adviceWarn('Sin perfil', 'Guarda un perfil primero'); return; }
             if (cargarPerfil(n)) {
                 cfgWinEl.style.display = 'none';
-                advice('Perfil cargado', n);
+                adviceOk('Perfil cargado', n);
             }
         });
         byId('hjp-perfil-borrar').addEventListener('click', () => {
             const sel = byId('hjp-perfil-sel');
             const n = sel ? sel.value : '';
             if (!n) return;
-            if (!window.confirm('¿Borrar el perfil "' + n + '"?')) return;
-            borrarPerfil(n);
-            advice('Perfil borrado', n);
+            hjpConfirm('Borrar perfil', 'Se borrara el perfil "' + n + '".', () => {
+                borrarPerfil(n);
+                adviceOk('Perfil borrado', n);
+            }, { peligro: true, okText: 'Borrar', icon: ICO.cerrar });
         });
-        byId('hjp-check-update').addEventListener('click', async () => {
-            await comprobarActualizacion();
-            const u = APP.update;
-            if (u.state === 'available') advice('Nueva version disponible', u.remote + ' (instalada ' + VER + ')');
-            else if (u.state === 'current') advice('Estas al dia', 'Version instalada ' + VER + ' · remota ' + (u.remote || '?'));
-            else advice('No se pudo comprobar', u.lastError || 'sin conexion');
+        byId('hjp-check-update').addEventListener('click', async (e) => {
+            await conBusy(e.currentTarget, async () => {
+                await comprobarActualizacion();
+                const u = APP.update;
+                if (u.state === 'available') adviceOk('Nueva version disponible', u.remote + ' (instalada ' + VER + ')');
+                else if (u.state === 'current') adviceOk('Estas al dia', 'Version instalada ' + VER + ' · remota ' + (u.remote || '?'));
+                else adviceErr('No se pudo comprobar', u.lastError || 'sin conexion');
+            });
         });
         byId('hjp-limpiar-hist').addEventListener('click', () => {
-            if (!APP.historial.length) { advice('Bitacora vacia', ''); return; }
-            if (!window.confirm('¿Borrar toda la bitacora de avisos?')) return;
-            limpiarBitacora();
-            advice('Bitacora limpiada');
+            if (!APP.historial.length) { adviceWarn('Sin avisos', 'El historial ya esta vacio'); return; }
+            hjpConfirm('Limpiar historial', 'Se borraran todos los avisos registrados en esta pestana.', () => {
+                limpiarBitacora();
+                adviceOk('Historial limpiado');
+            }, { peligro: true, okText: 'Limpiar', icon: ICO.limpiar });
         });
         byId('hjp-borrar-memo').addEventListener('click', () => {
-            APP.memo = {}; writeSession(SS.memo, APP.memo); refresh();
-            advice('Estado borrado');
+            hjpConfirm('Borrar estado', 'Se reinicia el estado interno de las reglas (detenciones, desvios, etc.).', () => {
+                APP.memo = {}; writeSession(SS.memo, APP.memo); refresh();
+                adviceOk('Estado borrado');
+            }, { okText: 'Borrar', icon: ICO.limpiar });
         });
         byId('hjp-borrar-todo').addEventListener('click', () => {
-            if (!window.confirm('Borrar TODO (configuracion, estado, bitacora, historial)?')) return;
-            Object.keys(LS).forEach((k) => { try { localStorage.removeItem(LS[k]); } catch (_) { /* noop */ } });
-            Object.keys(SS).forEach((k) => { try { sessionStorage.removeItem(SS[k]); } catch (_) { /* noop */ } });
-            avisoEl.textContent = 'Estado borrado, recargando...';
-            avisoEl.style.display = 'block';
-            setTimeout(() => { try { location.reload(); } catch (_) { /* noop */ } }, 700);
+            hjpConfirm('Borrar TODO', 'Se borrara la configuracion, el estado, el historial de avisos, rutas y odometros. Esta accion no se puede deshacer.', () => {
+                Object.keys(LS).forEach((k) => { try { localStorage.removeItem(LS[k]); } catch (_) { /* noop */ } });
+                Object.keys(SS).forEach((k) => { try { sessionStorage.removeItem(SS[k]); } catch (_) { /* noop */ } });
+                avisoEl.textContent = 'Estado borrado, recargando...';
+                avisoEl.style.display = 'block';
+                setTimeout(() => { try { location.reload(); } catch (_) { /* noop */ } }, 700);
+            }, { peligro: true, okText: 'Borrar TODO' });
+        });
+        // Acciones de los estados vacios (delegado, un solo listener).
+        panelEl.addEventListener('click', (e) => {
+            const b = e.target.closest && e.target.closest('.hjp-vacio-acc');
+            if (!b) return;
+            const acc = b.dataset.acc;
+            if (acc === 'abrir-lista') mainBtn.click();
+            else if (acc === 'ajustes') abrirCfg();
+            else if (acc === 'tab-unidades') setTab('unidades');
         });
     }
 
@@ -4764,7 +5044,7 @@
         await refresh();
         restartTimers();
         if (primerUso) {
-            setTimeout(() => advice('Bienvenido a HJP · Wialon', 'Pulsa ? (en la barra o en la cabecera del panel) para la ayuda rapida'), 900);
+            setTimeout(abrirBienvenida, 900);
         }
         setTimeout(comprobarActualizacion, 5000);
         setInterval(comprobarActualizacion, 30 * 60 * 1000);
