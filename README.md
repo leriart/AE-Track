@@ -14,8 +14,8 @@ carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.0.0-850D22?style=for-the-badge&labelColor=1f2330)](https://github.com/leriart/AE-Track/releases)
-[![tests](https://img.shields.io/badge/tests-5%20suites%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.1.0-850D22?style=for-the-badge&labelColor=1f2330)](https://github.com/leriart/AE-Track/releases)
+[![tests](https://img.shields.io/badge/tests-6%20suites%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -63,7 +63,10 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   Voz y pitido en alertas graves; notificacion del navegador opcional.
 - **Rutas con OpenStreetMap**: planifica con OSRM (servidor publico) o con
   A* local sobre el grafo de OSM (Overpass), con respeto a `oneway` y
-  `maxspeed`.
+  `maxspeed`. **Trazado automatico** al asignar un destino en la lista
+  vigilada: cuando una unidad tiene `eco=destino`, Rondo calcula la ruta
+  en background y actualiza una columna "Ruta" en la tabla de unidades
+  con estado (EN RUTA / LLEGO / DESV), progreso y ETA.
 - **Analisis de viaje**: punto de partida (donde estuvo parada mas de N
   horas), trayecto, paradas y carga detectada.
 - **Odometro por unidad** persistente, con deteccion de saltos GPS anomalos.
@@ -123,7 +126,7 @@ el boton de la barra o con `Alt+L`.
 | Pestana | Para que sirve |
 | --- | --- |
 | **Dashboard** | Resumen de la flota: en linea, sin senal, detenidas, en movimiento y avisos del dia. Las tarjetas son clicables y filtran Unidades. |
-| **Unidades** | Lista con estado, velocidad, geocerca, odometro y acciones. Las columnas se pueden **ordenar** con clic en la cabecera; clic en una fila abre su ventana. |
+| **Unidades** | Lista con estado, velocidad, geocerca, odometro, **estado de ruta** y acciones. Las columnas se pueden **ordenar** con clic en la cabecera; clic en una fila abre su ventana. |
 | **Avisos** | Historial de alertas con filtro por severidad y exportable a CSV o Markdown. |
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
 | **Geocercas** | Cuantas unidades hay dentro de cada geocerca y cuales son. |
@@ -190,11 +193,13 @@ node tests/version.test.js
 node tests/trip.test.js
 node tests/odometro.test.js
 node tests/ui.test.js
+node tests/autoruta.test.js
 ```
 
-Las cinco suites verifican geodesica, Douglas-Peucker, DBSCAN, A* ponderado,
+Las seis suites verifican geodesica, Douglas-Peucker, DBSCAN, A* ponderado,
 deteccion de punto de partida, paradas con jitter GPS, odometro, orden de
-la tabla, escala de UI, parseo de version, etc.
+la tabla, escala de UI, parseo de version, trazado automatico de rutas,
+calculo de ETA y estado de ruta.
 
 ## Ramas
 

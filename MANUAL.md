@@ -209,7 +209,7 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | Detenido | Lleva parada fuera de una base | 30 min |
 | Zona no prevista | Permanece en una geocerca no esperada | 20 min |
 | Geocercas | Entra o sale de cualquier geocerca | inmediato |
-| Destino | Llega al destino o inicia el regreso | segun ruta/destino |
+| Destino | Llega al destino o inicia el regreso | progreso >= 95% o a menos de 400 m |
 | Desconexion | Sigue sin senal demasiado tiempo | 25 min |
 | Velocidad | Supera el limite (global o por unidad) | 110 km/h |
 | Desvio de ruta | Se aleja del trazado de la ruta | 250 m durante 5 min |
@@ -253,13 +253,39 @@ y, opcionalmente, datos de Overpass para calcular con el algoritmo A*.
 3. Escribe el destino como un lugar o direccion, o como coordenadas `lat,lon`.
 4. El origen es la posicion actual de la unidad.
 
+### Trazado automatico al asignar destino
+
+Si la opcion **Trazar ruta automaticamente al asignar un destino** esta
+activa (Ajustes > Rutas, activada por defecto), no hace falta lanzar el
+comando manualmente: cuando una unidad vigilada tiene un destino en la
+lista, Rondo calcula la ruta en background y la muestra en la columna
+**Ruta** de la pestana Unidades y en la pestana **Rutas**.
+
+- Cuando anades una unidad con `eco=destino` en la lista, se calcula al
+  instante la ruta desde la posicion actual hacia ese destino.
+- Si cambias el destino en la lista, se recalcula (con un pequeno debounce
+  para no lanzar peticiones en cada pulsacion).
+- Al iniciar el script, se traza cualquier ruta pendiente.
+- Si el destino no se puede geocodificar, aparece un aviso y la unidad
+  queda con la marca "trazando..." en la columna Ruta hasta que se
+  corrija.
+- El modo por defecto es **OSRM** (rapido). Puedes cambiar a **A* sobre
+  OSM** en Ajustes > Rutas si necesitas rutas peatonales o mas detalle
+  en grafos locales (experimental, requiere activar Overpass).
+
 ### Seguimiento
 
 En la pestana **Rutas** veras por unidad:
 
 - El estado: EN RUTA, DESVIADO, LLEGO o SIN POSICION.
-- El progreso (0 a 100 %), la distancia al trazado y el ETA.
+- El progreso (0 a 100 %), la distancia al trazado y el ETA calculado a
+  partir de la velocidad actual (con minimo prudente de 50 km/h cuando
+  la unidad esta parada).
 - Botones para recalcular, exportar la ruta a GeoJSON y exportar la traza.
+
+En la columna **Ruta** de la pestana Unidades encontraras ademas una
+pildora con el mismo estado y una mini-barra de progreso: util para ver
+de un vistazo el avance de toda la flota sin abrir la pestana Rutas.
 
 ### Alertas de ruta
 
