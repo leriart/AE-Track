@@ -255,7 +255,7 @@
         paradaMin: 15,
         historialHoras: 168,
         analizarAuto: true,
-        autoRuta: true,
+        autoRuta: false,
         autoRutaModo: 'osrm',
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
@@ -941,7 +941,12 @@
         const it = unitByEco(eco);
         if (!it) { adviceErr('Unidad no encontrada', eco); return null; }
         let origen = origenOv || null;
-        if (!origen && APP.config.analizarAuto) {
+        // Cuando el trazado automatico esta activo, siempre intentamos
+        // detectar el punto de partida por el algoritmo antes de caer a la
+        // posicion actual. Asi la ruta refleja el viaje real de la unidad
+        // (origen historico -> destino -> posible regreso al origen).
+        const buscarPartida = APP.config.autoRuta || APP.config.analizarAuto;
+        if (!origen && buscarPartida) {
             // Punto de partida detectado en el historial (parada > partidaHoras).
             try {
                 const v = await analizarViaje(eco, true);
@@ -1307,7 +1312,23 @@
             }
         }
         const distInicio = haversine(fin.lat, fin.lon, partida.lat, partida.lon);
-        const regreso = !!(llego && distInicio > 300 && distInicio < maxDist * 0.6);
+        // Deteccion de regreso al punto de partida. Hay dos senales:
+        //   1. Heuristica clasica: la unidad se alejo del origen (llego) y
+        //      ahora vuelve a estar cerca sin haber llegado al final.
+        //   2. Si hay ruta trazada, usamos snapRuta: la posicion actual
+        //      esta en la polilinea cerca del origen (progreso bajo) y a
+        //      menos de retornoM del punto de partida. Esto detecta el
+        //      regreso aunque la unidad haya llegado por un camino alterno.
+        let regreso = !!(llego && distInicio > 300 && distInicio < maxDist * 0.6);
+        if (!regreso && ruta && ruta.coords && ruta.coords.length > 1) {
+            try {
+                const memoS = APP.snapMemo[it.info.clave] || (APP.snapMemo[it.info.clave] = { idx: 0 });
+                const sFin = snapRuta(fin.lat, fin.lon, ruta, memoS);
+                if (sFin && sFin.progreso < 0.15 && distInicio <= APP.config.retornoM) {
+                    regreso = true;
+                }
+            } catch (_) { /* fallback a la heuristica */ }
+        }
         const zonaPartida = zoneAt(partida.lat, partida.lon);
         const cargo = esZonaCarga(zonaPartida)
             || (paradas.length > 0 && haversine(paradas[0].lat, paradas[0].lon, partida.lat, partida.lon) < 300);
@@ -3617,7 +3638,11 @@
             '<option value="osrm">OSRM (rápido)</option>' +
             '<option value="astar">A* sobre OSM (experimental)</option>' +
             '</select></label>' +
-            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 0 8px">Al guardar un destino en la lista vigilada, se calcula la ruta en background respetando los servicios públicos (OSRM/Nominatim).</p>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 0 8px">Al activar este check, cuando una unidad vigilada tenga un destino, Rondo hace las tres cosas siguientes usando los algoritmos de la casa:<br>' +
+            '&#8226; <b>Punto de partida</b>: detecta la ultima parada larga del historial (mas de <b>' + DEFAULTS.partidaHoras + ' h</b>) y la usa como origen de la ruta.<br>' +
+            '&#8226; <b>Destino</b>: traza la ruta hacia el destino guardado en la lista vigilada (resuelve el lugar con Nominatim si hace falta).<br>' +
+            '&#8226; <b>Regreso</b>: detecta cuando la unidad vuelve al punto de partida tras haber llegado al destino, y avisa.<br>' +
+            'Los calculos se hacen en background respetando los servicios publicos (OSRM/Nominatim).</p>' +
             '<h4>Alertas de ruta</h4>' +
             checkRow('c-r-desvio', 'Desvío de ruta') +
             numRow('c-desvio-m', 'Desvío mayor a (m)') +
