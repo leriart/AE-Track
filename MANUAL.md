@@ -124,9 +124,14 @@ en ese estado.
 
 En la parte superior del panel:
 
-- **Dashboard**: resumen de la flota. En linea, sin senal, detenidas, en
-  movimiento, en zonas y alertas del dia. Incluye una grafica de unidades en
-  linea y los avisos recientes.
+- **Dashboard**: resumen de la flota. Tarjetas con en línea, sin señal,
+  detenidas, en movimiento, en zonas y avisos del día. Las tarjetas son
+  **clicables**: al pulsar una se abre la pestaña Unidades filtrada por ese
+  estado (o Avisos / Geocercas). Incluye una **barra de distribución** de la
+  flota (en movimiento / detenidas / sin señal), la gráfica de unidades en
+  línea, una lista de **"Requieren atención"** con las 5 unidades más
+  urgentes (sin señal, exceso, desviadas o detenidas) que abren su ventana
+  al pulsarlas, y los avisos recientes.
 - **Unidades**: lista de unidades vigiladas con estado, ultimo reporte,
   velocidad, zona, odometro y acciones. Clic en una fila para abrir su
   ventana. La campana silencia los avisos de esa unidad. El estado se
@@ -397,8 +402,11 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 - **Reglas**: umbrales y activacion de cada regla.
 - **Avisos**: voz e idioma, pitido y volumen, notificacion del navegador,
   duracion de tarjetas, severidad minima, horario y editor de la lista.
-- **Visual**: tema (oscuro, claro, automatico), densidad, color de acento y
-  mostrar coordenadas.
+- **Visual**: tema (oscuro, claro, automatico), densidad, **tamaño de la
+  interfaz** (Normal, Grande, Muy grande, Enorme), color de acento y
+  mostrar coordenadas. El tamaño de la interfaz agranda el texto y los
+  controles de todo el panel, útil si te cuesta ver; se previsualiza al
+  elegirlo y se aplica al guardar.
 - **Ventanas**: modo del panel, lado y ancho de la barra lateral, ocultar al
   hacer clic fuera, confirmacion al cerrar todas las ventanas, botones de la
   barra, orientacion, verificacion automatica y tamano del panel.

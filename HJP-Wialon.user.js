@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.15.1
+// @version      4.16.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, odómetro por unidad, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.15.1';
+    const VER = '4.16.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -175,6 +175,7 @@
         theme: 'oscuro',
         density: 'normal',
         acento: '#850D22',
+        escalaUI: 1,
         contornos: true,
         contornoHoras: 24,
         mostrarCoords: false,
@@ -2655,6 +2656,19 @@
         }
         const p = byId('hjp-panel');
         if (p) p.classList.toggle('density-compact', c.density === 'compact');
+        // Escala de interfaz: un solo factor multiplica textos y controles.
+        document.documentElement.style.setProperty('--hjp-esc', String(normalizarEscala(c.escalaUI)));
+    }
+    // Normaliza el factor de escala de UI a uno de los valores permitidos.
+    const ESCALAS_UI = [1, 1.15, 1.3, 1.5];
+    function normalizarEscala(v) {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return 1;
+        let mejor = ESCALAS_UI[0];
+        for (let i = 0; i < ESCALAS_UI.length; i++) {
+            if (Math.abs(ESCALAS_UI[i] - n) < Math.abs(mejor - n)) mejor = ESCALAS_UI[i];
+        }
+        return mejor;
     }
     function nmActivo() { return APP.noMolestar && APP.noMolestar.hasta > Date.now(); }
     function toggleNoMolestar(min) {
@@ -2702,6 +2716,7 @@
             "  --hjp-elev:0 10px 26px rgba(0,0,0,.42);\n" +
             "  --hjp-font:'Inter','Roboto','Segoe UI','Helvetica Neue',Arial,sans-serif;\n" +
             "  --hjp-easing:cubic-bezier(.4,0,.2,1);\n" +
+            "  --hjp-esc:1;\n" +
             "}\n" +
             "body[data-hjp-theme='claro']{\n" +
             "  --hjp-bg:#f5f7fa; --hjp-bg-soft:#ffffff; --hjp-bg-strong:#eef2f7;\n" +
@@ -3037,7 +3052,79 @@
             "@media (max-width:480px){\n" +
             "  #hjp-panel .tab .etqt{display:none}\n" +
             "  #hjp-barra .hjp-modo-label{display:none}\n" +
-            "}\n";
+            "}\n" +
+            /* ── Dashboard: distribucion y atencion ── */
+            "#hjp-dash .dist{display:flex;flex-direction:column;gap:7px}\n" +
+            "#hjp-dash .dist-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--hjp-bg);border:1px solid var(--hjp-border-soft)}\n" +
+            "#hjp-dash .dist-seg{height:100%;transition:width .4s var(--hjp-easing)}\n" +
+            "#hjp-dash .dist-seg.on{background:var(--hjp-ok)}\n" +
+            "#hjp-dash .dist-seg.det{background:var(--hjp-warn)}\n" +
+            "#hjp-dash .dist-seg.off{background:var(--hjp-bad)}\n" +
+            "#hjp-dash .dist-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--hjp-fg-dim)}\n" +
+            "#hjp-dash .dist-legend span{display:inline-flex;align-items:center;gap:5px}\n" +
+            "#hjp-dash .dist-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
+            "#hjp-dash .dist-legend i.on{background:var(--hjp-ok)}\n" +
+            "#hjp-dash .dist-legend i.det{background:var(--hjp-warn)}\n" +
+            "#hjp-dash .dist-legend i.off{background:var(--hjp-bad)}\n" +
+            "#hjp-dash .kpi[data-kpi]{cursor:pointer}\n" +
+            "#hjp-dash .kpi[data-kpi]::after{content:'›';position:absolute;right:9px;top:8px;color:var(--hjp-fg-mute);font-size:15px;opacity:.6}\n" +
+            "#hjp-dash .hjp-atencion-item:hover{background:var(--hjp-bg-strong)}\n" +
+            /* ── Escala de interfaz (accesibilidad visual) ──
+               Se controla con --hjp-esc. Todos los tamanos se multiplican por el
+               factor elegido en Ajustes > Visual. */
+            "#hjp-panel{font-size:calc(12.5px * var(--hjp-esc))}\n" +
+            "#hjp-panel header h3{font-size:calc(13px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-iconbtn{width:calc(30px * var(--hjp-esc));height:calc(30px * var(--hjp-esc));font-size:calc(13px * var(--hjp-esc))}\n" +
+            "#hjp-panel .tab{padding:calc(8px * var(--hjp-esc)) calc(4px * var(--hjp-esc));font-size:calc(11.5px * var(--hjp-esc))}\n" +
+            "#hjp-panel .tab .etqt{font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-panel .tab .contador{font-size:calc(10px * var(--hjp-esc));padding:calc(1px * var(--hjp-esc)) calc(5px * var(--hjp-esc))}\n" +
+            "#hjp-panel .tools button{padding:calc(5px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-panel input.filtro,#hjp-panel select.filtro{padding:calc(4px * var(--hjp-esc)) calc(7px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-panel th{padding:calc(6px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-panel td{padding:calc(5px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-panel .mini{padding:calc(3px * var(--hjp-esc)) calc(8px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-pill{font-size:calc(10.5px * var(--hjp-esc));padding:calc(1px * var(--hjp-esc)) calc(8px * var(--hjp-esc))}\n" +
+            "#hjp-panel .alerta{padding:calc(8px * var(--hjp-esc)) calc(10px * var(--hjp-esc))}\n" +
+            "#hjp-panel .alerta .ico{font-size:calc(16px * var(--hjp-esc))}\n" +
+            "#hjp-panel .alerta b{font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-panel .alerta span{font-size:calc(11.5px * var(--hjp-esc))}\n" +
+            "#hjp-panel .alerta .hora,#hjp-panel .alerta .meta{font-size:calc(10px * var(--hjp-esc))}\n" +
+            "#hjp-panel .kpi{padding:calc(9px * var(--hjp-esc)) calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-panel .kpi .etq{font-size:calc(10px * var(--hjp-esc))}\n" +
+            "#hjp-panel .kpi .valor{font-size:calc(18px * var(--hjp-esc))}\n" +
+            "#hjp-panel .kpi .resumen{font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-dash{padding:calc(14px * var(--hjp-esc));gap:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-dash .kpi-grid{gap:calc(10px * var(--hjp-esc))}\n" +
+            "#hjp-dash .sparkline{height:calc(44px * var(--hjp-esc))}\n" +
+            "#hjp-dash .recent{padding:calc(9px * var(--hjp-esc))}\n" +
+            "#hjp-dash .recent h4{font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-panel footer{font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-vacio{padding:calc(36px * var(--hjp-esc)) calc(22px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-vacio .hjp-mi{font-size:calc(40px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-vacio b{font-size:calc(13px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-vacio span{font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-tile{padding:calc(11px * var(--hjp-esc)) calc(6px * var(--hjp-esc));font-size:calc(10.5px * var(--hjp-esc))}\n" +
+            "#hjp-panel .hjp-tile .hjp-mi{font-size:calc(21px * var(--hjp-esc))}\n" +
+            "#hjp-barra{font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-barra .hjp-btn{padding:calc(7px * var(--hjp-esc)) calc(11px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
+            ".hjp-toast{font:calc(12.5px * var(--hjp-esc))/1.35 var(--hjp-font);padding:calc(10px * var(--hjp-esc)) calc(12px * var(--hjp-esc))}\n" +
+            ".hjp-toast .cuerpo b{font-size:calc(12.5px * var(--hjp-esc))}\n" +
+            ".hjp-toast .cuerpo span{font-size:calc(11.5px * var(--hjp-esc))}\n" +
+            "#hjp-config,#hjp-modal,#hjp-ayuda,#hjp-dialog{font-size:calc(13px * var(--hjp-esc))}\n" +
+            "#hjp-config label{font-size:calc(12px * var(--hjp-esc));padding:calc(3px * var(--hjp-esc)) 0}\n" +
+            "#hjp-config .cfg-tab{padding:calc(9px * var(--hjp-esc)) calc(12px * var(--hjp-esc));font-size:calc(11.5px * var(--hjp-esc))}\n" +
+            "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time],#hjp-config input[type=color],#hjp-config textarea,#hjp-config select{padding:calc(4px * var(--hjp-esc)) calc(7px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-config input[type=number],#hjp-config input[type=text],#hjp-config input[type=time]{width:calc(90px * var(--hjp-esc))}\n" +
+            "#hjp-config .cfg-body h4{font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-config button.accbtn,#hjp-config button.cancel{padding:calc(8px * var(--hjp-esc)) calc(14px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-modal h3,#hjp-modal > h3,.hjp-dialog .dlg-head{font-size:calc(14px * var(--hjp-esc))}\n" +
+            "#hjp-modal p,.hjp-dialog p{font-size:calc(12.5px * var(--hjp-esc))}\n" +
+            "#hjp-modal .mini{padding:calc(4px * var(--hjp-esc)) calc(9px * var(--hjp-esc));font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-modal button.accbtn,#hjp-modal button.cancel{padding:calc(8px * var(--hjp-esc)) calc(16px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n" +
+            "#hjp-ayuda p,#hjp-ayuda li{font-size:calc(12.5px * var(--hjp-esc))}\n" +
+            "#hjp-ayuda h4{font-size:calc(11px * var(--hjp-esc))}\n" +
+            "#hjp-contexto .op{padding:calc(7px * var(--hjp-esc)) calc(12px * var(--hjp-esc));font-size:calc(12.5px * var(--hjp-esc))}\n" +
+            "#hjp-dialog .dlg-foot button{padding:calc(8px * var(--hjp-esc)) calc(16px * var(--hjp-esc));font-size:calc(12px * var(--hjp-esc))}\n";
 
         const style = makeEl('style');
         style.textContent = css;
@@ -3131,14 +3218,21 @@
             '<div class="tabla" id="hjp-wrap-dash">' +
             '<div id="hjp-dash">' +
             '<div class="kpi-grid">' +
-            '<div class="kpi ok" title="Unidades que reportaron dentro del umbral de sin señal"><span class="etq">En línea</span><span class="valor" id="hjp-kpi-on">0</span><span class="resumen" id="hjp-kpi-on-pct">—</span></div>' +
-            '<div class="kpi bad" title="Unidades cuyo último reporte superó el umbral de sin señal"><span class="etq">Sin señal</span><span class="valor" id="hjp-kpi-off">0</span><span class="resumen" id="hjp-kpi-off-pct">—</span></div>' +
-            '<div class="kpi warn" title="Unidades en línea con velocidad muy baja"><span class="etq">Detenidas</span><span class="valor" id="hjp-kpi-det">0</span><span class="resumen">VEL <= 3 km/h</span></div>' +
-            '<div class="kpi sub" title="Unidades en línea con velocidad normal"><span class="etq">En movimiento</span><span class="valor" id="hjp-kpi-mov">0</span><span class="resumen" id="hjp-kpi-vel">— km/h prom.</span></div>' +
-            '<div class="kpi sub" title="Geocercas ocupadas por al menos una unidad online"><span class="etq">En zonas</span><span class="valor" id="hjp-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
-            '<div class="kpi" title="Avisos registrados desde la medianoche"><span class="etq">Avisos hoy</span><span class="valor" id="hjp-kpi-aho">0</span><span class="resumen" id="hjp-kpi-criticos">0 críticas</span></div>' +
+            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin señal · clic para verlas"><span class="etq">En línea</span><span class="valor" id="hjp-kpi-on">0</span><span class="resumen" id="hjp-kpi-on-pct">—</span></div>' +
+            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo último reporte superó el umbral de sin señal · clic para verlas"><span class="etq">Sin señal</span><span class="valor" id="hjp-kpi-off">0</span><span class="resumen" id="hjp-kpi-off-pct">—</span></div>' +
+            '<div class="kpi warn" data-kpi="detenida" title="Unidades en línea con velocidad muy baja · clic para verlas"><span class="etq">Detenidas</span><span class="valor" id="hjp-kpi-det">0</span><span class="resumen">VEL &lt;= 3 km/h</span></div>' +
+            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en línea con velocidad normal · clic para verlas"><span class="etq">En movimiento</span><span class="valor" id="hjp-kpi-mov">0</span><span class="resumen" id="hjp-kpi-vel">— km/h prom.</span></div>' +
+            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas por al menos una unidad online · clic para verlas"><span class="etq">En zonas</span><span class="valor" id="hjp-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
+            '<div class="kpi" data-kpi="alertas" title="Avisos registrados desde la medianoche · clic para verlos"><span class="etq">Avisos hoy</span><span class="valor" id="hjp-kpi-aho">0</span><span class="resumen" id="hjp-kpi-criticos">0 críticas</span></div>' +
             '</div>' +
+            '<div class="recent"><h4>Distribución de la flota</h4>' +
+            '<div class="dist"><div class="dist-bar">' +
+            '<span class="dist-seg on" id="hjp-dist-on"></span>' +
+            '<span class="dist-seg det" id="hjp-dist-det"></span>' +
+            '<span class="dist-seg off" id="hjp-dist-off"></span>' +
+            '</div><div class="dist-legend" id="hjp-dist-legend"></div></div></div>' +
             '<div><svg class="sparkline" id="hjp-spark" viewBox="0 0 200 36" preserveAspectRatio="none"></svg></div>' +
+            '<div class="recent"><h4>Requieren atención</h4><div id="hjp-atencion"></div></div>' +
             '<div class="recent"><h4>Avisos recientes</h4><div id="hjp-kpi-recientes"></div></div>' +
             '</div>' +
             '</div>' +
@@ -3294,6 +3388,12 @@
             '<label>Densidad <select id="c-dens">' +
             '<option value="normal">Normal</option>' +
             '<option value="compact">Compacta</option>' +
+            '</select></label>' +
+            '<label>Tamaño de la interfaz <select id="c-escala" title="Agranda el texto y los controles del panel, util si te cuesta ver">' +
+            '<option value="1">Normal (100%)</option>' +
+            '<option value="1.15">Grande (115%)</option>' +
+            '<option value="1.3">Muy grande (130%)</option>' +
+            '<option value="1.5">Enorme (150%)</option>' +
             '</select></label>' +
             '<label>Color de acento <input type="color" id="c-acento"></label>' +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
@@ -3729,6 +3829,54 @@
             ? 'No molestar hasta ' + new Date(APP.noMolestar.hasta).toLocaleTimeString().slice(0, 5)
             : 'criticos: ' + criticos + ' · sin señal: ' + off + ' · detenidas: ' + det;
     }
+    // Lista "Requieren atención": unidades sin señal, con exceso, desviadas o
+    // detenidas, ordenadas por prioridad. Cada fila abre la ventana de la unidad.
+    function paintAtencion(watched) {
+        const cont = byId('hjp-atencion');
+        if (!cont) return;
+        const ahora = Date.now() / 1000;
+        const items = [];
+        watched.forEach((u) => {
+            const info = parseUnitName(u);
+            const st = unitState(u);
+            const memo = APP.memo[info.clave] || {};
+            const eco = info.eco || info.placa || String(info.id);
+            if (!st.online) {
+                items.push({ eco, tipo: 'offline', peso: 4000 + (st.edadMin || 0), txt: 'sin señal hace ' + ageText(st.edadMin) });
+                return;
+            }
+            const lim = limiteDe(info);
+            if (st.vel > lim) items.push({ eco, tipo: 'vel', peso: 3000 + st.vel, txt: 'a ' + Math.round(st.vel) + ' km/h (límite ' + lim + ')' });
+            if (memo.desviadoDesde) {
+                const min = (ahora - memo.desviadoDesde) / 60;
+                items.push({ eco, tipo: 'desv', peso: 2000 + min, txt: 'desviada de su ruta hace ' + ageText(min) });
+            }
+            if (st.estado === 'detenida' && memo.detenidoDesde) {
+                const min = (ahora - memo.detenidoDesde) / 60;
+                items.push({ eco, tipo: 'det', peso: 1000 + min, txt: 'detenida hace ' + ageText(min) });
+            }
+        });
+        items.sort((a, b) => b.peso - a.peso);
+        const top = items.slice(0, 5);
+        if (!top.length) {
+            setHtml(cont, '<div style="padding:8px;color:var(--hjp-fg-mute)">Todo en orden: ninguna unidad requiere atención.</div>');
+            return;
+        }
+        const meta = {
+            offline: { col: 'var(--hjp-bad-fg)', ic: ICO.offline },
+            vel: { col: 'var(--hjp-warn-fg)', ic: ICO.velocidad },
+            desv: { col: 'var(--hjp-warn-fg)', ic: ICO.destino },
+            det: { col: 'var(--hjp-accent-2)', ic: ICO.detenida }
+        };
+        setHtml(cont, top.map((it) => {
+            const mm = meta[it.tipo] || meta.det;
+            return '<div class="alerta hjp-atencion-item" data-eco="' + esc(it.eco) + '" style="border-left:3px solid ' + mm.col + ';cursor:pointer" title="Abrir la ventana de ' + esc(it.eco) + '">' +
+                '<span class="ico hjp-mi" style="color:' + mm.col + '">' + mm.ic + '</span>' +
+                '<div class="cuerpo"><b>' + esc(it.eco) + '</b><span>' + esc(it.txt) + '</span></div>' +
+                '<span class="hora hjp-mi" style="color:var(--hjp-fg-mute)">' + ICO.panel + '</span>' +
+                '</div>';
+        }).join(''));
+    }
     function paintKPI() {
         const watched = APP.unidades.filter(shouldWatch);
         const estados = watched.map(unitState);
@@ -3756,6 +3904,24 @@
         kv('hjp-kpi-criticos', critAho + ' críticas');
         const resumenZ = document.querySelector('.kpi .valor#hjp-kpi-zonas + .resumen');
         if (resumenZ) resumenZ.textContent = 'de ' + APP.zonas.length + ' geocercas';
+
+        // Distribucion de la flota (barra + leyenda): movimiento / detenidas / sin señal.
+        const totalD = Math.max(1, total);
+        const segOn = byId('hjp-dist-on');
+        const segDet = byId('hjp-dist-det');
+        const segOff = byId('hjp-dist-off');
+        if (segOn) segOn.style.width = (mov / totalD * 100) + '%';
+        if (segDet) segDet.style.width = (det / totalD * 100) + '%';
+        if (segOff) segOff.style.width = (off / totalD * 100) + '%';
+        const legend = byId('hjp-dist-legend');
+        if (legend) {
+            const pct = (v) => (total ? Math.round((v / total) * 100) + '%' : '0%');
+            setHtml(legend,
+                '<span><i class="on"></i> En movimiento ' + mov + ' (' + pct(mov) + ')</span>' +
+                '<span><i class="det"></i> Detenidas ' + det + ' (' + pct(det) + ')</span>' +
+                '<span><i class="off"></i> Sin señal ' + off + ' (' + pct(off) + ')</span>');
+        }
+        paintAtencion(watched);
 
         const recientes = byId('hjp-kpi-recientes');
         if (recientes) {
@@ -4679,6 +4845,24 @@
                 paintTabla();
             });
         }
+        // Dashboard: KPI clicables (filtran Unidades) y filas de "Requieren atención".
+        const dashEl = byId('hjp-dash');
+        if (dashEl) {
+            dashEl.addEventListener('click', (e) => {
+                const item = e.target.closest && e.target.closest('.hjp-atencion-item');
+                if (item && item.dataset.eco) { openUnitWindow(item.dataset.eco); return; }
+                const kpi = e.target.closest && e.target.closest('.kpi[data-kpi]');
+                if (!kpi) return;
+                const acc = kpi.dataset.kpi;
+                if (acc === 'alertas') { setTab('alertas'); return; }
+                if (acc === 'zonas') { setTab('geocercas'); return; }
+                APP.filtEstado = (acc === 'online') ? 'todas' : acc;
+                const selF = byId('hjp-filtro-estado');
+                if (selF) selF.value = APP.filtEstado;
+                writeJSON(LS.filtEstado, APP.filtEstado);
+                setTab('unidades');
+            });
+        }
         document.addEventListener('pointerdown', unlockAudio, { once: true });
         document.addEventListener('keydown', unlockAudio, { once: true });
         document.querySelectorAll('#hjp-tabs .tab').forEach((t) =>
@@ -4871,6 +5055,7 @@
             g('c-verif-seg').value = APP.config.verifSeg;
             g('c-tema').value = APP.config.theme;
             g('c-dens').value = APP.config.density;
+            g('c-escala').value = String(normalizarEscala(APP.config.escalaUI));
             g('c-acento').value = APP.config.acento || '#850D22';
             g('c-coords').checked = !!APP.config.mostrarCoords;
             g('c-contornos').checked = !!APP.config.contornos;
@@ -4934,6 +5119,7 @@
             if (cfgDirty) {
                 hjpConfirm('Descartar cambios', 'Tienes cambios sin guardar en la configuracion. ¿Quieres descartarlos?', () => {
                     limpiarCfgDirty();
+                    applyTheme(); // revierte la vista previa de escala/tema
                     cfgWinEl.style.display = 'none';
                 }, { peligro: true, okText: 'Descartar', icon: ICO.ajustes });
             } else {
@@ -4946,6 +5132,13 @@
         if (cfgBody) {
             cfgBody.addEventListener('input', marcarCfgDirty);
             cfgBody.addEventListener('change', marcarCfgDirty);
+        }
+        // Vista previa de la escala de UI mientras se elige (se confirma al Guardar).
+        const selEscala = byId('c-escala');
+        if (selEscala) {
+            selEscala.addEventListener('change', (e) => {
+                document.documentElement.style.setProperty('--hjp-esc', String(normalizarEscala(e.target.value)));
+            });
         }
         byId('hjp-cfg-guardar').addEventListener('click', () => {
             const g = (id) => byId(id);
@@ -4974,6 +5167,7 @@
             cf.verifSeg = Math.max(2, isoNum(g('c-verif-seg').value, cf.verifSeg));
             cf.theme = g('c-tema').value;
             cf.density = g('c-dens').value;
+            cf.escalaUI = normalizarEscala(g('c-escala').value);
             cf.acento = g('c-acento').value;
             cf.mostrarCoords = g('c-coords').checked;
             cf.contornos = g('c-contornos').checked;

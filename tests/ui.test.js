@@ -37,6 +37,12 @@ const codeEmpty =
     '\nreturn {emptyState, setHtml, invalidarHtml};';
 const modEmpty = new Function(codeEmpty)();
 
+// normalizarEscala usa ESCALAS_UI.
+const codeEsc =
+    bloque('const ESCALAS_UI', 'function nmActivo') +
+    '\nreturn {normalizarEscala, ESCALAS_UI};';
+const modEsc = new Function(codeEsc)();
+
 let fallos = 0;
 function ok(nombre, cond, extra) {
     if (cond) console.log('ok    - ' + nombre);
@@ -98,6 +104,16 @@ ok('setHtml: HTML distinto si reescribe', modEmpty.setHtml(fake, '<b>B</b>') ===
 modEmpty.invalidarHtml('probando');
 ok('setHtml: invalidar fuerza reescritura', modEmpty.setHtml(fake, '<b>B</b>') === true);
 ok('setHtml: elemento nulo no rompe', modEmpty.setHtml(null, 'x') === false);
+
+// Escala de interfaz (accesibilidad).
+ok('normalizarEscala: 1 -> 1', modEsc.normalizarEscala(1) === 1);
+ok('normalizarEscala: "1.15" -> 1.15', modEsc.normalizarEscala('1.15') === 1.15);
+ok('normalizarEscala: 1.2 -> 1.15 (mas cercano)', modEsc.normalizarEscala(1.2) === 1.15);
+ok('normalizarEscala: 1.4 -> 1.3', modEsc.normalizarEscala(1.4) === 1.3);
+ok('normalizarEscala: 1.6 -> 1.5', modEsc.normalizarEscala(1.6) === 1.5);
+ok('normalizarEscala: no numerico -> 1', modEsc.normalizarEscala('x') === 1 && modEsc.normalizarEscala(undefined) === 1);
+ok('normalizarEscala: 999 -> 1.5', modEsc.normalizarEscala(999) === 1.5);
+ok('ESCALAS_UI tiene 4 niveles', modEsc.ESCALAS_UI.length === 4);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
