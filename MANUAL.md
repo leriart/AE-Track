@@ -255,14 +255,26 @@ y, opcionalmente, datos de Overpass para calcular con el algoritmo A*.
 
 ### Trazado automatico al asignar destino
 
-Si la opcion **Trazar ruta automaticamente al asignar un destino** esta
-activa (Ajustes > Rutas, activada por defecto), no hace falta lanzar el
-comando manualmente: cuando una unidad vigilada tiene un destino en la
-lista, Rondo calcula la ruta en background y la muestra en la columna
-**Ruta** de la pestana Unidades y en la pestana **Rutas**.
+Hay un check en **Ajustes > Rutas** llamado **Trazar ruta automaticamente
+al asignar un destino** que viene **desactivado por defecto**. Al
+activarlo, cuando una unidad vigilada tiene un destino en la lista,
+Rondo hace tres cosas automaticamente con sus algoritmos:
+
+- **Punto de partida**: detecta la ultima parada larga del viaje en
+  curso (mas de `partidaHoras` en el historial, configurable) y la usa
+  como origen de la ruta. Se aplica el algoritmo `detectarPuntoPartida`
+  con DBSCAN sobre los puntos de baja velocidad.
+- **Destino**: traza la ruta desde el punto de partida hacia el destino
+  guardado (`eco=destino` en la lista vigilada). Si es un texto, se
+  geocodifica con Nominatim; si son coordenadas, se usan directamente.
+- **Regreso**: detecta cuando la unidad vuelve al punto de partida tras
+  haber llegado al destino, ya sea por la misma ruta o por un camino
+  alterno, y lo refleja en la columna **Ruta** y en el analisis de viaje.
+
+Comportamiento:
 
 - Cuando anades una unidad con `eco=destino` en la lista, se calcula al
-  instante la ruta desde la posicion actual hacia ese destino.
+  instante la ruta de punto de partida a destino.
 - Si cambias el destino en la lista, se recalcula (con un pequeno debounce
   para no lanzar peticiones en cada pulsacion).
 - Al iniciar el script, se traza cualquier ruta pendiente.

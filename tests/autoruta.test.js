@@ -33,7 +33,7 @@ const code =
     'function precomputarRuta(c){const acum=[0];let t=0;for(let i=1;i<c.length;i++){t+=haversine(c[i-1][1],c[i-1][0],c[i][1],c[i][0]);acum.push(t);}return{acum,total:t};}\n' +
     'function snapRuta(lat,lon,ruta,memo){if(!ruta||!ruta.coords||ruta.coords.length<2||lat==null||lon==null)return null;const c=ruta.coords;const n=c.length;function proyectar(i){if(i<0||i>=n-1)return null;const d=distPuntoSegmento(lat,lon,c[i][1],c[i][0],c[i+1][1],c[i+1][0]);return{dist:d.dist,idx:i,t:d.t};}function resultado(mejor){const acum=ruta.acum||[0,ruta.total||1];const segLen=(acum[mejor.idx+1]||0)-(acum[mejor.idx]||0);const recorrido=(acum[mejor.idx]||0)+mejor.t*segLen;const total=ruta.total||1;const a=c[mejor.idx],b=c[mejor.idx+1];return{dist:mejor.dist,idx:mejor.idx,t:mejor.t,progreso:clamp(recorrido/total,0,1),recorrido,total,rumbo:bearing(a[1],a[0],b[1],b[0])};}if(memo&&Number.isInteger(memo.idx)&&memo.idx>=0&&memo.idx<n-1){const cands=[memo.idx,memo.idx-1,memo.idx+1];let mejor=null;for(let k=0;k<cands.length;k++){const p=proyectar(cands[k]);if(p&&(!mejor||p.dist<mejor.dist))mejor=p;}if(mejor&&mejor.dist<=1000){memo.idx=mejor.idx;return resultado(mejor);}}let mejor={dist:Infinity,idx:0,t:0};for(let i=0;i<n-1;i++){const d=distPuntoSegmento(lat,lon,c[i][1],c[i][0],c[i+1][1],c[i+1][0]);if(d.dist<mejor.dist)mejor={dist:d.dist,idx:i,t:d.t};}if(memo)memo.idx=mejor.idx;return resultado(mejor);}\n' +
     // Stubs de APP y writeSession
-    'const APP = { config: { autoRuta: true, autoRutaModo: "osrm", osrm: true, overpass: false, desvioM: 250, retornoM: 400, watchAll: true }, unidades: [], watchMap: {}, rutas: {}, snapMemo: {}, seleccion: new Set(), watchAll: true };\n' +
+    'const APP = { config: { autoRuta: false, autoRutaModo: "osrm", osrm: true, overpass: false, desvioM: 250, retornoM: 400, watchAll: true }, unidades: [], watchMap: {}, rutas: {}, snapMemo: {}, seleccion: new Set(), watchAll: true };\n' +
     'const writeSession = () => {};\n' +
     'const sleep = () => Promise.resolve();\n' +
     'let _planCalls = [];\n' +
@@ -62,9 +62,11 @@ mod.APP.unidades = [
     { id: 3, nm: 'UN.04383' }
 ];
 mod.APP.watchMap = {};
-ok('autoTrazarRutasPendientes: sin destinos devuelve lista vacia',
+mod.APP.config.autoRuta = false;
+ok('autoTrazarRutasPendientes: default desactivado no detecta nada',
     mod.autoTrazarRutasPendientes().length === 0);
 
+mod.APP.config.autoRuta = true;
 mod.APP.watchMap = { '4381': 'Monterrey', '4382': 'Saltillo' };
 const p = mod.autoTrazarRutasPendientes();
 ok('autoTrazarRutasPendientes: detecta 2 destinos pendientes',
