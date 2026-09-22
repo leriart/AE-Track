@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         HJP · Wialon (gestión de flota en AE-Track / Wialon)
 // @namespace    https://github.com/leriart/AE-Track
-// @version      4.14.0
+// @version      4.15.0
 // @description  Vigilancia de flota sobre la API nativa de Wialon. Evalúa reglas de negocio, notifica visualmente con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas, mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, detección de desvíos, giros en U y retorno por viaje cancelado, trazado con exportación GeoJSON, odómetro por unidad, límite de velocidad por unidad, perfiles, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Sin emojis.
 // @author       lerit, Héctor Ramírez (HectorRamirez-cpu)
 // @contributor  Héctor Ramírez (https://github.com/HectorRamirez-cpu) · creador del proyecto original
@@ -87,7 +87,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '4.14.0';
+    const VER = '4.15.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/HJP-Wialon.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/HJP-Wialon.user.js';
     function parseVersionHeader(text) {
@@ -1484,7 +1484,9 @@
             : (s === 'warn' || s === 'medio') ? ICO.medio
                 : (s === 'err' || s === 'critico' || s === 'alto') ? ICO.critico
                     : ICO.info;
-        toast({ sev: s, icono: ic, titulo, detalle: detalle || '', ts: Date.now() });
+        // 'info' usa el color azul de la severidad 'bajo' (COL no tiene 'info').
+        const sevCol = (s === 'info') ? 'bajo' : s;
+        toast({ sev: sevCol, icono: ic, titulo, detalle: detalle || '', ts: Date.now() });
     }
     function adviceOk(t, d) { advice(t, d, 'ok'); }
     function adviceWarn(t, d) { advice(t, d, 'medio'); }
@@ -3009,7 +3011,7 @@
             ".hjp-pill.off{background:var(--hjp-bad-bg);color:var(--hjp-bad-fg)}\n" +
             /* ── Responsive ── */
             "@media (max-width:720px){\n" +
-            "  #hjp-panel{min-width:0;width:min(96vw,470px)}\n" +
+            "  #hjp-panel{min-width:0;max-width:96vw}\n" +
             "  #hjp-config{width:min(96vw,560px)}\n" +
             "  #hjp-ayuda{width:min(96vw,620px)}\n" +
             "  #hjp-modal{width:min(96vw,520px)}\n" +
@@ -3430,9 +3432,10 @@
             toastsEl.setAttribute('role', 'status');
             toastsEl.setAttribute('aria-live', 'polite');
             avisoEl.setAttribute('role', 'alert');
-            const tabsEl = byId('hjp-tabs');
+            // panelEl aun no esta en el DOM: se consulta sobre el propio nodo.
+            const tabsEl = panelEl.querySelector('#hjp-tabs');
             if (tabsEl) tabsEl.setAttribute('role', 'tablist');
-            document.querySelectorAll('#hjp-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
+            panelEl.querySelectorAll('#hjp-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
         } catch (_) { /* noop */ }
 
         document.body.appendChild(barraEl);
