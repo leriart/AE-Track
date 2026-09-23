@@ -109,5 +109,39 @@ ok('normalizarEscala: no numerico -> 1', modEsc.normalizarEscala('x') === 1 && m
 ok('normalizarEscala: 999 -> 1.5', modEsc.normalizarEscala(999) === 1.5);
 ok('ESCALAS_UI tiene 4 niveles', modEsc.ESCALAS_UI.length === 4);
 
+/* ── Chequeos estructurales de la UI ────────────────────────────
+ * Previenen regresiones en el cambio de pestanas, el modo sidebar
+ * unico y la lista de unidades en tarjetas.
+ */
+// setTab debe incluir las 7 pestanas (incluida 'riesgo').
+const mSetTab = src.match(/const ids = \[([^\]]*)\];/);
+ok('setTab declara un arreglo de pestanas', !!mSetTab);
+if (mSetTab) {
+    const ids = mSetTab[1].split(',').map((s) => s.trim().replace(/['"]/g, '')).filter(Boolean);
+    ['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana', 'riesgo'].forEach((t) => {
+        ok('setTab incluye "' + t + '"', ids.indexOf(t) >= 0, ids.join(','));
+    });
+}
+// Los 7 contenedores deben existir en el HTML del panel.
+['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana', 'riesgo'].forEach((t) => {
+    ok('HTML tiene rondo-wrap-' + t, src.indexOf("id=\"rondo-wrap-" + t + "\"") >= 0);
+});
+// Alt+1..7 incluye la pestana riesgo.
+ok('atajo Alt+7 -> riesgo', /'7':\s*'riesgo'/.test(src));
+
+// Modo sidebar unico: sin boton ni selector de modo flotante.
+ok('sin boton rondo-btn-modo', src.indexOf('rondo-btn-modo') < 0);
+ok('sin boton rondo-sb-modo', src.indexOf('rondo-sb-modo') < 0);
+ok('sin selector c-panel-modo', src.indexOf('c-panel-modo') < 0);
+ok('esLateral siempre true', /function esLateral\(\)\s*{\s*return true;/.test(src));
+
+// Unidades en tarjetas (sin tabla) y con barra de orden.
+ok('lista de unidades es contenedor .rondo-uni-list', src.indexOf('class="rondo-uni-list"') >= 0);
+ok('hay plantilla de tarjeta rondo-uni-card', src.indexOf('rondo-uni-card') >= 0);
+ok('selector de orden de unidades presente', src.indexOf('rondo-uni-orden') >= 0);
+ok('sin thead en unidades', src.indexOf('<tbody id="rondo-body">') < 0);
+// La delegacion de eventos usa .fila (no tr.fila).
+ok('delegacion usa closest(".fila")', src.indexOf("closest('.fila')") >= 0 || src.indexOf('closest(".fila")') >= 0);
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

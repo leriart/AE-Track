@@ -8,8 +8,8 @@ Indice:
 - [Que es y que necesitas](#que-es-y-que-necesitas)
 - [Primeros pasos](#primeros-pasos)
 - [La barra de botones](#la-barra-de-botones)
-- [El panel: flotante o barra lateral](#el-panel-flotante-o-barra-lateral)
-- [Las seis pestanas](#las-seis-pestanas)
+- [El panel: barra lateral](#el-panel-barra-lateral)
+- [Las siete pestanas](#las-siete-pestanas)
 - [Vigilar unidades (lista vigilada)](#vigilar-unidades-lista-vigilada)
 - [Reglas de alerta](#reglas-de-alerta)
 - [Notificaciones](#notificaciones)
@@ -72,10 +72,7 @@ horizontal o vertical.
 
 - **Automatizar Unidades**: abre la lista de unidades. Desde ahi defines que
   unidades vigilar y lanza la apertura y el acomodo automatico de sus ventanas.
-- **Panel**: muestra u oculta el panel de control. Funciona en modo flotante y
-  en barra lateral.
-- **Flotante / Lateral**: alterna entre los dos modos del panel. Su icono y
-  etiqueta reflejan el modo actual.
+- **Panel**: muestra u oculta la barra lateral de control.
 - **Cerrar Todas**: cierra todas las ventanas de unidades abiertas. Para evitar
   cierres accidentales, el primer clic arma el boton (se pone rojo y dice
   "Confirmar") y el segundo clic cierra; si no confirmas en 4 segundos se
@@ -88,37 +85,28 @@ horizontal o vertical.
 Con el boton derecho sobre un boton de la barra lo ocultas; lo vuelves a
 activar en Ajustes, pestana Ventanas.
 
-## El panel: flotante o barra lateral
+## El panel: barra lateral
 
-El panel puede mostrarse de dos formas:
+Rondo vive como **barra lateral** a pantalla completa, fija al lado derecho o
+izquierdo de la ventana, ideal para dejar la vigilancia siempre visible
+mientras trabajas. Ya no existe el modo flotante: el panel siempre ocupa el
+alto completo y se ajusta en ancho.
 
-- **Flotante**: ventana movible y redimensionable. Arrastrala desde su cabecera
-  y cambia su tamano desde la esquina inferior derecha.
-- **Barra lateral**: panel fijo a pantalla completa en el lado derecho o
-  izquierdo, ideal para dejar la vigilancia siempre visible mientras trabajas.
+Para ajustar la barra ve a Ajustes, pestana **Ventanas**, y elige **Lado**
+(derecha o izquierda) y **Ancho de la barra (px)**.
 
-Para cambiar de modo:
-
-- Pulsa el boton **Flotante / Lateral** de la barra superior (siempre
-  visible), o
-- Usa **Alt + L**, o
-- Ve a Ajustes, pestana **Ventanas**, y elige **Modo** (flotante o barra
-  lateral), **Lado** (derecha o izquierda) y **Ancho lateral (px)**.
-
-Para mostrar u ocultar el panel (ambos modos) usa el boton **Panel** de la
-barra, el boton **Ocultar** de la barra lateral, el icono de campana con tachado
-del menu **No molestar** o el atajo **Alt + P**. En modo barra lateral, al
+Para mostrar u ocultar la barra usa el boton **Panel** de la barra superior, el
+boton **Ocultar** de la propia barra lateral, el icono de campana con tachado
+del menu **No molestar**, o el atajo **Alt + P** (tambien **Alt + L**). Al
 ocultarla queda una pequena pestana vertical en el borde (el **rail**) que la
 trae de vuelta con un clic y una animacion suave.
 
-Ademas, en modo barra lateral, **al hacer clic fuera del panel** la barra se
-oculta automaticamente y deja el rail visible. Puedes desactivar este
-comportamiento en Ajustes, pestana **Ventanas** ("Ocultar la barra lateral al
-hacer clic fuera").
+Ademas, **al hacer clic fuera del panel** la barra se oculta automaticamente y
+deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
+**Ventanas** ("Ocultar la barra lateral al hacer clic fuera").
 
-El panel **recuerda como lo dejaste**: el modo (flotante o barra lateral), el
-lado, el ancho y si estaba abierto o cerrado. Al recargar la pagina se restaura
-en ese estado.
+La barra **recuerda como la dejaste**: el lado, el ancho y si estaba abierta o
+cerrada. Al recargar la pagina se restaura en ese estado.
 
 ## Las siete pestanas
 
@@ -132,11 +120,12 @@ En la parte superior del panel:
   línea, una lista de **"Requieren atención"** con las 5 unidades más
   urgentes (sin señal, exceso, desviadas o detenidas) que abren su ventana
   al pulsarlas, y los avisos recientes.
-- **Unidades**: lista de unidades vigiladas con estado, ultimo reporte,
-  velocidad, zona, odometro y acciones. Clic en una fila para abrir su
-  ventana. La campana silencia los avisos de esa unidad. El estado se
-  muestra como **pildora de color** (verde en linea, ambar detenida, rojo
-  sin senal) y las columnas se pueden **ordenar** con clic en la cabecera.
+- **Unidades**: lista de **tarjetas** de las unidades vigiladas, con estado,
+  economico, placa, velocidad, ultimo reporte, zona y ruta. Clic en una tarjeta
+  para abrir su ventana; la campana silencia los avisos de esa unidad. El estado
+  se muestra como **pildora de color** (verde en linea, ambar detenida, rojo sin
+  senal) y hay una barra **Ordenar** (estado, eco, placa, velocidad, zona,
+  odometro o ruta) con boton para invertir la direccion.
 - **Avisos**: historial de alertas con filtro por severidad (criticas, altas,
   medias, bajas). Cada aviso indica la regla que lo genero y la hora.
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
@@ -148,9 +137,11 @@ En la parte superior del panel:
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
 - **Riesgo**: zonas de alto riesgo delictivo alimentadas por una URL o un
-  archivo CSV/JSON local. Muestra el estado de la carga, la URL activa, los
-  parametros (formato, score minimo, multiplicador de radio) y la lista de
-  zonas cargadas (top 200 ordenadas por score). Ver
+  archivo CSV/JSON local. Muestra una **dona** con la distribucion por nivel,
+  un **histograma** de scores, KPIs clicables (Total / Alto / Medio / Bajo),
+  un slider para el score minimo, busqueda libre, chips de nivel, 6 criterios
+  de orden, vista agrupada por estado o plana, **drag-and-drop** de archivos y
+  exportacion a CSV / GeoJSON / portapapeles. Ver
   [Zonas de riesgo](#zonas-de-riesgo).
 
 ## Vigilar unidades (lista vigilada)
@@ -567,8 +558,9 @@ te pedirá confirmación.
 | `Alt` + `4` | Rutas |
 | `Alt` + `5` | Geocercas |
 | `Alt` + `6` | Caravana |
-| `Alt` + `P` | Mostrar u ocultar el panel |
-| `Alt` + `L` | Panel flotante o barra lateral |
+| `Alt` + `7` | Riesgo |
+| `Alt` + `P` | Mostrar u ocultar la barra lateral |
+| `Alt` + `L` | Mostrar u ocultar la barra lateral |
 | `Alt` + `H` | Plegar la barra de botones |
 | `Esc` | Cerrar el dialogo superior (dialogo, menu contextual y luego ventanas) |
 
@@ -613,7 +605,7 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 El script comprueba la cabecera `@version` del repositorio al iniciar y cada
 30 minutos. Cuando hay una version nueva:
 
-- Aparece un boton verde **Actualizar X.Y.Z** en la barra flotante (visible sin
+- Aparece un boton verde **Actualizar X.Y.Z** en la barra de botones (visible sin
   abrir el panel) y un indicador en la cabecera del panel. Su titulo indica la
   version disponible.
 - Al hacer clic se abre la URL de instalacion de la nueva version en una
@@ -665,7 +657,7 @@ activar Overpass y la distancia no debe superar ~150 km. Los servicios publicos
 pueden limitar el uso; espera unos minutos.
 
 **El panel tapa cosas de la plataforma.**
-Usa el modo flotante y muevelo, o cambia la barra lateral de lado.
+Cambia la barra lateral de lado o reduce su ancho en Ajustes &gt; Ventanas.
 
 **Quiero empezar de cero.**
 Ajustes, pestana Avanzado, **Borrar TODO**. La pagina se recargara.

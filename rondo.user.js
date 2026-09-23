@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.5.0
-// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Tamano de interfaz ajustable. Sin emojis.
+// @version      5.6.0
+// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
 // @copyright    Proyecto original de Hector Ramirez (https://github.com/HectorRamirez-cpu)
@@ -144,7 +144,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.5.0';
+    const VER = '5.6.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -238,9 +238,9 @@
         contornos: true,
         contornoHoras: 24,
         mostrarCoords: false,
-        panelMode: 'flotante',
+        panelMode: 'lateral',
         panelLado: 'derecha',
-        panelAncho: 420,
+        panelAncho: 460,
         panelVisible: false,
         ocultarAlClicFuera: true,
         confirmarCierre: true,
@@ -3503,7 +3503,7 @@
         paintInfo();
     }
     function selectAllVisible() {
-        const rows = document.querySelectorAll('#rondo-body tr.fila');
+        const rows = document.querySelectorAll('#rondo-body .fila');
         let n = 0;
         rows.forEach((tr) => {
             const eco = tr.dataset.eco;
@@ -3734,7 +3734,7 @@
             "#rondo-barra .rondo-btn:active{transform:translateY(0)}\n" +
             "#rondo-barra .rondo-fold{background:var(--rondo-bg);color:var(--rondo-fg-dim);padding:4px 9px}\n" +
             "#rondo-barra.plegada .rondo-btn:not(.rondo-fold){display:none}\n" +
-            "#rondo-btn-main,#rondo-btn-panel,#rondo-btn-modo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-btn-main,#rondo-btn-panel{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
             "#rondo-btn-close{background:var(--rondo-bg-strong);color:var(--rondo-fg-dim)}\n" +
             "#rondo-btn-update{background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;border-color:transparent;box-shadow:0 0 0 0 rgba(67,160,71,.5);animation: rondoPulseGreen 2s infinite}\n" +
             "#rondo-panel .rondo-tile.armado,#rondo-barra .rondo-btn.armado{background:linear-gradient(135deg,#b71c1c,#e53935)!important;color:#fff!important;border-color:transparent!important;animation: rondoArmPulse .7s ease infinite}\n" +
@@ -3783,6 +3783,8 @@
             "#rondo-panel .tools button:hover{background:var(--rondo-bg);border-color:var(--rondo-fg-mute);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
             "#rondo-panel .tools button:active{transform:translateY(0)}\n" +
             "#rondo-panel .tools button.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-panel .tools button.rondo-tool-ico{padding:5px 7px;min-width:30px;justify-content:center}\n" +
+            "#rondo-panel .tools button.rondo-tool-ico .rondo-mi{font-size:15px;margin:0}\n" +
             "#rondo-panel input.filtro{flex:1;min-width:90px;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
             "#rondo-panel input.filtro:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
             "#rondo-panel select.filtro{flex:0 0 auto;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font-size:12px}\n" +
@@ -4071,7 +4073,44 @@
             "#rondo-dash .recent{padding:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
             "#rondo-dash .recent h4{margin:0 0 6px;font-size:11px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
             "#rondo-dash .recent .alerta{padding:5px 0;border-bottom-color:var(--rondo-border-soft)}\n" +
-            "#rondo-panel table.zone td{padding:5px 9px}\n" +
+            /* ── Unidades: barra de orden + lista de tarjetas ── */
+            "#rondo-panel #rondo-wrap-unidades{padding:0;display:flex;flex-direction:column}\n" +
+            "#rondo-panel .rondo-uni-bar{display:flex;align-items:center;gap:6px;padding:7px 9px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);position:sticky;top:0;z-index:3;flex-wrap:wrap;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-uni-bar .etq{display:inline-flex;align-items:center;gap:4px;font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.4px;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-uni-bar .etq .rondo-mi{font-size:13px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-uni-bar select.filtro{flex:1;min-width:120px}\n" +
+            "#rondo-panel .rondo-uni-list{display:flex;flex-direction:column;gap:6px;padding:8px;flex:1;min-height:0;overflow:auto}\n" +
+            "#rondo-panel .rondo-uni-empty{display:flex;align-items:center;justify-content:center;padding:10px}\n" +
+            "#rondo-panel .rondo-uni-card{display:flex;gap:8px;align-items:stretch;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:3px solid var(--rondo-fg-mute);border-radius:var(--rondo-radius-sm);padding:7px 9px;cursor:pointer;transition:background .15s,border-color .15s,transform .12s,box-shadow .15s;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            "#rondo-panel .rondo-uni-card:hover{background:var(--rondo-bg);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .rondo-uni-card.on{border-left-color:var(--rondo-ok)}\n" +
+            "#rondo-panel .rondo-uni-card.det{border-left-color:var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-uni-card.off{border-left-color:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-uni-card.sel-row{background:var(--rondo-ok-bg);border-color:var(--rondo-ok)}\n" +
+            "#rondo-panel .rondo-uni-card .u-check{display:flex;align-items:center;padding-right:2px;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-uni-card .u-check .rondo-sel{width:15px;height:15px;accent-color:var(--rondo-accent);cursor:pointer}\n" +
+            "#rondo-panel .rondo-uni-card .u-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:4px}\n" +
+            "#rondo-panel .rondo-uni-card .u-head{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-uni-card .u-eco{font:700 13px/1 var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;display:inline-flex;align-items:center;gap:3px}\n" +
+            "#rondo-panel .rondo-uni-card .u-eco .rondo-mi{font-size:12px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-uni-card .u-placa{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:5px;padding:1px 6px;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-uni-card .u-placa:empty{display:none}\n" +
+            "#rondo-panel .rondo-uni-card .u-vel{margin-left:auto;display:inline-flex;align-items:baseline;gap:2px;font:700 15px/1 var(--rondo-font);color:var(--rondo-fg);white-space:nowrap}\n" +
+            "#rondo-panel .rondo-uni-card .u-vel small{font:600 10px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-uni-card .u-vel em{font:500 9px var(--rondo-font);color:var(--rondo-fg-mute);font-style:normal;margin-left:1px}\n" +
+            "#rondo-panel .rondo-uni-card .u-vel.excede{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-uni-card .u-sil{flex-shrink:0}\n" +
+            "#rondo-panel .rondo-uni-card .u-meta{display:flex;flex-wrap:wrap;gap:5px;font-size:10.5px;color:var(--rondo-fg-dim);min-width:0}\n" +
+            "#rondo-panel .rondo-uni-card .u-meta .u-tag{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-uni-card .u-meta .u-tag .rondo-mi{font-size:12px;color:var(--rondo-fg-mute);flex-shrink:0}\n" +
+            "#rondo-panel .rondo-uni-card .u-ruta{display:flex;align-items:center;gap:6px;min-width:0}\n" +
+            "#rondo-panel .rondo-uni-card .u-ruta .rondo-pill{flex-shrink:0}\n" +
+            "#rondo-panel .rondo-uni-card .u-ruta-bar{flex:1;height:5px;background:var(--rondo-bg);border-radius:3px;overflow:hidden;min-width:40px}\n" +
+            "#rondo-panel .rondo-uni-card .u-ruta-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-uni-card .u-ruta-meta{font:600 10px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;flex-shrink:0}\n" +
+            "#rondo-panel table.zone{table-layout:fixed}\n" +
+            "#rondo-panel table.zone th:first-child,#rondo-panel table.zone td:first-child{width:45%}\n" +
+            "#rondo-panel table.zone td{padding:5px 9px;white-space:normal;word-break:break-word;vertical-align:top}\n" +
             "#rondo-panel table.zone tr.fila td:first-child{color:var(--rondo-accent-2);font-weight:600}\n" +
             "#rondo-panel .zone .contador-unidades{color:var(--rondo-ok-fg);font-weight:600}\n" +
             "#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);padding:14px;\n" +
@@ -4313,6 +4352,14 @@
             "#rondo-panel td{padding:calc(5px * var(--rondo-esc)) calc(9px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
             "#rondo-panel .mini{padding:calc(3px * var(--rondo-esc)) calc(8px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
             "#rondo-panel .rondo-pill{font-size:calc(10.5px * var(--rondo-esc));padding:calc(1px * var(--rondo-esc)) calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card{padding:calc(7px * var(--rondo-esc)) calc(9px * var(--rondo-esc));gap:calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card .u-eco{font-size:calc(13px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card .u-placa{font-size:calc(10.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card .u-vel{font-size:calc(15px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card .u-vel small{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card .u-vel em{font-size:calc(9px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card .u-meta{font-size:calc(10.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-uni-card .u-ruta-meta{font-size:calc(10px * var(--rondo-esc))}\n" +
             "#rondo-panel .alerta{padding:calc(8px * var(--rondo-esc)) calc(10px * var(--rondo-esc))}\n" +
             "#rondo-panel .alerta .ico{font-size:calc(16px * var(--rondo-esc))}\n" +
             "#rondo-panel .alerta b{font-size:calc(12px * var(--rondo-esc))}\n" +
@@ -4398,7 +4445,7 @@
     }
 
     /* ====================== UI BUILD ====================== */
-    let mainBtn, panelBtn, modoBtn, helpBtn, closeBtn, updateBtn, foldBtn, gripEl, barraEl,
+    let mainBtn, panelBtn, helpBtn, closeBtn, updateBtn, foldBtn, gripEl, barraEl,
         panelEl, modalEl, cfgWinEl, ayudaEl, ctxEl, toastsEl, avisoEl, railEl;
 
     function checkRow(id, txt) {
@@ -4417,14 +4464,13 @@
         try { document.head.appendChild(iconFont); } catch (_) { /* noop */ }
         mainBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.automatizar + '</span> Automatizar Unidades', id: 'rondo-btn-main', className: 'rondo-btn', title: 'Abrir lista de unidades y automatizar ventanas' });
         panelBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.panel + '</span> Panel', id: 'rondo-btn-panel', className: 'rondo-btn', title: 'Mostrar u ocultar el panel (Alt+P)' });
-        modoBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.expandir + '</span> <span class="rondo-modo-label">Flotante</span>', id: 'rondo-btn-modo', className: 'rondo-btn', title: 'Alternar entre panel flotante y barra lateral (Alt+L)' });
         closeBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.cerrar + '</span> Cerrar Todas', id: 'rondo-btn-close', className: 'rondo-btn', title: 'Cerrar todas las ventanas de unidades' });
         helpBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.ayuda + '</span>', id: 'rondo-btn-help', className: 'rondo-btn', title: 'Ayuda rápida (?)' });
         updateBtn = makeEl('button', { innerHTML: '<span class="rondo-mi">' + ICO.actualizar + '</span> Actualizar', id: 'rondo-btn-update', className: 'rondo-btn rondo-update', title: 'Nueva version disponible', style: 'display:none' });
         foldBtn = makeEl('button', { innerText: '▾', id: 'rondo-btn-fold', className: 'rondo-btn rondo-fold', title: 'Plegar barra' });
         gripEl = makeEl('span', { innerText: '⠿', id: 'rondo-grip', className: 'rondo-grip', title: 'Arrastrar barra · doble clic para orientar' });
         barraEl = makeEl('div', { id: 'rondo-barra' });
-        barraEl.append(gripEl, updateBtn, mainBtn, panelBtn, modoBtn, helpBtn, closeBtn, foldBtn);
+        barraEl.append(gripEl, updateBtn, mainBtn, panelBtn, helpBtn, closeBtn, foldBtn);
         if (APP.barra.vertical) barraEl.classList.add('vertical');
 
         panelEl = makeEl('div', { id: 'rondo-panel' });
@@ -4432,7 +4478,6 @@
             '<div class="rondo-sidebar-tools" id="rondo-sidebar-tools">' +
             '<button class="rondo-tile primary" id="rondo-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="rondo-mi">' + ICO.automatizar + '</span><span class="tile-lbl">Automatizar</span></button>' +
             '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar el panel (Alt+P)"><span class="rondo-mi">' + ICO.colapsar + '</span><span class="tile-lbl">Ocultar</span></button>' +
-            '<button class="rondo-tile" id="rondo-sb-modo" title="Volver al modo flotante"><span class="rondo-mi">' + ICO.expandir + '</span><span class="tile-lbl rondo-sb-modo-label">Flotante</span></button>' +
             '<button class="rondo-tile" id="rondo-sb-close" title="Cerrar todas las ventanas de unidades"><span class="rondo-mi">' + ICO.cerrar + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
             '<header id="rondo-drag">' +
@@ -4472,16 +4517,16 @@
             '<option value="alfabetico">Alfabético A-Z</option>' +
             '<option value="invertir">Invertir orden</option>' +
             '</select>' +
-            '<button id="rondo-refresh" title="Refrescar"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
-            '<button id="rondo-cfg-btn" title="Ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span></button>' +
-            '<button id="rondo-csv" title="Exportar unidades"><span class="rondo-mi">' + ICO.descargar + '</span> CSV</button>' +
-            '<button id="rondo-csv-al" title="Exportar el historial de avisos a CSV"><span class="rondo-mi">' + ICO.descargar + '</span> Avisos CSV</button>' +
+            '<button id="rondo-refresh" class="rondo-tool-ico" title="Refrescar"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
+            '<button id="rondo-cfg-btn" class="rondo-tool-ico" title="Ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span></button>' +
+            '<button id="rondo-csv" title="Exportar unidades a CSV"><span class="rondo-mi">' + ICO.descargar + '</span> CSV</button>' +
             '<button id="rondo-informe" title="Generar informe del dia"><span class="rondo-mi">' + ICO.descargar + '</span> Informe</button>' +
-            '<button id="rondo-verif" title="Solo ventanas seleccionadas"><span class="rondo-mi">' + ICO.verif + '</span> Solo selección</button>' +
-            '<button id="rondo-captura" title="Capturar ventanas"><span class="rondo-mi">' + ICO.captura + '</span> Capturar</button>' +
-            '<button id="rondo-verifica" title="Verificar ahora"><span class="rondo-mi">' + ICO.verifica + '</span> Aplicar</button>' +
-            '<button id="rondo-sel-all" title="Seleccionar todas las unidades visibles"><span class="rondo-mi">' + ICO.selAll + '</span> Sel. visibles</button>' +
-            '<button id="rondo-sel-clear" title="Quitar toda la selección"><span class="rondo-mi">' + ICO.selClear + '</span> Quitar selección</button>' +
+            '<button id="rondo-csv-al" class="rondo-tool-ico" title="Exportar el historial de avisos a CSV"><span class="rondo-mi">' + ICO.alertas + '</span></button>' +
+            '<button id="rondo-verif" class="rondo-tool-ico" title="Abrir solo las ventanas seleccionadas"><span class="rondo-mi">' + ICO.verif + '</span></button>' +
+            '<button id="rondo-captura" class="rondo-tool-ico" title="Capturar las ventanas abiertas"><span class="rondo-mi">' + ICO.captura + '</span></button>' +
+            '<button id="rondo-verifica" class="rondo-tool-ico" title="Verificar y acomodar ahora"><span class="rondo-mi">' + ICO.verifica + '</span></button>' +
+            '<button id="rondo-sel-all" class="rondo-tool-ico" title="Seleccionar todas las unidades visibles"><span class="rondo-mi">' + ICO.selAll + '</span></button>' +
+            '<button id="rondo-sel-clear" class="rondo-tool-ico" title="Quitar toda la selección"><span class="rondo-mi">' + ICO.selClear + '</span></button>' +
             '</div>' +
             '<div class="tabla" id="rondo-wrap-dash">' +
             '<div id="rondo-dash">' +
@@ -4505,18 +4550,23 @@
             '</div>' +
             '</div>' +
             '<div class="tabla" id="rondo-wrap-unidades" style="display:none">' +
-            '<table><thead><tr><th title="Seleccionar">Sel</th>' +
-            '<th class="rondo-sortable" data-sort="eco" title="Ordenar por economico">Eco<span class="rondo-sort"></span></th>' +
-            '<th class="rondo-sortable" data-sort="placa" title="Ordenar por placa">Placa<span class="rondo-sort"></span></th>' +
-            '<th class="rondo-sortable" data-sort="estado" title="Ordenar por estado">Estado<span class="rondo-sort"></span></th>' +
-            '<th class="rondo-sortable" data-sort="edad" title="Ordenar por antiguedad del ultimo reporte">Ultimo<span class="rondo-sort"></span></th>' +
-            '<th class="rondo-sortable" data-sort="vel" title="Ordenar por velocidad">km/h<span class="rondo-sort"></span></th>' +
-            '<th class="rondo-sortable" data-sort="zona" title="Ordenar por geocerca">Zona<span class="rondo-sort"></span></th>' +
-            '<th class="rondo-sortable" data-sort="odo" title="Odómetro acumulado (km)">km<span class="rondo-sort"></span></th>' +
-            '<th class="rondo-sortable" data-sort="ruta" title="Estado de la ruta trazada">Ruta<span class="rondo-sort"></span></th>' +
-            '<th></th></tr></thead>' +
-            '<tbody id="rondo-body"></tbody></table>' +
-            '<div id="rondo-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--rondo-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de esta columna.</div>' +
+            '<div class="rondo-uni-bar">' +
+            '<span class="etq"><span class="rondo-mi">' + ICO.filtro + '</span> Ordenar</span>' +
+            '<select class="filtro" id="rondo-uni-orden" title="Orden de la lista">' +
+            '<option value="">Estado (prioridad)</option>' +
+            '<option value="eco">Eco</option>' +
+            '<option value="placa">Placa</option>' +
+            '<option value="estado">Estado</option>' +
+            '<option value="edad">Último reporte</option>' +
+            '<option value="vel">Velocidad</option>' +
+            '<option value="zona">Zona</option>' +
+            '<option value="odo">Odómetro</option>' +
+            '<option value="ruta">Ruta</option>' +
+            '</select>' +
+            '<button class="mini" id="rondo-uni-dir" title="Cambiar direccion del orden"><span class="rondo-mi">' + ICO.bajar + '</span></button>' +
+            '</div>' +
+            '<div id="rondo-body" class="rondo-uni-list"></div>' +
+            '<div id="rondo-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--rondo-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de cada tarjeta.</div>' +
             '</div>' +
             '<div class="tabla" id="rondo-wrap-alertas" style="display:none">' +
             '<div class="severidad-pick" id="rondo-filtroseveridad">' +
@@ -4788,22 +4838,18 @@
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
             numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..6</b> cambia pestañas · <b>Alt+P</b> panel · <b>Alt+L</b> lateral · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..7</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
-            '<h4>Panel</h4>' +
-            '<label>Modo <select id="c-panel-modo">' +
-            '<option value="flotante">Flotante</option>' +
-            '<option value="lateral">Barra lateral</option>' +
-            '</select></label>' +
+            '<h4>Barra lateral</h4>' +
             '<label>Lado de la barra <select id="c-panel-lado">' +
             '<option value="derecha">Derecha</option>' +
             '<option value="izquierda">Izquierda</option>' +
             '</select></label>' +
-            numRow('c-panel-ancho', 'Ancho lateral (px)') +
+            numRow('c-panel-ancho', 'Ancho de la barra (px)') +
             checkRow('c-panel-clicfuera', 'Ocultar la barra lateral al hacer clic fuera') +
             checkRow('c-confirmar-cierre', 'Pedir confirmación al cerrar todas las ventanas') +
-            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:2px 0 0">El panel recuerda el modo (flotante o lateral) y si estaba abierto.</p>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:2px 0 0">Rondo vive como barra lateral redimensionable. La barra recuerda su lado y si estaba abierta.</p>' +
             '<h4>Barra de botones</h4>' +
             '<div class="row-grid">' +
             checkRow('c-b-main', 'Automatizar') +
@@ -4918,16 +4964,16 @@
             '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes &gt; Rutas.</p>' +
             '<h4>Atajos de teclado</h4>' +
             '<ul>' +
-            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>6</kbd>: cambiar de pestaña.</li>' +
-            '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar el panel.</li>' +
-            '<li><kbd>Alt</kbd>+<kbd>L</kbd>: alternar entre panel flotante y barra lateral.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>7</kbd>: cambiar de pestaña.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar la barra lateral.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>L</kbd>: mostrar u ocultar la barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
             '<li><kbd>Esc</kbd>: cerrar ventanas emergentes.</li>' +
             '</ul>' +
             '<h4>Actualizaciones</h4>' +
             '<p>El script revisa si hay una version nueva al iniciar y cada 30 minutos. Si la hay, aparece un indicador en la cabecera del panel; al pulsarlo se abre la URL para que Tampermonkey actualice el script.</p>' +
             '<h4>Consejo</h4>' +
-            '<p>Usa el boton <b>Flotante / Lateral</b> de la barra superior para cambiar el modo del panel. Al ocultar la barra lateral queda una pestaña en el borde (rail) que la trae de vuelta con un clic.</p>' +
+            '<p>Rondo vive como <b>barra lateral</b> a pantalla completa. Al ocultarla queda una pestaña en el borde (rail) que la trae de vuelta con un clic; tambien puedes ajustar el lado y el ancho en Ajustes &gt; Ventanas.</p>' +
             '</div>' +
             '<div class="cfg-foot">' +
             '<button class="cancel" id="rondo-ayuda-cerrar">Cerrar</button>' +
@@ -4993,86 +5039,56 @@
         placeBar();
         writeJSON(LS.barra, APP.barra);
     }
-    function esLateral() { return (APP.config.panelMode || 'flotante') === 'lateral'; }
+    // Rondo solo tiene modo sidebar (barra lateral). Se mantiene la funcion
+    // por compatibilidad de llamadas, pero siempre devuelve true.
+    function esLateral() { return true; }
     function aplicarModoPanel() {
         if (!panelEl) return;
         const lado = APP.config.panelLado || 'derecha';
-        const ancho = clamp(Number(APP.config.panelAncho) || 420, 360, Math.max(360, window.innerWidth - 20));
-        panelEl.classList.toggle('lateral', esLateral());
-        panelEl.classList.toggle('izquierda', esLateral() && lado === 'izquierda');
-        document.body.classList.toggle('rondo-lateral', esLateral());
-        if (esLateral()) {
-            panelEl.style.top = '0px';
-            panelEl.style.bottom = '0px';
-            panelEl.style.height = '100vh';
-            panelEl.style.width = ancho + 'px';
-            if (lado === 'izquierda') { panelEl.style.left = '0px'; panelEl.style.right = 'auto'; }
-            else { panelEl.style.left = 'auto'; panelEl.style.right = '0px'; }
-        } else {
-            panelEl.classList.remove('izquierda');
-            panelEl.style.right = 'auto';
-            panelEl.style.bottom = 'auto';
-            panelEl.style.top = (APP.panelPos ? APP.panelPos.y : 60) + 'px';
-            panelEl.style.left = (APP.panelPos ? APP.panelPos.x : 10) + 'px';
-            panelEl.style.height = ((APP.panelSize && APP.panelSize.h) ? APP.panelSize.h : 440) + 'px';
-            panelEl.style.width = ((APP.panelSize && APP.panelSize.w) ? APP.panelSize.w : 470) + 'px';
-        }
+        const ancho = clamp(Number(APP.config.panelAncho) || 460, 360, Math.max(360, window.innerWidth - 20));
+        panelEl.classList.add('lateral');
+        panelEl.classList.toggle('izquierda', lado === 'izquierda');
+        document.body.classList.add('rondo-lateral');
+        panelEl.style.top = '0px';
+        panelEl.style.bottom = '0px';
+        panelEl.style.height = '100vh';
+        panelEl.style.width = ancho + 'px';
+        if (lado === 'izquierda') { panelEl.style.left = '0px'; panelEl.style.right = 'auto'; }
+        else { panelEl.style.left = 'auto'; panelEl.style.right = '0px'; }
         const colIcon = document.querySelector('#rondo-collapse .rondo-mi');
-        if (colIcon) colIcon.textContent = esLateral() ? ICO.colapsar : ICO.expandir;
+        if (colIcon) colIcon.textContent = ICO.colapsar;
         const colBtn = byId('rondo-collapse');
-        if (colBtn) colBtn.title = esLateral() ? 'Ocultar barra lateral' : 'Ocultar panel';
-        if (esLateral()) {
-            panelEl.style.display = 'flex';
-            panelEl.classList.toggle('oculto', !!APP.panelHidden);
-        } else {
-            panelEl.classList.remove('oculto');
-            panelEl.style.display = APP.panelHidden ? 'none' : 'flex';
-        }
+        if (colBtn) colBtn.title = APP.panelHidden ? 'Mostrar barra lateral' : 'Ocultar barra lateral';
+        panelEl.style.display = 'flex';
+        panelEl.classList.toggle('oculto', !!APP.panelHidden);
         aplicarRail();
         writeJSON(LS.cfg, APP.config);
     }
+    // Ya no hay modo flotante: Alt+L / boton del modo ahora solo muestran u ocultan.
     function toggleSidebar() {
-        APP.config.panelMode = esLateral() ? 'flotante' : 'lateral';
-        APP.panelHidden = false;
-        APP.config.panelVisible = true;
-        panelEl.style.display = 'flex';
-        aplicarModoPanel();
-        actualizarBotonesModo();
-        advice('Panel', esLateral() ? 'modo barra lateral' : 'modo flotante');
+        togglePanel();
     }
     function actualizarBotonesModo() {
-        const lbl = document.querySelector('#rondo-btn-modo .rondo-modo-label');
-        if (lbl) lbl.textContent = esLateral() ? 'Lateral' : 'Flotante';
-        const icon = document.querySelector('#rondo-btn-modo .rondo-mi');
-        if (icon) icon.textContent = esLateral() ? ICO.colapsar : ICO.expandir;
-        const sbLbl = document.querySelector('#rondo-sb-modo .rondo-sb-modo-label');
-        if (sbLbl) sbLbl.textContent = esLateral() ? 'Flotante' : 'Lateral';
-        const sbIcon = document.querySelector('#rondo-sb-modo .rondo-mi');
-        if (sbIcon) sbIcon.textContent = esLateral() ? ICO.expandir : ICO.colapsar;
-        const sbModo = byId('rondo-sb-modo');
-        if (sbModo) sbModo.title = esLateral() ? 'Volver al modo flotante' : 'Pasar a barra lateral';
         const panelLbl = byId('rondo-btn-panel');
-        if (panelLbl) panelLbl.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
+        if (panelLbl) panelLbl.title = APP.panelHidden ? 'Mostrar la barra lateral (Alt+P)' : 'Ocultar la barra lateral (Alt+P)';
+        const colBtn = byId('rondo-collapse');
+        if (colBtn) colBtn.title = APP.panelHidden ? 'Mostrar barra lateral' : 'Ocultar barra lateral';
     }
     function togglePanel() {
         APP.panelHidden = !APP.panelHidden;
         APP.config.panelVisible = !APP.panelHidden;
-        if (esLateral()) {
-            panelEl.style.display = 'flex';
-        } else {
-            panelEl.style.display = APP.panelHidden ? 'none' : 'flex';
-        }
+        panelEl.style.display = 'flex';
         aplicarModoPanel();
         const icon = document.querySelector('#rondo-btn-panel .rondo-mi');
         if (icon) icon.textContent = APP.panelHidden ? ICO.panel : ICO.cerrar;
         const t = byId('rondo-btn-panel');
-        if (t) t.title = APP.panelHidden ? 'Mostrar el panel (Alt+P)' : 'Ocultar el panel (Alt+P)';
+        if (t) t.title = APP.panelHidden ? 'Mostrar la barra lateral (Alt+P)' : 'Ocultar la barra lateral (Alt+P)';
         if (APP.panelHidden) advice('Panel', 'oculto · usa el boton de la barra o el rail para mostrarlo');
         actualizarBotonesModo();
     }
     // Oculta la barra lateral sin avisos (util para el clic fuera del panel).
     function ocultarSidebar() {
-        if (!esLateral() || APP.panelHidden) return;
+        if (APP.panelHidden) return;
         APP.panelHidden = true;
         APP.config.panelVisible = false;
         aplicarModoPanel();
@@ -5085,15 +5101,10 @@
         railEl.classList.toggle('derecha', lado !== 'izquierda');
         railEl.innerHTML = '<span class="rondo-mi">' + (lado === 'izquierda' ? ICO.arrowRight : ICO.arrowLeft) + '</span>' +
             '<span class="rondo-rail-txt">PANEL</span>';
-        const show = esLateral() && APP.panelHidden;
-        railEl.classList.toggle('mostrar', show);
+        railEl.classList.toggle('mostrar', APP.panelHidden);
     }
     function placePanel() {
-        if (esLateral()) return;
-        if (!APP.panelPos) { aplicarModoPanel(); return; }
-        panelEl.style.left = APP.panelPos.x + 'px';
-        panelEl.style.top = APP.panelPos.y + 'px';
-        panelEl.style.bottom = 'auto';
+        // No hay modo flotante: nada que recolocar.
     }
     function attachDraggables() {
         (function dragBar() {
@@ -5178,7 +5189,7 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
-        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana'];
+        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana', 'riesgo'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
@@ -5430,13 +5441,14 @@
         }
     }
     function actualizarCabecerasOrden() {
-        document.querySelectorAll('#rondo-wrap-unidades th.rondo-sortable').forEach((th) => {
-            const act = APP.sortCol === th.dataset.sort;
-            th.classList.toggle('rondo-sort-asc', act && APP.sortDir !== 'desc');
-            th.classList.toggle('rondo-sort-desc', act && APP.sortDir === 'desc');
-            const s = th.querySelector('.rondo-sort');
-            if (s) s.textContent = act ? (APP.sortDir === 'desc' ? '▾' : '▴') : '⇅';
-        });
+        const sel = byId('rondo-uni-orden');
+        if (sel && sel.value !== (APP.sortCol || '')) sel.value = APP.sortCol || '';
+        const dir = byId('rondo-uni-dir');
+        if (dir) {
+            const icon = dir.querySelector('.rondo-mi');
+            if (icon) icon.textContent = APP.sortDir === 'desc' ? ICO.bajar : ICO.subir;
+            dir.title = APP.sortDir === 'desc' ? 'Orden descendente (clic para ascendente)' : 'Orden ascendente (clic para descendente)';
+        }
     }
     function paintTabla() {
         const body = byId('rondo-body');
@@ -5476,52 +5488,53 @@
             const ic = st.estado === 'offline' ? ICO.offline : (st.estado === 'detenida' ? ICO.detenida : ICO.moviendo);
             const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
             const coords = (APP.config.mostrarCoords && st.lat != null)
-                ? ' <span style="color:var(--rondo-fg-mute);font-size:10px">' + st.lat.toFixed(3) + ',' + st.lon.toFixed(3) + '</span>' : '';
+                ? st.lat.toFixed(3) + ', ' + st.lon.toFixed(3) : '';
             const lim = limiteDe(info);
             const excede = st.online && st.vel > lim;
-            const celVel = '<td' + (excede ? ' style="color:var(--rondo-bad-fg);font-weight:bold"' : '') + ' title="' +
-                (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h') + '">' +
-                Math.round(st.vel) + (lim !== APP.config.velMax ? ' <span style="font-size:10px">/' + lim + '</span>' : '') + '</td>';
+            const velTitle = (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h');
             const odo = odometroDe(info);
             const km = odo ? Math.round(odo.m / 100) / 10 : 0;
-            const celOdo = '<td class="odo" title="Odómetro acumulado (clic derecho para reiniciar)">' + km.toFixed(1) + '</td>';
-            // Columna Ruta: estado preciso respecto a la ruta trazada
-            // (EN RUTA / LLEGO / DESV / SIN POSICION / SIN RUTA) con el
-            // porcentaje y ETA cuando estan disponibles.
+            // Estado de ruta con progreso y ETA cuando aplica.
             const er = estadoRuta(info, st);
-            let celRuta = '<td class="ruta" title="' + esc(er.estado) + '"><span class="rondo-pill ' + rutaClasePill(er.estado) + '">' + esc(er.estado) + '</span>';
+            let rutaHtml = '<span class="rondo-pill ' + rutaClasePill(er.estado) + '">' + esc(er.estado) + '</span>';
             if (er.snap) {
                 const pct = Math.round(er.snap.progreso * 100);
-                celRuta += '<div class="ruta-bar"><div class="ruta-bar-fill" style="width:' + pct + '%"></div></div>';
                 const etaSeg = calcularETA(er.snap, er.ruta, st.vel);
                 const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min' : '-';
-                celRuta += '<div class="ruta-meta">' + pct + '% · ' + etaTxt + '</div>';
+                rutaHtml += '<div class="u-ruta-bar"><div class="u-ruta-fill" style="width:' + pct + '%"></div></div>' +
+                    '<span class="u-ruta-meta">' + pct + '% · ' + etaTxt + '</span>';
             } else if (watchDest(info)) {
-                // Hay destino pero la unidad esta sin coordenadas: indica que
-                // se esta trazando la ruta o que falta ubicacion.
-                celRuta += '<div class="ruta-meta">trazando...</div>';
+                rutaHtml += '<span class="u-ruta-meta">trazando...</span>';
             }
-            celRuta += '</td>';
+            // Sub-linea de metadatos: ultimo reporte, zona, odometro, coords.
+            const metas = [];
+            metas.push('<span class="u-tag"><span class="rondo-mi">' + ICO.reloj + '</span>' + esc(ageText(st.edadMin)) + '</span>');
+            if (zona) metas.push('<span class="u-tag"><span class="rondo-mi">' + ICO.zona + '</span>' + esc(zona) + '</span>');
+            if (coords) metas.push('<span class="u-tag"><span class="rondo-mi">' + ICO.senal + '</span>' + coords + '</span>');
+            metas.push('<span class="u-tag"><span class="rondo-mi">' + ICO.base + '</span>' + km.toFixed(1) + ' km</span>');
             return (
-                '<tr class="fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
-                '<td class="col-sel" data-eco="' + esc(info.eco) + '">' +
+                '<div class="rondo-uni-card fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
+                '<label class="u-check" title="Seleccionar la unidad">' +
                 '<input type="checkbox" class="rondo-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
-                '</td>' +
-                '<td class="eco">' + (vig ? '<span class="rondo-mi">' + ICO.bandera + '</span> ' : '') + esc(info.eco || '-') + '</td>' +
-                '<td>' + esc(info.placa || '') + '</td>' +
-                '<td><span class="rondo-pill ' + clase + '"><span class="rondo-mi">' + ic + '</span>' + txt + '</span></td>' +
-                '<td>' + ageText(st.edadMin) + '</td>' +
-                celVel +
-                '<td>' + esc(zona) + coords + '</td>' +
-                celOdo +
-                celRuta +
-                '<td><button class="mini rondo-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar' : 'Silenciar') + '">' +
-                '<span class="rondo-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button></td>' +
-                '</tr>'
+                '</label>' +
+                '<div class="u-body">' +
+                '<div class="u-head">' +
+                '<span class="u-eco">' + (vig ? '<span class="rondo-mi" title="En lista vigilada">' + ICO.bandera + '</span>' : '') + esc(info.eco || '-') + '</span>' +
+                '<span class="u-placa">' + esc(info.placa || '') + '</span>' +
+                '<span class="rondo-pill ' + clase + '"><span class="rondo-mi">' + ic + '</span>' + txt + '</span>' +
+                '<span class="u-vel' + (excede ? ' excede' : '') + '" title="' + velTitle + '">' + Math.round(st.vel) +
+                (lim !== APP.config.velMax ? '<small>/' + lim + '</small>' : '') + '<em>km/h</em></span>' +
+                '<button class="mini u-sil rondo-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar avisos' : 'Silenciar unidad') + '">' +
+                '<span class="rondo-mi">' + (sil ? ICO.silencio : ICO.sonido) + '</span></button>' +
+                '</div>' +
+                '<div class="u-meta">' + metas.join('') + '</div>' +
+                '<div class="u-ruta">' + rutaHtml + '</div>' +
+                '</div>' +
+                '</div>'
             );
-        }).join('') || '<tr><td colspan="10">' + emptyState(ICO.panel, LANG.sinUni,
+        }).join('') || '<div class="rondo-uni-empty">' + emptyState(ICO.panel, LANG.sinUni,
             'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
-            '<button class="mini rondo-vacio-acc" data-acc="abrir-lista"><span class="rondo-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</td></tr>');
+            '<button class="mini rondo-vacio-acc" data-acc="abrir-lista"><span class="rondo-mi">' + ICO.automatizar + '</span> Abrir lista de unidades</button>') + '</div>');
         const aviso = byId('rondo-sel-vacio');
         if (aviso) {
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
@@ -6490,7 +6503,7 @@
     function bindKeys() {
         document.addEventListener('keydown', (e) => {
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'geocercas', '6': 'caravana' };
+                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'geocercas', '6': 'caravana', '7': 'riesgo' };
                 if (tabs[e.key]) {
                     setTab(tabs[e.key]);
                     if (APP.panelHidden) togglePanel();
@@ -6638,11 +6651,9 @@
             togglePanel();
             paintPanel();
         });
-        modoBtn.addEventListener('click', toggleSidebar);
         if (railEl) railEl.addEventListener('click', togglePanel);
         byId('rondo-sb-main').addEventListener('click', () => mainBtn.click());
         byId('rondo-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
-        byId('rondo-sb-modo').addEventListener('click', toggleSidebar);
         byId('rondo-sb-panel').addEventListener('click', togglePanel);
         // Clic fuera del panel en modo barra lateral: se oculta.
         document.addEventListener('pointerdown', (e) => {
@@ -6731,15 +6742,20 @@
                 e.target.value = '';
             });
         }
-        const theadUnid = document.querySelector('#rondo-wrap-unidades thead');
-        if (theadUnid) {
-            theadUnid.addEventListener('click', (e) => {
-                const th = e.target.closest && e.target.closest('th.rondo-sortable');
-                if (!th) return;
-                const col = th.dataset.sort;
-                if (APP.sortCol === col) APP.sortDir = (APP.sortDir === 'desc') ? 'asc' : 'desc';
-                else { APP.sortCol = col; APP.sortDir = 'asc'; }
+        const ordenUnid = byId('rondo-uni-orden');
+        if (ordenUnid) {
+            ordenUnid.addEventListener('change', () => {
+                APP.sortCol = ordenUnid.value || '';
+                if (APP.sortCol) APP.sortDir = APP.sortDir || 'asc';
                 writeJSON(LS.sortCol, APP.sortCol);
+                writeJSON(LS.sortDir, APP.sortDir);
+                paintTabla();
+            });
+        }
+        const dirUnid = byId('rondo-uni-dir');
+        if (dirUnid) {
+            dirUnid.addEventListener('click', () => {
+                APP.sortDir = (APP.sortDir === 'desc') ? 'asc' : 'desc';
                 writeJSON(LS.sortDir, APP.sortDir);
                 paintTabla();
             });
@@ -6806,17 +6822,17 @@
             const placa = e.target.dataset.placa || '';
             if (e.target.checked) addToSelection(eco, placa);
             else removeFromSelection(eco, placa);
-            const tr = e.target.closest('tr.fila');
-            if (tr) tr.classList.toggle('sel-row', !!e.target.checked);
+            const card = e.target.closest('.fila');
+            if (card) card.classList.toggle('sel-row', !!e.target.checked);
         });
         document.getElementById('rondo-body').addEventListener('click', (e) => {
-            if (e.target.classList && (e.target.classList.contains('rondo-sel') || e.target.closest('label.col-sel'))) {
+            if (e.target.classList && (e.target.classList.contains('rondo-sel') || e.target.closest('label.u-check'))) {
                 e.stopPropagation();
                 return;
             }
-            const tr = e.target.closest('tr.fila');
-            if (!tr) return;
-            const eco = tr.dataset.eco;
+            const card = e.target.closest('.fila');
+            if (!card) return;
+            const eco = card.dataset.eco;
             if (!eco) return;
             if (e.target.classList && e.target.classList.contains('rondo-sil')) {
                 if (APP.dismissed.has(eco)) APP.dismissed.delete(eco); else APP.dismissed.add(eco);
@@ -6827,8 +6843,8 @@
             openUnitWindow(eco);
         });
         document.getElementById('rondo-body').addEventListener('contextmenu', (e) => {
-            const tr = e.target.closest && e.target.closest('tr.fila');
-            const eco = tr ? tr.dataset.eco : null;
+            const card = e.target.closest && e.target.closest('.fila');
+            const eco = card ? card.dataset.eco : null;
             if (!eco) return;
             e.preventDefault();
             const it = unitByEco(eco);
@@ -6959,11 +6975,10 @@
             g('c-coords').checked = !!APP.config.mostrarCoords;
             g('c-contornos').checked = !!APP.config.contornos;
             g('c-contorno-horas').value = APP.config.contornoHoras;
-            g('c-panel-modo').value = APP.config.panelMode || 'flotante';
             g('c-panel-clicfuera').checked = !!APP.config.ocultarAlClicFuera;
             g('c-confirmar-cierre').checked = !!APP.config.confirmarCierre;
             g('c-panel-lado').value = APP.config.panelLado || 'derecha';
-            g('c-panel-ancho').value = APP.config.panelAncho || 420;
+            g('c-panel-ancho').value = APP.config.panelAncho || 460;
             g('c-b-main').checked = !!APP.barra.botones.main;
             g('c-b-panel').checked = !!APP.barra.botones.panel;
             g('c-b-close').checked = !!APP.barra.botones.close;
@@ -7131,7 +7146,7 @@
             cf.horario.on = g('c-hor-on').checked;
             cf.horario.desde = g('c-hor-a').value || DEFAULTS.horario.desde;
             cf.horario.hasta = g('c-hor-b').value || DEFAULTS.horario.hasta;
-            cf.panelMode = g('c-panel-modo').value || 'flotante';
+            cf.panelMode = 'lateral';
             cf.panelLado = g('c-panel-lado').value || 'derecha';
             cf.panelAncho = clamp(isoNum(g('c-panel-ancho').value, cf.panelAncho), 360, 900);
             cf.ocultarAlClicFuera = g('c-panel-clicfuera').checked;
@@ -7163,11 +7178,12 @@
             adviceOk('Barra recentrada');
         });
         byId('rondo-reset-panel').addEventListener('click', () => {
-            panelEl.style.width = '470px';
-            panelEl.style.height = '440px';
-            APP.panelSize = { w: 470, h: 440 };
-            writeJSON(LS.panelsize, APP.panelSize);
-            adviceOk('Tamaño restablecido');
+            APP.config.panelAncho = 460;
+            writeJSON(LS.cfg, APP.config);
+            aplicarModoPanel();
+            const inp = byId('c-panel-ancho');
+            if (inp) inp.value = 460;
+            adviceOk('Ancho restablecido', '460 px');
         });
         byId('rondo-perfil-guardar').addEventListener('click', () => {
             rondoPrompt('Guardar perfil', 'Ponle un nombre a la configuracion actual.', '', (n) => {
@@ -7484,6 +7500,9 @@
         const primerUso = !localStorage.getItem(LS.cfg);
         injectCSS();
         buildUI();
+        // La barra lateral se aplica de inmediato (antes de esperar a Wialon)
+        // para que el panel ya tenga su layout correcto desde el primer dibujo.
+        aplicarModoPanel();
         attachDraggables();
         bindKeys();
         bindEvents();
