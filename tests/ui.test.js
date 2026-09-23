@@ -135,6 +135,13 @@ ok('sin boton rondo-sb-modo', src.indexOf('rondo-sb-modo') < 0);
 ok('sin selector c-panel-modo', src.indexOf('c-panel-modo') < 0);
 ok('esLateral siempre true', /function esLateral\(\)\s*{\s*return true;/.test(src));
 
+// Pestanas solo icono y sin marco verde en Riesgo.
+ok('CSS oculta siempre la etiqueta de la pestana', /#rondo-panel \.tab \.etqt\{display:none\}/.test(src));
+ok('sin indicador verde tab-regla-activa', src.indexOf('tab-regla-activa') < 0);
+ok('sin clase regla-activa en la pestana Riesgo', src.indexOf('regla-activa') < 0);
+// Riesgo no se repinta cada segundo (anti-parpadeo).
+ok('setInterval no llama paintRiesgo', !/setInterval[^)]+if \(APP\.tab === 'riesgo'\) paintRiesgo\(\)/.test(src));
+
 // Unidades en tarjetas (sin tabla) y con barra de orden.
 ok('lista de unidades es contenedor .rondo-uni-list', src.indexOf('class="rondo-uni-list"') >= 0);
 ok('hay plantilla de tarjeta rondo-uni-card', src.indexOf('rondo-uni-card') >= 0);

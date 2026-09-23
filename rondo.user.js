@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.6.0
+// @version      5.6.1
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -144,7 +144,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.6.0';
+    const VER = '5.6.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -3772,8 +3772,8 @@
             "#rondo-panel .rondo-iconbtn:active{transform:translateY(0)}\n" +
             "#rondo-panel .rondo-iconbtn.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.4)}\n" +
             "#rondo-panel .tabs{display:flex;gap:3px;background:var(--rondo-bg-soft);padding:5px 6px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
-            "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:3px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:7px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
-            "#rondo-panel .tab .etqt{font-size:11px;letter-spacing:.2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:9px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
+            +
             "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
@@ -4056,9 +4056,12 @@
             "#rondo-panel .rondo-riesgo-empty .paso .d{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.35}\n" +
             /* Tab Riesgo: contador + indicador de regla activa */
             "#rondo-panel .tab[data-tab='riesgo']{position:relative}\n" +
-            "#rondo-panel .tab[data-tab='riesgo'] .tab-regla-activa{display:none;width:6px;height:6px;border-radius:50%;background:var(--rondo-ok);margin-left:3px;box-shadow:0 0 0 2px rgba(67,160,71,.3);animation: rondoPulseGreen 2s infinite;vertical-align:middle}\n" +
-            "#rondo-panel .tab[data-tab='riesgo'].regla-activa .tab-regla-activa{display:inline-block}\n" +
-            "#rondo-panel .tab[data-tab='riesgo'].regla-activa{box-shadow:inset 0 -2px 0 var(--rondo-ok)}\n" +
+            /* Pestanas solo icono (sin etiqueta de texto), con badge contador. */
+            "#rondo-panel .tab .etqt{display:none}\n" +
+            "#rondo-panel .tab{padding:9px 2px;gap:4px}\n" +
+            "#rondo-panel .tab .rondo-mi{font-size:19px;line-height:1}\n" +
+            "#rondo-panel .tab .contador{font-size:9.5px;padding:1px 5px;margin-left:0}\n" +
+            +
             +
             "#rondo-panel .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
             "#rondo-panel .kpi .etq{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
@@ -4318,7 +4321,6 @@
             "  #rondo-toasts{width:min(92vw,330px);right:8px;bottom:8px}\n" +
             "}\n" +
             "@media (max-width:480px){\n" +
-            "  #rondo-panel .tab .etqt{display:none}\n" +
             "  #rondo-barra .rondo-modo-label{display:none}\n" +
             "}\n" +
             /* ── Dashboard: distribucion y atencion ── */
@@ -4344,7 +4346,9 @@
             "#rondo-panel header h3{font-size:calc(13px * var(--rondo-esc))}\n" +
             "#rondo-panel .rondo-iconbtn{width:calc(30px * var(--rondo-esc));height:calc(30px * var(--rondo-esc));font-size:calc(13px * var(--rondo-esc))}\n" +
             "#rondo-panel .tab{padding:calc(8px * var(--rondo-esc)) calc(4px * var(--rondo-esc));font-size:calc(11.5px * var(--rondo-esc))}\n" +
-            "#rondo-panel .tab .etqt{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tab{padding:calc(9px * var(--rondo-esc)) calc(2px * var(--rondo-esc));gap:calc(4px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tab .rondo-mi{font-size:calc(19px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tab .contador{font-size:calc(9.5px * var(--rondo-esc))}\n" +
             "#rondo-panel .tab .contador{font-size:calc(10px * var(--rondo-esc));padding:calc(1px * var(--rondo-esc)) calc(5px * var(--rondo-esc))}\n" +
             "#rondo-panel .tools button{padding:calc(5px * var(--rondo-esc)) calc(9px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
             "#rondo-panel input.filtro,#rondo-panel select.filtro{padding:calc(4px * var(--rondo-esc)) calc(7px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
@@ -4497,7 +4501,7 @@
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="rondo-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-mi">' + ICO.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
-            '<button class="tab" data-tab="riesgo" title="Zonas de riesgo: alerta si una unidad pierde senal en zona caliente"><span class="rondo-mi">' + ICO.riesgo + '</span><span class="etqt">Riesgo</span><span class="contador" id="rondo-c-riesgo">0</span><span class="tab-regla-activa" title="Regla activa"></span></button>' +
+            '<button class="tab" data-tab="riesgo" title="Zonas de riesgo"><span class="rondo-mi">' + ICO.riesgo + '</span><span class="contador" id="rondo-c-riesgo">0</span></button>' +
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
             '<input class="filtro" id="rondo-filtro" placeholder="' + esc(LANG.busq) + '">' +
@@ -4624,28 +4628,26 @@
             '<div class="rondo-riesgo-hist-head"><span>Distribucion de score</span><b id="rondo-riesgo-hist-rango">0&ndash;100</b></div>' +
             '<div class="rondo-riesgo-hist" id="rondo-riesgo-hist"></div>' +
             '</div>' +
-            '<div class="rondo-seccion">' +
-            '<h4><span class="rondo-mi">' + ICO.refrescar + '</span> Origen del dataset</h4>' +
+            '<div class="rondo-seccion rondo-riesgo-status-sec" id="rondo-riesgo-drop">' +
+            '<div class="rondo-riesgo-status-row">' +
+            '<div class="rondo-riesgo-status-text">' +
+            '<span class="rondo-mi">' + ICO.riesgo + '</span> ' +
+            '<b id="rondo-riesgo-status-cuenta">0 zonas</b>' +
+            '<span id="rondo-riesgo-status-fuente" class="rondo-riesgo-status-sub"></span>' +
+            '</div>' +
+            '<button class="mini rondo-riesgo-configurar" id="rondo-riesgo-configurar" title="Abrir Ajustes de Reglas (URL, formato, parametros y regla)">' +
+            '<span class="rondo-mi">' + ICO.ajustes + '</span> Configurar' +
+            '</button>' +
+            '<button class="mini rondo-riesgo-recargar" id="rondo-riesgo-recargar" title="Recargar el dataset desde la URL o el archivo">' +
+            '<span class="rondo-mi">' + ICO.refrescar + '</span> Recargar' +
+            '</button>' +
+            '<button class="mini rondo-riesgo-limpiar" id="rondo-riesgo-limpiar" title="Olvidar el dataset en memoria">' +
+            '<span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar' +
+            '</button>' +
+            '</div>' +
             '<div id="rondo-riesgo-estado" class="rondo-riesgo-estado"></div>' +
-            '<div class="rondo-riesgo-toolbar" id="rondo-riesgo-toolbar-url">' +
-            '<input id="rondo-riesgo-url" class="filtro" placeholder="URL del CSV / JSON (se consulta en cada arranque)">' +
-            '<button class="mini" id="rondo-riesgo-recargar" title="Reintentar carga"><span class="rondo-mi">' + ICO.refrescar + '</span> Recargar</button>' +
+            '<p class="rondo-riesgo-status-hint">Configura URL, formato, parametros y la regla desde <b>Ajustes &gt; Reglas</b>. Tambien puedes arrastrar aqui un CSV/JSON o usar Recargar/Limpiar arriba.</p>' +
             '<div class="rondo-riesgo-dropmask"><span class="rondo-mi">' + ICO.importar + '</span> Suelta el archivo aqui</div>' +
-            '</div>' +
-            '<div class="rondo-riesgo-toolbar" id="rondo-riesgo-toolbar-file">' +
-            '<input type="file" id="rondo-riesgo-archivo" accept=".csv,.json,.txt,.tsv">' +
-            '<button class="mini" id="rondo-riesgo-limpiar" title="Olvidar dataset en memoria"><span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar</button>' +
-            '<div class="rondo-riesgo-dropmask"><span class="rondo-mi">' + ICO.importar + '</span> Suelta el archivo aqui</div>' +
-            '</div>' +
-            '<p>Si no pones URL, la alerta de <b>perdida de senal en zona de riesgo</b> queda desactivada silenciosamente.</p>' +
-            '</div>' +
-            '<div class="rondo-seccion">' +
-            '<h4><span class="rondo-mi">' + ICO.ajustes + '</span> Parametros y regla</h4>' +
-            '<div id="rondo-riesgo-parametros" class="rondo-riesgo-params"></div>' +
-            '<label id="rondo-riesgo-toggle-wrap" class="rondo-riesgo-toggle">' +
-            '<input type="checkbox" id="rondo-riesgo-toggle"> ' +
-            '<span><span class="rondo-mi">' + ICO.alertas + '</span><b>PERDIO SENAL EN ZONA DE RIESGO</b> &middot; alerta critica</span>' +
-            '</label>' +
             '</div>' +
             '<div class="rondo-seccion">' +
             '<h4><span class="rondo-mi">' + ICO.filtro + '</span> Filtros y vista<span class="rondo-count" id="rondo-riesgo-filtradas">0</span></h4>' +
@@ -4667,15 +4669,27 @@
             '<option value="grupo">Por estado</option>' +
             '<option value="plano">Lista plana</option>' +
             '</select>' +
-            '<button class="mini" id="rondo-riesgo-limpiar-filtros" title="Quitar filtros"><span class="rondo-mi">' + ICO.limpiar + '</span></button>' +
-            '<button class="mini" id="rondo-riesgo-expandir" title="Expandir / colapsar todos los grupos"><span class="rondo-mi">' + ICO.expandir + '</span></button>' +
-            '<button class="mini" id="rondo-riesgo-exportar" title="Exportar subset filtrado"><span class="rondo-mi">' + ICO.exportar + '</span> Exportar</button>' +
+            '<button class="mini" id="rondo-riesgo-limpiar-filtros" title="Quitar filtros y ver todas las zonas">' +
+            '<span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar filtros' +
+            '</button>' +
+            '<button class="mini" id="rondo-riesgo-expandir" title="Expandir o colapsar todos los grupos">' +
+            '<span class="rondo-mi">' + ICO.expandir + '</span> Expandir todo' +
+            '</button>' +
+            '<button class="mini" id="rondo-riesgo-exportar" title="Exportar el subset visible (CSV, GeoJSON o portapapeles)">' +
+            '<span class="rondo-mi">' + ICO.exportar + '</span> Exportar' +
+            '</button>' +
             '</div>' +
             '<div class="rondo-riesgo-export">' +
             '<span class="etq">Exportar lo visible:</span>' +
-            '<button class="mini" id="rondo-riesgo-csv" title="CSV"><span class="rondo-mi">' + ICO.descargar + '</span> CSV</button>' +
-            '<button class="mini" id="rondo-riesgo-geo" title="GeoJSON"><span class="rondo-mi">' + ICO.exportar + '</span> GeoJSON</button>' +
-            '<button class="mini" id="rondo-riesgo-copiar" title="Copiar al portapapeles"><span class="rondo-mi">' + ICO.copiar + '</span> Copiar</button>' +
+            '<button class="mini" id="rondo-riesgo-csv" title="Descargar CSV">' +
+            '<span class="rondo-mi">' + ICO.descargar + '</span> CSV' +
+            '</button>' +
+            '<button class="mini" id="rondo-riesgo-geo" title="Descargar GeoJSON">' +
+            '<span class="rondo-mi">' + ICO.exportar + '</span> GeoJSON' +
+            '</button>' +
+            '<button class="mini" id="rondo-riesgo-copiar" title="Copiar al portapapeles">' +
+            '<span class="rondo-mi">' + ICO.copiar + '</span> Copiar' +
+            '</button>' +
             '</div>' +
             '<div class="rondo-riesgo-chips">' +
             '<span class="rondo-chip activo" data-nivel="todas">Todas</span>' +
@@ -5828,7 +5842,7 @@
     function paintRiesgo() {
         const cfg = APP.config || {};
         const items = APP.riesgo || [];
-        // ── Status banner ─────────────────────────────────────────────
+        // ── Estado / status banner ───────────────────────────────────
         const estadoEl = byId('rondo-riesgo-estado');
         if (estadoEl) {
             let html;
@@ -5837,43 +5851,44 @@
             if (APP.riesgoEstado === 'cargando') {
                 html = '<div class="rondo-riesgo-status load"><span class="ico rondo-mi"><span class="rondo-spin"></span></span><div class="cuerpo"><b>Cargando zonas de riesgo\u2026</b><span>Descargando desde la URL configurada.</span></div></div>';
             } else if (items.length > 0) {
-                html = '<div class="rondo-riesgo-status ok"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>' + items.length + ' zonas cargadas en memoria</b><span>\u00daltima carga ' + esc(rel) + ' \u00b7 ' + esc(fechaAbs) + '</span></div></div>';
+                html = '<div class="rondo-riesgo-status ok"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>' + items.length + ' zonas cargadas</b><span>\u00daltima carga ' + esc(rel) + ' \u00b7 ' + esc(fechaAbs) + '</span></div></div>';
             } else if (APP.riesgoEstado === 'error') {
                 html = '<div class="rondo-riesgo-status err"><span class="ico rondo-mi">' + ICO.alertas + '</span><div class="cuerpo"><b>Sin dataset activo</b><span>' + esc(APP.riesgoErr || 'configura una URL en Ajustes > Reglas, o importa un archivo') + '. La alerta cr\u00edtica de zona de riesgo queda desactivada.</span></div></div>';
             } else if (!cfg.riesgoUrl) {
-                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>A\u00fan no hay URL configurada</b><span>Pega una URL en <b>Ajustes &gt; Reglas &gt; Zonas de riesgo</b> o importa un CSV/JSON local.</span></div></div>';
+                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>A\u00fan no hay URL configurada</b><span>Pega una URL en <b>Ajustes &gt; Reglas &gt; Zonas de riesgo</b> o arrastra un archivo CSV/JSON aqui.</span></div></div>';
             } else {
-                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>Sin zonas cargadas</b><span>Pulsa <b>Recargar</b> para intentar de nuevo.</span></div></div>';
+                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>Sin zonas cargadas</b><span>Pulsa <b>Recargar</b> o arrastra un CSV/JSON aqui.</span></div></div>';
             }
             estadoEl.innerHTML = html;
         }
-        // ── URL y toggle ──────────────────────────────────────────────
-        const urlInput = byId('rondo-riesgo-url');
-        if (urlInput && urlInput.value !== (cfg.riesgoUrl || '')) urlInput.value = cfg.riesgoUrl || '';
-        const toggleEl = byId('rondo-riesgo-toggle');
-        if (toggleEl) toggleEl.checked = !!(cfg.reglas && cfg.reglas.riesgoSinSenal);
-        const toggleWrap = byId('rondo-riesgo-toggle-wrap');
-        if (toggleWrap) toggleWrap.classList.toggle('on', !!(cfg.reglas && cfg.reglas.riesgoSinSenal));
-        // ── Indicador de regla activa en la pestana ──────────────────
-        const tabRiesgo = document.querySelector('.tab[data-tab="riesgo"]');
-        if (tabRiesgo) tabRiesgo.classList.toggle('regla-activa', !!(cfg.reglas && cfg.reglas.riesgoSinSenal) && items.length > 0);
+        // ── Contador de la pestana ───────────────────────────────────
         const tabContador = byId('rondo-c-riesgo');
         if (tabContador) tabContador.textContent = items.length || 0;
-        // ── Parametros (incluye slider para score min.) ──────────────
-        const paramsEl = byId('rondo-riesgo-parametros');
-        if (paramsEl) {
-            const formato = cfg.riesgoFormato || 'auto';
-            const minScore = (cfg.riesgoMinScore == null) ? 1 : cfg.riesgoMinScore;
-            const radioMul = (cfg.riesgoRadioMul == null) ? 1 : cfg.riesgoRadioMul;
-            paramsEl.innerHTML =
-                '<label><b>Formato</b><select id="rondo-riesgo-formato-sel">' +
-                '<option value="auto"' + (formato === 'auto' ? ' selected' : '') + '>Auto</option>' +
-                '<option value="csv"' + (formato === 'csv' ? ' selected' : '') + '>CSV / TSV</option>' +
-                '<option value="json"' + (formato === 'json' ? ' selected' : '') + '>JSON</option>' +
-                '</select></label>' +
-                '<label><b>Score min.</b><span style="display:flex;align-items:center;gap:4px"><input type="range" id="rondo-riesgo-min" min="0" max="100" value="' + minScore + '"><span class="slider-val" id="rondo-riesgo-min-val">' + minScore + '</span></span></label>' +
-                '<label><b>Radio (x)</b><input type="number" id="rondo-riesgo-mul" min="0.1" max="5" step="0.1" value="' + radioMul + '"></label>' +
-                '<div class="rondo-riesgo-params-hint">M\u00e1s radio = zonas m\u00e1s amplias. M\u00e1s score = solo delitos graves.</div>';
+        // ── Cuenta + fuente (linea compacta) ────────────────────────
+        const cuentaEl = byId('rondo-riesgo-status-cuenta');
+        if (cuentaEl) {
+            cuentaEl.textContent = items.length + (items.length === 1 ? ' zona' : ' zonas');
+        }
+        const fuenteEl = byId('rondo-riesgo-status-fuente');
+        if (fuenteEl) {
+            const partes = [];
+            // Fuente del dataset: primero config (URL), luego APP._riesgoFetched,
+            // luego la fuente del primer item.
+            const fuente = (cfg.riesgoUrl && APP._riesgoFetched) || '';
+            if (fuente) {
+                let tag = fuente;
+                try {
+                    const u = new URL(fuente);
+                    tag = u.hostname + u.pathname;
+                    if (tag.length > 38) tag = tag.slice(0, 35) + '\u2026';
+                } catch (_) { /* noop */ }
+                partes.push(esc(tag));
+            }
+            if (APP.riesgoTs && items.length) {
+                partes.push('carga ' + esc(tiempoRelativo(APP.riesgoTs)));
+            }
+            fuenteEl.innerHTML = partes.length ? ' \u00b7 ' + partes.join(' \u00b7 ') : '';
+            fuenteEl.title = fuente;
         }
         // ── Dona SVG ─────────────────────────────────────────────────
         const stats = calcularStatsRiesgo(items);
@@ -6123,7 +6138,8 @@
         if (APP.tab === 'rutas') paintRutas();
         if (APP.tab === 'geocercas') paintGeocercas();
         if (APP.tab === 'caravana') paintCaravana();
-        if (APP.tab === 'riesgo') paintRiesgo();
+        // Riesgo NO se repinta cada segundo para evitar parpadeo: solo se
+        // re-pinta cuando cambian los datos, los filtros o se carga el dataset.
         byId('rondo-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
         paintStateBadge();
