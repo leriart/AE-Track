@@ -15,7 +15,7 @@ carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-5.3.0-850D22?style=for-the-badge&labelColor=1f2330)](https://github.com/leriart/AE-Track/releases)
-[![tests](https://img.shields.io/badge/tests-7%20suites%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-8%20suites%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -84,6 +84,7 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **Odometro por unidad** persistente, con deteccion de saltos GPS anomalos.
 - **Panel flotante o barra lateral** redimensionable y arrastrable, con tema
   oscuro o claro y **tamano de interfaz ajustable** para mayor legibilidad.
+  Ancho default ampliado a **520px** para que las pestanas respiren mejor.
 - **Lista vigilada** editable con destinos, **perfiles de configuracion**,
   **filtros**, **exportacion a CSV/Markdown/GeoJSON** y **respaldo JSON**.
 - **Dialogos y confirmaciones** coherentes con el estilo del panel, y
@@ -143,7 +144,7 @@ el boton de la barra o con `Alt+L`.
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
 | **Geocercas** | Cuantas unidades hay dentro de cada geocerca y cuales son. |
 | **Caravana** | Unidades (vigiladas o no) que acompanian a una unidad "lider" en la misma ruta (distancia firmada delante/detras) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada. |
-| **Riesgo** | Estado del dataset de zonas de alto riesgo (URL configurable o archivo local), parametros (formato, score minimo, multiplicador de radio) y lista de zonas cargadas. Detecta cuando una unidad pierde senal dentro de una zona. |
+| **Riesgo** | Dona SVG con distribucion por nivel, histograma de scores en 5 buckets, hero con KPIs clickeables (Total/Alto/Medio/Bajo), slider para score minimo, busqueda libre, chips de nivel, 6 criterios de orden, vista agrupada por estado (colapsable) o plana, drag-and-drop de archivos, export CSV/GeoJSON/copiar al portapapeles, empty states con onboarding de 3 pasos y tooltip rico en cada zona. |
 
 Atajos de teclado: `Alt+1..7` cambian de pestana, `Alt+P` muestra u oculta
 el panel, `Alt+L` alterna lateral, `Alt+H` pliega la barra, `Esc` cierra el
@@ -209,13 +210,16 @@ node tests/odometro.test.js
 node tests/ui.test.js
 node tests/autoruta.test.js
 node tests/caravana.test.js
+node tests/riesgo.test.js
 ```
 
-Las siete suites verifican geodesica, Douglas-Peucker, DBSCAN, A* ponderado,
+Las ocho suites verifican geodesica, Douglas-Peucker, DBSCAN, A* ponderado,
 deteccion de punto de partida, paradas con jitter GPS, odometro, orden de
 la tabla, escala de UI, parseo de version, trazado automatico de rutas,
-calculo de ETA, estado de ruta y modo caravana (proyeccion al eje,
-distancia firmada, sentido contrario y cercania directa).
+calculo de ETA, estado de ruta, modo caravana (proyeccion al eje,
+distancia firmada, sentido contrario y cercania directa) y algoritmos de
+la pestana de zonas de riesgo (clasificacion por nivel, estadisticas,
+filtrado, ordenamiento y agrupacion).
 
 ## Ramas
 

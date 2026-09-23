@@ -439,7 +439,13 @@
         riesgoTs: 0,            // ms de la ultima carga exitosa.
         riesgoErr: null,        // String del ultimo error o null.
         riesgoEstado: 'idle',   // 'idle' | 'cargando' | 'ok' | 'error'
-        _riesgoFetched: ''      // ultima URL por la que se pidi\u00f3 cargar
+        _riesgoFetched: '',     // ultima URL por la que se pidi\u00f3 cargar
+        // Estado de UI de la pestana Riesgo (sesion; se pierde al recargar).
+        riesgoFiltro: '',       // texto libre (estado / municipio / delito / id)
+        riesgoNivel: 'todas',   // 'todas' | 'alto' | 'medio' | 'bajo'
+        riesgoOrden: 'score',   // 'score' | 'estado' | 'municipio' | 'radio'
+        riesgoVista: 'grupo',   // 'grupo' (por estado) | 'plano' (lista)
+        riesgoColapsado: {}     // mapa estado -> bool (true = colapsado)
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
@@ -2173,6 +2179,405 @@
         }
         return mejor;
     }
+    /* ── Algoritmos UI de la pestana Riesgo ─────────────────────────────
+     * Clasificacion, estadisticas, filtrado, ordenamiento y agrupacion.
+     * Funciones puras: no leen DOM ni APP, salvo donde se indica.
+     */
+    // Umbrales de nivel. Se exponen aqui para que tests y UI coincidan.
+    const RIESGO_NIVEL = Object.freeze({ ALTO: 70, MEDIO: 40 });
+    function nivelRiesgo(score) {
+        const s = Number(score) || 0;
+        if (s >= RIESGO_NIVEL.ALTO) return 'alto';
+        if (s >= RIESGO_NIVEL.MEDIO) return 'medio';
+        return 'bajo';
+    }
+    // Radio efectivo ya con el multiplicador configurado.
+    function radioEfectivo(z, mul) {
+        const r = (z && z.radio_m) || 0;
+        const m = Number(mul);
+        return r * (Number.isFinite(m) && m > 0 ? m : 1);
+    }
+    // Area de un circulo en km^2 a partir del radio en metros.
+    function areaKm2DeRadio(radio_m) {
+        if (!(radio_m > 0)) return 0;
+        const km = radio_m / 1000;
+        return Math.PI * km * km;
+    }
+    // Texto corto para area: < 1 km^2 -> m^2; si no, km^2 con 1 decimal.
+    function fmtArea(km2) {
+        if (!km2) return '0';
+        if (km2 < 1) return Math.round(km2 * 1e6).toLocaleString('es-MX') + ' m\u00b2';
+        return km2.toFixed(1) + ' km\u00b2';
+    }
+    // Convierte los delitos del item en una cadena legible (top 3).
+    function delitosTop(z, max) {
+        const d = z && z.delitos;
+        if (!d || typeof d !== 'object') return '';
+        const keys = Object.keys(d).filter((k) => d[k] > 0);
+        keys.sort((a, b) => d[b] - d[a]);
+        const n = Math.max(1, max || 3);
+        return keys.slice(0, n).map((k) => k.replace(/_/g, ' ') + ': ' + d[k]).join(' \u00b7 ');
+    }
+    // Convierte el item a un texto "haystack" para busqueda difusa.
+    function riesgoHaystack(z) {
+        if (!z) return '';
+        const partes = [
+            z.id, z.estado, z.municipio, z.fuente,
+            (z.delitos && typeof z.delitos === 'object') ? Object.keys(z.delitos).join(' ') : ''
+        ];
+        return partes.filter(Boolean).join(' ').toLowerCase();
+    }
+    // Calcula estadisticas agregadas para el hero / KPIs.
+    function calcularStatsRiesgo(items) {
+        const out = { total: 0, alto: 0, medio: 0, bajo: 0, areaKm2: 0,
+            municipios: 0, fuenteSet: {}, maxScore: 0, sumScore: 0, delitosAcum: {} };
+        if (!items || !items.length) return out;
+        const muns = new Set();
+        out.total = items.length;
+        for (let i = 0; i < items.length; i++) {
+            const z = items[i];
+            const score = Number(z.score) || 0;
+            const nivel = nivelRiesgo(score);
+            out[nivel]++;
+            out.sumScore += score;
+            if (score > out.maxScore) out.maxScore = score;
+            if (z.radio_m > 0) out.areaKm2 += areaKm2DeRadio(z.radio_m);
+            if (z.municipio) muns.add(z.estado + '|' + z.municipio);
+            if (z.fuente) out.fuenteSet[z.fuente] = (out.fuenteSet[z.fuente] || 0) + 1;
+            if (z.delitos && typeof z.delitos === 'object') {
+                Object.keys(z.delitos).forEach((k) => {
+                    const n = Number(z.delitos[k]) || 0;
+                    if (n > 0) out.delitosAcum[k] = (out.delitosAcum[k] || 0) + n;
+                });
+            }
+        }
+        out.municipios = muns.size;
+        out.areaKm2 = Math.round(out.areaKm2 * 10) / 10;
+        out.promScore = Math.round(out.sumScore / out.total);
+        return out;
+    }
+    // Filtra por texto libre y nivel. Devuelve un array nuevo.
+    function filtrarZonas(items, query, nivel) {
+        if (!items || !items.length) return [];
+        const q = String(query || '').toLowerCase().trim();
+        const lvl = nivel || 'todas';
+        if (!q && (lvl === 'todas' || !lvl)) return items.slice();
+        const out = [];
+        for (let i = 0; i < items.length; i++) {
+            const z = items[i];
+            if (lvl !== 'todas' && nivelRiesgo(z.score) !== lvl) continue;
+            if (q && riesgoHaystack(z).indexOf(q) < 0) continue;
+            out.push(z);
+        }
+        return out;
+    }
+    // Ordena por el criterio dado. Devuelve un array nuevo.
+    function ordenarZonas(items, criterio) {
+        if (!items) return [];
+        const arr = items.slice();
+        const c = criterio || 'score';
+        const cmpStr = (a, b) => String(a || '').localeCompare(String(b || ''), 'es');
+        switch (c) {
+            case 'score-asc': arr.sort((a, b) => (Number(a.score) || 0) - (Number(b.score) || 0)); break;
+            case 'score-desc': arr.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0)); break;
+            case 'estado': arr.sort((a, b) => cmpStr(a.estado, b.estado) || ((Number(b.score) || 0) - (Number(a.score) || 0))); break;
+            case 'municipio': arr.sort((a, b) => cmpStr(a.municipio, b.municipio) || ((Number(b.score) || 0) - (Number(a.score) || 0))); break;
+            case 'radio-desc': arr.sort((a, b) => (Number(b.radio_m) || 0) - (Number(a.radio_m) || 0)); break;
+            case 'radio-asc': arr.sort((a, b) => (Number(a.radio_m) || 0) - (Number(b.radio_m) || 0)); break;
+            default: arr.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+        }
+        return arr;
+    }
+    // Agrupa por estado. Cada grupo incluye count, maxScore, municipios.
+    function agruparPorEstado(items) {
+        const grupos = Object.create(null);
+        if (!items) return [];
+        for (let i = 0; i < items.length; i++) {
+            const z = items[i];
+            const est = z.estado || 'Sin estado';
+            if (!grupos[est]) {
+                grupos[est] = { estado: est, count: 0, municipios: new Set(),
+                    maxScore: 0, sumScore: 0, alto: 0, medio: 0, bajo: 0, areaKm2: 0, zonas: [] };
+            }
+            const g = grupos[est];
+            g.count++;
+            g.zonas.push(z);
+            const score = Number(z.score) || 0;
+            if (score > g.maxScore) g.maxScore = score;
+            g.sumScore += score;
+            g[nivelRiesgo(score)]++;
+            if (z.municipio) g.municipios.add(z.municipio);
+            if (z.radio_m > 0) g.areaKm2 += areaKm2DeRadio(z.radio_m);
+        }
+        const arr = Object.values(grupos);
+        arr.forEach((g) => {
+            g.municipios = g.municipios.size;
+            g.promScore = Math.round(g.sumScore / g.count);
+            g.areaKm2 = Math.round(g.areaKm2 * 10) / 10;
+            g.zonas = ordenarZonas(g.zonas, 'score-desc');
+            delete g.sumScore;
+        });
+        arr.sort((a, b) => b.maxScore - a.maxScore || b.count - a.count);
+        return arr;
+    }
+    // Top N delitos agregados (para el footer del hero).
+    function topDelitos(stats, n) {
+        if (!stats || !stats.delitosAcum) return [];
+        const arr = Object.keys(stats.delitosAcum).map((k) => ({ key: k, n: stats.delitosAcum[k] }));
+        arr.sort((a, b) => b.n - a.n);
+        return arr.slice(0, n || 3);
+    }
+    // ── Dona y distribucion ────────────────────────────────────────
+    // Dado el total y los segmentos, devuelve los parametros del arco SVG
+    // para dibujarlo. size es el diametro, grosor el ancho del anillo.
+    // Salida: array [{fraccion, colorKey, dashArray, dashOffset}] para 3 segmentos.
+    function donutSegmentos(alto, medio, bajo, size, grosor) {
+        const total = (alto || 0) + (medio || 0) + (bajo || 0);
+        if (total === 0 || !size) {
+            return { total: 0, segmentos: [], radio: (size || 0) / 2 - (grosor || 0) / 2,
+                circunferencia: 0, grosor: grosor || 0 };
+        }
+        const radio = size / 2 - grosor / 2;
+        const circunferencia = 2 * Math.PI * radio;
+        const seg = (n, key) => ({
+            n: n || 0,
+            fraccion: (n || 0) / total,
+            colorKey: key,
+            longitud: ((n || 0) / total) * circunferencia,
+        });
+        return { total, radio, circunferencia, grosor: grosor || 0,
+            segmentos: [seg(alto, 'alto'), seg(medio, 'medio'), seg(bajo, 'bajo')] };
+    }
+    // Calcula los offset y longitudes para un stroke-dasharray de 3 segmentos
+    // que cubran la circunferencia sin huecos. Salida: 3 objetos {len, off}.
+    function donutDashArray(seg, circ) {
+        if (!seg || !circ) return [];
+        let acumulado = 0;
+        return seg.map((s) => {
+            const len = Math.max(0.0001, s.longitud);
+            const off = -acumulado;
+            acumulado += s.longitud;
+            return { len, off, colorKey: s.colorKey, fraccion: s.fraccion, n: s.n };
+        });
+    }
+    // ── Histograma de scores ───────────────────────────────────────
+    // Cuenta zonas por buckets de score. Por defecto 5 buckets de 20 puntos.
+    // Devuelve {buckets: [[lo,hi],...], counts: [...], max, total}.
+    function histogramaScores(items, buckets) {
+        const bk = buckets || [[0, 20], [20, 40], [40, 60], [60, 80], [80, 101]];
+        const counts = bk.map(() => 0);
+        if (!items || !items.length) {
+            return { buckets: bk, counts: counts, max: 0, total: 0 };
+        }
+        let max = 0;
+        let total = 0;
+        for (let i = 0; i < items.length; i++) {
+            const s = Number(items[i].score) || 0;
+            if (s < 0 || s > 100) continue;
+            for (let j = 0; j < bk.length; j++) {
+                if (s >= bk[j][0] && s < bk[j][1]) {
+                    counts[j]++;
+                    total++;
+                    if (counts[j] > max) max = counts[j];
+                    break;
+                }
+            }
+        }
+        return { buckets: bk, counts, max, total };
+    }
+    // ── Tiempo relativo ────────────────────────────────────────────
+    // Devuelve "hace 5 min", "hace 2 h", "recien" segun el timestamp.
+    function tiempoRelativo(ts) {
+        if (!ts) return '';
+        const d = Date.now() - ts;
+        if (d < 0) return 'recien';
+        const s = Math.floor(d / 1000);
+        if (s < 45) return 'hace ' + s + ' s';
+        const m = Math.floor(s / 60);
+        if (m < 60) return 'hace ' + m + ' min';
+        const h = Math.floor(m / 60);
+        if (h < 24) return 'hace ' + h + ' h';
+        const dd = Math.floor(h / 24);
+        return 'hace ' + dd + ' d';
+    }
+    // ── Formato de exportacion ─────────────────────────────────────
+    // Construye un array de filas (header + datos) para CSV.
+    // Columnas: estado, municipio, score, radio_m, lat, lon, fuente, id, delitos_resumen.
+    function riesgoParaCSV(items) {
+        const header = ['estado', 'municipio', 'score', 'radio_m', 'lat', 'lon', 'fuente', 'id', 'delitos'];
+        const filas = [header];
+        if (!items || !items.length) return filas;
+        for (let i = 0; i < items.length; i++) {
+            const z = items[i];
+            const d = (z.delitos && typeof z.delitos === 'object')
+                ? Object.keys(z.delitos).filter((k) => z.delitos[k] > 0)
+                    .map((k) => k + ':' + z.delitos[k]).join(';')
+                : '';
+            filas.push([
+                z.estado || '', z.municipio || '',
+                Number(z.score) || 0, Number(z.radio_m) || 0,
+                z.lat != null ? z.lat : (z.centro && z.centro[0] != null ? z.centro[0] : ''),
+                z.lon != null ? z.lon : (z.centro && z.centro[1] != null ? z.centro[1] : ''),
+                z.fuente || '', z.id || '', d,
+            ]);
+        }
+        return filas;
+    }
+    // Construye un objeto GeoJSON FeatureCollection para exportacion.
+    function riesgoParaGeoJSON(items) {
+        const features = [];
+        if (!items || !items.length) {
+            return { type: 'FeatureCollection', features: [] };
+        }
+        for (let i = 0; i < items.length; i++) {
+            const z = items[i];
+            const lat = z.lat != null ? z.lat : (z.centro && z.centro[0] != null ? z.centro[0] : null);
+            const lon = z.lon != null ? z.lon : (z.centro && z.centro[1] != null ? z.centro[1] : null);
+            if (lat == null || lon == null) continue;
+            features.push({
+                type: 'Feature',
+                geometry: { type: 'Point', coordinates: [lon, lat] },
+                properties: {
+                    id: z.id || null,
+                    estado: z.estado || null,
+                    municipio: z.municipio || null,
+                    score: Number(z.score) || 0,
+                    radio_m: Number(z.radio_m) || 0,
+                    fuente: z.fuente || null,
+                    delitos: (z.delitos && typeof z.delitos === 'object') ? z.delitos : null,
+                },
+            });
+        }
+        return { type: 'FeatureCollection', features: features };
+    }
+    // Construye texto para copiar al portapapeles.
+    function riesgoParaClipboard(items) {
+        if (!items || !items.length) return '';
+        const lineas = [];
+        lineas.push('ZONAS DE RIESGO (' + items.length + ')');
+        lineas.push('=====================');
+        items.forEach((z) => {
+            const score = Number(z.score) || 0;
+            const radio = z.radio_m || 0;
+            const lat = z.lat != null ? z.lat : (z.centro && z.centro[0] != null ? z.centro[0] : null);
+            const lon = z.lon != null ? z.lon : (z.centro && z.centro[1] != null ? z.centro[1] : null);
+            const coord = (lat != null && lon != null)
+                ? ('  ' + lat.toFixed(4) + ', ' + lon.toFixed(4)) : '';
+            lineas.push((z.estado || '?') + ' \u00b7 ' + (z.municipio || '?') + ' \u00b7 score ' + score + '/100 \u00b7 buffer ' + radio + ' m' + coord);
+        });
+        return lineas.join('\n');
+    }
+    // Devuelve los parametros necesarios para dibujar una sola card de zona
+    // como texto enriquecido (usado por el detalle expandible).
+    function riesgoDetalleHTML(z) {
+        if (!z) return '';
+        const partes = [];
+        partes.push('<b>' + esc(z.estado || '?') + '</b>');
+        if (z.municipio) partes.push(esc(z.municipio));
+        if (z.id) partes.push('id: ' + esc(z.id));
+        const score = Number(z.score) || 0;
+        partes.push('score <b>' + score + '/100</b>');
+        if (z.radio_m) partes.push('buffer <b>' + z.radio_m + ' m</b>');
+        const lat = z.lat != null ? z.lat : (z.centro && z.centro[0] != null ? z.centro[0] : null);
+        const lon = z.lon != null ? z.lon : (z.centro && z.centro[1] != null ? z.centro[1] : null);
+        if (lat != null && lon != null) {
+            partes.push('coordenadas <span class="coord">' + lat.toFixed(4) + ', ' + lon.toFixed(4) + '</span>');
+        }
+        if (z.fuente) partes.push('fuente <i>' + esc(z.fuente) + '</i>');
+        if (z.delitos && typeof z.delitos === 'object') {
+            const det = delitosTop(z, 5);
+            if (det) partes.push('delitos: ' + esc(det));
+        }
+        return partes.join(' \u00b7 ');
+    }
+    // ── Export y copia (operan sobre el subset visible) ──────────────
+    // Devuelve el subset de zonas actualmente filtrado y ordenado.
+    function riesgoSubsetVisible() {
+        const items = APP.riesgo || [];
+        const filtradas = filtrarZonas(items, APP.riesgoFiltro, APP.riesgoNivel);
+        return ordenarZonas(filtradas, APP.riesgoOrden || 'score');
+    }
+    // Dispara descarga de un CSV con el subset visible.
+    function exportarRiesgoCSV() {
+        const items = riesgoSubsetVisible();
+        if (!items.length) { adviceWarn('Nada que exportar', 'No hay zonas visibles con los filtros actuales.'); return; }
+        const filas = riesgoParaCSV(items);
+        const escCsv = (c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"';
+        const csv = filas.map((f) => f.map(escCsv).join(',')).join('\n');
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' }));
+        a.download = 'rondo_riesgo_' + new Date().toISOString().slice(0, 10) + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        adviceOk('CSV exportado', items.length + ' zonas');
+    }
+    // Dispara descarga de un GeoJSON con el subset visible.
+    function exportarRiesgoGeoJSON() {
+        const items = riesgoSubsetVisible();
+        if (!items.length) { adviceWarn('Nada que exportar', 'No hay zonas visibles con los filtros actuales.'); return; }
+        const geo = riesgoParaGeoJSON(items);
+        const text = JSON.stringify(geo, null, 2);
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(new Blob([text], { type: 'application/geo+json;charset=utf-8;' }));
+        a.download = 'rondo_riesgo_' + new Date().toISOString().slice(0, 10) + '.geojson';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        adviceOk('GeoJSON exportado', items.length + ' zonas');
+    }
+    // Copia el subset visible al portapapeles.
+    function copiarRiesgoFiltrado() {
+        const items = riesgoSubsetVisible();
+        if (!items.length) { adviceWarn('Nada que copiar', 'No hay zonas visibles con los filtros actuales.'); return; }
+        const text = riesgoParaClipboard(items);
+        copiarAlPortapapeles(text, 'Copiado al portapapeles', items.length + ' zonas (' + items.length + ' lineas)');
+    }
+    // Copia una sola zona al portapapeles.
+    function copiarZonaRiesgo(z) {
+        const text = riesgoParaClipboard([z]);
+        copiarAlPortapapeles(text, 'Zona copiada', esc(z.estado || '?') + ' \u00b7 ' + esc(z.municipio || '?'));
+    }
+    // Helper: usa copyToClipboard (definida mas abajo) y avisa con toast.
+    function copiarAlPortapapeles(text, titulo, resumen) {
+        const cb = (typeof copyToClipboard === 'function') ? copyToClipboard : null;
+        const p = cb ? cb(text) : Promise.resolve(false);
+        Promise.resolve(p).then((ok) => {
+            if (ok) adviceOk(titulo, resumen);
+            else adviceErr(titulo, 'No se pudo copiar');
+        }).catch(() => adviceErr(titulo, 'No se pudo copiar'));
+    }
+    // Menu contextual del boton "Exportar" grande. Usa showMenu() que ya existe.
+    function mostrarMenuExportarRiesgo() {
+        const btn = byId('rondo-riesgo-exportar');
+        if (!btn) return;
+        const rect = btn.getBoundingClientRect();
+        const items = riesgoSubsetVisible();
+        const n = items.length;
+        showMenu(rect.left, rect.bottom + 4, [
+            { id: 'riesgo-export-csv', icon: ICO.descargar, label: 'CSV (' + n + ' zonas)' },
+            { id: 'riesgo-export-geo', icon: ICO.exportar, label: 'GeoJSON (' + n + ' zonas)' },
+            { id: 'riesgo-export-copiar', icon: ICO.copiar, label: 'Copiar al portapapeles' },
+        ]);
+        // Delegamos click sobre el ctxEl.
+        const handler = (e) => {
+            const op = e.target.closest && e.target.closest('.op');
+            if (!op) return;
+            const acc = op.dataset.acc;
+            if (acc === 'riesgo-export-csv') exportarRiesgoCSV();
+            else if (acc === 'riesgo-export-geo') exportarRiesgoGeoJSON();
+            else if (acc === 'riesgo-export-copiar') copiarRiesgoFiltrado();
+            if (typeof hideMenu === 'function') hideMenu();
+        };
+        if (ctxEl) {
+            ctxEl.removeEventListener('click', ctxEl._riesgoHandler);
+            ctxEl._riesgoHandler = handler;
+            ctxEl.addEventListener('click', handler);
+        }
+    }
+    // Abre la ventana de Ajustes (helper para el empty state).
+    function abrirAjustes() {
+        const b = byId('rondo-cfg-btn');
+        if (b) b.click();
+    }
     async function reglaRiesgoSinSenal(st, prev, R, info, etq) {
         if (!APP.config.reglas.riesgoSinSenal) return;
         if (!APP.riesgo || !APP.riesgo.length) return;
@@ -3431,6 +3836,228 @@
             "#rondo-panel .rondo-cv-card .cv-meta .pill.dim{opacity:.75}\n" +
             "#rondo-panel .rondo-cv-card.contrario{border-color:rgba(var(--rondo-crit-rgb),.6)}\n" +
             "#rondo-panel .rondo-cv-empty{padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
+            /* ── Pestaña Riesgo ───────────────────────────────────── */
+            "#rondo-panel #rondo-wrap-riesgo{padding:8px;display:flex;flex-direction:column;gap:9px;overflow:auto;flex:1}\n" +
+            /* Hero: header grande con titulo, KPIs y distribution bar */
+            "#rondo-panel .rondo-riesgo-hero{background:linear-gradient(135deg,var(--rondo-bg-soft),var(--rondo-bg));border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius);padding:10px 12px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            "#rondo-panel .rondo-riesgo-hero::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--rondo-bad),var(--rondo-warn),var(--rondo-fg-mute))}\n" +
+            "#rondo-panel .rondo-riesgo-hero-head{display:flex;align-items:center;gap:9px}\n" +
+            "#rondo-panel .rondo-riesgo-hero-head .rondo-mi{font-size:22px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-riesgo-hero-head .ht{font:700 13.5px var(--rondo-font);color:var(--rondo-fg);letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-riesgo-hero-head .hs{font:600 11px var(--rondo-font);color:var(--rondo-fg-dim);display:flex;gap:4px;align-items:center}\n" +
+            "#rondo-panel .rondo-riesgo-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}\n" +
+            "#rondo-panel .rondo-riesgo-kpi{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:6px 8px;display:flex;flex-direction:column;gap:1px;min-width:0;position:relative;overflow:hidden;transition:border-color .15s,transform .12s}\n" +
+            "#rondo-panel .rondo-riesgo-kpi:hover{border-color:var(--rondo-border);transform:translateY(-1px)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi .kpi-etq{font:600 9.5px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-riesgo-kpi .kpi-val{font:700 17px/1.1 var(--rondo-font);color:var(--rondo-fg);white-space:nowrap}\n" +
+            "#rondo-panel .rondo-riesgo-kpi .kpi-res{font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.alto .kpi-val{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.alto{border-color:rgba(var(--rondo-bad-fg),.25)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.medio .kpi-val{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.medio{border-color:rgba(var(--rondo-warn-fg),.25)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.bajo .kpi-val{color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-dist{display:flex;height:7px;border-radius:4px;overflow:hidden;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .rondo-riesgo-dist-seg{height:100%;transition:width .35s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-riesgo-dist-seg.alto{background:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-dist-seg.medio{background:var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-riesgo-dist-seg.bajo{background:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-dist-legend{display:flex;gap:10px;font:600 10px var(--rondo-font);color:var(--rondo-fg-dim);flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-riesgo-dist-legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:4px;vertical-align:-1px}\n" +
+            "#rondo-panel .rondo-riesgo-dist-legend i.alto{background:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-dist-legend i.medio{background:var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-riesgo-dist-legend i.bajo{background:var(--rondo-fg-mute)}\n" +
+            /* Seccion generica (config, filtros, lista) */
+            "#rondo-panel .rondo-seccion{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:9px 11px;display:flex;flex-direction:column;gap:8px;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            "#rondo-panel .rondo-seccion h4{margin:0;font-size:11px;color:var(--rondo-accent-2);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:6px;font-weight:700}\n" +
+            "#rondo-panel .rondo-seccion h4 .rondo-mi{font-size:14px;color:var(--rondo-accent-2);line-height:1}\n" +
+            "#rondo-panel .rondo-seccion h4 .rondo-count{margin-left:auto;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:2px 8px;border-radius:9px;font:700 10px/1 var(--rondo-font);letter-spacing:.2px}\n" +
+            "#rondo-panel .rondo-seccion p{margin:0;font-size:11px;color:var(--rondo-fg-dim);line-height:1.45}\n" +
+            /* Status banner dentro de la pestana */
+            "#rondo-panel .rondo-riesgo-status{display:flex;gap:9px;padding:8px 10px;border-radius:var(--rondo-radius-sm);align-items:flex-start;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-left:4px solid var(--rondo-fg-mute);transition:border-color .2s}\n" +
+            "#rondo-panel .rondo-riesgo-status.ok{border-left-color:var(--rondo-ok);background:var(--rondo-ok-bg)}\n" +
+            "#rondo-panel .rondo-riesgo-status.err{border-left-color:var(--rondo-bad);background:var(--rondo-bad-bg)}\n" +
+            "#rondo-panel .rondo-riesgo-status.load{border-left-color:var(--rondo-accent-2);background:var(--rondo-bg)}\n" +
+            "#rondo-panel .rondo-riesgo-status .ico{font-size:16px;line-height:1.15;width:18px;text-align:center}\n" +
+            "#rondo-panel .rondo-riesgo-status.ok .ico{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-status.err .ico{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-status.load .ico{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-riesgo-status .cuerpo{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}\n" +
+            "#rondo-panel .rondo-riesgo-status b{font-size:12px;letter-spacing:.2px;color:var(--rondo-fg);font-weight:600}\n" +
+            "#rondo-panel .rondo-riesgo-status span{color:var(--rondo-fg-dim);font-size:11.5px}\n" +
+            /* Toolbar: URL, archivo, recargar, limpiar */
+            "#rondo-panel .rondo-riesgo-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-riesgo-toolbar > .filtro,#rondo-panel .rondo-riesgo-toolbar > input[type=file]{flex:1;min-width:0;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:5px 8px;font:12px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-riesgo-toolbar > input[type=file]{padding:4px 6px}\n" +
+            "#rondo-panel .rondo-riesgo-toolbar > .filtro:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-riesgo-toolbar > input::placeholder{color:var(--rondo-fg-mute)}\n" +
+            /* Parametros: grid 3 columnas */
+            "#rondo-panel .rondo-riesgo-params{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px;padding:2px 0}\n" +
+            "#rondo-panel .rondo-riesgo-params > label{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--rondo-fg-dim);padding:0;margin:0}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > b{font:600 10.5px var(--rondo-font);color:var(--rondo-fg);letter-spacing:.2px}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > input,#rondo-panel .rondo-riesgo-params > label > select{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font:600 12px var(--rondo-font);width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > input:focus,#rondo-panel .rondo-riesgo-params > label > select:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-riesgo-params-hint{grid-column:1/-1;font-size:10.5px;color:var(--rondo-fg-mute);line-height:1.4;padding-top:4px;border-top:1px dashed var(--rondo-border-soft);margin-top:2px}\n" +
+            /* Toggle regla */
+            "#rondo-panel .rondo-riesgo-toggle{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);font-size:11.5px;color:var(--rondo-fg);cursor:pointer;transition:background .15s,border-color .15s}\n" +
+            "#rondo-panel .rondo-riesgo-toggle:hover{background:var(--rondo-bg-strong);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-riesgo-toggle input{accent-color:var(--rondo-accent);cursor:pointer;width:14px;height:14px;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-riesgo-toggle b{font-weight:600;color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-toggle.on{border-color:rgba(var(--rondo-accent-rgb),.4);background:linear-gradient(0deg,var(--rondo-bg),var(--rondo-bg-strong))}\n" +
+            "#rondo-panel .rondo-riesgo-toggle.on b{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-riesgo-toggle .rondo-mi{color:var(--rondo-accent-2);font-size:14px}\n" +
+            /* Filtros: busqueda + nivel + orden + vista */
+            "#rondo-panel .rondo-riesgo-filters{display:grid;grid-template-columns:1fr;gap:6px}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row > .search-wrap{position:relative;display:flex;align-items:center}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > .rondo-mi{position:absolute;left:7px;color:var(--rondo-fg-mute);font-size:14px;pointer-events:none}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > input{padding-left:24px!important}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row select.filtro,#rondo-panel .rondo-riesgo-filters-row .mini{width:auto;min-width:0}\n" +
+            "#rondo-panel .rondo-riesgo-chips{display:flex;gap:4px;flex-wrap:wrap;align-items:center}\n" +
+            "#rondo-panel .rondo-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 6px rgba(var(--rondo-accent-rgb),.3)}\n" +
+            "#rondo-panel .rondo-chip.alto.activo{background:var(--rondo-bad);box-shadow:0 2px 6px rgba(229,57,53,.35)}\n" +
+            "#rondo-panel .rondo-chip.medio.activo{background:var(--rondo-warn);color:#1d2433;box-shadow:0 2px 6px rgba(249,168,37,.35)}\n" +
+            "#rondo-panel .rondo-chip.bajo.activo{background:var(--rondo-fg-mute);color:#1d2433;box-shadow:0 2px 6px rgba(111,120,136,.35)}\n" +
+            "#rondo-panel .rondo-riesgo-summary{display:flex;align-items:center;gap:8px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-dim);padding:4px 2px 2px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-riesgo-summary b{color:var(--rondo-fg);font-weight:600}\n" +
+            "#rondo-panel .rondo-riesgo-summary .sep{opacity:.5}\n" +
+            /* Lista */
+            "#rondo-panel .rondo-riesgo-list{display:flex;flex-direction:column;gap:7px;max-height:none}\n" +
+            /* Grupo colapsable por estado */
+            "#rondo-panel .rondo-riesgo-grupo{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);overflow:hidden;transition:border-color .15s}\n" +
+            "#rondo-panel .rondo-riesgo-grupo:hover{border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head{display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer;user-select:none;background:var(--rondo-bg-soft);transition:background .15s}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-estado{font:700 12px var(--rondo-font);color:var(--rondo-fg);letter-spacing:.3px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-meta{display:flex;align-items:center;gap:5px;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-meta .pill{font:600 10px/1 var(--rondo-font);padding:2px 7px;border-radius:9px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-meta .pill.alto{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-meta .pill.medio{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-meta .pill.bajo{background:var(--rondo-bg);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-toggle{font-size:14px;color:var(--rondo-fg-mute);transition:transform .2s var(--rondo-easing);display:inline-block;width:14px;text-align:center}\n" +
+            "#rondo-panel .rondo-riesgo-grupo.colapsado .g-toggle{transform:rotate(-90deg)}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-body{display:flex;flex-direction:column;gap:5px;padding:7px;max-height:520px;overflow:auto}\n" +
+            "#rondo-panel .rondo-riesgo-grupo.colapsado .rondo-riesgo-grupo-body{display:none}\n" +
+            /* Card de zona */
+            "#rondo-panel .rondo-riesgo-card{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:8px 10px;display:flex;flex-direction:column;gap:5px;transition:background .15s,border-color .15s,transform .12s,box-shadow .15s;position:relative}\n" +
+            "#rondo-panel .rondo-riesgo-card:hover{background:var(--rondo-bg);border-color:var(--rondo-border);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .rondo-riesgo-card.alto{border-left:3px solid var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-card.medio{border-left:3px solid var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-riesgo-card.bajo{border-left:3px solid var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-head{display:flex;align-items:center;gap:7px;line-height:1.2}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-head .rb-loc{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--rondo-fg);font:600 12px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-head .rb-loc .rb-est{color:var(--rondo-accent-2);margin-right:2px}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-head .rb-mun{color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-score{font:700 12px/1 var(--rondo-font);padding:3px 8px;border-radius:8px;flex-shrink:0;min-width:30px;text-align:center}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-score.alto{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-score.medio{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-score.bajo{background:var(--rondo-bg);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-bar{flex:1;height:5px;background:var(--rondo-bg);border-radius:3px;overflow:hidden;min-width:40px;max-width:80px}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-bar-fill{height:100%;transition:width .35s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-bar-fill.alto{background:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-bar-fill.medio{background:var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-bar-fill.bajo{background:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-sub{font-size:10.5px;color:var(--rondo-fg-dim);line-height:1.4;word-wrap:break-word}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-meta{display:flex;flex-wrap:wrap;gap:4px;font-size:10px;color:var(--rondo-fg-dim);align-items:center}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-meta .pill{display:inline-flex;align-items:center;gap:3px;padding:1px 7px;border-radius:999px;background:var(--rondo-bg);color:var(--rondo-fg);font:600 10px var(--rondo-font);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-meta .pill.coord{font-family:monospace}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-meta .pill.fuente{margin-left:auto;background:transparent;color:var(--rondo-fg-mute);font-weight:500;border-color:transparent}\n" +
+            /* Estado vacio de la lista */
+            "#rondo-panel .rondo-riesgo-empty{padding:28px 14px;text-align:center;color:var(--rondo-fg-dim);font-size:12px;border:1px dashed var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-panel .rondo-riesgo-empty .rondo-mi{display:block;margin:0 auto 8px;font-size:34px;color:var(--rondo-fg-mute);opacity:.55}\n" +
+            "#rondo-panel .rondo-riesgo-empty b{color:var(--rondo-fg);font-weight:600}\n" +
+            "#rondo-panel .rondo-riesgo-empty button{margin-top:8px}\n" +
+            /* Footer de la lista */
+            "#rondo-panel .rondo-riesgo-foot{font-size:10.5px;color:var(--rondo-fg-mute);padding:6px 4px 0;text-align:right;border-top:1px dashed var(--rondo-border-soft);margin-top:4px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-riesgo-foot b{color:var(--rondo-fg-dim);font-weight:600}\n" +
+            /* ── Hero expandido: dona SVG + histograma + KPIs clickeables ── */
+            "#rondo-panel .rondo-riesgo-hero{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:11px 12px}\n" +
+            "#rondo-panel .rondo-riesgo-dona{position:relative;width:74px;height:74px;flex-shrink:0;cursor:default;transition:transform .2s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-riesgo-dona:hover{transform:scale(1.04)}\n" +
+            "#rondo-panel .rondo-riesgo-dona svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}\n" +
+            "#rondo-panel .rondo-riesgo-dona circle{fill:none;stroke-width:9;transition:stroke-width .2s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-riesgo-dona circle.fondo{stroke:var(--rondo-bg);opacity:.6}\n" +
+            "#rondo-panel .rondo-riesgo-dona circle.seg-alto{stroke:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-dona circle.seg-medio{stroke:var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-riesgo-dona circle.seg-bajo{stroke:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-dona-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}\n" +
+            "#rondo-panel .rondo-riesgo-dona-center .dona-val{font:700 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-dona-center .dona-etq{font:600 9px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}\n" +
+            "#rondo-panel .rondo-riesgo-hero-side{display:flex;flex-direction:column;gap:7px;min-width:0}\n" +
+            "#rondo-panel .rondo-riesgo-hero-side .ht{font:700 13.5px var(--rondo-font);color:var(--rondo-fg);letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-riesgo-hero-side .hs{font:600 11px var(--rondo-font);color:var(--rondo-fg-dim);display:flex;gap:4px;align-items:center}\n" +
+            /* KPI clickeable */
+            "#rondo-panel .rondo-riesgo-kpi{cursor:pointer;transition:border-color .15s,transform .12s,background .15s,box-shadow .15s}\n" +
+            "#rondo-panel .rondo-riesgo-kpi:hover{border-color:var(--rondo-border);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi:active{transform:translateY(0)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.activo{box-shadow:0 0 0 1px var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.alto.activo{border-color:var(--rondo-bad);box-shadow:0 0 0 1px var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.medio.activo{border-color:var(--rondo-warn);box-shadow:0 0 0 1px var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.bajo.activo{border-color:var(--rondo-fg-mute);box-shadow:0 0 0 1px var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.alto:hover .kpi-val{color:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-kpi.medio:hover .kpi-val{color:var(--rondo-warn)}\n" +
+            /* Histograma (sparkline vertical de 5 buckets) */
+            "#rondo-panel .rondo-riesgo-hist{display:flex;align-items:flex-end;gap:3px;height:34px;padding:2px 0}\n" +
+            "#rondo-panel .rondo-riesgo-hist-b{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:0}\n" +
+            "#rondo-panel .rondo-riesgo-hist-b .bar{width:100%;background:var(--rondo-fg-mute);border-radius:2px 2px 1px 1px;min-height:2px;transition:height .35s var(--rondo-easing),background .2s}\n" +
+            "#rondo-panel .rondo-riesgo-hist-b .bar.alto{background:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-riesgo-hist-b .bar.medio{background:var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-riesgo-hist-b .bar.bajo{background:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-riesgo-hist-b .lbl{font:600 8.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap}\n" +
+            "#rondo-panel .rondo-riesgo-hist-wrap{display:flex;flex-direction:column;gap:3px;padding:5px 7px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm)}\n" +
+            "#rondo-panel .rondo-riesgo-hist-head{display:flex;justify-content:space-between;align-items:center;font:600 9.5px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.4px}\n" +
+            "#rondo-panel .rondo-riesgo-hist-head b{color:var(--rondo-fg);font-weight:700}\n" +
+            /* Drag and drop overlay para toolbar */
+            "#rondo-panel .rondo-riesgo-toolbar{position:relative}\n" +
+            "#rondo-panel .rondo-riesgo-toolbar.drag-over > .rondo-riesgo-dropmask{opacity:1;pointer-events:auto}\n" +
+            "#rondo-panel .rondo-riesgo-dropmask{position:absolute;inset:-4px;border:2px dashed var(--rondo-accent-2);border-radius:var(--rondo-radius);background:rgba(var(--rondo-accent-rgb),.06);display:flex;align-items:center;justify-content:center;gap:6px;color:var(--rondo-accent-2);font:700 11.5px var(--rondo-font);opacity:0;pointer-events:none;transition:opacity .15s;z-index:2;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}\n" +
+            /* Slider de score min. */
+            "#rondo-panel .rondo-riesgo-params > label > b .slider-val{color:var(--rondo-accent-2);font-weight:700;font-family:monospace}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > b{display:flex;justify-content:space-between;align-items:center;gap:4px}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > input[type=range]{appearance:none;-webkit-appearance:none;background:transparent;padding:0;height:22px;border:0;cursor:pointer;width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-webkit-slider-runnable-track{height:4px;background:linear-gradient(90deg,var(--rondo-fg-mute),var(--rondo-accent-2));border-radius:2px}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-moz-range-track{height:4px;background:linear-gradient(90deg,var(--rondo-fg-mute),var(--rondo-accent-2));border-radius:2px}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--rondo-accent-2);border:2px solid var(--rondo-bg);margin-top:-5px;box-shadow:0 1px 3px rgba(0,0,0,.3);cursor:grab}\n" +
+            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--rondo-accent-2);border:2px solid var(--rondo-bg);box-shadow:0 1px 3px rgba(0,0,0,.3);cursor:grab}\n" +
+            /* Toggle: anade icono */
+            "#rondo-panel .rondo-riesgo-toggle .rondo-mi{color:var(--rondo-accent-2);font-size:14px}\n" +
+            /* Sticky filters */
+            "#rondo-panel .rondo-riesgo-filters{position:sticky;top:0;z-index:3;background:var(--rondo-bg-soft);padding-top:2px;margin-top:-2px}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row{grid-template-columns:1fr auto auto auto auto auto}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row > .search-wrap{position:relative;display:flex;align-items:center}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > .rondo-mi{position:absolute;left:7px;color:var(--rondo-fg-mute);font-size:14px;pointer-events:none}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > input{padding-left:24px!important;width:100%}\n" +
+            /* Export bar */
+            "#rondo-panel .rondo-riesgo-export{display:flex;gap:4px;align-items:center;padding-top:4px;border-top:1px dashed var(--rondo-border-soft);margin-top:2px}\n" +
+            "#rondo-panel .rondo-riesgo-export .etq{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);margin-right:auto}\n" +
+            /* Chips con feedback al cambiar */
+            "#rondo-panel .rondo-riesgo-chips{transition:opacity .2s}\n" +
+            "#rondo-panel .rondo-chip{transition:all .15s var(--rondo-easing);padding:3px 9px}\n" +
+            "#rondo-panel .rondo-chip:hover{transform:translateY(-1px)}\n" +
+            "#rondo-panel .rondo-chip:active{transform:translateY(0)}\n" +
+            /* Card: animacion de entrada + acciones en hover + tooltip */
+            "#rondo-panel .rondo-riesgo-card{position:relative;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-actions{display:flex;gap:3px;margin-left:auto;align-items:center;opacity:0;transition:opacity .15s}\n" +
+            "#rondo-panel .rondo-riesgo-card:hover .rb-actions{opacity:1}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-actions button{background:transparent;border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-mute);border-radius:6px;padding:2px 5px;cursor:pointer;font-size:11px;line-height:1;transition:all .15s}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-actions button:hover{background:var(--rondo-bg-soft);color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-actions button.ok{color:var(--rondo-ok-fg);border-color:var(--rondo-ok)}\n" +
+            "#rondo-panel .rondo-riesgo-card[title]{cursor:default}\n" +
+            /* Empty state con onboarding */
+            "#rondo-panel .rondo-riesgo-empty{display:flex;flex-direction:column;align-items:center;gap:6px}\n" +
+            "#rondo-panel .rondo-riesgo-empty .rondo-mi{line-height:1}\n" +
+            "#rondo-panel .rondo-riesgo-empty .pasos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;width:100%}\n" +
+            "#rondo-panel .rondo-riesgo-empty .paso{display:flex;flex-direction:column;gap:3px;padding:8px 9px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);text-align:left}\n" +
+            "#rondo-panel .rondo-riesgo-empty .paso .n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--rondo-accent-grad);color:#fff;font:700 10px var(--rondo-font);margin-bottom:2px}\n" +
+            "#rondo-panel .rondo-riesgo-empty .paso .t{font:600 11px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-riesgo-empty .paso .d{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.35}\n" +
+            /* Tab Riesgo: contador + indicador de regla activa */
+            "#rondo-panel .tab[data-tab='riesgo']{position:relative}\n" +
+            "#rondo-panel .tab[data-tab='riesgo'] .tab-regla-activa{display:none;width:6px;height:6px;border-radius:50%;background:var(--rondo-ok);margin-left:3px;box-shadow:0 0 0 2px rgba(67,160,71,.3);animation: rondoPulseGreen 2s infinite;vertical-align:middle}\n" +
+            "#rondo-panel .tab[data-tab='riesgo'].regla-activa .tab-regla-activa{display:inline-block}\n" +
+            "#rondo-panel .tab[data-tab='riesgo'].regla-activa{box-shadow:inset 0 -2px 0 var(--rondo-ok)}\n" +
+            +
             "#rondo-panel .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
             "#rondo-panel .kpi .etq{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
             "#rondo-panel .kpi .valor{font:600 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
@@ -3691,6 +4318,43 @@
             "#rondo-panel .alerta b{font-size:calc(12px * var(--rondo-esc))}\n" +
             "#rondo-panel .alerta span{font-size:calc(11.5px * var(--rondo-esc))}\n" +
             "#rondo-panel .alerta .hora,#rondo-panel .alerta .meta{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-seccion{padding:calc(9px * var(--rondo-esc)) calc(11px * var(--rondo-esc));gap:calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-seccion h4{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-seccion h4 .rondo-mi{font-size:calc(14px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-hero{padding:calc(11px * var(--rondo-esc)) calc(12px * var(--rondo-esc));gap:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-dona{width:calc(74px * var(--rondo-esc));height:calc(74px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-dona circle{stroke-width:calc(9px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-dona-center .dona-val{font-size:calc(18px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-dona-center .dona-etq{font-size:calc(9px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-hero-side .ht{font-size:calc(13.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-hero-side .hs{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-kpi{padding:calc(5px * var(--rondo-esc)) calc(7px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-kpi .kpi-etq{font-size:calc(9.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-kpi .kpi-val{font-size:calc(17px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-kpi .kpi-res{font-size:calc(9.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-hist{height:calc(34px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-hist-b .lbl{font-size:calc(8.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-hist-head{font-size:calc(9.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-status{padding:calc(8px * var(--rondo-esc)) calc(10px * var(--rondo-esc));gap:calc(9px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-status .ico{font-size:calc(16px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-status b{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-status span{font-size:calc(11.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row{gap:calc(6px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-chip{font-size:calc(10.5px * var(--rondo-esc));padding:calc(2px * var(--rondo-esc)) calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-summary{font-size:calc(10.5px * var(--rondo-esc));gap:calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head{padding:calc(7px * var(--rondo-esc)) calc(10px * var(--rondo-esc));gap:calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .g-estado{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-body{padding:calc(7px * var(--rondo-esc));gap:calc(5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-card{padding:calc(8px * var(--rondo-esc)) calc(10px * var(--rondo-esc));gap:calc(5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-head .rb-loc{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-score{font-size:calc(12px * var(--rondo-esc));padding:calc(3px * var(--rondo-esc)) calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-sub{font-size:calc(10.5px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-meta{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-meta .pill{font-size:calc(10px * var(--rondo-esc));padding:calc(1px * var(--rondo-esc)) calc(7px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-empty{padding:calc(28px * var(--rondo-esc)) calc(14px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-empty .rondo-mi{font-size:calc(34px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-riesgo-foot{font-size:calc(10.5px * var(--rondo-esc));padding:calc(6px * var(--rondo-esc)) calc(4px * var(--rondo-esc)) 0}\n" +
+            "#rondo-panel .rondo-riesgo-toggle{font-size:calc(11.5px * var(--rondo-esc));padding:calc(7px * var(--rondo-esc)) calc(10px * var(--rondo-esc))}\n" +
             "#rondo-panel .kpi{padding:calc(9px * var(--rondo-esc)) calc(11px * var(--rondo-esc))}\n" +
             "#rondo-panel .kpi .etq{font-size:calc(10px * var(--rondo-esc))}\n" +
             "#rondo-panel .kpi .valor{font-size:calc(18px * var(--rondo-esc))}\n" +
@@ -3788,7 +4452,7 @@
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="rondo-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-mi">' + ICO.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
-            '<button class="tab" data-tab="riesgo" title="Zonas de riesgo: alerta si una unidad pierde senal en zona caliente"><span class="rondo-mi">' + ICO.riesgo + '</span><span class="etqt">Riesgo</span></button>' +
+            '<button class="tab" data-tab="riesgo" title="Zonas de riesgo: alerta si una unidad pierde senal en zona caliente"><span class="rondo-mi">' + ICO.riesgo + '</span><span class="etqt">Riesgo</span><span class="contador" id="rondo-c-riesgo">0</span><span class="tab-regla-activa" title="Regla activa"></span></button>' +
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
             '<input class="filtro" id="rondo-filtro" placeholder="' + esc(LANG.busq) + '">' +
@@ -3880,34 +4544,106 @@
             '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
             '</div>' +
             '<div class="tabla" id="rondo-wrap-riesgo" style="display:none">' +
+            '<div class="rondo-riesgo-hero">' +
+            '<div class="rondo-riesgo-dona" id="rondo-riesgo-dona" title="Distribucion por nivel">' +
+            '<svg viewBox="0 0 74 74" aria-hidden="true">' +
+            '<circle class="fondo" cx="37" cy="37" r="28.5"></circle>' +
+            '<circle class="seg-alto" id="rondo-riesgo-dona-alto" cx="37" cy="37" r="28.5" stroke-dasharray="0 999" stroke-dashoffset="0"></circle>' +
+            '<circle class="seg-medio" id="rondo-riesgo-dona-medio" cx="37" cy="37" r="28.5" stroke-dasharray="0 999" stroke-dashoffset="0"></circle>' +
+            '<circle class="seg-bajo" id="rondo-riesgo-dona-bajo" cx="37" cy="37" r="28.5" stroke-dasharray="0 999" stroke-dashoffset="0"></circle>' +
+            '</svg>' +
+            '<div class="rondo-riesgo-dona-center">' +
+            '<span class="dona-val" id="rondo-riesgo-dona-val">0</span>' +
+            '<span class="dona-etq">zonas</span>' +
+            '</div>' +
+            '</div>' +
+            '<div class="rondo-riesgo-hero-side">' +
+            '<div class="rondo-riesgo-hero-head">' +
+            '<span class="ht">Zonas de riesgo</span>' +
+            '<span class="hs" id="rondo-riesgo-fuente-tag"></span>' +
+            '</div>' +
+            '<div class="rondo-riesgo-kpis" id="rondo-riesgo-kpis">' +
+            '<div class="rondo-riesgo-kpi" data-kpi-nivel="todas"><span class="kpi-etq">Total</span><span class="kpi-val" id="rondo-riesgo-kpi-total">0</span><span class="kpi-res" id="rondo-riesgo-kpi-prom">&mdash;</span></div>' +
+            '<div class="rondo-riesgo-kpi alto" data-kpi-nivel="alto" title="Click para filtrar por Alto"><span class="kpi-etq">Alto</span><span class="kpi-val" id="rondo-riesgo-kpi-alto">0</span><span class="kpi-res">score &ge; 70</span></div>' +
+            '<div class="rondo-riesgo-kpi medio" data-kpi-nivel="medio" title="Click para filtrar por Medio"><span class="kpi-etq">Medio</span><span class="kpi-val" id="rondo-riesgo-kpi-medio">0</span><span class="kpi-res">40&ndash;69</span></div>' +
+            '<div class="rondo-riesgo-kpi bajo" data-kpi-nivel="bajo" title="Click para filtrar por Bajo"><span class="kpi-etq">Bajo</span><span class="kpi-val" id="rondo-riesgo-kpi-bajo">0</span><span class="kpi-res">&lt; 40</span></div>' +
+            '</div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="rondo-riesgo-hist-wrap" id="rondo-riesgo-hist-wrap">' +
+            '<div class="rondo-riesgo-hist-head"><span>Distribucion de score</span><b id="rondo-riesgo-hist-rango">0&ndash;100</b></div>' +
+            '<div class="rondo-riesgo-hist" id="rondo-riesgo-hist"></div>' +
+            '</div>' +
             '<div class="rondo-seccion">' +
-            '<h4 style="margin:8px 0 6px"><span class="rondo-mi">' + ICO.riesgo + '</span> Zonas de riesgo</h4>' +
+            '<h4><span class="rondo-mi">' + ICO.refrescar + '</span> Origen del dataset</h4>' +
             '<div id="rondo-riesgo-estado" class="rondo-riesgo-estado"></div>' +
-            '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">' +
-            '<input id="rondo-riesgo-url" class="filtro" style="flex:1;min-width:240px" placeholder="URL del CSV / JSON (se consulta en cada arranque)">' +
+            '<div class="rondo-riesgo-toolbar" id="rondo-riesgo-toolbar-url">' +
+            '<input id="rondo-riesgo-url" class="filtro" placeholder="URL del CSV / JSON (se consulta en cada arranque)">' +
             '<button class="mini" id="rondo-riesgo-recargar" title="Reintentar carga"><span class="rondo-mi">' + ICO.refrescar + '</span> Recargar</button>' +
+            '<div class="rondo-riesgo-dropmask"><span class="rondo-mi">' + ICO.importar + '</span> Suelta el archivo aqui</div>' +
             '</div>' +
-            '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
-            '<input type="file" id="rondo-riesgo-archivo" accept=".csv,.json,.txt,.tsv" style="flex:1;min-width:240px">' +
+            '<div class="rondo-riesgo-toolbar" id="rondo-riesgo-toolbar-file">' +
+            '<input type="file" id="rondo-riesgo-archivo" accept=".csv,.json,.txt,.tsv">' +
             '<button class="mini" id="rondo-riesgo-limpiar" title="Olvidar dataset en memoria"><span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar</button>' +
+            '<div class="rondo-riesgo-dropmask"><span class="rondo-mi">' + ICO.importar + '</span> Suelta el archivo aqui</div>' +
             '</div>' +
-            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:6px 0 0">Si no pones URL, la alerta de <b>perdida de senal en zona de riesgo</b> queda desactivada silenciosamente.</p>' +
-            '</div>' +
-            '<div class="rondo-seccion">' +
-            '<h4 style="margin:8px 0 6px"><span class="rondo-mi">' + ICO.info + '</span> Parametros</h4>' +
-            '<div id="rondo-riesgo-parametros" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>' +
-            '<div style="margin-top:8px">' +
-            '<label style="font-size:11.5px"><input type="checkbox" id="rondo-riesgo-toggle"> Activar alerta <b>PERDIO SENAL EN ZONA DE RIESGO</b></label>' +
-            '</div>' +
+            '<p>Si no pones URL, la alerta de <b>perdida de senal en zona de riesgo</b> queda desactivada silenciosamente.</p>' +
             '</div>' +
             '<div class="rondo-seccion">' +
-            '<h4 style="margin:8px 0 6px"><span class="rondo-mi">' + ICO.geocercas + '</span> Zonas cargadas</h4>' +
-            '<div id="rondo-riesgo-lista" style="max-height:280px;overflow:auto"></div>' +
+            '<h4><span class="rondo-mi">' + ICO.ajustes + '</span> Parametros y regla</h4>' +
+            '<div id="rondo-riesgo-parametros" class="rondo-riesgo-params"></div>' +
+            '<label id="rondo-riesgo-toggle-wrap" class="rondo-riesgo-toggle">' +
+            '<input type="checkbox" id="rondo-riesgo-toggle"> ' +
+            '<span><span class="rondo-mi">' + ICO.alertas + '</span><b>PERDIO SENAL EN ZONA DE RIESGO</b> &middot; alerta critica</span>' +
+            '</label>' +
+            '</div>' +
+            '<div class="rondo-seccion">' +
+            '<h4><span class="rondo-mi">' + ICO.filtro + '</span> Filtros y vista<span class="rondo-count" id="rondo-riesgo-filtradas">0</span></h4>' +
+            '<div class="rondo-riesgo-filters">' +
+            '<div class="rondo-riesgo-filters-row">' +
+            '<div class="search-wrap">' +
+            '<span class="rondo-mi">' + ICO.filtro + '</span>' +
+            '<input id="rondo-riesgo-buscar" class="filtro" placeholder="Buscar estado, municipio, delito, id…">' +
+            '</div>' +
+            '<select id="rondo-riesgo-orden" class="filtro" title="Ordenar">' +
+            '<option value="score">Mayor score</option>' +
+            '<option value="score-asc">Menor score</option>' +
+            '<option value="estado">Estado (A-Z)</option>' +
+            '<option value="municipio">Municipio (A-Z)</option>' +
+            '<option value="radio-desc">Mayor buffer</option>' +
+            '<option value="radio-asc">Menor buffer</option>' +
+            '</select>' +
+            '<select id="rondo-riesgo-vista" class="filtro" title="Vista">' +
+            '<option value="grupo">Por estado</option>' +
+            '<option value="plano">Lista plana</option>' +
+            '</select>' +
+            '<button class="mini" id="rondo-riesgo-limpiar-filtros" title="Quitar filtros"><span class="rondo-mi">' + ICO.limpiar + '</span></button>' +
+            '<button class="mini" id="rondo-riesgo-expandir" title="Expandir / colapsar todos los grupos"><span class="rondo-mi">' + ICO.expandir + '</span></button>' +
+            '<button class="mini" id="rondo-riesgo-exportar" title="Exportar subset filtrado"><span class="rondo-mi">' + ICO.exportar + '</span> Exportar</button>' +
+            '</div>' +
+            '<div class="rondo-riesgo-export">' +
+            '<span class="etq">Exportar lo visible:</span>' +
+            '<button class="mini" id="rondo-riesgo-csv" title="CSV"><span class="rondo-mi">' + ICO.descargar + '</span> CSV</button>' +
+            '<button class="mini" id="rondo-riesgo-geo" title="GeoJSON"><span class="rondo-mi">' + ICO.exportar + '</span> GeoJSON</button>' +
+            '<button class="mini" id="rondo-riesgo-copiar" title="Copiar al portapapeles"><span class="rondo-mi">' + ICO.copiar + '</span> Copiar</button>' +
+            '</div>' +
+            '<div class="rondo-riesgo-chips">' +
+            '<span class="rondo-chip activo" data-nivel="todas">Todas</span>' +
+            '<span class="rondo-chip alto" data-nivel="alto">Alto</span>' +
+            '<span class="rondo-chip medio" data-nivel="medio">Medio</span>' +
+            '<span class="rondo-chip bajo" data-nivel="bajo">Bajo</span>' +
+            '</div>' +
+            '<div class="rondo-riesgo-summary" id="rondo-riesgo-summary"></div>' +
+            '</div>' +
+            '</div>' +
+            '<div class="rondo-seccion">' +
+            '<h4><span class="rondo-mi">' + ICO.geocercas + '</span> Zonas<span class="rondo-count" id="rondo-riesgo-total">0</span></h4>' +
+            '<div id="rondo-riesgo-lista" class="rondo-riesgo-list"></div>' +
             '</div>' +
             '</div>' +
             '<footer><span id="rondo-info">iniciando...</span><span id="rondo-upd"></span></footer>'
         );
-        panelEl.style.width = (APP.panelSize && APP.panelSize.w) ? APP.panelSize.w + 'px' : '470px';
+        panelEl.style.width = (APP.panelSize && APP.panelSize.w) ? APP.panelSize.w + 'px' : '520px';
         panelEl.style.height = (APP.panelSize && APP.panelSize.h) ? APP.panelSize.h + 'px' : '440px';
 
         modalEl = makeEl('div', { id: 'rondo-modal' });
@@ -5077,69 +5813,293 @@
     /* === END: paintCaravana === */
 
     function paintRiesgo() {
-        if (byId('rondo-wrap-riesgo')) {
-            // Refresca el contenido del panel Riesgo.
-        }
         const cfg = APP.config || {};
+        const items = APP.riesgo || [];
+        // ── Status banner ─────────────────────────────────────────────
         const estadoEl = byId('rondo-riesgo-estado');
         if (estadoEl) {
-            const items = APP.riesgo || [];
             let html;
-            const fecha = APP.riesgoTs ? new Date(APP.riesgoTs).toLocaleString() : '\u2014';
+            const rel = tiempoRelativo(APP.riesgoTs);
+            const fechaAbs = APP.riesgoTs ? new Date(APP.riesgoTs).toLocaleString() : '\u2014';
             if (APP.riesgoEstado === 'cargando') {
-                html = '<div class="alerta" style="border-left:4px solid var(--rondo-accent-2)"><span class="ico rondo-mi">' + ICO.senal + '</span><div class="cuerpo"><b>Cargando zonas de riesgo\u2026</b><span>Descargando desde la URL configurada.</span></div></div>';
+                html = '<div class="rondo-riesgo-status load"><span class="ico rondo-mi"><span class="rondo-spin"></span></span><div class="cuerpo"><b>Cargando zonas de riesgo\u2026</b><span>Descargando desde la URL configurada.</span></div></div>';
             } else if (items.length > 0) {
-                html = '<div class="alerta" style="border-left:4px solid var(--rondo-ok-fg)"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>' + items.length + ' zonas cargadas en memoria</b><span>\u00daltima carga: ' + fecha + '</span></div></div>';
+                html = '<div class="rondo-riesgo-status ok"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>' + items.length + ' zonas cargadas en memoria</b><span>\u00daltima carga ' + esc(rel) + ' \u00b7 ' + esc(fechaAbs) + '</span></div></div>';
             } else if (APP.riesgoEstado === 'error') {
-                html = '<div class="alerta" style="border-left:4px solid var(--rondo-bad-fg)"><span class="ico rondo-mi">' + ICO.alertas + '</span><div class="cuerpo"><b>Sin dataset activo</b><span>' + esc(APP.riesgoErr || 'configura una URL en Ajustes > Reglas, o importa un archivo') + '. La alerta cr\u00edtica de zona de riesgo queda desactivada.</span></div></div>';
+                html = '<div class="rondo-riesgo-status err"><span class="ico rondo-mi">' + ICO.alertas + '</span><div class="cuerpo"><b>Sin dataset activo</b><span>' + esc(APP.riesgoErr || 'configura una URL en Ajustes > Reglas, o importa un archivo') + '. La alerta cr\u00edtica de zona de riesgo queda desactivada.</span></div></div>';
             } else if (!cfg.riesgoUrl) {
-                html = '<div class="alerta" style="border-left:4px solid var(--rondo-fg-mute)"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>A\u00fan no hay URL configurada</b><span>Pega una URL en <b>Ajustes &gt; Reglas &gt; Zonas de riesgo</b> o importa un CSV/JSON local.</span></div></div>';
+                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>A\u00fan no hay URL configurada</b><span>Pega una URL en <b>Ajustes &gt; Reglas &gt; Zonas de riesgo</b> o importa un CSV/JSON local.</span></div></div>';
             } else {
-                html = '<div class="alerta" style="border-left:4px solid var(--rondo-fg-mute)"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>Sin zonas cargadas</b><span>Pulsa <b>Recargar</b> para intentar de nuevo.</span></div></div>';
+                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>Sin zonas cargadas</b><span>Pulsa <b>Recargar</b> para intentar de nuevo.</span></div></div>';
             }
             estadoEl.innerHTML = html;
         }
+        // ── URL y toggle ──────────────────────────────────────────────
         const urlInput = byId('rondo-riesgo-url');
         if (urlInput && urlInput.value !== (cfg.riesgoUrl || '')) urlInput.value = cfg.riesgoUrl || '';
         const toggleEl = byId('rondo-riesgo-toggle');
         if (toggleEl) toggleEl.checked = !!(cfg.reglas && cfg.reglas.riesgoSinSenal);
+        const toggleWrap = byId('rondo-riesgo-toggle-wrap');
+        if (toggleWrap) toggleWrap.classList.toggle('on', !!(cfg.reglas && cfg.reglas.riesgoSinSenal));
+        // ── Indicador de regla activa en la pestana ──────────────────
+        const tabRiesgo = document.querySelector('.tab[data-tab="riesgo"]');
+        if (tabRiesgo) tabRiesgo.classList.toggle('regla-activa', !!(cfg.reglas && cfg.reglas.riesgoSinSenal) && items.length > 0);
+        const tabContador = byId('rondo-c-riesgo');
+        if (tabContador) tabContador.textContent = items.length || 0;
+        // ── Parametros (incluye slider para score min.) ──────────────
         const paramsEl = byId('rondo-riesgo-parametros');
         if (paramsEl) {
             const formato = cfg.riesgoFormato || 'auto';
             const minScore = (cfg.riesgoMinScore == null) ? 1 : cfg.riesgoMinScore;
             const radioMul = (cfg.riesgoRadioMul == null) ? 1 : cfg.riesgoRadioMul;
             paramsEl.innerHTML =
-                '<label>Formato <select id="rondo-riesgo-formato-sel" style="width:120px">' +
+                '<label><b>Formato</b><select id="rondo-riesgo-formato-sel">' +
                 '<option value="auto"' + (formato === 'auto' ? ' selected' : '') + '>Auto</option>' +
                 '<option value="csv"' + (formato === 'csv' ? ' selected' : '') + '>CSV / TSV</option>' +
                 '<option value="json"' + (formato === 'json' ? ' selected' : '') + '>JSON</option>' +
                 '</select></label>' +
-                '<label>Score m\u00ednimo <input type="number" id="rondo-riesgo-min" min="0" max="100" value="' + minScore + '" style="width:80px"></label>' +
-                '<label>Multiplicador radio (x) <input type="number" id="rondo-riesgo-mul" min="0.1" max="5" step="0.1" value="' + radioMul + '" style="width:80px"></label>' +
-                '<div style="grid-column:1/-1;font-size:11px;color:var(--rondo-fg-dim)">M\u00e1s radio = zonas m\u00e1s amplias. M\u00e1s score = solo zonas con delitos graves.</div>';
+                '<label><b>Score min.</b><span style="display:flex;align-items:center;gap:4px"><input type="range" id="rondo-riesgo-min" min="0" max="100" value="' + minScore + '"><span class="slider-val" id="rondo-riesgo-min-val">' + minScore + '</span></span></label>' +
+                '<label><b>Radio (x)</b><input type="number" id="rondo-riesgo-mul" min="0.1" max="5" step="0.1" value="' + radioMul + '"></label>' +
+                '<div class="rondo-riesgo-params-hint">M\u00e1s radio = zonas m\u00e1s amplias. M\u00e1s score = solo delitos graves.</div>';
         }
+        // ── Dona SVG ─────────────────────────────────────────────────
+        const stats = calcularStatsRiesgo(items);
+        renderRiesgoDona(stats);
+        // ── Histograma ───────────────────────────────────────────────
+        const hist = histogramaScores(items);
+        renderRiesgoHistograma(hist);
+        // ── KPIs ─────────────────────────────────────────────────────
+        const totalEl = byId('rondo-riesgo-kpi-total');
+        if (totalEl) totalEl.textContent = stats.total;
+        const promEl = byId('rondo-riesgo-kpi-prom');
+        if (promEl) {
+            if (stats.total) promEl.textContent = 'prom. ' + stats.promScore + '/100';
+            else promEl.innerHTML = '&mdash;';
+        }
+        const altoEl = byId('rondo-riesgo-kpi-alto');
+        if (altoEl) altoEl.textContent = stats.alto;
+        const medioEl = byId('rondo-riesgo-kpi-medio');
+        if (medioEl) medioEl.textContent = stats.medio;
+        const bajoEl = byId('rondo-riesgo-kpi-bajo');
+        if (bajoEl) bajoEl.textContent = stats.bajo;
+        // Marca el KPI activo segun el nivel filtrado
+        document.querySelectorAll('#rondo-wrap-riesgo .rondo-riesgo-kpi').forEach((k) => {
+            k.classList.toggle('activo', k.dataset.kpiNivel === (APP.riesgoNivel || 'todas'));
+        });
+        // ── Filtros (sync UI con APP.riesgoFiltro/Nivel/Orden/Vista) ──
+        const buscar = byId('rondo-riesgo-buscar');
+        if (buscar && document.activeElement !== buscar && buscar.value !== (APP.riesgoFiltro || '')) {
+            buscar.value = APP.riesgoFiltro || '';
+        }
+        const ordenSel = byId('rondo-riesgo-orden');
+        if (ordenSel && ordenSel.value !== (APP.riesgoOrden || 'score')) ordenSel.value = APP.riesgoOrden || 'score';
+        const vistaSel = byId('rondo-riesgo-vista');
+        if (vistaSel && vistaSel.value !== (APP.riesgoVista || 'grupo')) vistaSel.value = APP.riesgoVista || 'grupo';
+        document.querySelectorAll('#rondo-wrap-riesgo .rondo-chip').forEach((c) => {
+            c.classList.toggle('activo', c.dataset.nivel === (APP.riesgoNivel || 'todas'));
+        });
+        // ── Lista: filtrar -> ordenar -> (agrupar o plano) ────────────
         const listaEl = byId('rondo-riesgo-lista');
-        if (listaEl) {
-            const items = APP.riesgo || [];
-            if (!items.length) {
-                listaEl.innerHTML = emptyState(ICO.geocercas, 'Sin zonas cargadas', 'Configura una URL, importa un archivo, o pega un CSV directamente.');
-            } else {
-                const top = items.slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 200);
-                listaEl.innerHTML = top.map((z) => {
-                    const color = z.score >= 70 ? 'var(--rondo-bad-fg)' : (z.score >= 40 ? 'var(--rondo-warn-fg)' : 'var(--rondo-fg-mute)');
-                    const d = z.delitos;
-                    const detalle = (d && typeof d === 'object')
-                        ? Object.keys(d).filter((k) => d[k] > 0).slice(0, 4).map((k) => k + ':' + d[k]).join(' / ')
-                        : '';
-                    return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
-                        '<span class="ico rondo-mi">' + ICO.riesgo + '</span>' +
-                        '<div class="cuerpo"><b>' + esc(z.estado || '?') + ' \u00b7 ' + esc(z.municipio || '(sin municipio)') + '</b>' +
-                        '<span>Score ' + (z.score || 0) + '/100 \u00b7 buffer ' + (z.radio_m || 0) + ' m' +
-                        (detalle ? ' \u00b7 ' + esc(detalle) : '') +
-                        '<span class="meta"><span class="regla">' + esc(z.fuente || '?') + '</span></span>' +
-                        '</span></div></div>';
-                }).join('') + ((items.length > top.length) ? '<div style="font-size:11px;color:var(--rondo-fg-dim);padding:6px 4px">Mostrando las ' + top.length + ' con mayor score de ' + items.length + ' totales.</div>' : '');
+        const totalLabel = byId('rondo-riesgo-total');
+        const filtradasLabel = byId('rondo-riesgo-filtradas');
+        if (totalLabel) totalLabel.textContent = items.length;
+        if (filtradasLabel) filtradasLabel.textContent = '...';
+        if (!listaEl) return;
+        const filtradas = filtrarZonas(items, APP.riesgoFiltro, APP.riesgoNivel);
+        const ordenadas = ordenarZonas(filtradas, APP.riesgoOrden || 'score');
+        if (filtradasLabel) filtradasLabel.textContent = ordenadas.length;
+        // Summary line
+        const summary = byId('rondo-riesgo-summary');
+        if (summary) {
+            const partes = [];
+            partes.push('<span><b>' + ordenadas.length + '</b> visibles</span>');
+            if (ordenadas.length !== items.length) partes.push('<span class="sep">de</span><span>' + items.length + ' totales</span>');
+            const estSet = new Set();
+            ordenadas.forEach((z) => { if (z.estado) estSet.add(z.estado); });
+            if (estSet.size > 1) partes.push('<span class="sep">\u00b7</span><span>' + estSet.size + ' estados</span>');
+            const sumArea = ordenadas.reduce((acc, z) => acc + areaKm2DeRadio(z.radio_m || 0), 0);
+            if (sumArea > 0) partes.push('<span class="sep">\u00b7</span><span>' + fmtArea(Math.round(sumArea * 10) / 10) + '</span>');
+            const top = topDelitos(calcularStatsRiesgo(ordenadas), 2);
+            if (top.length) {
+                partes.push('<span class="sep">\u00b7</span><span>top ' + top.map((t) => t.key.replace(/_/g, ' ') + ' ' + t.n).join(', ') + '</span>');
             }
+            summary.innerHTML = partes.join(' ');
+        }
+        // Empty state: con onboarding si no hay items, con sugerencias si los hay pero el filtro no devuelve nada.
+        if (!ordenadas.length) {
+            let inner;
+            if (items.length === 0) {
+                inner =
+                    '<span class="rondo-mi">' + ICO.geocercas + '</span>' +
+                    '<b>Aun no hay zonas cargadas</b>' +
+                    '<span>Sigue estos pasos para empezar.</span>' +
+                    '<div class="pasos">' +
+                        '<div class="paso"><span class="n">1</span><span class="t">Pega la URL</span><span class="d">En <b>Origen del dataset</b> arriba. Acepta CSV o JSON publico.</span></div>' +
+                        '<div class="paso"><span class="n">2</span><span class="t">Recarga</span><span class="d">Pulsa <b>Recargar</b>. Tambien puedes arrastrar un archivo CSV/JSON al recuadro.</span></div>' +
+                        '<div class="paso"><span class="n">3</span><span class="t">Activa la regla</span><span class="d">Si quieres alerta critica cuando una unidad pierda senal en zona, marca <b>PERDIO SENAL EN ZONA DE RIESGO</b>.</span></div>' +
+                    '</div>' +
+                    '<button class="mini" id="rondo-riesgo-empty-ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>';
+            } else {
+                inner =
+                    '<span class="rondo-mi">' + ICO.filtro + '</span>' +
+                    '<b>Ninguna zona coincide</b>' +
+                    '<span>Ajusta el texto o el nivel. Visibles: 0 de ' + items.length + '.</span>' +
+                    '<button class="mini" id="rondo-riesgo-empty-clear"><span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar filtros</button>';
+            }
+            listaEl.innerHTML = '<div class="rondo-riesgo-empty">' + inner + '</div>';
+            return;
+        }
+        // Render: agrupado o plano
+        if (APP.riesgoVista === 'plano') {
+            listaEl.innerHTML = renderZonasPlano(ordenadas);
+        } else {
+            listaEl.innerHTML = renderZonasAgrupadas(ordenadas);
+        }
+        // Footer con conteo
+        const totalShown = APP.riesgoVista === 'plano' ? ordenadas.length
+            : agruparPorEstado(ordenadas).reduce((acc, g) => acc + g.zonas.length, 0);
+        const fHtml = totalShown < items.length
+            ? '<span>Mostrando <b>' + totalShown + '</b> de <b>' + items.length + '</b></span>'
+            : '<span>Mostrando <b>' + totalShown + '</b></span>';
+        const fHtmlR = APP.riesgoColapsado && Object.keys(APP.riesgoColapsado).filter((k) => APP.riesgoColapsado[k]).length
+            ? '<span>' + Object.values(APP.riesgoColapsado).filter(Boolean).length + ' grupo(s) colapsado(s)</span>'
+            : '';
+        listaEl.insertAdjacentHTML('beforeend', '<div class="rondo-riesgo-foot">' + fHtml + fHtmlR + '</div>');
+    }
+    // Render de la dona SVG del hero.
+    function renderRiesgoDona(stats) {
+        const valEl = byId('rondo-riesgo-dona-val');
+        if (valEl) valEl.textContent = stats.total;
+        const radio = 28.5;
+        const circ = 2 * Math.PI * radio;
+        const seg = donutSegmentos(stats.alto, stats.medio, stats.bajo, 74, 9);
+        const dash = donutDashArray(seg.segmentos, circ);
+        const els = [
+            byId('rondo-riesgo-dona-alto'),
+            byId('rondo-riesgo-dona-medio'),
+            byId('rondo-riesgo-dona-bajo'),
+        ];
+        let acc = 0;
+        for (let i = 0; i < 3; i++) {
+            const el = els[i];
+            if (!el) continue;
+            const d = dash[i];
+            if (!d || d.fraccion <= 0 || stats.total === 0) {
+                el.setAttribute('stroke-dasharray', '0 999');
+                continue;
+            }
+            // stroke-dasharray: visible_len, (circ - visible_len) para que el resto sea hueco.
+            el.setAttribute('stroke-dasharray', (d.len - 0.5) + ' ' + (circ + 1));
+            // offset: empezamos donde termina el segmento previo (rotacion -90deg ya aplicada al SVG).
+            acc += d.len;
+            el.setAttribute('stroke-dashoffset', -(acc - d.len));
+        }
+    }
+    // Render del histograma de scores (5 barras verticales).
+    function renderRiesgoHistograma(hist) {
+        const wrap = byId('rondo-riesgo-hist');
+        if (!wrap) return;
+        if (!hist.total) {
+            wrap.innerHTML = '<div style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--rondo-fg-mute);font-size:10.5px">Sin datos</div>';
+            return;
+        }
+        const lvlOf = (lo, hi) => {
+            // Score maximo del bucket: alto >= 60, medio >= 20, bajo < 20.
+            const mid = (lo + hi - 1) / 2;
+            return nivelRiesgo(mid);
+        };
+        let html = '';
+        for (let i = 0; i < hist.buckets.length; i++) {
+            const b = hist.buckets[i];
+            const c = hist.counts[i];
+            const pct = hist.max ? Math.max(4, Math.round((c / hist.max) * 100)) : 0;
+            const lvl = lvlOf(b[0], b[1]);
+            const lbl = (b[0] === 80 ? '80+' : b[0] + '\u2013' + (b[1] - 1));
+            html += '<div class="rondo-riesgo-hist-b" title="Score ' + lbl + ': ' + c + ' zonas">' +
+                '<div class="bar ' + lvl + '" style="height:' + pct + '%"></div>' +
+                '<div class="lbl">' + lbl + '</div>' +
+                '</div>';
+        }
+        wrap.innerHTML = html;
+    }
+    // Render plano: una card por zona, sin agrupar.
+    function renderZonasPlano(ordenadas) {
+        const MAX = 500;
+        const html = [];
+        for (let i = 0; i < ordenadas.length && i < MAX; i++) html.push(renderZonaCard(ordenadas[i]));
+        return html.join('');
+    }
+    // Render agrupado: un grupo colapsable por estado.
+    function renderZonasAgrupadas(ordenadas) {
+        const grupos = agruparPorEstado(ordenadas);
+        const out = [];
+        for (let i = 0; i < grupos.length; i++) {
+            const g = grupos[i];
+            const colapsado = !!(APP.riesgoColapsado && APP.riesgoColapsado[g.estado]);
+            const max = Math.min(3, g.zonas.length);
+            const meta = [];
+            meta.push('<span class="pill"><b>' + g.count + '</b></span>');
+            meta.push('<span class="pill ' + (nivelRiesgo(g.maxScore)) + '">max ' + g.maxScore + '</span>');
+            if (g.municipios > 1) meta.push('<span class="pill">' + g.municipios + ' mun.</span>');
+            const bodyHtml = g.zonas.map(renderZonaCard).join('');
+            out.push(
+                '<div class="rondo-riesgo-grupo' + (colapsado ? ' colapsado' : '') + '" data-estado="' + esc(g.estado) + '">' +
+                '<div class="rondo-riesgo-grupo-head">' +
+                '<span class="rondo-mi g-toggle">' + ICO.bajar + '</span>' +
+                '<span class="g-estado">' + esc(g.estado) + '</span>' +
+                '<span class="g-meta">' + meta.join('') + '</span>' +
+                '</div>' +
+                '<div class="rondo-riesgo-grupo-body">' + bodyHtml + '</div>' +
+                '</div>'
+            );
+        }
+        return out.join('');
+    }
+    // Render de una sola card de zona (reusada por plano y agrupado).
+    function renderZonaCard(z) {
+        const score = Number(z.score) || 0;
+        const nivel = nivelRiesgo(score);
+        const estado = esc(z.estado || '?');
+        const municipio = esc(z.municipio || '(sin municipio)');
+        const radio = z.radio_m || 0;
+        const lat = (z.lat != null) ? z.lat.toFixed(3) : (z.centro && z.centro[0] != null ? z.centro[0].toFixed(3) : '');
+        const lon = (z.lon != null) ? z.lon.toFixed(3) : (z.centro && z.centro[1] != null ? z.centro[1].toFixed(3) : '');
+        const coord = (lat && lon) ? (lat + ', ' + lon) : '';
+        const detalle = delitosTop(z, 3);
+        const fuenteTag = z.fuente ? '<span class="pill fuente" title="Fuente del dato">' + esc(z.fuente) + '</span>' : '';
+        const idTag = z.id ? '<span class="pill" title="ID">' + esc(z.id) + '</span>' : '';
+        // Boton copiar: data-acc="copy-zone" con data-eco apunta al index en APP.riesgo (no tenemos id estable).
+        const idx = (APP.riesgo || []).indexOf(z);
+        const dataIdx = idx >= 0 ? ' data-zona-idx="' + idx + '"' : '';
+        return '<div class="rondo-riesgo-card ' + nivel + '"' + dataIdx +
+            ' title="' + esc(riesgoDetalleHTML(z).replace(/<\/?b>/g, '')) + '">' +
+            '<div class="rb-head">' +
+                '<span class="rb-loc"><span class="rb-est">' + estado + '</span><span class="rb-mun"> \u00b7 ' + municipio + '</span></span>' +
+                '<span class="rb-bar" title="Score ' + score + '/100"><span class="rb-bar-fill ' + nivel + '" style="width:' + score + '%"></span></span>' +
+                '<span class="rb-score ' + nivel + '">' + score + '</span>' +
+            '</div>' +
+            (detalle ? '<div class="rb-sub">' + esc(detalle) + '</div>' : '') +
+            '<div class="rb-meta">' +
+                (radio ? '<span class="pill">buffer ' + radio + ' m</span>' : '') +
+                (coord ? '<span class="pill coord">' + coord + '</span>' : '') +
+                idTag +
+                fuenteTag +
+                '<span class="rb-actions">' +
+                    '<button data-acc="copy-zone" data-zona-idx="' + idx + '" title="Copiar al portapapeles">' + ICO.copiar + '</button>' +
+                '</span>' +
+            '</div>' +
+            '</div>';
+    }
+    // Helper: actualiza el texto "n grupo(s) colapsado(s)" en el footer de la lista.
+    function actualizarContadorColapsados(footEl) {
+        if (!footEl) return;
+        const n = (APP.riesgoColapsado && Object.values(APP.riesgoColapsado).filter(Boolean).length) || 0;
+        const span = footEl.querySelector('.rondo-foot-grupos');
+        if (n > 0) {
+            if (span) span.textContent = n + ' grupo(s) colapsado(s)';
+            else footEl.insertAdjacentHTML('beforeend', '<span class="rondo-foot-grupos">' + n + ' grupo(s) colapsado(s)</span>');
+        } else if (span) {
+            span.remove();
         }
     }
 
@@ -6281,7 +7241,7 @@
     function bindRiesgo() {
         const wrap = byId('rondo-wrap-riesgo');
         if (!wrap) return;
-        // Delegacion: cualquier input/select de la pestana dispara aqui.
+        // ── Delegacion de change en inputs/selects de la pestana ──────
         wrap.addEventListener('change', (e) => {
             const t = e.target;
             if (!t || !t.id) return;
@@ -6310,8 +7270,147 @@
                 t.value = cfg.riesgoRadioMul;
                 writeJSON(LS.cfg, APP.config);
                 paintRiesgo();
+            } else if (t.id === 'rondo-riesgo-orden') {
+                APP.riesgoOrden = t.value || 'score';
+                paintRiesgo();
+            } else if (t.id === 'rondo-riesgo-vista') {
+                APP.riesgoVista = (t.value === 'plano') ? 'plano' : 'grupo';
+                paintRiesgo();
             }
         });
+        // ── Slider de score min: actualiza valor mostrado y repinta en vivo ──
+        const slider = byId('rondo-riesgo-min');
+        const sliderVal = byId('rondo-riesgo-min-val');
+        if (slider && sliderVal) {
+            slider.addEventListener('input', () => {
+                sliderVal.textContent = slider.value;
+                APP.config.riesgoMinScore = parseFloat(slider.value) || 0;
+                paintRiesgo();
+            });
+            slider.addEventListener('change', () => {
+                writeJSON(LS.cfg, APP.config);
+            });
+        }
+        // ── Busqueda: input con debounce ──────────────────────────────
+        const buscar = byId('rondo-riesgo-buscar');
+        if (buscar) {
+            let to = null;
+            buscar.addEventListener('input', () => {
+                clearTimeout(to);
+                to = setTimeout(() => {
+                    APP.riesgoFiltro = buscar.value || '';
+                    paintRiesgo();
+                }, 120);
+            });
+        }
+        // ── Click delegation: chips, KPI, grupo, copy zone, etc. ──────
+        wrap.addEventListener('click', (e) => {
+            // Boton copiar de una card.
+            const copyBtn = e.target.closest('[data-acc="copy-zone"]');
+            if (copyBtn && wrap.contains(copyBtn)) {
+                const idx = parseInt(copyBtn.dataset.zonaIdx, 10);
+                const z = (APP.riesgo || [])[idx];
+                if (z) copiarZonaRiesgo(z);
+                return;
+            }
+            // Boton empty-state "Abrir Ajustes".
+            const ajBtn = e.target.closest('#rondo-riesgo-empty-ajustes');
+            if (ajBtn) {
+                abrirAjustes();
+                return;
+            }
+            // KPI: click para filtrar por ese nivel.
+            const kpi = e.target.closest('.rondo-riesgo-kpi');
+            if (kpi && kpi.dataset.kpiNivel) {
+                APP.riesgoNivel = (APP.riesgoNivel === kpi.dataset.kpiNivel) ? 'todas' : kpi.dataset.kpiNivel;
+                paintRiesgo();
+                return;
+            }
+            // Chips de nivel.
+            const chip = e.target.closest('.rondo-chip');
+            if (chip && wrap.contains(chip) && chip.dataset.nivel) {
+                APP.riesgoNivel = chip.dataset.nivel;
+                paintRiesgo();
+                return;
+            }
+            // Header de grupo: colapsar / expandir.
+            const head = e.target.closest('.rondo-riesgo-grupo-head');
+            if (head) {
+                const grupo = head.closest('.rondo-riesgo-grupo');
+                if (grupo && grupo.dataset.estado) {
+                    APP.riesgoColapsado = APP.riesgoColapsado || {};
+                    APP.riesgoColapsado[grupo.dataset.estado] = !grupo.classList.contains('colapsado');
+                    grupo.classList.toggle('colapsado');
+                    const f = wrap.querySelector('.rondo-riesgo-foot');
+                    if (f) actualizarContadorColapsados(f);
+                    return;
+                }
+            }
+            // Limpiar filtros.
+            const clearBtn = e.target.closest('#rondo-riesgo-limpiar-filtros, #rondo-riesgo-empty-clear');
+            if (clearBtn) {
+                APP.riesgoFiltro = '';
+                APP.riesgoNivel = 'todas';
+                APP.riesgoOrden = 'score';
+                APP.riesgoVista = 'grupo';
+                paintRiesgo();
+                return;
+            }
+            // Expandir / colapsar todos los grupos.
+            const expBtn = e.target.closest('#rondo-riesgo-expandir');
+            if (expBtn) {
+                const grupos = wrap.querySelectorAll('.rondo-riesgo-grupo');
+                const todosColapsados = Array.from(grupos).every((g) => g.classList.contains('colapsado'));
+                APP.riesgoColapsado = APP.riesgoColapsado || {};
+                grupos.forEach((g) => {
+                    const col = !todosColapsados;
+                    g.classList.toggle('colapsado', col);
+                    if (g.dataset.estado) APP.riesgoColapsado[g.dataset.estado] = col;
+                });
+                const f = wrap.querySelector('.rondo-riesgo-foot');
+                if (f) actualizarContadorColapsados(f);
+                return;
+            }
+        });
+        // ── Drag and drop sobre las dos toolbars ───────────────────────
+        ['rondo-riesgo-toolbar-url', 'rondo-riesgo-toolbar-file'].forEach((id) => {
+            const tb = byId(id);
+            if (!tb) return;
+            ['dragenter', 'dragover'].forEach((evt) =>
+                tb.addEventListener(evt, (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    tb.classList.add('drag-over');
+                }));
+            ['dragleave', 'drop'].forEach((evt) =>
+                tb.addEventListener(evt, (ev) => {
+                    ev.preventDefault();
+                    ev.stopPropagation();
+                    tb.classList.remove('drag-over');
+                }));
+            tb.addEventListener('drop', (ev) => {
+                const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
+                if (!f) return;
+                // Disparamos el mismo flujo que el input file.
+                const arch = byId('rondo-riesgo-archivo');
+                if (!arch) return;
+                const dt = new DataTransfer();
+                dt.items.add(f);
+                arch.files = dt.files;
+                arch.dispatchEvent(new Event('change', { bubbles: true }));
+            });
+        });
+        // ── Botones de exportacion ────────────────────────────────────
+        const csvBtn = byId('rondo-riesgo-csv');
+        if (csvBtn) csvBtn.addEventListener('click', () => exportarRiesgoCSV());
+        const geoBtn = byId('rondo-riesgo-geo');
+        if (geoBtn) geoBtn.addEventListener('click', () => exportarRiesgoGeoJSON());
+        const copiarBtn = byId('rondo-riesgo-copiar');
+        if (copiarBtn) copiarBtn.addEventListener('click', () => copiarRiesgoFiltrado());
+        // Boton "Exportar" grande (muestra menu).
+        const exportBig = byId('rondo-riesgo-exportar');
+        if (exportBig) exportBig.addEventListener('click', () => mostrarMenuExportarRiesgo());
+        // ── Botones existentes (recargar / limpiar / archivo) ─────────
         const rec = byId('rondo-riesgo-recargar');
         if (rec) rec.addEventListener('click', () => cargarRiesgo());
         const lim = byId('rondo-riesgo-limpiar');
