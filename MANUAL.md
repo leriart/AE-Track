@@ -120,7 +120,7 @@ El panel **recuerda como lo dejaste**: el modo (flotante o barra lateral), el
 lado, el ancho y si estaba abierto o cerrado. Al recargar la pagina se restaura
 en ese estado.
 
-## Las seis pestanas
+## Las siete pestanas
 
 En la parte superior del panel:
 
@@ -147,6 +147,11 @@ En la parte superior del panel:
   cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
+- **Riesgo**: zonas de alto riesgo delictivo alimentadas por una URL o un
+  archivo CSV/JSON local. Muestra el estado de la carga, la URL activa, los
+  parametros (formato, score minimo, multiplicador de radio) y la lista de
+  zonas cargadas (top 200 ordenadas por score). Ver
+  [Zonas de riesgo](#zonas-de-riesgo).
 
 ## Vigilar unidades (lista vigilada)
 
@@ -220,6 +225,7 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | Desvio de ruta | Se aleja del trazado de la ruta | 250 m durante 5 min |
 | Giro en U | Toma rumbo opuesto al de la ruta | 130 grados durante 3 min |
 | Retorno / viaje cancelado | Retrocede o vuelve al origen | 25 % de retroceso o 400 m del origen |
+| Perdio senal en zona de riesgo | Transicion online -> offline y ultima posicion valida cae dentro de una zona de riesgo cargada | depende de los parametros de la zona (radio y score) |
 
 Notas:
 
@@ -230,6 +236,91 @@ Notas:
   demasiado seguido (45 min por defecto).
 - Puedes limitar los avisos a un **horario** (por ejemplo 06:00 a 23:00).
   Tambien admite rangos que cruzan medianoche, como 22:00 a 06:00.
+
+### Zonas de riesgo
+
+La regla *Perdio senal en zona de riesgo* convierte un evento
+ordinario (sin senal) en un evento critico si la ultima posicion
+conocida de la unidad cae dentro de un buffer de zona de alto riesgo.
+Su proposito es hacer ruido cuando un vehiculo desaparece justo donde
+mas probable que sea victima de un delito: robos a transporte, asalto,
+etc.
+
+**Como se alimentan las zonas:** Rondo **no incluye ningun dataset**
+en este repo. Vos decidis donde vive esa informacion y la ruta es
+configurable desde el panel. Hay tres formas:
+
+1. **URL remota** (CSV o JSON). Pegala en Ajustes > Reglas > "Zonas de
+   riesgo" > "URL del CSV / JSON". Rondo la consulta al arrancar y cada
+   vez que pulses **Recargar** en la pestana Riesgo. Si la URL falla,
+   la regla se desactiva silenciosamente.
+2. **Archivo local**. Usa el boton **Importar archivo** de la pestana
+   Riesgo o de Ajustes. Acepta CSV, TSV, JSON o TXT. La informacion
+   vive solo en memoria hasta que cierres el navegador.
+3. **Pegar el contenido** como URL `data:` (pequenos datasets que
+   caben en una sola linea). Util para pruebas.
+
+**Que pasa si no hay dataset cargado?** La regla existe pero nunca
+dispara. Es la opcion mas segura si no queres configurar nada: la
+alerta generica de "sin senal" sigue funcionando como siempre.
+
+**Formato JSON esperado:**
+
+```json
+{
+  "version": 1,
+  "fuente": "tu proveedor o fuente",
+  "items": [
+    {
+      "id": "identificador-estable",
+      "estado": "CDMX",
+      "municipio": "Cuauhtemoc",
+      "centro": [19.4326, -99.1332],
+      "radio_m": 1500,
+      "score": 78,
+      "delitos": { "robo_vehiculo": 5, "asalto": 12 }
+    }
+  ]
+}
+```
+
+Tambien acepta GeoJSON FeatureCollection (`{ type: "FeatureCollection",
+features: [...] }`) y un array directo en la raiz.
+
+**Formato CSV esperado (autodetectado):**
+
+```
+id,estado,municipio,lat,lon,radio_m,score,delito,conteo
+mx-01,CDMX,Cuauhtemoc,19.4326,-99.1332,1500,78,robo_vehiculo,5
+mx-01,CDMX,Cuauhtemoc,19.4326,-99.1332,1500,78,asalto,12
+```
+
+Las filas con la misma (lat, lon, radio, score) se agrupan y suman sus
+delitos. Si no se incluye columna `radio_m`, Rondo lo estima segun el
+score: 4.5 km (>= 70), 2.2 km (>= 50), 1.4 km (>= 30), 0.5 km (resto).
+Las columnas reconocibles por sinonimos: lat/latitud, lon/lng/long,
+score/severidad/riesgo, radio/buffer/distancia, delito/tipo/categoria,
+conteo/count/casos/incidentes.
+
+**Parametros configurables (Ajustes > Reglas > Zonas de riesgo):**
+
+| Parametro | Que hace | Por defecto |
+| --- | --- | --- |
+| URL del CSV / JSON | Direccion a consultar al arrancar | vacio |
+| Formato | Auto / CSV / JSON | auto |
+| Score minimo | Ignora zonas con score menor a este valor | 1 |
+| Multiplicador de radio | Escala el radio declarado en cada zona (0.1x a 5x) | 1 |
+| Regla *Perdio senal en zona de riesgo* | Toggles globales de la regla | activado |
+
+**La alerta en pantalla:**
+
+```
+PERDIO SENAL EN ZONA DE RIESGO \u00b7 <unidad>
+Ultima posicion en <municipio>, <estado> (score N/100). Sin reporte hace X min.
+```
+
+Se entrega como **critica** (color rojo, sonido de alarma, TTS grave)
+y queda registrada en la pestana Avisos como cualquier otra alerta.
 
 ## Notificaciones
 

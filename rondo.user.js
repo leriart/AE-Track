@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.2.0
+// @version      5.3.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con Dashboard, Unidades, Avisos, Geocercas y Rutas. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y panel flotante o barra lateral. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -110,7 +110,8 @@
         arrowLeft: 'E314',
         arrowRight: 'E315',
         actualizar: 'E5D5',
-        caravana: 'E7FB'
+        caravana: 'E7FB',
+        riesgo: 'E160'
     });
     function ico(name) {
         const h = MAT[name];
@@ -143,7 +144,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.2.0';
+    const VER = '5.3.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -185,7 +186,8 @@
         sortCol: 'rondo.api.sortCol',
         sortDir: 'rondo.api.sortDir',
         rutas: 'rondo.api.rutas',
-        odometro: 'rondo.api.odometro'
+        odometro: 'rondo.api.odometro',
+        riesgo: 'rondo.api.riesgo'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
@@ -200,7 +202,8 @@
         kpi: 'rondo.api.s.kpi',
         limites: 'rondo.api.s.limites',
         orden: 'rondo.api.s.orden',
-        viajes: 'rondo.api.s.viajes'
+        viajes: 'rondo.api.s.viajes',
+        riesgo: 'rondo.api.s.riesgo'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -260,6 +263,12 @@
         autoRutaModo: 'osrm',
         caravanaM: 300,
         caravanaCercaM: 2000,
+        // Zonas de riesgo. Por defecto URL vac\u00eda: Rondo no intenta cargar nada
+        // hasta que el usuario pegue una URL en Ajustes > Riesgo.
+        riesgoUrl: '',
+        riesgoFormato: 'auto',   // 'csv' | 'json' | 'auto'
+        riesgoMinScore: 1,
+        riesgoRadioMul: 1,
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -273,7 +282,8 @@
             desvio: false,
             retorno: false,
             giroU: false,
-            demoraBase: false
+            demoraBase: false,
+            riesgoSinSenal: true
         })
     });
 
@@ -421,7 +431,15 @@
         unlocked: false,
         consultaRestante: 0,
         stats: { erroresReglas: 0, astarCap: 0 },
-        caravanaEco: ''
+        caravanaEco: '',
+
+        // Riesgo: zonas de alto riesgo para flota, consultadas en cada arranque
+        // desde APP.config.riesgoUrl. Sin default; vive solo en memoria.
+        riesgo: null,           // Array<Item> o null si no se carg\u00f3 a\u00fan.
+        riesgoTs: 0,            // ms de la ultima carga exitosa.
+        riesgoErr: null,        // String del ultimo error o null.
+        riesgoEstado: 'idle',   // 'idle' | 'cargando' | 'ok' | 'error'
+        _riesgoFetched: ''      // ultima URL por la que se pidi\u00f3 cargar
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
@@ -1873,6 +1891,310 @@
  * pushAlert. evaluateUnit solo orquesta; asi se pueden anadir o quitar
  * reglas sin tocar el resto.
  */
+
+    /* ====================== RIESGO ======================
+     * Zonas de alto riesgo alimentadas por una URL externa (CSV o JSON).
+     * El repositorio de Rondo no incluye datos: el usuario pega en
+     * Ajustes > Riesgo una URL que apunta a un CSV/JSON publico, o
+     * importa un archivo desde disco.
+     *
+     * Formatos aceptados al cargar:
+     *   JSON: { items: [...] }  |  { features: [...] } (GeoJSON)  |  [ ... ]
+     *   CSV :  1 fila por zona con columnas lat/lon/score/radio/estado/municipio/delito/conteo
+     *
+     * La regla `riesgoSinSenal` dispara una alerta critica cuando una unidad
+     * transiciona de con senal -> sin senal y su ultima posicion valida cae
+     * dentro del buffer de una zona cargada.
+     */
+    function _norm(s) {
+        return (s == null) ? '' : String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+    }
+    function _splitCSVLine(line, sep) {
+        const out = [];
+        let cell = '', inQ = false, i = 0;
+        while (i < line.length) {
+            const c = line[i];
+            if (inQ) {
+                if (c === '"') {
+                    if (line[i + 1] === '"') { cell += '"'; i += 2; continue; }
+                    inQ = false; i++; continue;
+                }
+                cell += c; i++; continue;
+            }
+            if (c === '"') { inQ = true; i++; continue; }
+            if (c === sep) { out.push(cell); cell = ''; i++; continue; }
+            cell += c; i++;
+        }
+        out.push(cell);
+        return out;
+    }
+    function _parseCSV(text, sep) {
+        const t = String(text || '').replace(/^\uFEFF/, '');
+        const lines = t.split(/\r?\n/).filter((l) => l.length > 0);
+        if (!lines.length) return { header: [], rows: [] };
+        // El separador efectivo puede haber sido sobreescrito o autodetectado.
+        const rows = lines.map((l) => _splitCSVLine(l, sep));
+        const header = rows.shift().map((h) => _norm(h));
+        return { header, rows };
+    }
+    function _autoSep(text) {
+        const sample = String(text || '').slice(0, 2048);
+        const lines = sample.split(/\r?\n/).filter(Boolean);
+        if (!lines.length) return ',';
+        const c = (lines[0].match(/,/g) || []).length;
+        const s = (lines[0].match(/;/g) || []).length;
+        const t = (lines[0].match(/\t/g) || []).length;
+        if (t >= c && t >= s && t > 0) return '\t';
+        if (s > c) return ';';
+        return ',';
+    }
+    function _findCol(header, keys) {
+        for (let i = 0; i < header.length; i++) {
+            const h = header[i];
+            for (let k = 0; k < keys.length; k++) {
+                if (h === keys[k] || h.indexOf(keys[k]) >= 0) return i;
+            }
+        }
+        return -1;
+    }
+    function _normItem(z, source, idx) {
+        if (!z) return null;
+        let lat = null, lon = null;
+        if (Array.isArray(z.centro) && z.centro.length >= 2) {
+            lat = +z.centro[0]; lon = +z.centro[1];
+        } else {
+            if (z.lat != null) lat = +z.lat;
+            if (z.lon != null || z.lng != null || z.long != null) lon = +(z.lon || z.lng || z.long);
+        }
+        if (!isFinite(lat) || !isFinite(lon)) return null;
+        if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+        const radio = +(z.radio_m || z.radio || z.buffer || z.distancia || 0);
+        if (!(radio > 0)) return null;
+        const score = +(z.score || z.severidad || z.riesgo || z.incidencia || 0);
+        const estado = z.estado || z.state || z.entidad || z.entidad_federativa || '';
+        const municipio = z.municipio || z.municipality || z.city || z.ciudad || z.alcaldia || z.alcald\u00eda || '';
+        const id = z.id || ((source || 'item') + '-' + idx + '-' + Math.round(lat * 100) + '-' + Math.round(lon * 100));
+        const delitos = (z.delitos && typeof z.delitos === 'object') ? z.delitos : null;
+        return {
+            id, estado: String(estado), municipio: String(municipio),
+            centro: [lat, lon], radio_m: radio, score,
+            fuente: z.fuente || source || 'usuario',
+            delitos: delitos || null,
+            nota: z.nota || z.note || ''
+        };
+    }
+    function _itemsFromJSON(data) {
+        let arr = null;
+        if (Array.isArray(data)) arr = data;
+        else if (data && Array.isArray(data.items)) arr = data.items;
+        else if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) {
+            arr = data.features.map((f) => {
+                if (!f || !f.geometry) return null;
+                const g = f.geometry;
+                if (g.type === 'Point' && Array.isArray(g.coordinates)) {
+                    return Object.assign({}, f.properties || {}, {
+                        centro: [g.coordinates[1], g.coordinates[0]]
+                    });
+                }
+                return null;
+            }).filter(Boolean);
+        }
+        if (!arr) return [];
+        const out = [];
+        for (let i = 0; i < arr.length; i++) {
+            const it = _normItem(arr[i], 'json', i);
+            if (it) out.push(it);
+        }
+        return out;
+    }
+    function _itemsFromCSV(text) {
+        const sep = _autoSep(text);
+        const { header, rows } = _parseCSV(text, sep);
+        if (!header.length || !rows.length) return [];
+        const iLat = _findCol(header, ['lat', 'latitud']);
+        const iLon = _findCol(header, ['lon', 'lng', 'long', 'longitud']);
+        if (iLat < 0 || iLon < 0) return [];
+        const iScore = _findCol(header, ['score', 'severidad', 'riesgo', 'incidencia', 'peligrosidad']);
+        const iRadio = _findCol(header, ['radio_m', 'radio', 'buffer', 'distancia', 'distancia_m']);
+        const iEstado = _findCol(header, ['estado', 'entidad', 'state']);
+        const iMun = _findCol(header, ['municipio', 'municipality', 'ciudad', 'alcaldia', 'alcald\u00eda']);
+        const iDelito = _findCol(header, ['delito', 'tipo', 'categoria', 'crime', 'crimen']);
+        const iConteo = _findCol(header, ['conteo', 'count', 'casos', 'incidentes', 'valor', 'frecuencia']);
+        // Agrupa filas por (lat,lon,radio,score).
+        const buckets = new Map();
+        let defaultRadio = 0, defaultScore = 0;
+        let anonIdx = 0;
+        for (let r = 0; r < rows.length; r++) {
+            const row = rows[r];
+            const lat = +row[iLat];
+            const lon = +row[iLon];
+            if (!isFinite(lat) || !isFinite(lon)) continue;
+            const radio = (iRadio >= 0) ? +row[iRadio] : defaultRadio;
+            const score = (iScore >= 0) ? +row[iScore] : defaultScore;
+            const key = lat.toFixed(5) + ',' + lon.toFixed(5) + ',' + radio + ',' + score;
+            let b = buckets.get(key);
+            if (!b) {
+                b = {
+                    id: 'csv-' + (++anonIdx),
+                    estado: (iEstado >= 0) ? row[iEstado] : '',
+                    municipio: (iMun >= 0) ? row[iMun] : '',
+                    centro: [lat, lon],
+                    radio_m: (radio > 0) ? radio : 0,
+                    score,
+                    fuente: 'csv',
+                    delitos: {},
+                    nota: ''
+                };
+                buckets.set(key, b);
+            }
+            if (iDelito >= 0 && iConteo >= 0) {
+                const d = (row[iDelito] || '').trim();
+                const c = parseFloat(row[iConteo]);
+                if (d && isFinite(c)) b.delitos[d] = (b.delitos[d] || 0) + c;
+            }
+            if (!b.estado && iEstado >= 0) b.estado = row[iEstado] || '';
+            if (!b.municipio && iMun >= 0) b.municipio = row[iMun] || '';
+        }
+        if (!defaultRadio) {
+            // Si no se encontro columna de radio, lo estimamos:
+            // score >= 70 -> 4.5 km, 50-70 -> 2.2 km, 30-50 -> 1.4 km, >0 -> 0.5 km.
+        }
+        const out = [];
+        for (const b of buckets.values()) {
+            if (!b.radio_m) {
+                if (b.score >= 70) b.radio_m = 4500;
+                else if (b.score >= 50) b.radio_m = 2200;
+                else if (b.score >= 30) b.radio_m = 1400;
+                else if (b.score > 0) b.radio_m = 500;
+                else b.radio_m = 0;
+            }
+            if (!(b.radio_m > 0)) continue;
+            out.push({
+                id: b.id,
+                estado: String(b.estado || ''),
+                municipio: String(b.municipio || ''),
+                centro: b.centro,
+                radio_m: b.radio_m,
+                score: b.score,
+                fuente: 'csv',
+                delitos: Object.keys(b.delitos).length ? b.delitos : null,
+                nota: ''
+            });
+        }
+        return out;
+    }
+    async function cargarRiesgo(url) {
+        const src = (url != null) ? String(url).trim() : (APP.config && APP.config.riesgoUrl || '');
+        if (!src) { APP.riesgo = null; APP.riesgoErr = null; APP.riesgoEstado = 'idle'; return; }
+        if (typeof fetch !== 'function') { APP.riesgoErr = 'fetch() no disponible'; APP.riesgoEstado = 'error'; return; }
+        if (APP._riesgoFetched === src && APP.riesgoEstado === 'cargando') return;
+        APP._riesgoFetched = src;
+        APP.riesgoEstado = 'cargando';
+        if (APP.tab === 'riesgo') paintRiesgo();
+        try {
+            const formato = (APP.config && APP.config.riesgoFormato) || 'auto';
+            const r = await fetch(src, { cache: 'no-store', credentials: 'omit' });
+            if (!r.ok) {
+                APP.riesgoErr = 'HTTP ' + r.status + ' desde la URL de riesgo';
+                APP.riesgo = null;
+                APP.riesgoEstado = 'error';
+            } else {
+                const text = await r.text();
+                const trimmed = String(text || '').trim();
+                let items = [];
+                let fmt = (formato || 'auto').toLowerCase();
+                if (fmt === 'auto') {
+                    fmt = (trimmed.length && (trimmed[0] === '[' || trimmed[0] === '{')) ? 'json' : 'csv';
+                }
+                if (fmt === 'json') {
+                    try {
+                        const data = JSON.parse(trimmed);
+                        items = _itemsFromJSON(data);
+                        if (!items.length) {
+                            APP.riesgoErr = 'JSON sin items v\u00e1lidos ({} o [])';
+                            APP.riesgo = null;
+                            APP.riesgoEstado = 'error';
+                            if (APP.tab === 'riesgo') paintRiesgo();
+                            return;
+                        }
+                    } catch (e) {
+                        APP.riesgoErr = 'JSON inv\u00e1lido: ' + (e && e.message || '');
+                        APP.riesgo = null;
+                        APP.riesgoEstado = 'error';
+                        if (APP.tab === 'riesgo') paintRiesgo();
+                        return;
+                    }
+                } else {
+                    items = _itemsFromCSV(trimmed);
+                    if (!items.length) {
+                        APP.riesgoErr = 'CSV sin columnas lat/lon reconocibles';
+                        APP.riesgo = null;
+                        APP.riesgoEstado = 'error';
+                        if (APP.tab === 'riesgo') paintRiesgo();
+                        return;
+                    }
+                }
+                APP.riesgo = items;
+                APP.riesgoErr = null;
+                APP.riesgoTs = Date.now();
+                APP.riesgoEstado = 'ok';
+                if (APP.unlocked) {
+                    try { console.log('[Rondo] riesgo cargado:', items.length, 'zonas (' + fmt + ')'); } catch (_) {}
+                }
+            }
+        } catch (e) {
+            APP.riesgoErr = (e && e.message) ? e.message : String(e);
+            APP.riesgo = null;
+            APP.riesgoEstado = 'error';
+        }
+        if (APP.tab === 'riesgo') paintRiesgo();
+    }
+    function puntoEnZonaDeRiesgo(lat, lon) {
+        if (!APP.riesgo || !APP.riesgo.length) return null;
+        if (lat == null || lon == null) return null;
+        const minScore = Number((APP.config && APP.config.riesgoMinScore) || 0);
+        const mul = Number((APP.config && APP.config.riesgoRadioMul) || 1);
+        let mejor = null;
+        for (let i = 0; i < APP.riesgo.length; i++) {
+            const z = APP.riesgo[i];
+            if (!z || !z.centro || !Array.isArray(z.centro)) continue;
+            if (!(z.radio_m > 0)) continue;
+            if (typeof z.score !== 'number' || z.score < minScore) continue;
+            const radioKm = (z.radio_m * mul) / 1000;
+            const distKm = haversine(lat, lon, z.centro[0], z.centro[1]);
+            if (distKm <= radioKm) {
+                if (!mejor || z.score > mejor.score) {
+                    mejor = {
+                        id: z.id, estado: z.estado, municipio: z.municipio,
+                        score: z.score, dist: distKm * 1000, fuente: z.fuente
+                    };
+                }
+            }
+        }
+        return mejor;
+    }
+    async function reglaRiesgoSinSenal(st, prev, R, info, etq) {
+        if (!APP.config.reglas.riesgoSinSenal) return;
+        if (!APP.riesgo || !APP.riesgo.length) return;
+        if (!prev) return;
+        if (prev.estado === 'offline' || st.estado !== 'offline') return;
+        if (st.edadMin < APP.config.offlineMin) return;
+        const lat = (st.lat != null) ? st.lat : prev.lat;
+        const lon = (st.lon != null) ? st.lon : prev.lon;
+        if (lat == null || lon == null) return;
+        const z = puntoEnZonaDeRiesgo(lat, lon);
+        if (!z) return;
+        if (R.riesgoSinSenalAlerta) return;
+        R.riesgoSinSenalAlerta = true;
+        const etqTxt = z.municipio ? (z.municipio + ', ' + (z.estado || '')) : (z.estado || 'zona desconocida');
+        pushAlert({
+            regla: 'riesgoSinSenal', sev: 'critico', clave: info.clave, eco: info.eco, icono: ICO.riesgo,
+            titulo: 'PERDIO SENAL EN ZONA DE RIESGO \u00b7 ' + etq,
+            detalle: 'Ultima posicion en ' + etqTxt + ' (score ' + z.score + '/100). Sin reporte hace ' + ageText(st.edadMin) + '.',
+            hablar: 'Atencion critica. La unidad ' + etq + ' perdio senal en zona de riesgo'
+        });
+    }
+
     async function reglaOffline(st, prev, R, info, etq) {
         if (!APP.config.reglas.offline) return;
         if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
@@ -2159,19 +2481,22 @@
             retornoAlerta: prev ? prev.retornoAlerta : false,
             rumboOpDesde: prev ? prev.rumboOpDesde : null,
             demoraBaseAlerta: prev ? (prev.demoraBaseAlerta || 0) : 0,
-            llego: prev ? prev.llego : false
+            llego: prev ? prev.llego : false,
+            riesgoSinSenalAlerta: prev ? prev.riesgoSinSenalAlerta : false
         };
         try {
             await reglaOffline(st, prev, R, info, etq);
             // Si la unidad vuelve a reportar, rearma la alerta de desconexion
             // aunque la regla general este desactivada.
             if (st.estado !== 'offline') R.descoAlerta = false;
+            if (st.estado !== 'offline') R.riesgoSinSenalAlerta = false;
             await reglaGpsPerdido(st, prev, R, info, etq);
             await reglaDetenido(u, st, R, info, etq, ctx);
             reglaZona(st, R, info, etq);
             reglaGeocerca(st, prev, R, info, etq);
             await reglaDestino(st, R, info, etq);
             await reglaDesconexion(st, R, info, etq);
+            await reglaRiesgoSinSenal(st, prev, R, info, etq);
             reglaVelocidad(st, R, info, etq);
             reglaDemoraBase(st, R, info, etq);
             reglaRuta(st, R, info, etq);
@@ -3463,6 +3788,7 @@
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="rondo-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-mi">' + ICO.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
+            '<button class="tab" data-tab="riesgo" title="Zonas de riesgo: alerta si una unidad pierde senal en zona caliente"><span class="rondo-mi">' + ICO.riesgo + '</span><span class="etqt">Riesgo</span></button>' +
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
             '<input class="filtro" id="rondo-filtro" placeholder="' + esc(LANG.busq) + '">' +
@@ -3553,6 +3879,32 @@
             '</div>' +
             '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
             '</div>' +
+            '<div class="tabla" id="rondo-wrap-riesgo" style="display:none">' +
+            '<div class="rondo-seccion">' +
+            '<h4 style="margin:8px 0 6px"><span class="rondo-mi">' + ICO.riesgo + '</span> Zonas de riesgo</h4>' +
+            '<div id="rondo-riesgo-estado" class="rondo-riesgo-estado"></div>' +
+            '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:8px">' +
+            '<input id="rondo-riesgo-url" class="filtro" style="flex:1;min-width:240px" placeholder="URL del CSV / JSON (se consulta en cada arranque)">' +
+            '<button class="mini" id="rondo-riesgo-recargar" title="Reintentar carga"><span class="rondo-mi">' + ICO.refrescar + '</span> Recargar</button>' +
+            '</div>' +
+            '<div style="display:flex;gap:6px;align-items:center;margin-top:6px">' +
+            '<input type="file" id="rondo-riesgo-archivo" accept=".csv,.json,.txt,.tsv" style="flex:1;min-width:240px">' +
+            '<button class="mini" id="rondo-riesgo-limpiar" title="Olvidar dataset en memoria"><span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar</button>' +
+            '</div>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:6px 0 0">Si no pones URL, la alerta de <b>perdida de senal en zona de riesgo</b> queda desactivada silenciosamente.</p>' +
+            '</div>' +
+            '<div class="rondo-seccion">' +
+            '<h4 style="margin:8px 0 6px"><span class="rondo-mi">' + ICO.info + '</span> Parametros</h4>' +
+            '<div id="rondo-riesgo-parametros" style="display:grid;grid-template-columns:1fr 1fr;gap:8px"></div>' +
+            '<div style="margin-top:8px">' +
+            '<label style="font-size:11.5px"><input type="checkbox" id="rondo-riesgo-toggle"> Activar alerta <b>PERDIO SENAL EN ZONA DE RIESGO</b></label>' +
+            '</div>' +
+            '</div>' +
+            '<div class="rondo-seccion">' +
+            '<h4 style="margin:8px 0 6px"><span class="rondo-mi">' + ICO.geocercas + '</span> Zonas cargadas</h4>' +
+            '<div id="rondo-riesgo-lista" style="max-height:280px;overflow:auto"></div>' +
+            '</div>' +
+            '</div>' +
             '<footer><span id="rondo-info">iniciando...</span><span id="rondo-upd"></span></footer>'
         );
         panelEl.style.width = (APP.panelSize && APP.panelSize.w) ? APP.panelSize.w + 'px' : '470px';
@@ -3633,7 +3985,21 @@
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
+            checkRow('c-r-riesgo', 'Perdi\u00f3 se\u00f1al en zona de riesgo') +
             '</div>' +
+            '<h4>Zonas de riesgo</h4>' +
+            '<label>URL del CSV / JSON <span style="color:var(--rondo-fg-dim);font-size:11px">(opcional; se consulta en cada arranque; el repo no incluye datos)</span>' +
+            '<input type="text" id="c-riesgo-url" style="width:100%;margin-top:4px" placeholder="pega la URL aqu\u00ed (https://...)">' +
+            '</label>' +
+            '<label>Formato ' +
+            '<select id="c-riesgo-formato">' +
+            '<option value="auto">Auto detectar</option>' +
+            '<option value="csv">CSV / TSV</option>' +
+            '<option value="json">JSON</option>' +
+            '</select>' +
+            '</label>' +
+            numRow('c-riesgo-min', 'Score m\u00ednimo (0-100)') +
+            numRow('c-riesgo-mul', 'Multiplicador de radio (x)') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avisos" style="display:none">' +
             '<h4>Avisos</h4>' +
@@ -4092,6 +4458,7 @@
         else if (name === 'rutas') paintRutas();
         else if (name === 'geocercas') paintGeocercas();
         else if (name === 'caravana') paintCaravana();
+        else if (name === 'riesgo') paintRiesgo();
         paintCounters();
         paintStateBadge();
         paintInfo();
@@ -4709,6 +5076,73 @@
     }
     /* === END: paintCaravana === */
 
+    function paintRiesgo() {
+        if (byId('rondo-wrap-riesgo')) {
+            // Refresca el contenido del panel Riesgo.
+        }
+        const cfg = APP.config || {};
+        const estadoEl = byId('rondo-riesgo-estado');
+        if (estadoEl) {
+            const items = APP.riesgo || [];
+            let html;
+            const fecha = APP.riesgoTs ? new Date(APP.riesgoTs).toLocaleString() : '\u2014';
+            if (APP.riesgoEstado === 'cargando') {
+                html = '<div class="alerta" style="border-left:4px solid var(--rondo-accent-2)"><span class="ico rondo-mi">' + ICO.senal + '</span><div class="cuerpo"><b>Cargando zonas de riesgo\u2026</b><span>Descargando desde la URL configurada.</span></div></div>';
+            } else if (items.length > 0) {
+                html = '<div class="alerta" style="border-left:4px solid var(--rondo-ok-fg)"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>' + items.length + ' zonas cargadas en memoria</b><span>\u00daltima carga: ' + fecha + '</span></div></div>';
+            } else if (APP.riesgoEstado === 'error') {
+                html = '<div class="alerta" style="border-left:4px solid var(--rondo-bad-fg)"><span class="ico rondo-mi">' + ICO.alertas + '</span><div class="cuerpo"><b>Sin dataset activo</b><span>' + esc(APP.riesgoErr || 'configura una URL en Ajustes > Reglas, o importa un archivo') + '. La alerta cr\u00edtica de zona de riesgo queda desactivada.</span></div></div>';
+            } else if (!cfg.riesgoUrl) {
+                html = '<div class="alerta" style="border-left:4px solid var(--rondo-fg-mute)"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>A\u00fan no hay URL configurada</b><span>Pega una URL en <b>Ajustes &gt; Reglas &gt; Zonas de riesgo</b> o importa un CSV/JSON local.</span></div></div>';
+            } else {
+                html = '<div class="alerta" style="border-left:4px solid var(--rondo-fg-mute)"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>Sin zonas cargadas</b><span>Pulsa <b>Recargar</b> para intentar de nuevo.</span></div></div>';
+            }
+            estadoEl.innerHTML = html;
+        }
+        const urlInput = byId('rondo-riesgo-url');
+        if (urlInput && urlInput.value !== (cfg.riesgoUrl || '')) urlInput.value = cfg.riesgoUrl || '';
+        const toggleEl = byId('rondo-riesgo-toggle');
+        if (toggleEl) toggleEl.checked = !!(cfg.reglas && cfg.reglas.riesgoSinSenal);
+        const paramsEl = byId('rondo-riesgo-parametros');
+        if (paramsEl) {
+            const formato = cfg.riesgoFormato || 'auto';
+            const minScore = (cfg.riesgoMinScore == null) ? 1 : cfg.riesgoMinScore;
+            const radioMul = (cfg.riesgoRadioMul == null) ? 1 : cfg.riesgoRadioMul;
+            paramsEl.innerHTML =
+                '<label>Formato <select id="rondo-riesgo-formato-sel" style="width:120px">' +
+                '<option value="auto"' + (formato === 'auto' ? ' selected' : '') + '>Auto</option>' +
+                '<option value="csv"' + (formato === 'csv' ? ' selected' : '') + '>CSV / TSV</option>' +
+                '<option value="json"' + (formato === 'json' ? ' selected' : '') + '>JSON</option>' +
+                '</select></label>' +
+                '<label>Score m\u00ednimo <input type="number" id="rondo-riesgo-min" min="0" max="100" value="' + minScore + '" style="width:80px"></label>' +
+                '<label>Multiplicador radio (x) <input type="number" id="rondo-riesgo-mul" min="0.1" max="5" step="0.1" value="' + radioMul + '" style="width:80px"></label>' +
+                '<div style="grid-column:1/-1;font-size:11px;color:var(--rondo-fg-dim)">M\u00e1s radio = zonas m\u00e1s amplias. M\u00e1s score = solo zonas con delitos graves.</div>';
+        }
+        const listaEl = byId('rondo-riesgo-lista');
+        if (listaEl) {
+            const items = APP.riesgo || [];
+            if (!items.length) {
+                listaEl.innerHTML = emptyState(ICO.geocercas, 'Sin zonas cargadas', 'Configura una URL, importa un archivo, o pega un CSV directamente.');
+            } else {
+                const top = items.slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 200);
+                listaEl.innerHTML = top.map((z) => {
+                    const color = z.score >= 70 ? 'var(--rondo-bad-fg)' : (z.score >= 40 ? 'var(--rondo-warn-fg)' : 'var(--rondo-fg-mute)');
+                    const d = z.delitos;
+                    const detalle = (d && typeof d === 'object')
+                        ? Object.keys(d).filter((k) => d[k] > 0).slice(0, 4).map((k) => k + ':' + d[k]).join(' / ')
+                        : '';
+                    return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
+                        '<span class="ico rondo-mi">' + ICO.riesgo + '</span>' +
+                        '<div class="cuerpo"><b>' + esc(z.estado || '?') + ' \u00b7 ' + esc(z.municipio || '(sin municipio)') + '</b>' +
+                        '<span>Score ' + (z.score || 0) + '/100 \u00b7 buffer ' + (z.radio_m || 0) + ' m' +
+                        (detalle ? ' \u00b7 ' + esc(detalle) : '') +
+                        '<span class="meta"><span class="regla">' + esc(z.fuente || '?') + '</span></span>' +
+                        '</span></div></div>';
+                }).join('') + ((items.length > top.length) ? '<div style="font-size:11px;color:var(--rondo-fg-dim);padding:6px 4px">Mostrando las ' + top.length + ' con mayor score de ' + items.length + ' totales.</div>' : '');
+            }
+        }
+    }
+
     setInterval(() => {
         if (panelEl.style.display === 'none') return;
         if (APP.tab === 'unidades') paintTabla();
@@ -4716,6 +5150,7 @@
         if (APP.tab === 'rutas') paintRutas();
         if (APP.tab === 'geocercas') paintGeocercas();
         if (APP.tab === 'caravana') paintCaravana();
+        if (APP.tab === 'riesgo') paintRiesgo();
         byId('rondo-upd').textContent = ICO.reloj + ' ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
         paintStateBadge();
@@ -5582,6 +6017,11 @@
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
+            g('c-r-riesgo').checked = !!APP.config.reglas.riesgoSinSenal;
+            g('c-riesgo-url').value = APP.config.riesgoUrl || '';
+            g('c-riesgo-formato').value = APP.config.riesgoFormato || 'auto';
+            g('c-riesgo-min').value = APP.config.riesgoMinScore;
+            g('c-riesgo-mul').value = APP.config.riesgoRadioMul;
             g('c-r-desvio').checked = !!APP.config.reglas.desvio;
             g('c-desvio-m').value = APP.config.desvioM;
             g('c-desvio-min').value = APP.config.desvioMin;
@@ -5688,6 +6128,16 @@
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
+            cf.reglas.riesgoSinSenal = g('c-r-riesgo').checked;
+            cf.riesgoUrl = (g('c-riesgo-url').value || '').trim();
+            cf.riesgoFormato = g('c-riesgo-formato').value || 'auto';
+            cf.riesgoMinScore = clamp(isoNum(g('c-riesgo-min').value, DEFAULTS.riesgoMinScore), 0, 100);
+            cf.riesgoRadioMul = clamp(parseFloat(g('c-riesgo-mul').value) || DEFAULTS.riesgoRadioMul, 0.1, 5);
+            // Si la URL cambi\u00f3 (o se activ\u00f3), recarga de inmediato.
+            if (cf.riesgoUrl !== APP._riesgoFetched || APP.riesgoEstado === 'error') {
+                APP._riesgoFetched = cf.riesgoUrl;
+                cargarRiesgo();
+            }
             cf.reglas.desvio = g('c-r-desvio').checked;
             cf.desvioM = Math.max(30, isoNum(g('c-desvio-m').value, cf.desvioM));
             cf.desvioMin = Math.max(1, isoNum(g('c-desvio-min').value, cf.desvioMin));
@@ -5827,6 +6277,109 @@
         });
     }
 
+    /* ====================== RIESGO: BINDINGS ====================== */
+    function bindRiesgo() {
+        const wrap = byId('rondo-wrap-riesgo');
+        if (!wrap) return;
+        // Delegacion: cualquier input/select de la pestana dispara aqui.
+        wrap.addEventListener('change', (e) => {
+            const t = e.target;
+            if (!t || !t.id) return;
+            const cfg = APP.config;
+            if (t.id === 'rondo-riesgo-url') {
+                const newUrl = (t.value || '').trim();
+                if (newUrl !== (cfg.riesgoUrl || '')) {
+                    cfg.riesgoUrl = newUrl;
+                    APP._riesgoFetched = newUrl;
+                    writeJSON(LS.cfg, APP.config);
+                    cargarRiesgo();
+                }
+            } else if (t.id === 'rondo-riesgo-toggle') {
+                cfg.reglas.riesgoSinSenal = !!t.checked;
+                writeJSON(LS.cfg, APP.config);
+            } else if (t.id === 'rondo-riesgo-formato-sel') {
+                cfg.riesgoFormato = t.value || 'auto';
+                writeJSON(LS.cfg, APP.config);
+            } else if (t.id === 'rondo-riesgo-min') {
+                cfg.riesgoMinScore = clamp(parseFloat(t.value) || DEFAULTS.riesgoMinScore, 0, 100);
+                t.value = cfg.riesgoMinScore;
+                writeJSON(LS.cfg, APP.config);
+                paintRiesgo();
+            } else if (t.id === 'rondo-riesgo-mul') {
+                cfg.riesgoRadioMul = clamp(parseFloat(t.value) || DEFAULTS.riesgoRadioMul, 0.1, 5);
+                t.value = cfg.riesgoRadioMul;
+                writeJSON(LS.cfg, APP.config);
+                paintRiesgo();
+            }
+        });
+        const rec = byId('rondo-riesgo-recargar');
+        if (rec) rec.addEventListener('click', () => cargarRiesgo());
+        const lim = byId('rondo-riesgo-limpiar');
+        if (lim) {
+            lim.addEventListener('click', () => {
+                APP.riesgo = null;
+                APP.riesgoErr = null;
+                APP.riesgoEstado = 'idle';
+                APP.riesgoTs = 0;
+                paintRiesgo();
+            });
+        }
+        const arch = byId('rondo-riesgo-archivo');
+        if (arch) {
+            arch.addEventListener('change', (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (ev) => {
+                    const text = String(ev.target.result || '');
+                    const trimmed = text.trim();
+                    let items = [];
+                    let fmt = trimmed.length && (trimmed[0] === '[' || trimmed[0] === '{') ? 'json' : 'csv';
+                    try {
+                        if (fmt === 'json') {
+                            const data = JSON.parse(trimmed);
+                            items = _itemsFromJSON(data);
+                        } else {
+                            items = _itemsFromCSV(trimmed);
+                        }
+                    } catch (e1) {
+                        APP.riesgoErr = 'Archivo invalido: ' + (e1 && e1.message || '');
+                        APP.riesgo = null;
+                        APP.riesgoEstado = 'error';
+                        paintRiesgo();
+                        e.target.value = '';
+                        return;
+                    }
+                    if (!items.length) {
+                        APP.riesgoErr = 'Archivo sin items reconocibles (revisa columnas lat/lon)';
+                        APP.riesgo = null;
+                        APP.riesgoEstado = 'error';
+                        paintRiesgo();
+                        e.target.value = '';
+                        return;
+                    }
+                    APP.riesgo = items;
+                    APP.riesgoErr = null;
+                    APP.riesgoTs = Date.now();
+                    APP.riesgoEstado = 'ok';
+                    paintRiesgo();
+                    if (APP.unlocked) {
+                        try { console.log('[Rondo] riesgo cargado desde archivo:', items.length, 'zonas'); } catch (_) {}
+                    }
+                    e.target.value = '';
+                };
+                reader.onerror = () => {
+                    APP.riesgoErr = 'No se pudo leer el archivo';
+                    APP.riesgo = null;
+                    APP.riesgoEstado = 'error';
+                    paintRiesgo();
+                    e.target.value = '';
+                };
+                reader.readAsText(file);
+            });
+        }
+    }
+
     /* ====================== INIT ====================== */
     async function init() {
         const primerUso = !localStorage.getItem(LS.cfg);
@@ -5836,6 +6389,7 @@
         bindKeys();
         bindEvents();
         bindCaravanaSelect();
+        bindRiesgo();
 
         const ok = await wialonReady();
         if (!ok) {
@@ -5861,6 +6415,8 @@
         paintVerifyButton();
         updateNoMolestar();
         await refresh();
+        // Carga en background (no bloquea el inicio). Sin URL por defecto -> queda inactivo.
+        cargarRiesgo();
         restartTimers();
         if (primerUso) {
             setTimeout(abrirBienvenida, 900);
