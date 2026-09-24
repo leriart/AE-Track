@@ -229,6 +229,50 @@ ok('sin SVG en textContent', !/\.textContent\s*=\s*[^;]*UIS\./.test(src));
 ok('sin SVG en .textContent con ternario', !/\.textContent\s*=\s*\([^;]*UIS\./.test(src));
 ok('sin iconos en detalle de alertas', !/detalle:\s*UIS\./.test(src));
 
+// Cada par de iconos con la misma intencion visual debe tener paths distintos.
+// Antes varios pares (warn/riesgo, alertas/mute, pin/zone) eran el mismo path.
+(function () {
+    const m = src.match(/const NA_ICONS = Object\.freeze\(\{([\s\S]*?)\n    \}\);/);
+    if (!m) return;
+    const body = m[1];
+    // Extrae clave -> array de paths.
+    const re = /^\s{8}([a-zA-Z0-9_]+):\s*\[([\s\S]*?)\],?\s*$/gm;
+    const icons = {};
+    let mm;
+    while ((mm = re.exec(body)) !== null) {
+        const key = mm[1];
+        // Extrae todos los strings entre comillas simples.
+        const paths = (mm[2].match(/'[^']+'/g) || []).map((s) => s.slice(1, -1));
+        icons[key] = paths.join('|');
+    }
+    // Pares que DEBEN ser distintos (cada uno un icono Ant Design distinto).
+    const pares = [
+        ['warn', 'riesgo'],        // triangulo vs llama
+        ['alertas', 'mute'],       // campana outlined vs campana filled
+        ['pin', 'zone'],           // pin relleno vs pin outlined
+        ['clear', 'close'],        // papelera vs X
+        ['ok', 'error'],           // check en circulo vs X en circulo
+        ['expand', 'collapse'],    // + en cuadrado vs - en cuadrado
+        ['down', 'up'],            // chevron abajo vs chevron arriba
+        ['right', 'left'],         // chevron derecha vs chevron izquierda
+        ['csv', 'upload']          // documento vs nube con flecha
+    ];
+    for (const [a, b] of pares) {
+        ok('iconos distintos: ' + a + ' vs ' + b, icons[a] !== icons[b],
+            a + ' y ' + b + ' comparten path (deben ser iconos Ant Design distintos)');
+    }
+    // Cada uno debe tener al menos un path SVG no vacio.
+    for (const key of Object.keys(icons)) {
+        ok('icono ' + key + ' tiene path SVG', icons[key].length > 0);
+    }
+})();
+// El bug del ternario del mute (sil ? UIS.mute : UIS.mute) debe estar
+// corregido: ambos branches del ternario deben ser iconos distintos.
+ok('bug mute corregido: ternario usa iconos distintos en tarjeta de unidad',
+    !/\(sil \? UIS\.mute : UIS\.mute\)/.test(src));
+ok('bug mute corregido: ternario en menu contextual usa iconos distintos',
+    !/silenciado \? UIS\.mute : UIS\.mute/.test(src));
+
 // Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
 ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);
 ok('riesgo tiene container de drop', src.indexOf('id="rondo-riesgo-drop"') >= 0);

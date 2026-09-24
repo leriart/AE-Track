@@ -5,6 +5,7 @@ este proyecto se llamaba **HJP Wialon** y el archivo era `HJP-Wialon.user.js`;
 el contenido es compatible y la primera vez Rondo migra automaticamente la
 configuracion, la lista vigilada, las rutas, el odometro y los perfiles.
 
+- [5.11.1](./5.11.1.md) - Iconos de Ant Design diferenciados (riesgo/alertas/mute/pin), 8 entradas sin uso eliminadas y fix del toggle de silenciar unidad.
 - [5.11.0](./5.11.0.md) - Rondo usa los mismos iconos que la plataforma (Ant Design, SVG inline); se elimina Material Icons.
 - [5.10.0](./5.10.0.md) - Motores de voz online gratis (StreamElements/Google), iconos Unicode en pestanas y cabecera, y dashboard sin acciones rapidas.
 - [5.9.1](./5.9.1.md) - Ayuda rapida ampliada, seleccion de voz por modelo, y pulido visual de la barra lateral (cabecera sin icono, salud de flota mas prominente).
