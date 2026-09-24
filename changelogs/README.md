@@ -5,6 +5,7 @@ este proyecto se llamaba **HJP Wialon** y el archivo era `HJP-Wialon.user.js`;
 el contenido es compatible y la primera vez Rondo migra automaticamente la
 configuracion, la lista vigilada, las rutas, el odometro y los perfiles.
 
+- [5.12.0](./5.12.0.md) - Test de voz integrado (boton Probar/Detener + texto editable) e IA de razonamiento manual sobre Avisos con DeepSeek / NVIDIA NIM / Moonshot Kimi, contexto de geocercas + POIs de Overpass.
 - [5.11.1](./5.11.1.md) - Iconos de Ant Design diferenciados (riesgo/alertas/mute/pin), 8 entradas sin uso eliminadas y fix del toggle de silenciar unidad.
 - [5.11.0](./5.11.0.md) - Rondo usa los mismos iconos que la plataforma (Ant Design, SVG inline); se elimina Material Icons.
 - [5.10.0](./5.10.0.md) - Motores de voz online gratis (StreamElements/Google), iconos Unicode en pestanas y cabecera, y dashboard sin acciones rapidas.

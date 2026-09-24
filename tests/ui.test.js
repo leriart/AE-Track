@@ -273,6 +273,29 @@ ok('bug mute corregido: ternario usa iconos distintos en tarjeta de unidad',
 ok('bug mute corregido: ternario en menu contextual usa iconos distintos',
     !/silenciado \? UIS\.mute : UIS\.mute/.test(src));
 
+// Test de voz: boton Probar/Detener + texto editable en Ajustes > Avisos.
+ok('boton Probar voz existe', /id="c-voz-test"/.test(src));
+ok('boton Detener voz existe', /id="c-voz-detener"/.test(src));
+ok('texto de prueba editable existe', /id="c-voz-test-text"/.test(src));
+ok('frase por defecto del test existe', /vozTest:\s*'[^']*'/.test(src));
+ok('icono SoundOutlined en NA_ICONS', /\bspeak:\s*\['/.test(src));
+
+// IA de razonamiento: pestana en Configuracion + 3 proveedores + handler.
+ok('pestana IA en configuracion', /data-cfg="ia"/.test(src));
+ok('proveedor DeepSeek', /deepseek-chat/.test(src));
+ok('proveedor NVIDIA NIM', /integrate\.api\.nvidia\.com/.test(src));
+ok('proveedor Moonshot Kimi', /api\.moonshot\.ai/.test(src));
+ok('IA_SYSTEM prompt estructurado JSON', /"veredicto":\s*"falso_positivo" \| "normal" \| "sospechoso" \| "critico"/.test(src));
+ok('boton Probar conexion IA existe', /id="c-ia-test"/.test(src));
+ok('boton Borrar API key IA existe', /id="c-ia-clear"/.test(src));
+ok('campo API key IA existe', /id="c-ia-key"/.test(src));
+ok('campo modelo IA existe', /id="c-ia-modelo"/.test(src));
+ok('Overpass para POIs en aiContexto', /amenity"~"workshop\|fuel\|parking/.test(src));
+ok('boton IA en alertas', /rondo-ia-btn/.test(src));
+ok('veredicto IA en alertas', /rondo-ia-verdict/.test(src));
+ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
+ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
+
 // Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
 ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);
 ok('riesgo tiene container de drop', src.indexOf('id="rondo-riesgo-drop"') >= 0);

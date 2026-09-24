@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.11.1-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.11.1.md)
-[![tests](https://img.shields.io/badge/tests-452%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.12.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.12.0.md)
+[![tests](https://img.shields.io/badge/tests-473%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -112,6 +112,21 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **Dialogos y confirmaciones** coherentes con el estilo del panel, y
   **estado vacio util** con pista y accion en cada pestana.
 - **Atajos de teclado** para abrir/cerrar el panel y cambiar de pestana.
+- **Test de voz** en Ajustes > Avisos: boton Probar / Detener que
+  reproduce una frase editable con el motor (Web, StreamElements,
+  Google), idioma y voz configurados.
+
+### IA de razonamiento (optativa)
+
+- **3 proveedores gratis**: DeepSeek (`deepseek-chat`), NVIDIA NIM
+  (`meta/llama-3.1-70b-instruct`) y Moonshot Kimi (`kimi-k2.7-code-highspeed`).
+- En cada aviso de la pestana **Avisos** hay un boton **IA** que manda
+  contexto (estado de la unidad, geocercas, POIs cercanos por Overpass
+  y alertas recientes) al proveedor y devuelve un veredicto
+  estructurado (`falso_positivo` / `normal` / `sospechoso` / `critico`)
+  con resumen, evidencia y recomendacion.
+- La API key se guarda en `localStorage` y solo se envia al endpoint del
+  proveedor; el flujo automatico de alertas no se ve afectado.
 
 ## Compatibilidad
 
@@ -269,15 +284,16 @@ node tests/caravana.test.js
 node tests/riesgo.test.js
 ```
 
-**8 suites, ~452 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**8 suites, ~473 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana
 (proyeccion al eje, distancia firmada, sentido contrario y cercania
 directa), algoritmos de la pestana de zonas de riesgo (clasificacion por
-nivel, estadisticas, filtrado, ordenamiento y agrupacion) y la integridad
+nivel, estadisticas, filtrado, ordenamiento y agrupacion), integridad
 del set de iconos (paths SVG, diferenciacion de pares y regresion de
-bugs).
+bugs) y la integracion de voz (test de voz, IA con DeepSeek / NVIDIA /
+Kimi, contexto Overpass, boton en alertas).
 
 ## Ramas
 

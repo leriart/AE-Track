@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.11.1
+// @version      5.12.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -149,7 +149,13 @@
         help: ['M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm0 820c-205.4 0-372-166.6-372-372s166.6-372 372-372 372 166.6 372 372-166.6 372-372 372z', 'M623.6 316.7C593.6 290.4 554 276 512 276s-81.6 14.5-111.6 40.7C369.2 344 352 380.7 352 420v7.6c0 4.4 3.6 8 8 8h48c4.4 0 8-3.6 8-8V420c0-44.1 43.1-80 96-80s96 35.9 96 80c0 31.1-22 59.6-56.1 72.7-21.2 8.1-39.2 22.3-52.1 40.9-13.1 19-19.9 41.8-19.9 64.9V620c0 4.4 3.6 8 8 8h48c4.4 0 8-3.6 8-8v-22.7a48.3 48.3 0 0130.9-44.8c59-22.7 97.1-74.7 97.1-132.5.1-39.3-17.1-76-48.3-103.3zM472 732a40 40 0 1080 0 40 40 0 10-80 0z'],
         caravana: ['M824.2 699.9a301.55 301.55 0 00-86.4-60.4C783.1 602.8 812 546.8 812 484c0-110.8-92.4-201.7-203.2-200-109.1 1.7-197 90.6-197 200 0 62.8 29 118.8 74.2 155.5a300.95 300.95 0 00-86.4 60.4C345 754.6 314 826.8 312 903.8a8 8 0 008 8.2h56c4.3 0 7.9-3.4 8-7.7 1.9-58 25.4-112.3 66.7-153.5A226.62 226.62 0 01612 684c60.9 0 118.2 23.7 161.3 66.8C814.5 792 838 846.3 840 904.3c.1 4.3 3.7 7.7 8 7.7h56a8 8 0 008-8.2c-2-77-33-149.2-87.8-203.9zM612 612c-34.2 0-66.4-13.3-90.5-37.5a126.86 126.86 0 01-37.5-91.8c.3-32.8 13.4-64.5 36.3-88 24-24.6 56.1-38.3 90.4-38.7 33.9-.3 66.8 12.9 91 36.6 24.8 24.3 38.4 56.8 38.4 91.4 0 34.2-13.3 66.3-37.5 90.5A127.3 127.3 0 01612 612zM361.5 510.4c-.9-8.7-1.4-17.5-1.4-26.4 0-15.9 1.5-31.4 4.3-46.5.7-3.6-1.2-7.3-4.5-8.8-13.6-6.1-26.1-14.5-36.9-25.1a127.54 127.54 0 01-38.7-95.4c.9-32.1 13.8-62.6 36.3-85.6 24.7-25.3 57.9-39.1 93.2-38.7 31.9.3 62.7 12.6 86 34.4 7.9 7.4 14.7 15.6 20.4 24.4 2 3.1 5.9 4.4 9.3 3.2 17.6-6.1 36.2-10.4 55.3-12.4 5.6-.6 8.8-6.6 6.3-11.6-32.5-64.3-98.9-108.7-175.7-109.9-110.9-1.7-203.3 89.2-203.3 199.9 0 62.8 28.9 118.8 74.2 155.5-31.8 14.7-61.1 35-86.5 60.4-54.8 54.7-85.8 126.9-87.8 204a8 8 0 008 8.2h56.1c4.3 0 7.9-3.4 8-7.7 1.9-58 25.4-112.3 66.7-153.5 29.4-29.4 65.4-49.8 104.7-59.7 3.9-1 6.5-4.7 6-8.7z'],
         watch: ['M880 305H624V192c0-17.7-14.3-32-32-32H184v-40c0-4.4-3.6-8-8-8h-56c-4.4 0-8 3.6-8 8v784c0 4.4 3.6 8 8 8h56c4.4 0 8-3.6 8-8V640h248v113c0 17.7 14.3 32 32 32h416c17.7 0 32-14.3 32-32V337c0-17.7-14.3-32-32-32zM184 568V232h368v336H184zm656 145H504v-73h112c4.4 0 8-3.6 8-8V377h216v336z'],
-        upload: ['M518.3 459a8 8 0 00-12.6 0l-112 141.7a7.98 7.98 0 006.3 12.9h73.9V856c0 4.4 3.6 8 8 8h60c4.4 0 8-3.6 8-8V613.7H624c6.7 0 10.4-7.7 6.3-12.9L518.3 459z', 'M811.4 366.7C765.6 245.9 648.9 160 512.2 160S258.8 245.8 213 366.6C127.3 389.1 64 467.2 64 560c0 110.5 89.5 200 199.9 200H304c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8h-40.1c-33.7 0-65.4-13.4-89-37.7-23.5-24.2-36-56.8-34.9-90.6.9-26.4 9.9-51.2 26.2-72.1 16.7-21.3 40.1-36.8 66.1-43.7l37.9-9.9 13.9-36.6c8.6-22.8 20.6-44.1 35.7-63.4a245.6 245.6 0 0152.4-49.9c41.1-28.9 89.5-44.2 140-44.2s98.9 15.3 140 44.2c19.9 14 37.5 30.8 52.4 49.9 15.1 19.3 27.1 40.7 35.7 63.4l13.8 36.5 37.8 10C846.1 454.5 884 503.8 884 560c0 33.1-12.9 64.3-36.3 87.7a123.07 123.07 0 01-87.6 36.3H720c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h40.1C870.5 760 960 670.5 960 560c0-92.7-63.1-170.7-148.6-193.3z']
+        upload: ['M518.3 459a8 8 0 00-12.6 0l-112 141.7a7.98 7.98 0 006.3 12.9h73.9V856c0 4.4 3.6 8 8 8h60c4.4 0 8-3.6 8-8V613.7H624c6.7 0 10.4-7.7 6.3-12.9L518.3 459z', 'M811.4 366.7C765.6 245.9 648.9 160 512.2 160S258.8 245.8 213 366.6C127.3 389.1 64 467.2 64 560c0 110.5 89.5 200 199.9 200H304c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8h-40.1c-33.7 0-65.4-13.4-89-37.7-23.5-24.2-36-56.8-34.9-90.6.9-26.4 9.9-51.2 26.2-72.1 16.7-21.3 40.1-36.8 66.1-43.7l37.9-9.9 13.9-36.6c8.6-22.8 20.6-44.1 35.7-63.4a245.6 245.6 0 0152.4-49.9c41.1-28.9 89.5-44.2 140-44.2s98.9 15.3 140 44.2c19.9 14 37.5 30.8 52.4 49.9 15.1 19.3 27.1 40.7 35.7 63.4l13.8 36.5 37.8 10C846.1 454.5 884 503.8 884 560c0 33.1-12.9 64.3-36.3 87.7a123.07 123.07 0 01-87.6 36.3H720c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h40.1C870.5 760 960 670.5 960 560c0-92.7-63.1-170.7-148.6-193.3z'],
+        // Speak (altavoz con ondas, Ant Design SoundOutlined): boton Probar voz
+        // en Ajustes > Avisos. Se diferencia de 'theme' (Bombilla) y 'refresh' (flecha).
+        speak: ['M625.9 115c-5.9 0-11.9 1.6-17.4 5.3L254 352H90c-8.8 0-16 7.2-16 16v288c0 8.8 7.2 16 16 16h164l354.5 231.7c5.5 3.6 11.6 5.3 17.4 5.3 16.7 0 32.1-13.3 32.1-32.1V147.1c0-18.8-15.4-32.1-32.1-32.1zM586 803L293.4 611.7l-18-11.7H146V424h129.4l17.9-11.7L586 221v582zm348-327H806c-8.8 0-16 7.2-16 16v40c0 8.8 7.2 16 16 16h128c8.8 0 16-7.2 16-16v-40c0-8.8-7.2-16-16-16zm-41.9 261.8l-110.3-63.7a15.9 15.9 0 00-21.7 5.9l-19.9 34.5c-4.4 7.6-1.8 17.4 5.8 21.8L856.3 800a15.9 15.9 0 0021.7-5.9l19.9-34.5c4.4-7.6 1.7-17.4-5.8-21.8zM760 344a15.9 15.9 0 0021.7 5.9L892 286.2c7.6-4.4 10.2-14.2 5.8-21.8L878 230a15.9 15.9 0 00-21.7-5.9L746 287.8a15.99 15.99 0 00-5.8 21.8L760 344z'],
+        // Robot (Ant Design RobotOutlined): cabecera de la pestana IA en
+        // Ajustes. Se diferencia de 'gear' (engranaje) y 'help' (signo ?).
+        robot: ['M300 328a60 60 0 10120 0 60 60 0 10-120 0zM852 64H172c-17.7 0-32 14.3-32 32v660c0 17.7 14.3 32 32 32h680c17.7 0 32-14.3 32-32V96c0-17.7-14.3-32-32-32zm-32 660H204V128h616v596zM604 328a60 60 0 10120 0 60 60 0 10-120 0zm250.2 556H169.8c-16.5 0-29.8 14.3-29.8 32v36c0 4.4 3.3 8 7.4 8h729.1c4.1 0 7.4-3.6 7.4-8v-36c.1-17.7-13.2-32-29.7-32zM664 508H360c-4.4 0-8 3.6-8 8v60c0 4.4 3.6 8 8 8h304c4.4 0 8-3.6 8-8v-60c0-4.4-3.6-8-8-8z']
     });
     function naSvg(paths) {
         if (!paths || !paths.length) return '';
@@ -219,7 +225,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.11.1';
+    const VER = '5.12.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -297,6 +303,21 @@
         vozMotor: 'web',        // 'web' (navegador) | 'online' (StreamElements) | 'google'
         vozOnline: 'Mia',       // voz online (StreamElements/Polly)
         vozVolumen: 1,          // volumen 0..1
+        vozTest: 'Aviso de prueba de Rondo. Unidad 1234 sin senal hace cinco minutos.', // frase del boton Probar voz
+
+        // ── IA de razonamiento ───────────────────────────────────────────
+        // El user mete su API key (se guarda en localStorage, prefijo
+        // rondo.api.*, nunca sale del navegador salvo al endpoint del
+        // proveedor). La IA se invoca manualmente desde el boton
+        // "Analizar con IA" en cada aviso. Devuelve veredicto:
+        //   {verdict:'falso_positivo'|'normal'|'sospechoso'|'critico',
+        //    resumen:'...', recomendaciones:['...']}
+        iaHabilitada: false,    // requiere API key para activarse
+        iaProveedor: 'deepseek', // 'deepseek' | 'nvidia' | 'kimi'
+        iaApiKey: '',           // API key (NUNCA sale del navegador salvo al endpoint)
+        iaModelo: '',           // opcional: override del modelo (si vacio, usa el del proveedor)
+        iaRadioPoisM: 250,      // radio (m) para pedir POIs a Overpass
+        iaTimeoutS: 25,         // timeout para la llamada a la IA
         beep: true,
         beepVol: 0.06,
         desktop: false,
@@ -1882,6 +1903,229 @@
         const ctx = audioCtx();
         if (ctx && ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (_) { /* noop */ } }
     }
+
+    /* ====================== IA DE RAZONAMIENTO ====================== */
+    // Tres proveedores compatibles con OpenAI Chat Completions que dan API
+    // key gratis sin tarjeta: DeepSeek, NVIDIA NIM, Moonshot Kimi.
+    // Se invoca MANUALMENTE desde el boton "Analizar con IA" en cada
+    // aviso de la pestana Avisos. No toca el flujo automatico de reglas.
+    //
+    // El endpoint OpenAI de cada proveedor y el modelo por defecto se
+    // exponen aqui para que sea facil añadir un cuarto proveedor luego.
+    const IA_PROVEEDORES = Object.freeze({
+        deepseek: {
+            nombre: 'DeepSeek',
+            endpoint: 'https://api.deepseek.com/v1/chat/completions',
+            modelo: 'deepseek-chat',
+            headers: { 'Content-Type': 'application/json', 'Authorization': '' }
+        },
+        nvidia: {
+            nombre: 'NVIDIA NIM',
+            endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions',
+            modelo: 'meta/llama-3.1-70b-instruct',
+            headers: { 'Content-Type': 'application/json', 'Authorization': '' }
+        },
+        kimi: {
+            nombre: 'Moonshot Kimi',
+            endpoint: 'https://api.moonshot.ai/v1/chat/completions',
+            modelo: 'kimi-k2.7-code-highspeed',
+            headers: { 'Content-Type': 'application/json', 'Authorization': '' }
+        }
+    });
+
+    // Prompt del sistema para el analista de flota. Le pedimos veredicto
+    // estructurado en JSON para poder parsearlo de forma robusta y pintar
+    // el resultado en la UI.
+    const IA_SYSTEM = String.raw`Eres un analista de seguridad de flotas de vehiculos en Mexico.
+Tu trabajo: dado el contexto de una alerta, decides si es un FALSO POSITIVO, un evento NORMAL, un caso SOSPECHOSO o un incidente CRITICO.
+
+Reglas de razonamiento:
+- Si la unidad esta "sin senal" pero su ultima posicion conocida cae DENTRO de una geocerca conocida del cliente (base, proveedor habitual, instalaciones), suele ser un falso positivo: solo se apago la unidad / entro a zona sin cobertura.
+- Si esta "sin senal" y la ultima posicion esta EN UNA CARRETERA o PUNTO AISLADO (fuera de geocercas), sube la sospecha a "sospechoso" o "critico" segun los POIs cercanos.
+- POIs cercanos (via Overpass): talleres mecanicos, deshuesaderos, estacionamientos privados, zonas industriales, bares o lotes baldios cerca del ultimo punto conocido aumentan la sospecha de robo.
+- "Desvio de ruta" persistente (>5 min) suele ser sospechoso si el nuevo trazado pasa por puntos aislados o se aleja de la geocerca destino.
+- "Velocidad excedida" en zona escolar / hospital / pueblo es critico.
+- "Detenido en zona no prevista" en un punto conocido de carga/descarga es normal; si es en un lote aislado o cerca de un deshuesadero, es sospechoso.
+- Hora del dia importa: 2-5 AM en un lugar aislado y sospechoso suele ser critico.
+
+Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma EXACTA:
+{
+  "veredicto": "falso_positivo" | "normal" | "sospechoso" | "critico",
+  "confianza": numero entre 0 y 1,
+  "resumen": "una o dos frases explicando el razonamiento en espanol",
+  "evidencia": ["..."],
+  "recomendacion": "una accion concreta (verificar con central, llamar al operador, marcar para revision, etc.)
+}`;
+
+    // Junta el contexto para una alerta: eco, placa, estado, ultima posicion,
+    // geocerca actual, POIs cercanos por Overpass y ultimas alertas.
+    async function aiContexto(alert) {
+        const eco = String(alert.eco || '');
+        const unidades = APP.unidades || [];
+        const u = unidades.find((x) => parseUnitName(x).eco === eco || parseUnitName(x).clave === alert.clave);
+        const info = u ? parseUnitName(u) : { eco, placa: '', nombre: eco };
+        const st = u ? unitState(u) : { lat: null, lon: null, vel: 0, edadMin: 0, online: false, estado: 'desconocido' };
+        const pos = (st.lat != null && st.lon != null)
+            ? { lat: +st.lat.toFixed(6), lon: +st.lon.toFixed(6), ts: u && u.pos ? u.pos.t : null }
+            : null;
+        // Geocerca actual (si la unidad esta dentro).
+        const geocercaActual = (function () {
+            if (!pos) return null;
+            for (const z of APP.zonas || []) {
+                const c = z.c || z.centro;
+                if (!c) continue;
+                const r = (z.r || z.radio || 100);
+                if (haversine(pos.lat, pos.lon, c[0], c[1]) <= r) return z.n || z.nombre || z.name || 'geocerca';
+            }
+            return null;
+        })();
+        // POIs cercanos via Overpass (amenity + shop + leisure peligrosos).
+        let pois = [];
+        if (pos && APP.config.iaRadioPoisM > 0) {
+            pois = await aiOverpassPois(pos.lat, pos.lon, +APP.config.iaRadioPoisM || 250);
+        }
+        // Historial reciente de la misma unidad (ultimas 5).
+        const hist = (APP.historial || [])
+            .filter((h) => h.eco === eco)
+            .slice(0, 5)
+            .map((h) => ({ regla: h.regla, sev: h.sev, ts: new Date(h.ts).toISOString(), titulo: h.titulo }));
+        return {
+            eco, placa: info.placa || '', nombre: info.nombre || '',
+            regla: alert.regla, sev: alert.sev,
+            titulo: alert.titulo, detalle: alert.detalle || '',
+            ultimaPosicion: pos, edadMin: st.edadMin || 0,
+            velocidad: st.vel || 0, estado: st.estado || 'desconocido',
+            geocercaActual, pois, alertasRecientes: hist
+        };
+    }
+
+    // Pide a Overpass POIs alrededor de un punto. Devuelve [{nombre, tipo, dist_m}].
+    // Timeout corto: si falla, devolvemos lista vacia (la IA no se bloquea).
+    async function aiOverpassPois(lat, lon, radioM) {
+        if (!lat || !lon || !radioM) return [];
+        const radio = Math.max(50, Math.min(2000, +radioM || 250));
+        const q = '[out:json][timeout:10];(' +
+            'node["amenity"~"workshop|fuel|parking|car_wash|nightclub|bar|driving_school|place_of_worship|grave_yard|prison|courthouse|police"](around:' + radio + ',' + lat + ',' + lon + ');' +
+            'node["shop"~"car_repair|car_parts|scrap_yard|tyres|motorcycle"](around:' + radio + ',' + lat + ',' + lon + ');' +
+            'node["leisure"~"park|pitch|garden"](around:' + radio + ',' + lat + ',' + lon + ');' +
+            'way["amenity"~"parking|fuel|industrial"](around:' + radio + ',' + lat + ',' + lon + ');' +
+            ');out body 30;';
+        try {
+            const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+            const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
+            const res = await fetch('https://overpass-api.de/api/interpreter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'data=' + encodeURIComponent(q),
+                signal: ctrl ? ctrl.signal : undefined
+            });
+            if (timer) clearTimeout(timer);
+            if (!res.ok) return [];
+            const d = await res.json();
+            const out = [];
+            (d.elements || []).forEach((el) => {
+                if (!el.lat || !el.lon) return;
+                const t = el.tags || {};
+                const nombre = t.name || t.operator || t.brand
+                    || (t.amenity ? ('amenity:' + t.amenity) : null)
+                    || (t.shop ? ('shop:' + t.shop) : null)
+                    || (t.leisure ? ('leisure:' + t.leisure) : null)
+                    || 'lugar';
+                out.push({
+                    nombre: String(nombre).slice(0, 80),
+                    tipo: t.amenity || t.shop || t.leisure || 'desconocido',
+                    dist_m: Math.round(haversine(lat, lon, el.lat, el.lon))
+                });
+            });
+            // Ordena por distancia y devuelve los 8 mas cercanos.
+            out.sort((a, b) => a.dist_m - b.dist_m);
+            return out.slice(0, 8);
+        } catch (_) {
+            return [];
+        }
+    }
+
+    // Llama al proveedor configurado y devuelve el objeto de veredicto
+    // parseado (o {error, raw} si fallo).
+    async function aiLlamarProveedor(contexto) {
+        const cfg = APP.config || {};
+        if (!cfg.iaHabilitada) return { error: 'IA deshabilitada. Activala en Ajustes > IA.' };
+        if (!cfg.iaApiKey) return { error: 'Falta la API key. Pegala en Ajustes > IA.' };
+        const prov = IA_PROVEEDORES[cfg.iaProveedor];
+        if (!prov) return { error: 'Proveedor IA desconocido: ' + cfg.iaProveedor };
+        const body = {
+            model: cfg.iaModelo && String(cfg.iaModelo).trim() ? cfg.iaModelo : prov.modelo,
+            messages: [
+                { role: 'system', content: IA_SYSTEM },
+                { role: 'user', content: 'Contexto de la alerta (JSON):\n' + JSON.stringify(contexto, null, 0) }
+            ],
+            temperature: 0.2,
+            max_tokens: 500,
+            stream: false
+        };
+        const headers = Object.assign({}, prov.headers);
+        headers['Authorization'] = 'Bearer ' + cfg.iaApiKey;
+        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const ms = Math.max(2000, (+cfg.iaTimeoutS || 25) * 1000);
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
+        let res;
+        try {
+            res = await fetch(prov.endpoint, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(body),
+                signal: ctrl ? ctrl.signal : undefined
+            });
+        } catch (e) {
+            if (timer) clearTimeout(timer);
+            return { error: 'Red/CORS con ' + prov.nombre + ': ' + (e && e.message || e) };
+        }
+        if (timer) clearTimeout(timer);
+        if (!res.ok) {
+            let txt = '';
+            try { txt = await res.text(); } catch (_) { /* noop */ }
+            return { error: prov.nombre + ' HTTP ' + res.status + (txt ? ' · ' + txt.slice(0, 220) : '') };
+        }
+        let data;
+        try { data = await res.json(); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
+        const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+        if (!txt) return { error: 'Sin contenido en la respuesta de ' + prov.nombre, raw: data };
+        // El modelo a veces envuelve el JSON en ```json ... ```. Lo limpiamos.
+        const limpio = String(txt).replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+        try {
+            const j = JSON.parse(limpio);
+            return j;
+        } catch (e) {
+            return { error: 'La IA no devolvio JSON parseable', raw: String(txt).slice(0, 500) };
+        }
+    }
+
+    // Pipeline principal: junta contexto y llama al proveedor.
+    async function aiAnalizar(alert) {
+        if (!APP.config.iaHabilitada) return { error: 'IA deshabilitada' };
+        if (!APP.config.iaApiKey) return { error: 'Falta API key' };
+        const ctx = await aiContexto(alert);
+        const veredicto = await aiLlamarProveedor(ctx);
+        return Object.assign({ contexto: ctx }, veredicto);
+    }
+
+    // Mini-probe de conexion (la pestana IA). Manda un ping corto y
+    // devuelve texto listo para pintar en #c-ia-status.
+    async function aiProbar() {
+        const el = byId('c-ia-status');
+        const set = (txt, ok) => { if (el) { el.textContent = txt; el.style.color = ok ? 'var(--rondo-ok-fg)' : 'var(--rondo-bad-fg)'; } };
+        set('Probando...', true);
+        // Eco fake: no se persiste en historial ni dispara reglas reales.
+        const fake = { regla: 'test', sev: 'medio', eco: 'TEST-IA', clave: 'TEST-IA-' + Date.now(),
+            titulo: 'Ping de conexion', detalle: 'Comprobando que el proveedor responde.' };
+        const r = await aiAnalizar(fake);
+        if (r.error) { set('ERROR: ' + r.error, false); return false; }
+        const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+        set('OK · ' + provNombre + ' respondio · veredicto=' + (r.veredicto || '?') +
+            ' · confianza=' + (r.confianza != null ? r.confianza : '?'), true);
+        return true;
+    }
+
     function beep(sev) {
         if (!APP.config.beep) return;
         try {
@@ -4321,6 +4565,15 @@
             "#rondo-panel .rondo-usym{font-family: var(--rondo-font);font-weight:700;line-height:1;display:inline-block;flex-shrink:0}\n" +
             /* Iconos de Ant Design (SVG inline): mismos que la plataforma. */
             ".rondo-na{width:1em;height:1em;fill:currentColor;display:inline-block;vertical-align:-.125em;flex-shrink:0;overflow:visible}\n" +
+            // Veredicto IA en tarjetas de Avisos.
+            "#rondo-panel .rondo-ia-verdict{margin-top:6px;padding:6px 8px;background:var(--rondo-bg-soft);border-radius:var(--rondo-radius-sm);font-size:12px;line-height:1.4}\n" +
+            "#rondo-panel .rondo-ia-verdict .rondo-ia-head{margin-bottom:3px}\n" +
+            "#rondo-panel .rondo-ia-verdict .rondo-ia-summary{color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-ia-verdict .rondo-ia-ev{margin:4px 0 4px 18px;padding:0;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-ia-verdict .rondo-ia-rec{margin-top:3px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-ia-verdict .rondo-ia-err{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-ia-verdict .rondo-ia-loading{color:var(--rondo-fg-dim);font-style:italic}\n" +
+            "#rondo-panel .rondo-ia-btn{margin-left:6px}\n" +
             ".rondo-usym .rondo-na,.rondo-usym .rondo-na{width:1em;height:1em}\n" +
             "#rondo-panel .rondo-usym.lg{font-size:18px}\n" +
             "#rondo-panel .rondo-usym.md{font-size:14px}\n" +
@@ -5180,6 +5433,7 @@
             '<button class="cfg-tab" data-cfg="visual">Visual</button>' +
             '<button class="cfg-tab" data-cfg="ventanas">Ventanas</button>' +
             '<button class="cfg-tab" data-cfg="rutas">Rutas</button>' +
+            '<button class="cfg-tab" data-cfg="ia">IA</button>' +
             '<button class="cfg-tab" data-cfg="avanzado">Avanzado</button>' +
             '</div>' +
             '<div class="cfg-body" id="rondo-cfg-body">' +
@@ -5251,6 +5505,12 @@
             '<option value="ar">Árabe</option>' +
             '</select></label>' +
             '<label>Voz <select id="c-voz-voice"><option value="">Predeterminada</option></select></label>' +
+            '<div class="rondo-acciones" style="margin-top:6px">' +
+                '<button type="button" class="accbtn" id="c-voz-test"><span class="rondo-usym">' + UIS.speak + '</span> Probar voz</button>' +
+                '<button type="button" class="accbtn" id="c-voz-detener"><span class="rondo-usym">' + UIS.close + '</span> Detener</button>' +
+            '</div>' +
+            '<label>Texto de prueba <input type="text" id="c-voz-test-text" value="' + esc(DEFAULTS.vozTest) + '" maxlength="180" title="Frase que se lee al pulsar Probar voz"></label>' +
+            '<span style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin-top:-2px">Se lee con el motor, idioma y voz configurados arriba.</span>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
             numRow('c-beep-vol', 'Volumen del pitido (0-1)') +
             checkRow('c-desktop', 'Notificación del navegador') +
@@ -5359,6 +5619,25 @@
             numRow('c-parada-min', 'Parada mínima (min)') +
             numRow('c-hist-horas', 'Historial a analizar (h)') +
             checkRow('c-analizar-auto', 'Analizar automáticamente al planear ruta') +
+            '</div>' +
+            '<div class="cfg-pane" data-cfg="ia" style="display:none">' +
+            '<h4>IA de razonamiento</h4>' +
+            '<p style="font-size:11.5px;color:var(--rondo-fg-dim);margin:0 0 8px">Cuando pulses <b>Analizar con IA</b> en un aviso, Rondo junta contexto (estado de la unidad, geocercas, POIs cercanos por Overpass, alertas recientes) y se lo envia al proveedor. La IA devuelve un veredicto (falso positivo / normal / sospechoso / critico) y un resumen. Tu <b>API key</b> se guarda solo en este navegador y solo se envia al endpoint del proveedor.</p>' +
+            checkRow('c-ia-on', 'Habilitar IA (boton Analizar en Avisos)') +
+            '<label>Proveedor <select id="c-ia-prov">' +
+            '<option value="deepseek">DeepSeek (deepseek-chat, free tier)</option>' +
+            '<option value="nvidia">NVIDIA NIM (meta/llama-3.1-70b-instruct, free tier)</option>' +
+            '<option value="kimi">Moonshot Kimi (kimi-k2.7-code-highspeed, free tier)</option>' +
+            '</select></label>' +
+            '<label>API key <input type="password" id="c-ia-key" autocomplete="off" spellcheck="false" placeholder="sk-..." title="Solo se envia al endpoint del proveedor; nunca a Rondo"></label>' +
+            '<label>Modelo (opcional, vacio = el del proveedor) <input type="text" id="c-ia-modelo" autocomplete="off" placeholder="(modelo por defecto)" spellcheck="false"></label>' +
+            numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
+            numRow('c-ia-timeout', 'Timeout (s)') +
+            '<div class="rondo-acciones" style="margin-top:6px">' +
+                '<button type="button" class="accbtn" id="c-ia-test"><span class="rondo-usym">' + UIS.robot + '</span> Probar conexion</button>' +
+                '<button type="button" class="accbtn" id="c-ia-clear"><span class="rondo-usym">' + UIS.clear + '</span> Borrar API key</button>' +
+            '</div>' +
+            '<div id="c-ia-status" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px"></div>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
@@ -6127,22 +6406,68 @@
             if (!f) return true;
             return (a.titulo + ' ' + (a.detalle || '') + ' ' + (a.eco || '')).toLowerCase().indexOf(f) >= 0;
         });
+        // Estructura por alerta para poder actualizar la IA sin re-pintar
+        // toda la lista (delegamos el click abajo).
+        const iah = !!(APP.config && APP.config.iaHabilitada && APP.config.iaApiKey);
         setHtml(cont, lista.length
             ? lista.map((a) => (
-                '<div class="alerta" style="border-left:4px solid ' + (COL[a.sev] || '#555') + '">' +
+                '<div class="alerta" data-clave="' + esc(a.clave) + '" data-ts="' + a.ts + '" style="border-left:4px solid ' + (COL[a.sev] || '#555') + '">' +
                 '<span class="ico rondo-usym" style="color:' + (COL[a.sev] || '#777') + '">' + (UIS[a.icono] || SEV_UIS[a.sev] || UIS.info) + '</span>' +
                 '<div class="cuerpo">' +
                 '<b>' + esc(a.titulo) + '</b>' +
                 (a.detalle ? '<span>' + esc(a.detalle) + '</span>' : '') +
                 '<div class="meta"><span class="regla">' + esc(a.regla) + '</span>' +
                 '<span>' + new Date(a.ts).toLocaleString().slice(0, 16) + '</span></div>' +
+                '<div class="rondo-ia-verdict" data-clave="' + esc(a.clave) + '" data-ts="' + a.ts + '" style="display:none"></div>' +
                 '</div>' +
                 '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
+                (iah ? '<button type="button" class="mini rondo-ia-btn" data-clave="' + esc(a.clave) + '" data-ts="' + a.ts + '" title="Analizar con IA (DeepSeek / NVIDIA / Kimi)"><span class="rondo-usym sm">' + UIS.robot + '</span> IA</button>' : '') +
                 '</div>'
             )).join('')
             : emptyState(UIS.alertas, 'Sin avisos registrados',
                 'Aqui se acumula el historial de alertas. Cuando una regla se dispare, aparecera en esta lista.'));
         paintSeverity();
+    }
+
+    // Lanza el analisis IA para un aviso concreto. Re-pinta solo el bloque
+    // del veredicto dentro de la tarjeta correspondiente.
+    async function aiAnalizarAviso(clave, ts) {
+        if (!APP.config.iaHabilitada || !APP.config.iaApiKey) {
+            adviceWarn('IA deshabilitada', 'Activala y mete tu API key en Ajustes > IA.');
+            return;
+        }
+        const item = APP.historial.find((h) => h.clave === clave && h.ts === +ts);
+        if (!item) return;
+        const verEl = document.querySelector('.rondo-ia-verdict[data-clave="' + cssEscape(clave) + '"][data-ts="' + ts + '"]');
+        const btn = document.querySelector('.rondo-ia-btn[data-clave="' + cssEscape(clave) + '"][data-ts="' + ts + '"]');
+        if (verEl) verEl.innerHTML = '<span class="rondo-ia-loading">Analizando con IA... (' + (IA_PROVEEDORES[APP.config.iaProveedor].nombre) + ')</span>';
+        if (btn) { btn.disabled = true; btn.textContent = '...'; }
+        const res = await aiAnalizar(item);
+        if (!verEl) return;
+        if (res.error) {
+            verEl.style.display = 'block';
+            verEl.innerHTML = '<div class="rondo-ia-err"><b>Error IA:</b> ' + esc(res.error) + '</div>';
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym sm">' + UIS.refresh + '</span> Reintentar'; }
+            return;
+        }
+        const v = String(res.veredicto || '?');
+        const colores = { falso_positivo: '#2e7d32', normal: '#1565c0', sospechoso: '#e65100', critico: '#b71c1c' };
+        const color = colores[v] || '#555';
+        const resumen = res.resumen ? esc(res.resumen) : '(sin resumen)';
+        const ev = Array.isArray(res.evidencia) ? res.evidencia : [];
+        const rec = res.recomendacion ? '<div class="rondo-ia-rec"><b>Recomendacion:</b> ' + esc(res.recomendacion) + '</div>' : '';
+        const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+        verEl.style.display = 'block';
+        verEl.style.borderLeft = '3px solid ' + color;
+        verEl.style.paddingLeft = '6px';
+        verEl.innerHTML =
+            '<div class="rondo-ia-head"><b style="color:' + color + '">' + v.toUpperCase().replace('_', ' ') + '</b>' +
+            ' <span style="color:var(--rondo-fg-dim);font-size:11px"> · ' + esc(provNombre) +
+            ' · confianza ' + (res.confianza != null ? res.confianza : '?') + '</span></div>' +
+            '<div class="rondo-ia-summary">' + resumen + '</div>' +
+            (ev.length ? '<ul class="rondo-ia-ev">' + ev.map((e) => '<li>' + esc(e) + '</li>').join('') + '</ul>' : '') +
+            rec;
+        if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym sm">' + UIS.refresh + '</span> Reanalizar'; }
     }
     function paintSeverity() {
         document.querySelectorAll('#rondo-filtroseveridad span[data-sev]').forEach((s) => {
@@ -7408,12 +7733,26 @@
             t.addEventListener('click', () => setTab(t.dataset.tab)));
         document.querySelectorAll('#rondo-filtroseveridad span').forEach((s) =>
             s.addEventListener('click', () => { APP.filtSever = s.dataset.sev; paintAlertas(); }));
+        // Delegacion: click en un boton "IA" dentro de una tarjeta de Avisos.
+        // Usamos un solo listener en el contenedor.
+        const listaAlertasEl = byId('rondo-lista-alertas');
+        if (listaAlertasEl) listaAlertasEl.addEventListener('click', (ev) => {
+            const btn = ev.target.closest && ev.target.closest('.rondo-ia-btn');
+            if (!btn) return;
+            ev.preventDefault();
+            aiAnalizarAviso(btn.dataset.clave, +btn.dataset.ts);
+        });
         byId('rondo-tema').addEventListener('click', () => {
             APP.config.theme = APP.config.theme === 'oscuro' ? 'claro' : (APP.config.theme === 'claro' ? 'auto' : 'oscuro');
             writeJSON(LS.cfg, APP.config);
             applyTheme();
             advice('Tema', APP.config.theme);
         });
+        // Despues de Guardar config: repintar Avisos para que aparezcan/
+        // desaparezcan los botones "IA" segun iaHabilitada + iaApiKey.
+        // Se hace en cerrarCfg/Guardar abajo, pero nos aseguramos tambien
+        // cuando cambia el tema u otras opciones que afectan la UI.
+        const _repintarAlertasSi = () => { if (APP.tab === 'alertas') paintAlertas(); };
         byId('rondo-actualizar').addEventListener('click', aplicarActualizacion);
         updateBtn.addEventListener('click', aplicarActualizacion);
         byId('rondo-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
@@ -7582,7 +7921,25 @@
             g('c-voz').checked = !!APP.config.voice;
             g('c-voz-lang').value = APP.config.voiceLang || 'es-MX';
             g('c-voz-motor').value = APP.config.vozMotor || 'web';
+            const vozTestTextEl = byId('c-voz-test-text');
+            if (vozTestTextEl) vozTestTextEl.value = APP.config.vozTest || DEFAULTS.vozTest;
             poblarVozSelect();
+            // Pestana IA: precarga valores. La API key se enmascara al
+            // mostrarla (nunca el texto plano en el DOM).
+            const iaOnEl = byId('c-ia-on');
+            if (iaOnEl) iaOnEl.checked = !!APP.config.iaHabilitada;
+            const iaProvEl = byId('c-ia-prov');
+            if (iaProvEl) iaProvEl.value = APP.config.iaProveedor || 'deepseek';
+            const iaKeyEl = byId('c-ia-key');
+            if (iaKeyEl) iaKeyEl.value = APP.config.iaApiKey ? '********' : '';
+            const iaModeloEl = byId('c-ia-modelo');
+            if (iaModeloEl) iaModeloEl.value = APP.config.iaModelo || '';
+            const iaRadioEl = byId('c-ia-radio');
+            if (iaRadioEl) iaRadioEl.value = APP.config.iaRadioPoisM != null ? APP.config.iaRadioPoisM : 250;
+            const iaTimeoutEl = byId('c-ia-timeout');
+            if (iaTimeoutEl) iaTimeoutEl.value = APP.config.iaTimeoutS != null ? APP.config.iaTimeoutS : 25;
+            const iaStatusEl = byId('c-ia-status');
+            if (iaStatusEl) iaStatusEl.textContent = '';
             g('c-beep').checked = !!APP.config.beep;
             g('c-beep-vol').value = APP.config.beepVol;
             g('c-beep-vol').step = '0.01';
@@ -7663,6 +8020,29 @@
         if (vozLangEl) vozLangEl.addEventListener('change', () => {
             if ((byId('c-voz-motor') || {}).value === 'online') poblarVozSelect();
         });
+        // Probar voz / Detener: lee la frase configurada con el motor, idioma
+        // y voz actuales. El texto se guarda en APP.config.vozTest al pulsar
+        // Guardar en la pestana de Avisos.
+        const vozTestBtn = byId('c-voz-test');
+        if (vozTestBtn) vozTestBtn.addEventListener('click', () => {
+            const txtEl = byId('c-voz-test-text');
+            const txt = (txtEl && txtEl.value) || DEFAULTS.vozTest;
+            unlockAudio();
+            speak(String(txt));
+        });
+        const vozStopBtn = byId('c-voz-detener');
+        if (vozStopBtn) vozStopBtn.addEventListener('click', () => _ttsDetener());
+
+        // Pestana IA: probar conexion y borrar API key.
+        const iaTestBtn = byId('c-ia-test');
+        if (iaTestBtn) iaTestBtn.addEventListener('click', () => aiProbar());
+        const iaClearBtn = byId('c-ia-clear');
+        if (iaClearBtn) iaClearBtn.addEventListener('click', () => {
+            APP.config.iaApiKey = '';
+            const k = byId('c-ia-key'); if (k) k.value = '';
+            const s = byId('c-ia-status');
+            if (s) { s.textContent = 'API key borrada.'; s.style.color = 'var(--rondo-fg-dim)'; }
+        });
         // Las voces del navegador cargan de forma asincrona.
         if ('speechSynthesis' in window && window.speechSynthesis.onvoiceschanged !== undefined) {
             window.speechSynthesis.onvoiceschanged = () => {
@@ -7714,6 +8094,23 @@
             cf.velMax = Math.max(10, isoNum(g('c-vel').value, cf.velMax));
             cf.toastSeg = Math.max(3, isoNum(g('c-toastSeg').value, cf.toastSeg));
             cf.severidadMin = g('c-sevmin').value;
+            // Texto del boton Probar voz (truncado a 180 chars por el input).
+            const vozTestEl = byId('c-voz-test-text');
+            if (vozTestEl) cf.vozTest = String(vozTestEl.value || '').trim().slice(0, 180) || DEFAULTS.vozTest;
+            // IA: recoge config. La API key se acepta tal cual (la pega el
+            // usuario) pero si llega enmascarada ('********') se respeta
+            // la anterior.
+            const iaOnEl = byId('c-ia-on'); if (iaOnEl) cf.iaHabilitada = !!iaOnEl.checked;
+            const iaProvEl = byId('c-ia-prov'); if (iaProvEl) cf.iaProveedor = iaProvEl.value || 'deepseek';
+            const iaKeyEl = byId('c-ia-key');
+            if (iaKeyEl) {
+                const v = String(iaKeyEl.value || '').trim();
+                if (v && v !== '********') cf.iaApiKey = v;
+                // Si el usuario la dejo enmascarada y no la cambio, se conserva.
+            }
+            const iaModeloEl = byId('c-ia-modelo'); if (iaModeloEl) cf.iaModelo = String(iaModeloEl.value || '').trim();
+            const iaRadioEl = byId('c-ia-radio'); if (iaRadioEl) cf.iaRadioPoisM = clamp(isoNum(iaRadioEl.value, 250), 50, 2000);
+            const iaTimeoutEl = byId('c-ia-timeout'); if (iaTimeoutEl) cf.iaTimeoutS = clamp(isoNum(iaTimeoutEl.value, 25), 5, 120);
             cf.voice = g('c-voz').checked;
             cf.voiceLang = g('c-voz-lang').value || DEFAULTS.voiceLang;
             cf.vozMotor = g('c-voz-motor').value || 'web';
@@ -7813,6 +8210,8 @@
             limpiarCfgDirty();
             cfgWinEl.style.display = 'none';
             refresh();
+            // Repintar Avisos para que aparezcan/desaparezcan los botones IA.
+            paintAlertas();
             adviceOk(LANG.guardado);
         });
 
