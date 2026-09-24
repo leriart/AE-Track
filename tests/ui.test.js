@@ -142,6 +142,30 @@ ok('sin clase regla-activa en la pestana Riesgo', src.indexOf('regla-activa') < 
 // Riesgo no se repinta cada segundo (anti-parpadeo).
 ok('setInterval no llama paintRiesgo', !/setInterval[^)]+if \(APP\.tab === 'riesgo'\) paintRiesgo\(\)/.test(src));
 
+// Header: refrescar y ajustes como iconos arriba (junto a tema y no molestar).
+ok('header tiene rondo-refresh', /<header id="rondo-drag">[\s\S]*id="rondo-refresh"/.test(src));
+ok('header tiene rondo-cfg-btn', /<header id="rondo-drag">[\s\S]*id="rondo-cfg-btn"/.test(src));
+ok('rondo-refresh es rondo-iconbtn', /id="rondo-refresh" class="rondo-iconbtn"|class="rondo-iconbtn" id="rondo-refresh"/.test(src));
+ok('rondo-cfg-btn es rondo-iconbtn', /id="rondo-cfg-btn" class="rondo-iconbtn"|class="rondo-iconbtn" id="rondo-cfg-btn"/.test(src));
+
+// Barra de herramientas contextual por pestaña.
+ok('existe paintTools', /function paintTools\(\)/.test(src));
+ok('setTab llama paintTools', /function setTab\(name\)[\s\S]*paintTools\(\)/.test(src));
+ok('herramientas declaran data-tabs', (src.match(/class="[^"]*rondo-tool[^"]*"[^>]*data-tabs=/g) || []).length >= 6);
+
+// Dashboard re-hecho: KPIs compactos y bloques.
+ok('dash usa rondo-dash-kpis', src.indexOf('rondo-dash-kpis') >= 0);
+ok('dash usa rondo-dash-block', src.indexOf('rondo-dash-block') >= 0);
+ok('dash sin kpi-grid viejo', src.indexOf('class="kpi-grid"') < 0);
+ok('dash sin sparkline visible en HTML', src.indexOf('id="rondo-spark"') < 0);
+
+// Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
+ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);
+ok('riesgo tiene container de drop', src.indexOf('id="rondo-riesgo-drop"') >= 0);
+ok('riesgo ya no tiene toolbar de URL', src.indexOf('rondo-riesgo-toolbar-url') < 0);
+ok('riesgo ya no tiene parametros inline', src.indexOf('id="rondo-riesgo-parametros"') < 0);
+ok('riesgo usa rondo-usym', src.indexOf('rondo-usym') >= 0);
+
 // Unidades en tarjetas (sin tabla) y con barra de orden.
 ok('lista de unidades es contenedor .rondo-uni-list', src.indexOf('class="rondo-uni-list"') >= 0);
 ok('hay plantilla de tarjeta rondo-uni-card', src.indexOf('rondo-uni-card') >= 0);

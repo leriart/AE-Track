@@ -14,7 +14,7 @@ carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.6.1-850D22?style=for-the-badge&labelColor=1f2330)](https://github.com/leriart/AE-Track/releases)
+[![version](https://img.shields.io/badge/version-5.7.0-850D22?style=for-the-badge&labelColor=1f2330)](https://github.com/leriart/AE-Track/releases)
 [![tests](https://img.shields.io/badge/tests-8%20suites%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
@@ -140,13 +140,13 @@ con `Alt+L`.
 
 | Pestana | Para que sirve |
 | --- | --- |
-| **Dashboard** | Resumen de la flota: en linea, sin senal, detenidas, en movimiento y avisos del dia. Las tarjetas son clicables y filtran Unidades. |
+| **Dashboard** | Resumen compacto para la barra lateral: cabecera con velocidad promedio, 6 KPIs en cuadricula 3x2 (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy) clicables para filtrar Unidades, distribucion de la flota con leyenda, "Requieren atencion" y avisos recientes. |
 | **Unidades** | Lista de **tarjetas** (sin desbordes) con estado, velocidad, ultimo reporte, geocerca, odometro y **estado de ruta** con barra de progreso y ETA. Barra **Ordenar** por estado, eco, placa, velocidad, zona, odometro o ruta, con boton para invertir la direccion. Clic en una tarjeta abre su ventana. |
 | **Avisos** | Historial de alertas con filtro por severidad y exportable a CSV o Markdown. |
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
 | **Geocercas** | Cuantas unidades hay dentro de cada geocerca y cuales son. |
 | **Caravana** | Unidades (vigiladas o no) que acompanian a una unidad "lider" en la misma ruta (distancia firmada delante/detras) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada. |
-| **Riesgo** | Dona SVG con distribucion por nivel, histograma de scores en 5 buckets, hero con KPIs clickeables (Total/Alto/Medio/Bajo), slider para score minimo, busqueda libre, chips de nivel, 6 criterios de orden, vista agrupada por estado (colapsable) o plana, drag-and-drop de archivos, export CSV/GeoJSON/copiar al portapapeles, empty states con onboarding de 3 pasos y tooltip rico en cada zona. |
+| **Riesgo** | Visor de zonas de alto riesgo con dona SVG, histograma de scores, KPIs clickeables, busqueda, chips de nivel, 6 criterios de orden, vista agrupada o plana, drag-and-drop de CSV/JSON, export CSV/GeoJSON al portapapeles y empty states con onboarding. Acepta el dataset nacional (SESNSP+INEGI) derivando score y radio cuando vienen en cero. La URL, formato, parametros y la regla se configuran en **Ajustes > Reglas** (boton *Configurar* en la pestana). |
 
 Atajos de teclado: `Alt+1..7` cambian de pestana, `Alt+P` / `Alt+L` muestran u
 ocultan la barra lateral, `Alt+H` pliega la barra, `Esc` cierra el dialogo

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.6.1
+// @version      5.7.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -122,6 +122,24 @@
         ownKeys() { return Object.keys(MAT); }
     });
 
+    /* Simbolos Unicode para iconos en texto plano (no dependen de la
+     * fuente Material Icons). Se usan en la pestana Zonas de riesgo y en
+     * otros lugares donde queremos que el icono renderice aunque la fuente
+     * no este disponible. Todos son caracteres estandar que cualquier
+     * fuente sans-serif moderna sabe dibujar. */
+    const UIS = Object.freeze({
+        riesgo: '\u26A0',     refresh: '\u27F3',  load: '\u231B',
+        clear: '\u232B',       gear: '\u2699',     info: '\u24D8',
+        warn: '\u26A0',        down: '\u25BE',     up: '\u25B4',
+        arrowDown: '\u2193',   arrowUp: '\u2191',  smallDown: '\u25BE',
+        smallRight: '\u25B8',  filter: '\u25A3',   find: '\u2315',
+        csv: '\u2193',         export: '\u2913',   copy: '\u2398',
+        zone: '\u25A2',        expand: '\u229E',   collapse: '\u229F',
+        bullet: '\u2022',      pin: '\u25CE',
+        drop: '\u2913',        trash: '\u2716',    check: '\u2713',
+        x: '\u2715',           right: '\u2192',    left: '\u2190'
+    });
+
     const COL = Object.freeze({
         critico: '#b71c1c', alto: '#e65100', medio: '#f9a825',
         bajo: '#1565c0', ok: '#2e7d32'
@@ -144,7 +162,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.6.1';
+    const VER = '5.7.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -1972,22 +1990,42 @@
             if (z.lat != null) lat = +z.lat;
             if (z.lon != null || z.lng != null || z.long != null) lon = +(z.lon || z.lng || z.long);
         }
-        if (!isFinite(lat) || !isFinite(lon)) return null;
+        if (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) return null;
         if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
         const radio = +(z.radio_m || z.radio || z.buffer || z.distancia || 0);
-        if (!(radio > 0)) return null;
         const score = +(z.score || z.severidad || z.riesgo || z.incidencia || 0);
         const estado = z.estado || z.state || z.entidad || z.entidad_federativa || '';
         const municipio = z.municipio || z.municipality || z.city || z.ciudad || z.alcaldia || z.alcald\u00eda || '';
         const id = z.id || ((source || 'item') + '-' + idx + '-' + Math.round(lat * 100) + '-' + Math.round(lon * 100));
         const delitos = (z.delitos && typeof z.delitos === 'object') ? z.delitos : null;
+        // Suma de delitos (para derivar score cuando falta o es 0).
+        let total = 0;
+        if (delitos) {
+            for (const k in delitos) {
+                const v = +delitos[k];
+                if (isFinite(v) && v > 0) total += v;
+            }
+        }
+        // Si no hay delitos pero hay "nota" tipo "total X", intenta extraer.
+        if (!total && typeof z.nota === 'string') {
+            const m = /total\s*[:=]?\s*(\d+)/i.exec(z.nota);
+            if (m) total = +m[1];
+        }
         return {
             id, estado: String(estado), municipio: String(municipio),
             centro: [lat, lon], radio_m: radio, score,
             fuente: z.fuente || source || 'usuario',
             delitos: delitos || null,
-            nota: z.nota || z.note || ''
+            nota: z.nota || z.note || '',
+            _total: total
         };
+    }
+    // Devuelve el radio (m) derivado del score cuando el dataset no lo incluye.
+    function _radioDeScore(score) {
+        if (score >= 70) return 4000;
+        if (score >= 40) return 2200;
+        if (score >= 20) return 1400;
+        return 500;
     }
     function _itemsFromJSON(data) {
         let arr = null;
@@ -2011,6 +2049,32 @@
             const it = _normItem(arr[i], 'json', i);
             if (it) out.push(it);
         }
+        // Si la mayoria de items no tienen score explicito, derivar del total
+        // de delitos normalizado por el maximo del dataset.
+        let sinScore = 0;
+        for (let i = 0; i < out.length; i++) if (!(out[i].score > 0)) sinScore++;
+        if (out.length > 0 && sinScore / out.length > 0.5) {
+            let maxTotal = 0;
+            for (let i = 0; i < out.length; i++) if (out[i]._total > maxTotal) maxTotal = out[i]._total;
+            if (maxTotal > 0) {
+                for (let i = 0; i < out.length; i++) {
+                    const it = out[i];
+                    if (!(it.score > 0) && it._total > 0) {
+                        // Distribucion con raiz para abrir el espectro.
+                        it.score = Math.max(1, Math.min(100, Math.round(Math.sqrt(it._total / maxTotal) * 100)));
+                    }
+                }
+            }
+        }
+        // Si no hay radio_m, derivarlo del score.
+        for (let i = 0; i < out.length; i++) {
+            const it = out[i];
+            if (!(it.radio_m > 0) && it.score > 0) {
+                it.radio_m = _radioDeScore(it.score);
+            }
+        }
+        // Limpia campos auxiliares.
+        for (let i = 0; i < out.length; i++) delete out[i]._total;
         return out;
     }
     function _itemsFromCSV(text) {
@@ -2066,13 +2130,30 @@
             // score >= 70 -> 4.5 km, 50-70 -> 2.2 km, 30-50 -> 1.4 km, >0 -> 0.5 km.
         }
         const out = [];
+        // Acumula total de delitos por bucket para derivar score si falta.
         for (const b of buckets.values()) {
-            if (!b.radio_m) {
-                if (b.score >= 70) b.radio_m = 4500;
-                else if (b.score >= 50) b.radio_m = 2200;
-                else if (b.score >= 30) b.radio_m = 1400;
-                else if (b.score > 0) b.radio_m = 500;
-                else b.radio_m = 0;
+            let total = 0;
+            if (b.delitos) for (const k in b.delitos) { const v = +b.delitos[k]; if (isFinite(v) && v > 0) total += v; }
+            b._total = total;
+        }
+        // Si la mayoria de buckets no tienen score, derivarlo del total normalizado.
+        let sinScore = 0;
+        for (const b of buckets.values()) if (!(b.score > 0)) sinScore++;
+        const totalBuckets = buckets.size;
+        if (totalBuckets > 0 && sinScore / totalBuckets > 0.5) {
+            let maxTotal = 0;
+            for (const b of buckets.values()) if (b._total > maxTotal) maxTotal = b._total;
+            if (maxTotal > 0) {
+                for (const b of buckets.values()) {
+                    if (!(b.score > 0) && b._total > 0) {
+                        b.score = Math.max(1, Math.min(100, Math.round(Math.sqrt(b._total / maxTotal) * 100)));
+                    }
+                }
+            }
+        }
+        for (const b of buckets.values()) {
+            if (!(b.radio_m > 0) && b.score > 0) {
+                b.radio_m = _radioDeScore(b.score);
             }
             if (!(b.radio_m > 0)) continue;
             out.push({
@@ -3818,8 +3899,48 @@
             "#rondo-panel .alerta .hora{color:var(--rondo-fg-mute);font-size:10px}\n" +
             "#rondo-panel .alerta .meta{display:flex;gap:6px;font-size:10px;color:var(--rondo-fg-mute);margin-top:3px;flex-wrap:wrap}\n" +
             "#rondo-panel .alerta .meta .regla{background:var(--rondo-bg-strong);padding:1px 5px;border-radius:4px}\n" +
-            "#rondo-dash{display:flex;flex-direction:column;padding:14px;gap:12px;overflow:auto;flex:1;max-width:1200px;margin:0 auto;box-sizing:border-box}\n" +
-            "#rondo-dash .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}\n" +
+            /* ── Dashboard compacto (sidebar 460 px) ────────────────────── */
+            "#rondo-dash{display:flex;flex-direction:column;padding:8px 10px;gap:8px;overflow:auto;flex:1;box-sizing:border-box}\n" +
+            "#rondo-dash .rondo-dash-head{display:flex;align-items:center;gap:6px;padding:2px 2px 4px;font:700 11.5px var(--rondo-font);color:var(--rondo-fg);border-bottom:1px solid var(--rondo-border-soft);margin-bottom:2px}\n" +
+            "#rondo-dash .rondo-dash-head .rondo-usym{font-size:15px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-dash .rondo-dash-head b{letter-spacing:.2px}\n" +
+            "#rondo-dash .rondo-dash-vel{margin-left:auto;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dash .rondo-dash-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}\n" +
+            "#rondo-dash .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:6px 8px;display:flex;flex-direction:column;gap:1px;min-width:0;position:relative;overflow:hidden;transition:border-color .15s,transform .12s,box-shadow .15s;cursor:pointer}\n" +
+            "#rondo-dash .kpi:hover{border-color:var(--rondo-border);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-dash .kpi:active{transform:translateY(0)}\n" +
+            "#rondo-dash .kpi .kpi-etq{font:600 9px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash .kpi .kpi-val{font:700 17px/1.1 var(--rondo-font);color:var(--rondo-fg);white-space:nowrap}\n" +
+            "#rondo-dash .kpi .kpi-pct{font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash .kpi .kpi-pct:empty{display:none}\n" +
+            "#rondo-dash .kpi.ok{border-left:3px solid var(--rondo-ok)}\n" +
+            "#rondo-dash .kpi.bad{border-left:3px solid var(--rondo-bad)}\n" +
+            "#rondo-dash .kpi.warn{border-left:3px solid var(--rondo-warn)}\n" +
+            "#rondo-dash .kpi.sub{border-left:3px solid var(--rondo-fg-mute)}\n" +
+            "#rondo-dash .kpi[data-kpi]::after{content:'';position:absolute;right:6px;top:6px;color:var(--rondo-fg-mute);font-size:11px;opacity:.5}\n" +
+            "#rondo-dash .rondo-dash-block{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:7px 9px;display:flex;flex-direction:column;gap:5px}\n" +
+            "#rondo-dash .rondo-dash-block-head{font:600 10px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:5px}\n" +
+            "#rondo-dash .rondo-dash-block-head .rondo-usym{font-size:12px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-dash .rondo-dash-dist-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dash .rondo-dash-dist-bar .seg{height:100%;transition:width .4s var(--rondo-easing)}\n" +
+            "#rondo-dash .rondo-dash-dist-bar .seg.on{background:var(--rondo-ok)}\n" +
+            "#rondo-dash .rondo-dash-dist-bar .seg.det{background:var(--rondo-warn)}\n" +
+            "#rondo-dash .rondo-dash-dist-bar .seg.off{background:var(--rondo-bad)}\n" +
+            "#rondo-dash .rondo-dash-dist-legend{display:flex;flex-wrap:wrap;gap:8px;font:600 9.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dash .rondo-dash-dist-legend span{display:inline-flex;align-items:center;gap:4px}\n" +
+            "#rondo-dash .rondo-dash-dist-legend i{width:7px;height:7px;border-radius:2px;display:inline-block}\n" +
+            "#rondo-dash .rondo-dash-dist-legend i.on{background:var(--rondo-ok)}\n" +
+            "#rondo-dash .rondo-dash-dist-legend i.det{background:var(--rondo-warn)}\n" +
+            "#rondo-dash .rondo-dash-dist-legend i.off{background:var(--rondo-bad)}\n" +
+            "#rondo-dash .rondo-dash-list{display:flex;flex-direction:column;gap:3px;max-height:140px;overflow:auto}\n" +
+            "#rondo-dash .rondo-dash-list .alerta{padding:4px 6px;border-left:3px solid var(--rondo-fg-mute);font-size:11px;background:transparent}\n" +
+            "#rondo-dash .rondo-dash-list .alerta .cuerpo b{font-size:11px}\n" +
+            "#rondo-dash .rondo-dash-list .alerta .cuerpo span{font-size:10px}\n" +
+            "#rondo-dash .rondo-dash-list .rondo-atencion-item{padding:4px 6px;border-radius:0;background:transparent}\n" +
+            "#rondo-dash .rondo-dash-empty{padding:8px;color:var(--rondo-fg-mute);font-size:11px;text-align:center}\n" +
+            "#rondo-dash .kpi[data-kpi]{cursor:pointer}\n" +
+            "#rondo-dash .kpi[data-kpi]::after{content:''}\n" +
+            "#rondo-dash .rondo-atencion-item:hover{background:var(--rondo-bg-strong)}\n" +
             "#rondo-panel .tabla{padding:8px 4px}\n" +
             "#rondo-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
             "#rondo-panel .rondo-caravana-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
@@ -3887,26 +4008,8 @@
             "#rondo-panel .rondo-riesgo-status b{font-size:12px;letter-spacing:.2px;color:var(--rondo-fg);font-weight:600}\n" +
             "#rondo-panel .rondo-riesgo-status span{color:var(--rondo-fg-dim);font-size:11.5px}\n" +
             /* Toolbar: URL, archivo, recargar, limpiar */
-            "#rondo-panel .rondo-riesgo-toolbar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
-            "#rondo-panel .rondo-riesgo-toolbar > .filtro,#rondo-panel .rondo-riesgo-toolbar > input[type=file]{flex:1;min-width:0;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:5px 8px;font:12px var(--rondo-font)}\n" +
-            "#rondo-panel .rondo-riesgo-toolbar > input[type=file]{padding:4px 6px}\n" +
-            "#rondo-panel .rondo-riesgo-toolbar > .filtro:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
-            "#rondo-panel .rondo-riesgo-toolbar > input::placeholder{color:var(--rondo-fg-mute)}\n" +
             /* Parametros: grid 3 columnas */
-            "#rondo-panel .rondo-riesgo-params{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 8px;padding:2px 0}\n" +
-            "#rondo-panel .rondo-riesgo-params > label{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--rondo-fg-dim);padding:0;margin:0}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > b{font:600 10.5px var(--rondo-font);color:var(--rondo-fg);letter-spacing:.2px}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > input,#rondo-panel .rondo-riesgo-params > label > select{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font:600 12px var(--rondo-font);width:100%;box-sizing:border-box}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > input:focus,#rondo-panel .rondo-riesgo-params > label > select:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
-            "#rondo-panel .rondo-riesgo-params-hint{grid-column:1/-1;font-size:10.5px;color:var(--rondo-fg-mute);line-height:1.4;padding-top:4px;border-top:1px dashed var(--rondo-border-soft);margin-top:2px}\n" +
             /* Toggle regla */
-            "#rondo-panel .rondo-riesgo-toggle{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);font-size:11.5px;color:var(--rondo-fg);cursor:pointer;transition:background .15s,border-color .15s}\n" +
-            "#rondo-panel .rondo-riesgo-toggle:hover{background:var(--rondo-bg-strong);border-color:var(--rondo-border)}\n" +
-            "#rondo-panel .rondo-riesgo-toggle input{accent-color:var(--rondo-accent);cursor:pointer;width:14px;height:14px;flex-shrink:0}\n" +
-            "#rondo-panel .rondo-riesgo-toggle b{font-weight:600;color:var(--rondo-fg)}\n" +
-            "#rondo-panel .rondo-riesgo-toggle.on{border-color:rgba(var(--rondo-accent-rgb),.4);background:linear-gradient(0deg,var(--rondo-bg),var(--rondo-bg-strong))}\n" +
-            "#rondo-panel .rondo-riesgo-toggle.on b{color:var(--rondo-accent-2)}\n" +
-            "#rondo-panel .rondo-riesgo-toggle .rondo-mi{color:var(--rondo-accent-2);font-size:14px}\n" +
             /* Filtros: busqueda + nivel + orden + vista */
             "#rondo-panel .rondo-riesgo-filters{display:grid;grid-template-columns:1fr;gap:6px}\n" +
             "#rondo-panel .rondo-riesgo-filters-row{display:grid;grid-template-columns:1fr auto auto auto;gap:6px;align-items:center}\n" +
@@ -3915,6 +4018,34 @@
             "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > input{padding-left:24px!important}\n" +
             "#rondo-panel .rondo-riesgo-filters-row select.filtro,#rondo-panel .rondo-riesgo-filters-row .mini{width:auto;min-width:0}\n" +
             "#rondo-panel .rondo-riesgo-chips{display:flex;gap:4px;flex-wrap:wrap;align-items:center}\n" +
+            /* Simbolos Unicode: usan la fuente sans-serif del panel, sin
+             * dependencia de Material Icons. Heredan color/tamano del
+             * contexto. */
+            "#rondo-panel .rondo-usym{font-family: var(--rondo-font);font-weight:700;line-height:1;display:inline-block;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-usym.lg{font-size:18px}\n" +
+            "#rondo-panel .rondo-usym.md{font-size:14px}\n" +
+            "#rondo-panel .rondo-usym.sm{font-size:11px}\n" +
+            /* Spinner Unicode (gira via animation CSS). */
+            "#rondo-panel .rondo-usym-spin{display:inline-block;animation: rondoSpin .9s linear infinite;font-size:16px}\n" +
+            "#rondo-panel .rondo-riesgo-status-sec{position:relative;overflow:hidden}\n" +
+            "#rondo-panel .rondo-riesgo-status-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-riesgo-status-text{flex:1;min-width:0;display:flex;align-items:center;gap:5px;font-size:12px;color:var(--rondo-fg);overflow:hidden}\n" +
+            "#rondo-panel .rondo-riesgo-status-text .rondo-usym{font-size:18px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-riesgo-status-text b{flex-shrink:0}\n" +
+            "#rondo-panel .rondo-riesgo-status-sub{font-weight:400;color:var(--rondo-fg-mute);font-size:10.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}\n" +
+            "#rondo-panel .rondo-riesgo-status-sub:empty{display:none}\n" +
+            "#rondo-panel .rondo-riesgo-configurar,#rondo-panel .rondo-riesgo-recargar,#rondo-panel .rondo-riesgo-limpiar{flex-shrink:0;display:inline-flex;align-items:center;gap:3px}\n" +
+            "#rondo-panel .rondo-riesgo-status-hint{margin:0;font-size:10.5px;color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            "#rondo-panel .rondo-riesgo-status-hint b{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-riesgo-search{display:flex;align-items:center;gap:5px;flex:1;min-width:0}\n" +
+            "#rondo-panel .rondo-riesgo-search input{padding-left:0!important;flex:1;min-width:0;width:100%}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row{grid-template-columns:1fr auto auto auto auto auto}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row > select.filtro{padding:5px 6px;font-size:11.5px;min-width:0}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row .mini{padding:5px 7px;font-size:11px}\n" +
+            "#rondo-panel .rondo-riesgo-filters-row .mini .rondo-usym{font-size:13px}\n" +
+            "#rondo-panel .rondo-riesgo-grupo-head .rondo-usym{font-size:14px;margin-right:2px}\n" +
+            "#rondo-panel .rondo-riesgo-card .rb-actions button .rondo-usym{font-size:13px}\n" +
+            +
             "#rondo-panel .rondo-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
             "#rondo-panel .rondo-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 6px rgba(var(--rondo-accent-rgb),.3)}\n" +
@@ -3967,7 +4098,7 @@
             "#rondo-panel .rondo-riesgo-card .rb-meta .pill.fuente{margin-left:auto;background:transparent;color:var(--rondo-fg-mute);font-weight:500;border-color:transparent}\n" +
             /* Estado vacio de la lista */
             "#rondo-panel .rondo-riesgo-empty{padding:28px 14px;text-align:center;color:var(--rondo-fg-dim);font-size:12px;border:1px dashed var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft)}\n" +
-            "#rondo-panel .rondo-riesgo-empty .rondo-mi{display:block;margin:0 auto 8px;font-size:34px;color:var(--rondo-fg-mute);opacity:.55}\n" +
+            "#rondo-panel .rondo-riesgo-empty .rondo-mi,#rondo-panel .rondo-riesgo-empty .rondo-usym{display:block;margin:0 auto 8px;font-size:34px;color:var(--rondo-fg-mute);opacity:.55}\n" +
             "#rondo-panel .rondo-riesgo-empty b{color:var(--rondo-fg);font-weight:600}\n" +
             "#rondo-panel .rondo-riesgo-empty button{margin-top:8px}\n" +
             /* Footer de la lista */
@@ -4011,19 +4142,10 @@
             "#rondo-panel .rondo-riesgo-hist-head{display:flex;justify-content:space-between;align-items:center;font:600 9.5px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.4px}\n" +
             "#rondo-panel .rondo-riesgo-hist-head b{color:var(--rondo-fg);font-weight:700}\n" +
             /* Drag and drop overlay para toolbar */
-            "#rondo-panel .rondo-riesgo-toolbar{position:relative}\n" +
-            "#rondo-panel .rondo-riesgo-toolbar.drag-over > .rondo-riesgo-dropmask{opacity:1;pointer-events:auto}\n" +
-            "#rondo-panel .rondo-riesgo-dropmask{position:absolute;inset:-4px;border:2px dashed var(--rondo-accent-2);border-radius:var(--rondo-radius);background:rgba(var(--rondo-accent-rgb),.06);display:flex;align-items:center;justify-content:center;gap:6px;color:var(--rondo-accent-2);font:700 11.5px var(--rondo-font);opacity:0;pointer-events:none;transition:opacity .15s;z-index:2;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}\n" +
+            "#rondo-panel .rondo-riesgo-status-sec.drag-over > .rondo-riesgo-dropmask{opacity:1;pointer-events:auto}\n" +
+            "#rondo-panel .rondo-riesgo-dropmask{position:absolute;inset:0;border:2px dashed var(--rondo-accent-2);border-radius:var(--rondo-radius);background:rgba(var(--rondo-accent-rgb),.06);display:flex;align-items:center;justify-content:center;gap:6px;color:var(--rondo-accent-2);font:700 11.5px var(--rondo-font);opacity:0;pointer-events:none;transition:opacity .15s;z-index:2;backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}\n" +
             /* Slider de score min. */
-            "#rondo-panel .rondo-riesgo-params > label > b .slider-val{color:var(--rondo-accent-2);font-weight:700;font-family:monospace}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > b{display:flex;justify-content:space-between;align-items:center;gap:4px}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > input[type=range]{appearance:none;-webkit-appearance:none;background:transparent;padding:0;height:22px;border:0;cursor:pointer;width:100%;box-sizing:border-box}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-webkit-slider-runnable-track{height:4px;background:linear-gradient(90deg,var(--rondo-fg-mute),var(--rondo-accent-2));border-radius:2px}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-moz-range-track{height:4px;background:linear-gradient(90deg,var(--rondo-fg-mute),var(--rondo-accent-2));border-radius:2px}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:14px;height:14px;border-radius:50%;background:var(--rondo-accent-2);border:2px solid var(--rondo-bg);margin-top:-5px;box-shadow:0 1px 3px rgba(0,0,0,.3);cursor:grab}\n" +
-            "#rondo-panel .rondo-riesgo-params > label > input[type=range]::-moz-range-thumb{width:14px;height:14px;border-radius:50%;background:var(--rondo-accent-2);border:2px solid var(--rondo-bg);box-shadow:0 1px 3px rgba(0,0,0,.3);cursor:grab}\n" +
             /* Toggle: anade icono */
-            "#rondo-panel .rondo-riesgo-toggle .rondo-mi{color:var(--rondo-accent-2);font-size:14px}\n" +
             /* Sticky filters */
             "#rondo-panel .rondo-riesgo-filters{position:sticky;top:0;z-index:3;background:var(--rondo-bg-soft);padding-top:2px;margin-top:-2px}\n" +
             "#rondo-panel .rondo-riesgo-filters-row{grid-template-columns:1fr auto auto auto auto auto}\n" +
@@ -4038,8 +4160,8 @@
             "#rondo-panel .rondo-chip{transition:all .15s var(--rondo-easing);padding:3px 9px}\n" +
             "#rondo-panel .rondo-chip:hover{transform:translateY(-1px)}\n" +
             "#rondo-panel .rondo-chip:active{transform:translateY(0)}\n" +
-            /* Card: animacion de entrada + acciones en hover + tooltip */
-            "#rondo-panel .rondo-riesgo-card{position:relative;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            /* Card: posicion relativa + acciones en hover + tooltip */
+            "#rondo-panel .rondo-riesgo-card{position:relative}\n" +
             "#rondo-panel .rondo-riesgo-card .rb-actions{display:flex;gap:3px;margin-left:auto;align-items:center;opacity:0;transition:opacity .15s}\n" +
             "#rondo-panel .rondo-riesgo-card:hover .rb-actions{opacity:1}\n" +
             "#rondo-panel .rondo-riesgo-card .rb-actions button{background:transparent;border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-mute);border-radius:6px;padding:2px 5px;cursor:pointer;font-size:11px;line-height:1;transition:all .15s}\n" +
@@ -4048,7 +4170,7 @@
             "#rondo-panel .rondo-riesgo-card[title]{cursor:default}\n" +
             /* Empty state con onboarding */
             "#rondo-panel .rondo-riesgo-empty{display:flex;flex-direction:column;align-items:center;gap:6px}\n" +
-            "#rondo-panel .rondo-riesgo-empty .rondo-mi{line-height:1}\n" +
+            "#rondo-panel .rondo-riesgo-empty .rondo-mi,#rondo-panel .rondo-riesgo-empty .rondo-usym{line-height:1}\n" +
             "#rondo-panel .rondo-riesgo-empty .pasos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px;width:100%}\n" +
             "#rondo-panel .rondo-riesgo-empty .paso{display:flex;flex-direction:column;gap:3px;padding:8px 9px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);text-align:left}\n" +
             "#rondo-panel .rondo-riesgo-empty .paso .n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:50%;background:var(--rondo-accent-grad);color:#fff;font:700 10px var(--rondo-font);margin-bottom:2px}\n" +
@@ -4071,7 +4193,7 @@
             "#rondo-panel .kpi.bad .valor{color:var(--rondo-bad-fg)}\n" +
             "#rondo-panel .kpi.sub .valor{color:var(--rondo-fg)}\n" +
             "#rondo-panel .kpi .resumen{font-size:11px;color:var(--rondo-fg-dim)}\n" +
-            "#rondo-dash .sparkline{display:block;width:100%;height:44px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:7px;padding:6px}\n" +
+            "#rondo-dash .sparkline{display:none}\n" +
             "#rondo-dash .sparkline path{fill:none;stroke-width:1.6}\n" +
             "#rondo-dash .recent{padding:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
             "#rondo-dash .recent h4{margin:0 0 6px;font-size:11px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
@@ -4324,21 +4446,6 @@
             "  #rondo-barra .rondo-modo-label{display:none}\n" +
             "}\n" +
             /* ── Dashboard: distribucion y atencion ── */
-            "#rondo-dash .dist{display:flex;flex-direction:column;gap:7px}\n" +
-            "#rondo-dash .dist-bar{display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft)}\n" +
-            "#rondo-dash .dist-seg{height:100%;transition:width .4s var(--rondo-easing)}\n" +
-            "#rondo-dash .dist-seg.on{background:var(--rondo-ok)}\n" +
-            "#rondo-dash .dist-seg.det{background:var(--rondo-warn)}\n" +
-            "#rondo-dash .dist-seg.off{background:var(--rondo-bad)}\n" +
-            "#rondo-dash .dist-legend{display:flex;flex-wrap:wrap;gap:12px;font-size:11px;color:var(--rondo-fg-dim)}\n" +
-            "#rondo-dash .dist-legend span{display:inline-flex;align-items:center;gap:5px}\n" +
-            "#rondo-dash .dist-legend i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
-            "#rondo-dash .dist-legend i.on{background:var(--rondo-ok)}\n" +
-            "#rondo-dash .dist-legend i.det{background:var(--rondo-warn)}\n" +
-            "#rondo-dash .dist-legend i.off{background:var(--rondo-bad)}\n" +
-            "#rondo-dash .kpi[data-kpi]{cursor:pointer}\n" +
-            "#rondo-dash .kpi[data-kpi]::after{content:'›';position:absolute;right:9px;top:8px;color:var(--rondo-fg-mute);font-size:15px;opacity:.6}\n" +
-            "#rondo-dash .rondo-atencion-item:hover{background:var(--rondo-bg-strong)}\n" +
             /* ── Escala de interfaz (accesibilidad visual) ──
                Se controla con --rondo-esc. Todos los tamanos se multiplican por el
                factor elegido en Ajustes > Visual. */
@@ -4405,16 +4512,22 @@
             "#rondo-panel .rondo-riesgo-empty{padding:calc(28px * var(--rondo-esc)) calc(14px * var(--rondo-esc))}\n" +
             "#rondo-panel .rondo-riesgo-empty .rondo-mi{font-size:calc(34px * var(--rondo-esc))}\n" +
             "#rondo-panel .rondo-riesgo-foot{font-size:calc(10.5px * var(--rondo-esc));padding:calc(6px * var(--rondo-esc)) calc(4px * var(--rondo-esc)) 0}\n" +
-            "#rondo-panel .rondo-riesgo-toggle{font-size:calc(11.5px * var(--rondo-esc));padding:calc(7px * var(--rondo-esc)) calc(10px * var(--rondo-esc))}\n" +
             "#rondo-panel .kpi{padding:calc(9px * var(--rondo-esc)) calc(11px * var(--rondo-esc))}\n" +
             "#rondo-panel .kpi .etq{font-size:calc(10px * var(--rondo-esc))}\n" +
             "#rondo-panel .kpi .valor{font-size:calc(18px * var(--rondo-esc))}\n" +
             "#rondo-panel .kpi .resumen{font-size:calc(11px * var(--rondo-esc))}\n" +
-            "#rondo-dash{padding:calc(14px * var(--rondo-esc));gap:calc(12px * var(--rondo-esc))}\n" +
-            "#rondo-dash .kpi-grid{gap:calc(10px * var(--rondo-esc))}\n" +
-            "#rondo-dash .sparkline{height:calc(44px * var(--rondo-esc))}\n" +
-            "#rondo-dash .recent{padding:calc(9px * var(--rondo-esc))}\n" +
-            "#rondo-dash .recent h4{font-size:calc(11px * var(--rondo-esc))}\n" +
+            "#rondo-dash{padding:calc(8px * var(--rondo-esc)) calc(10px * var(--rondo-esc));gap:calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-dash .rondo-dash-head{font-size:calc(11.5px * var(--rondo-esc));margin-bottom:calc(2px * var(--rondo-esc))}\n" +
+            "#rondo-dash .rondo-dash-kpis{gap:calc(6px * var(--rondo-esc))}\n" +
+            "#rondo-dash .kpi{padding:calc(6px * var(--rondo-esc)) calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-dash .kpi .kpi-etq{font-size:calc(9px * var(--rondo-esc))}\n" +
+            "#rondo-dash .kpi .kpi-val{font-size:calc(17px * var(--rondo-esc))}\n" +
+            "#rondo-dash .kpi .kpi-pct{font-size:calc(9.5px * var(--rondo-esc))}\n" +
+            "#rondo-dash .rondo-dash-block{padding:calc(7px * var(--rondo-esc)) calc(9px * var(--rondo-esc))}\n" +
+            "#rondo-dash .rondo-dash-block-head{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-dash .rondo-dash-dist-bar{height:calc(8px * var(--rondo-esc))}\n" +
+            "#rondo-dash .rondo-dash-list .alerta{padding:calc(4px * var(--rondo-esc)) calc(6px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
+
             "#rondo-panel footer{font-size:calc(11px * var(--rondo-esc))}\n" +
             "#rondo-panel .rondo-vacio{padding:calc(36px * var(--rondo-esc)) calc(22px * var(--rondo-esc))}\n" +
             "#rondo-panel .rondo-vacio .rondo-mi{font-size:calc(40px * var(--rondo-esc))}\n" +
@@ -4490,6 +4603,8 @@
             '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-mi">' + ICO.actualizar + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-tema" title="Tema"><span class="rondo-mi">' + ICO.luna + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-nmolestar" title="No molestar"><span class="rondo-mi">' + ICO.silencioTotal + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-refresh" title="Refrescar datos"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-cfg-btn" title="Ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-collapse" title="Colapsar/expandir barra lateral"><span class="rondo-mi">' + ICO.colapsar + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-ayuda-btn" title="Ayuda rápida"><span class="rondo-mi">' + ICO.ayuda + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-cerrar-panel" title="Cerrar panel"><span class="rondo-mi">' + ICO.cerrar + '</span></button>' +
@@ -4504,16 +4619,16 @@
             '<button class="tab" data-tab="riesgo" title="Zonas de riesgo"><span class="rondo-mi">' + ICO.riesgo + '</span><span class="contador" id="rondo-c-riesgo">0</span></button>' +
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
-            '<input class="filtro" id="rondo-filtro" placeholder="' + esc(LANG.busq) + '">' +
-            '<select class="filtro" id="rondo-filtro-estado" title="Filtrar por estado">' +
+            '<input class="filtro rondo-tool" id="rondo-filtro" data-tabs="unidades,alertas,geocercas" placeholder="' + esc(LANG.busq) + '">' +
+            '<select class="filtro rondo-tool" id="rondo-filtro-estado" data-tabs="unidades" title="Filtrar por estado">' +
             '<option value="todas">Todas</option>' +
             '<option value="moviendo">Moviendo</option>' +
-            '<option value="detenida">Detenidas</option>' +
-            '<option value="offline">Sin señal</option>' +
+            '<option value="detenida">Det.</option>' +
+            '<option value="offline">Off</option>' +
             '<option value="vigilada">Vigiladas</option>' +
             '<option value="silenciada">Silenciadas</option>' +
             '</select>' +
-            '<select class="filtro" id="rondo-orden-sel" title="Orden de las ventanas de unidades">' +
+            '<select class="filtro rondo-tool" id="rondo-orden-sel" data-tabs="unidades" title="Orden de las ventanas de unidades">' +
             '<option value="">Orden de ventanas…</option>' +
             '<option value="pegado">Pegado</option>' +
             '<option value="numero">Número (menor a mayor)</option>' +
@@ -4521,36 +4636,47 @@
             '<option value="alfabetico">Alfabético A-Z</option>' +
             '<option value="invertir">Invertir orden</option>' +
             '</select>' +
-            '<button id="rondo-refresh" class="rondo-tool-ico" title="Refrescar"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
-            '<button id="rondo-cfg-btn" class="rondo-tool-ico" title="Ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span></button>' +
-            '<button id="rondo-csv" title="Exportar unidades a CSV"><span class="rondo-mi">' + ICO.descargar + '</span> CSV</button>' +
-            '<button id="rondo-informe" title="Generar informe del dia"><span class="rondo-mi">' + ICO.descargar + '</span> Informe</button>' +
-            '<button id="rondo-csv-al" class="rondo-tool-ico" title="Exportar el historial de avisos a CSV"><span class="rondo-mi">' + ICO.alertas + '</span></button>' +
-            '<button id="rondo-verif" class="rondo-tool-ico" title="Abrir solo las ventanas seleccionadas"><span class="rondo-mi">' + ICO.verif + '</span></button>' +
-            '<button id="rondo-captura" class="rondo-tool-ico" title="Capturar las ventanas abiertas"><span class="rondo-mi">' + ICO.captura + '</span></button>' +
-            '<button id="rondo-verifica" class="rondo-tool-ico" title="Verificar y acomodar ahora"><span class="rondo-mi">' + ICO.verifica + '</span></button>' +
-            '<button id="rondo-sel-all" class="rondo-tool-ico" title="Seleccionar todas las unidades visibles"><span class="rondo-mi">' + ICO.selAll + '</span></button>' +
-            '<button id="rondo-sel-clear" class="rondo-tool-ico" title="Quitar toda la selección"><span class="rondo-mi">' + ICO.selClear + '</span></button>' +
+            '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-mi">' + ICO.descargar + '</span> CSV</button>' +
+            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar informe del dia"><span class="rondo-mi">' + ICO.descargar + '</span> Informe</button>' +
+            '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-mi">' + ICO.alertas + '</span></button>' +
+            '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-mi">' + ICO.verif + '</span></button>' +
+            '<button id="rondo-captura" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Capturar las ventanas abiertas"><span class="rondo-mi">' + ICO.captura + '</span></button>' +
+            '<button id="rondo-verifica" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Verificar y acomodar ahora"><span class="rondo-mi">' + ICO.verifica + '</span></button>' +
+            '<button id="rondo-sel-all" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Seleccionar todas las unidades visibles"><span class="rondo-mi">' + ICO.selAll + '</span></button>' +
+            '<button id="rondo-sel-clear" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Quitar toda la selección"><span class="rondo-mi">' + ICO.selClear + '</span></button>' +
             '</div>' +
             '<div class="tabla" id="rondo-wrap-dash">' +
             '<div id="rondo-dash">' +
-            '<div class="kpi-grid">' +
-            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin señal · clic para verlas"><span class="etq">En línea</span><span class="valor" id="rondo-kpi-on">0</span><span class="resumen" id="rondo-kpi-on-pct">—</span></div>' +
-            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo último reporte superó el umbral de sin señal · clic para verlas"><span class="etq">Sin señal</span><span class="valor" id="rondo-kpi-off">0</span><span class="resumen" id="rondo-kpi-off-pct">—</span></div>' +
-            '<div class="kpi warn" data-kpi="detenida" title="Unidades en línea con velocidad muy baja · clic para verlas"><span class="etq">Detenidas</span><span class="valor" id="rondo-kpi-det">0</span><span class="resumen">VEL &lt;= 3 km/h</span></div>' +
-            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en línea con velocidad normal · clic para verlas"><span class="etq">En movimiento</span><span class="valor" id="rondo-kpi-mov">0</span><span class="resumen" id="rondo-kpi-vel">— km/h prom.</span></div>' +
-            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas por al menos una unidad online · clic para verlas"><span class="etq">En zonas</span><span class="valor" id="rondo-kpi-zonas">0</span><span class="resumen">de 0 geocercas</span></div>' +
-            '<div class="kpi" data-kpi="alertas" title="Avisos registrados desde la medianoche · clic para verlos"><span class="etq">Avisos hoy</span><span class="valor" id="rondo-kpi-aho">0</span><span class="resumen" id="rondo-kpi-criticos">0 críticas</span></div>' +
+            '<div class="rondo-dash-head">' +
+            '<span class="rondo-usym md">' + UIS.dashboard + '</span> ' +
+            '<b>Resumen de la flota</b>' +
+            '<span class="rondo-dash-vel" id="rondo-dash-vel"></span>' +
             '</div>' +
-            '<div class="recent"><h4>Distribución de la flota</h4>' +
-            '<div class="dist"><div class="dist-bar">' +
-            '<span class="dist-seg on" id="rondo-dist-on"></span>' +
-            '<span class="dist-seg det" id="rondo-dist-det"></span>' +
-            '<span class="dist-seg off" id="rondo-dist-off"></span>' +
-            '</div><div class="dist-legend" id="rondo-dist-legend"></div></div></div>' +
-            '<div><svg class="sparkline" id="rondo-spark" viewBox="0 0 200 36" preserveAspectRatio="none"></svg></div>' +
-            '<div class="recent"><h4>Requieren atención</h4><div id="rondo-atencion"></div></div>' +
-            '<div class="recent"><h4>Avisos recientes</h4><div id="rondo-kpi-recientes"></div></div>' +
+            '<div class="rondo-dash-kpis">' +
+            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
+            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo ultimo reporte supero el umbral · clic para verlas"><span class="kpi-etq">Sin senal</span><span class="kpi-val" id="rondo-kpi-off">0</span><span class="kpi-pct" id="rondo-kpi-off-pct"></span></div>' +
+            '<div class="kpi warn" data-kpi="detenida" title="Unidades en linea con velocidad muy baja · clic para verlas"><span class="kpi-etq">Det.</span><span class="kpi-val" id="rondo-kpi-det">0</span></div>' +
+            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en linea con velocidad normal · clic para verlas"><span class="kpi-etq">En mov.</span><span class="kpi-val" id="rondo-kpi-mov">0</span></div>' +
+            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas · clic para verlas"><span class="kpi-etq">En zonas</span><span class="kpi-val" id="rondo-kpi-zonas">0</span><span class="kpi-pct" id="rondo-kpi-zonas-pct"></span></div>' +
+            '<div class="kpi" data-kpi="alertas" title="Avisos desde la medianoche · clic para verlos"><span class="kpi-etq">Avisos hoy</span><span class="kpi-val" id="rondo-kpi-aho">0</span><span class="kpi-pct" id="rondo-kpi-criticos"></span></div>' +
+            '</div>' +
+            '<div class="rondo-dash-block">' +
+            '<div class="rondo-dash-block-head">Distribucion de la flota</div>' +
+            '<div class="rondo-dash-dist-bar">' +
+            '<span class="seg on" id="rondo-dist-on"></span>' +
+            '<span class="seg det" id="rondo-dist-det"></span>' +
+            '<span class="seg off" id="rondo-dist-off"></span>' +
+            '</div>' +
+            '<div class="rondo-dash-dist-legend" id="rondo-dist-legend"></div>' +
+            '</div>' +
+            '<div class="rondo-dash-block">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.warn + '</span> Requieren atencion</div>' +
+            '<div id="rondo-atencion" class="rondo-dash-list"></div>' +
+            '</div>' +
+            '<div class="rondo-dash-block">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.alertas + '</span> Avisos recientes</div>' +
+            '<div id="rondo-kpi-recientes" class="rondo-dash-list"></div>' +
+            '</div>' +
             '</div>' +
             '</div>' +
             '<div class="tabla" id="rondo-wrap-unidades" style="display:none">' +
@@ -4631,30 +4757,29 @@
             '<div class="rondo-seccion rondo-riesgo-status-sec" id="rondo-riesgo-drop">' +
             '<div class="rondo-riesgo-status-row">' +
             '<div class="rondo-riesgo-status-text">' +
-            '<span class="rondo-mi">' + ICO.riesgo + '</span> ' +
+            '<span class="rondo-usym lg">' + UIS.riesgo + '</span> ' +
             '<b id="rondo-riesgo-status-cuenta">0 zonas</b>' +
             '<span id="rondo-riesgo-status-fuente" class="rondo-riesgo-status-sub"></span>' +
             '</div>' +
             '<button class="mini rondo-riesgo-configurar" id="rondo-riesgo-configurar" title="Abrir Ajustes de Reglas (URL, formato, parametros y regla)">' +
-            '<span class="rondo-mi">' + ICO.ajustes + '</span> Configurar' +
+            '<span class="rondo-usym">' + UIS.gear + '</span> Configurar' +
             '</button>' +
             '<button class="mini rondo-riesgo-recargar" id="rondo-riesgo-recargar" title="Recargar el dataset desde la URL o el archivo">' +
-            '<span class="rondo-mi">' + ICO.refrescar + '</span> Recargar' +
+            '<span class="rondo-usym">' + UIS.refresh + '</span> Recargar' +
             '</button>' +
             '<button class="mini rondo-riesgo-limpiar" id="rondo-riesgo-limpiar" title="Olvidar el dataset en memoria">' +
-            '<span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar' +
+            '<span class="rondo-usym">' + UIS.clear + '</span> Limpiar' +
             '</button>' +
             '</div>' +
             '<div id="rondo-riesgo-estado" class="rondo-riesgo-estado"></div>' +
-            '<p class="rondo-riesgo-status-hint">Configura URL, formato, parametros y la regla desde <b>Ajustes &gt; Reglas</b>. Tambien puedes arrastrar aqui un CSV/JSON o usar Recargar/Limpiar arriba.</p>' +
-            '<div class="rondo-riesgo-dropmask"><span class="rondo-mi">' + ICO.importar + '</span> Suelta el archivo aqui</div>' +
+            '<p class="rondo-riesgo-status-hint">' + UIS.gear + ' Configura URL, formato, parametros y la regla desde <b>Ajustes &gt; Reglas</b>. ' + UIS.drop + ' Arrastra aqui un CSV/JSON o usa ' + UIS.refresh + ' Recargar.</p>' +
+            '<div class="rondo-riesgo-dropmask"><span class="rondo-usym md">' + UIS.drop + '</span> Suelta el archivo aqui</div>' +
             '</div>' +
             '<div class="rondo-seccion">' +
-            '<h4><span class="rondo-mi">' + ICO.filtro + '</span> Filtros y vista<span class="rondo-count" id="rondo-riesgo-filtradas">0</span></h4>' +
+            '<h4><span class="rondo-usym md">' + UIS.filter + '</span> Filtros y vista<span class="rondo-count" id="rondo-riesgo-filtradas">0</span></h4>' +
             '<div class="rondo-riesgo-filters">' +
             '<div class="rondo-riesgo-filters-row">' +
-            '<div class="search-wrap">' +
-            '<span class="rondo-mi">' + ICO.filtro + '</span>' +
+            '<div class="rondo-riesgo-search">' +
             '<input id="rondo-riesgo-buscar" class="filtro" placeholder="Buscar estado, municipio, delito, id…">' +
             '</div>' +
             '<select id="rondo-riesgo-orden" class="filtro" title="Ordenar">' +
@@ -4670,25 +4795,25 @@
             '<option value="plano">Lista plana</option>' +
             '</select>' +
             '<button class="mini" id="rondo-riesgo-limpiar-filtros" title="Quitar filtros y ver todas las zonas">' +
-            '<span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar filtros' +
+            '<span class="rondo-usym">' + UIS.clear + '</span> Limpiar filtros' +
             '</button>' +
             '<button class="mini" id="rondo-riesgo-expandir" title="Expandir o colapsar todos los grupos">' +
-            '<span class="rondo-mi">' + ICO.expandir + '</span> Expandir todo' +
+            '<span class="rondo-usym">' + UIS.expand + '</span> Expandir todo' +
             '</button>' +
             '<button class="mini" id="rondo-riesgo-exportar" title="Exportar el subset visible (CSV, GeoJSON o portapapeles)">' +
-            '<span class="rondo-mi">' + ICO.exportar + '</span> Exportar' +
+            '<span class="rondo-usym">' + UIS.export + '</span> Exportar' +
             '</button>' +
             '</div>' +
             '<div class="rondo-riesgo-export">' +
             '<span class="etq">Exportar lo visible:</span>' +
             '<button class="mini" id="rondo-riesgo-csv" title="Descargar CSV">' +
-            '<span class="rondo-mi">' + ICO.descargar + '</span> CSV' +
+            '<span class="rondo-usym">' + UIS.csv + '</span> CSV' +
             '</button>' +
             '<button class="mini" id="rondo-riesgo-geo" title="Descargar GeoJSON">' +
-            '<span class="rondo-mi">' + ICO.exportar + '</span> GeoJSON' +
+            '<span class="rondo-usym">' + UIS.export + '</span> GeoJSON' +
             '</button>' +
             '<button class="mini" id="rondo-riesgo-copiar" title="Copiar al portapapeles">' +
-            '<span class="rondo-mi">' + ICO.copiar + '</span> Copiar' +
+            '<span class="rondo-usym">' + UIS.copy + '</span> Copiar' +
             '</button>' +
             '</div>' +
             '<div class="rondo-riesgo-chips">' +
@@ -4701,7 +4826,7 @@
             '</div>' +
             '</div>' +
             '<div class="rondo-seccion">' +
-            '<h4><span class="rondo-mi">' + ICO.geocercas + '</span> Zonas<span class="rondo-count" id="rondo-riesgo-total">0</span></h4>' +
+            '<h4><span class="rondo-usym md">' + UIS.zone + '</span> Zonas<span class="rondo-count" id="rondo-riesgo-total">0</span></h4>' +
             '<div id="rondo-riesgo-lista" class="rondo-riesgo-list"></div>' +
             '</div>' +
             '</div>' +
@@ -4760,7 +4885,7 @@
             '<div class="cfg-pane" data-cfg="general">' +
             '<h4>General</h4>' +
             numRow('c-poll', 'Refresco (ms)') +
-            numRow('c-off', 'Sin señal > (min)') +
+            numRow('c-off', 'Off > (min)') +
             numRow('c-cd', 'Cooldown alerta (min)') +
             checkRow('c-watchAll', 'Monitorear todas las unidades (ignora selección)') +
             checkRow('c-auto', 'Abrir al caer (critico)') +
@@ -4777,7 +4902,7 @@
             numRow('c-vel', 'Velocidad máxima (km/h)') +
             '<h4>Reglas activas</h4>' +
             '<div class="row-grid">' +
-            checkRow('c-r-off', 'Sin señal') +
+            checkRow('c-r-off', 'Off') +
             checkRow('c-r-gps', 'GPS en marcha') +
             checkRow('c-r-det', 'Detenido') +
             checkRow('c-r-zona', 'Zona') +
@@ -5213,6 +5338,7 @@
             t.classList.toggle('activo', act);
             t.setAttribute('aria-selected', act ? 'true' : 'false');
         });
+        paintTools();
         if (name === 'dash') paintKPI();
         else if (name === 'unidades') paintTabla();
         else if (name === 'alertas') paintAlertas();
@@ -5223,6 +5349,22 @@
         paintCounters();
         paintStateBadge();
         paintInfo();
+    }
+    // Muestra solo las herramientas relevantes a la pestaña activa. Cada
+    // boton/select/input de la barra .tools lleva data-tabs con las pestañas
+    // en las que aplica (vacio = siempre).
+    function paintTools() {
+        const tab = APP.tab || 'dash';
+        const cont = byId('rondo-tools');
+        if (!cont) return;
+        let visibles = 0;
+        cont.querySelectorAll('.rondo-tool').forEach((el) => {
+            const tabs = String(el.dataset.tabs || '').split(',').map((s) => s.trim()).filter(Boolean);
+            const show = tabs.length === 0 || tabs.indexOf(tab) >= 0;
+            el.style.display = show ? '' : 'none';
+            if (show) visibles++;
+        });
+        cont.style.display = visibles ? '' : 'none';
     }
     function paintInfo() {
         const info = byId('rondo-info');
@@ -5316,18 +5458,17 @@
             return;
         }
         const meta = {
-            offline: { col: 'var(--rondo-bad-fg)', ic: ICO.offline },
-            vel: { col: 'var(--rondo-warn-fg)', ic: ICO.velocidad },
-            desv: { col: 'var(--rondo-warn-fg)', ic: ICO.destino },
-            det: { col: 'var(--rondo-accent-2)', ic: ICO.detenida },
-            'ruta-pend': { col: 'var(--rondo-warn-fg)', ic: ICO.destino }
+            offline: { col: 'var(--rondo-bad-fg)', ic: UIS.x },
+            vel: { col: 'var(--rondo-warn-fg)', ic: UIS.up },
+            desv: { col: 'var(--rondo-warn-fg)', ic: UIS.zone },
+            det: { col: 'var(--rondo-accent-2)', ic: UIS.bullet },
+            'ruta-pend': { col: 'var(--rondo-warn-fg)', ic: UIS.zone }
         };
         setHtml(cont, top.map((it) => {
             const mm = meta[it.tipo] || meta.det;
             return '<div class="alerta rondo-atencion-item" data-eco="' + esc(it.eco) + '" style="border-left:3px solid ' + mm.col + ';cursor:pointer" title="Abrir la ventana de ' + esc(it.eco) + '">' +
-                '<span class="ico rondo-mi" style="color:' + mm.col + '">' + mm.ic + '</span>' +
+                '<span class="ico rondo-usym" style="color:' + mm.col + '">' + mm.ic + '</span>' +
                 '<div class="cuerpo"><b>' + esc(it.eco) + '</b><span>' + esc(it.txt) + '</span></div>' +
-                '<span class="hora rondo-mi" style="color:var(--rondo-fg-mute)">' + ICO.panel + '</span>' +
                 '</div>';
         }).join(''));
     }
@@ -5350,14 +5491,12 @@
         kv('rondo-kpi-off', off);
         kv('rondo-kpi-det', det);
         kv('rondo-kpi-mov', mov);
-        kv('rondo-kpi-vel', Math.round(vel) + ' km/h prom.');
-        kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '-');
-        kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '-');
+        kv('rondo-kpi-vel', on ? Math.round(vel) + ' km/h prom.' : '');
+        kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '');
+        kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-zonas', enZona.size);
-        kv('rondo-kpi-aho', aho);
+        kv('rondo-kpi-zonas-pct', APP.zonas.length ? 'de ' + APP.zonas.length : ''); kv('rondo-kpi-aho', aho);
         kv('rondo-kpi-criticos', critAho + ' críticas');
-        const resumenZ = document.querySelector('.kpi .valor#rondo-kpi-zonas + .resumen');
-        if (resumenZ) resumenZ.textContent = 'de ' + APP.zonas.length + ' geocercas';
 
         // Distribucion de la flota (barra + leyenda): movimiento / detenidas / sin señal.
         const totalD = Math.max(1, total);
@@ -5371,9 +5510,9 @@
         if (legend) {
             const pct = (v) => (total ? Math.round((v / total) * 100) + '%' : '0%');
             setHtml(legend,
-                '<span><i class="on"></i> En movimiento ' + mov + ' (' + pct(mov) + ')</span>' +
-                '<span><i class="det"></i> Detenidas ' + det + ' (' + pct(det) + ')</span>' +
-                '<span><i class="off"></i> Sin señal ' + off + ' (' + pct(off) + ')</span>');
+                '<span><i class="on"></i> Mov. ' + mov + ' (' + pct(mov) + ')</span>' +
+                '<span><i class="det"></i> Det. ' + det + ' (' + pct(det) + ')</span>' +
+                '<span><i class="off"></i> Off ' + off + ' (' + pct(off) + ')</span>');
         }
         paintAtencion(watched);
 
@@ -5381,16 +5520,18 @@
         if (recientes) {
             const items = APP.historial.slice(0, 6);
             setHtml(recientes, items.length
-                ? items.map((a) => (
+                ? items.slice(0, 4).map((a) => (
                     '<div class="alerta" style="border-left:3px solid ' + (COL[a.sev] || '#555') + '">' +
-                    '<span class="ico rondo-mi" style="color:' + (COL[a.sev] || '#777') + '">' + a.icono + '</span>' +
+                    '<span class="ico rondo-usym" style="color:' + (COL[a.sev] || '#777') + '">' + (a.icono || UIS.info) + '</span>' +
                     '<div class="cuerpo"><b>' + esc(a.titulo) + '</b>' +
                     (a.detalle ? '<span>' + esc(a.detalle) + '</span>' : '') + '</div>' +
                     '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
                     '</div>'
                 )).join('')
-                : '<div style="padding:8px;color:var(--rondo-fg-mute)">' + LANG.recientesNone + '</div>');
+                : '<div class="rondo-dash-empty">' + LANG.recientesNone + '</div>');
         }
+        // paintSparkline ya no se usa (sparkline oculto). Mantengo la funcion vacia
+        // por compatibilidad si alguien la llama desde otro lugar.
         paintSparkline();
     }
     function paintSparkline() {
@@ -5849,15 +5990,15 @@
             const rel = tiempoRelativo(APP.riesgoTs);
             const fechaAbs = APP.riesgoTs ? new Date(APP.riesgoTs).toLocaleString() : '\u2014';
             if (APP.riesgoEstado === 'cargando') {
-                html = '<div class="rondo-riesgo-status load"><span class="ico rondo-mi"><span class="rondo-spin"></span></span><div class="cuerpo"><b>Cargando zonas de riesgo\u2026</b><span>Descargando desde la URL configurada.</span></div></div>';
+                html = '<div class="rondo-riesgo-status load"><span class="ico rondo-usym rondo-usym-spin">' + UIS.load + '</span><div class="cuerpo"><b>Cargando zonas de riesgo\u2026</b><span>Descargando desde la URL configurada.</span></div></div>';
             } else if (items.length > 0) {
-                html = '<div class="rondo-riesgo-status ok"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>' + items.length + ' zonas cargadas</b><span>\u00daltima carga ' + esc(rel) + ' \u00b7 ' + esc(fechaAbs) + '</span></div></div>';
+                html = '<div class="rondo-riesgo-status ok"><span class="ico rondo-usym">' + UIS.info + '</span><div class="cuerpo"><b>' + items.length + ' zonas cargadas</b><span>\u00daltima carga ' + esc(rel) + ' \u00b7 ' + esc(fechaAbs) + '</span></div></div>';
             } else if (APP.riesgoEstado === 'error') {
-                html = '<div class="rondo-riesgo-status err"><span class="ico rondo-mi">' + ICO.alertas + '</span><div class="cuerpo"><b>Sin dataset activo</b><span>' + esc(APP.riesgoErr || 'configura una URL en Ajustes > Reglas, o importa un archivo') + '. La alerta cr\u00edtica de zona de riesgo queda desactivada.</span></div></div>';
+                html = '<div class="rondo-riesgo-status err"><span class="ico rondo-usym">' + UIS.warn + '</span><div class="cuerpo"><b>Sin dataset activo</b><span>' + esc(APP.riesgoErr || 'configura una URL en Ajustes > Reglas, o importa un archivo') + '. La alerta cr\u00edtica de zona de riesgo queda desactivada.</span></div></div>';
             } else if (!cfg.riesgoUrl) {
-                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>A\u00fan no hay URL configurada</b><span>Pega una URL en <b>Ajustes &gt; Reglas &gt; Zonas de riesgo</b> o arrastra un archivo CSV/JSON aqui.</span></div></div>';
+                html = '<div class="rondo-riesgo-status"><span class="ico rondo-usym">' + UIS.info + '</span><div class="cuerpo"><b>A\u00fan no hay URL configurada</b><span>Pega una URL en <b>Ajustes &gt; Reglas &gt; Zonas de riesgo</b> o arrastra un archivo CSV/JSON aqui.</span></div></div>';
             } else {
-                html = '<div class="rondo-riesgo-status"><span class="ico rondo-mi">' + ICO.info + '</span><div class="cuerpo"><b>Sin zonas cargadas</b><span>Pulsa <b>Recargar</b> o arrastra un CSV/JSON aqui.</span></div></div>';
+                html = '<div class="rondo-riesgo-status"><span class="ico rondo-usym">' + UIS.info + '</span><div class="cuerpo"><b>Sin zonas cargadas</b><span>Pulsa <b>Recargar</b> o arrastra un CSV/JSON aqui.</span></div></div>';
             }
             estadoEl.innerHTML = html;
         }
@@ -5958,7 +6099,7 @@
             let inner;
             if (items.length === 0) {
                 inner =
-                    '<span class="rondo-mi">' + ICO.geocercas + '</span>' +
+                    '<span class="rondo-usym">' + UIS.zone + '</span>' +
                     '<b>Aun no hay zonas cargadas</b>' +
                     '<span>Sigue estos pasos para empezar.</span>' +
                     '<div class="pasos">' +
@@ -5966,13 +6107,13 @@
                         '<div class="paso"><span class="n">2</span><span class="t">Recarga</span><span class="d">Pulsa <b>Recargar</b>. Tambien puedes arrastrar un archivo CSV/JSON al recuadro.</span></div>' +
                         '<div class="paso"><span class="n">3</span><span class="t">Activa la regla</span><span class="d">Si quieres alerta critica cuando una unidad pierda senal en zona, marca <b>PERDIO SENAL EN ZONA DE RIESGO</b>.</span></div>' +
                     '</div>' +
-                    '<button class="mini" id="rondo-riesgo-empty-ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>';
+                    '<button class="mini" id="rondo-riesgo-empty-ajustes"><span class="rondo-usym">' + UIS.gear + '</span> Abrir Ajustes</button>';
             } else {
                 inner =
-                    '<span class="rondo-mi">' + ICO.filtro + '</span>' +
+                    '<span class="rondo-usym">' + UIS.filter + '</span>' +
                     '<b>Ninguna zona coincide</b>' +
                     '<span>Ajusta el texto o el nivel. Visibles: 0 de ' + items.length + '.</span>' +
-                    '<button class="mini" id="rondo-riesgo-empty-clear"><span class="rondo-mi">' + ICO.limpiar + '</span> Limpiar filtros</button>';
+                    '<button class="mini" id="rondo-riesgo-empty-clear"><span class="rondo-usym">' + UIS.clear + '</span> Limpiar filtros</button>';
             }
             listaEl.innerHTML = '<div class="rondo-riesgo-empty">' + inner + '</div>';
             return;
@@ -6073,7 +6214,7 @@
             out.push(
                 '<div class="rondo-riesgo-grupo' + (colapsado ? ' colapsado' : '') + '" data-estado="' + esc(g.estado) + '">' +
                 '<div class="rondo-riesgo-grupo-head">' +
-                '<span class="rondo-mi g-toggle">' + ICO.bajar + '</span>' +
+                '<span class="rondo-usym g-toggle">' + UIS.smallDown + '</span>' +
                 '<span class="g-estado">' + esc(g.estado) + '</span>' +
                 '<span class="g-meta">' + meta.join('') + '</span>' +
                 '</div>' +
@@ -6113,7 +6254,7 @@
                 idTag +
                 fuenteTag +
                 '<span class="rb-actions">' +
-                    '<button data-acc="copy-zone" data-zona-idx="' + idx + '" title="Copiar al portapapeles">' + ICO.copiar + '</button>' +
+                    '<button class="rondo-copy-zone" data-acc="copy-zone" data-zona-idx="' + idx + '" title="Copiar al portapapeles">' + UIS.copy + '</button>' +
                 '</span>' +
             '</div>' +
             '</div>';
@@ -6197,7 +6338,7 @@
         lineas.push('');
         lineas.push('Generado: ' + new Date().toLocaleString());
         lineas.push('Unidades vigiladas: ' + watched.length);
-        lineas.push('En línea: ' + (watched.length - off.length) + ' · Sin señal: ' + off.length);
+        lineas.push('En línea: ' + (watched.length - off.length) + ' · Off: ' + off.length);
         lineas.push('');
         lineas.push('## Alertas de hoy (' + hoy.length + ')');
         const sevs = Object.keys(porSev).sort((a, b) => pickSeverity(b) - pickSeverity(a));
@@ -7286,9 +7427,6 @@
                     writeJSON(LS.cfg, APP.config);
                     cargarRiesgo();
                 }
-            } else if (t.id === 'rondo-riesgo-toggle') {
-                cfg.reglas.riesgoSinSenal = !!t.checked;
-                writeJSON(LS.cfg, APP.config);
             } else if (t.id === 'rondo-riesgo-formato-sel') {
                 cfg.riesgoFormato = t.value || 'auto';
                 writeJSON(LS.cfg, APP.config);
@@ -7404,34 +7542,27 @@
                 return;
             }
         });
-        // ── Drag and drop sobre las dos toolbars ───────────────────────
-        ['rondo-riesgo-toolbar-url', 'rondo-riesgo-toolbar-file'].forEach((id) => {
-            const tb = byId(id);
-            if (!tb) return;
+        // ── Drag and drop sobre la seccion de estado ───────────────────
+        const dropZone = byId('rondo-riesgo-drop');
+        if (dropZone) {
             ['dragenter', 'dragover'].forEach((evt) =>
-                tb.addEventListener(evt, (ev) => {
+                dropZone.addEventListener(evt, (ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
-                    tb.classList.add('drag-over');
+                    dropZone.classList.add('drag-over');
                 }));
             ['dragleave', 'drop'].forEach((evt) =>
-                tb.addEventListener(evt, (ev) => {
+                dropZone.addEventListener(evt, (ev) => {
                     ev.preventDefault();
                     ev.stopPropagation();
-                    tb.classList.remove('drag-over');
+                    if (evt === 'dragleave' && dropZone.contains(ev.relatedTarget)) return;
+                    dropZone.classList.remove('drag-over');
                 }));
-            tb.addEventListener('drop', (ev) => {
+            dropZone.addEventListener('drop', (ev) => {
                 const f = ev.dataTransfer && ev.dataTransfer.files && ev.dataTransfer.files[0];
-                if (!f) return;
-                // Disparamos el mismo flujo que el input file.
-                const arch = byId('rondo-riesgo-archivo');
-                if (!arch) return;
-                const dt = new DataTransfer();
-                dt.items.add(f);
-                arch.files = dt.files;
-                arch.dispatchEvent(new Event('change', { bubbles: true }));
+                if (f) cargarRiesgoDesdeArchivo(f);
             });
-        });
+        }
         // ── Botones de exportacion ────────────────────────────────────
         const csvBtn = byId('rondo-riesgo-csv');
         if (csvBtn) csvBtn.addEventListener('click', () => exportarRiesgoCSV());
@@ -7455,60 +7586,56 @@
                 paintRiesgo();
             });
         }
-        const arch = byId('rondo-riesgo-archivo');
-        if (arch) {
-            arch.addEventListener('change', (e) => {
-                const file = e.target.files && e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = (ev) => {
-                    const text = String(ev.target.result || '');
-                    const trimmed = text.trim();
-                    let items = [];
-                    let fmt = trimmed.length && (trimmed[0] === '[' || trimmed[0] === '{') ? 'json' : 'csv';
-                    try {
-                        if (fmt === 'json') {
-                            const data = JSON.parse(trimmed);
-                            items = _itemsFromJSON(data);
-                        } else {
-                            items = _itemsFromCSV(trimmed);
-                        }
-                    } catch (e1) {
-                        APP.riesgoErr = 'Archivo invalido: ' + (e1 && e1.message || '');
-                        APP.riesgo = null;
-                        APP.riesgoEstado = 'error';
-                        paintRiesgo();
-                        e.target.value = '';
-                        return;
-                    }
-                    if (!items.length) {
-                        APP.riesgoErr = 'Archivo sin items reconocibles (revisa columnas lat/lon)';
-                        APP.riesgo = null;
-                        APP.riesgoEstado = 'error';
-                        paintRiesgo();
-                        e.target.value = '';
-                        return;
-                    }
-                    APP.riesgo = items;
-                    APP.riesgoErr = null;
-                    APP.riesgoTs = Date.now();
-                    APP.riesgoEstado = 'ok';
-                    paintRiesgo();
-                    if (APP.unlocked) {
-                        try { console.log('[Rondo] riesgo cargado desde archivo:', items.length, 'zonas'); } catch (_) {}
-                    }
-                    e.target.value = '';
-                };
-                reader.onerror = () => {
-                    APP.riesgoErr = 'No se pudo leer el archivo';
-                    APP.riesgo = null;
-                    APP.riesgoEstado = 'error';
-                    paintRiesgo();
-                    e.target.value = '';
-                };
-                reader.readAsText(file);
-            });
-        }
+    }
+    // Lee un archivo CSV/JSON y lo aplica como dataset de riesgo.
+    function cargarRiesgoDesdeArchivo(file) {
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const text = String(ev.target.result || '');
+            const trimmed = text.trim();
+            let items = [];
+            let fmt = trimmed.length && (trimmed[0] === '[' || trimmed[0] === '{') ? 'json' : 'csv';
+            try {
+                if (fmt === 'json') {
+                    const data = JSON.parse(trimmed);
+                    items = _itemsFromJSON(data);
+                } else {
+                    items = _itemsFromCSV(trimmed);
+                }
+            } catch (e1) {
+                APP.riesgoErr = 'Archivo invalido: ' + (e1 && e1.message || '');
+                APP.riesgo = null;
+                APP.riesgoEstado = 'error';
+                paintRiesgo();
+                return;
+            }
+            if (!items.length) {
+                APP.riesgoErr = 'Archivo sin items reconocibles (revisa columnas lat/lon)';
+                APP.riesgo = null;
+                APP.riesgoEstado = 'error';
+                paintRiesgo();
+                return;
+            }
+            APP.riesgo = items;
+            APP.riesgoErr = null;
+            APP.riesgoTs = Date.now();
+            APP.riesgoEstado = 'ok';
+            // El archivo cargado reemplaza la URL: dejamos constancia.
+            APP._riesgoFetched = (APP.config && APP.config.riesgoUrl) || 'archivo local';
+            paintRiesgo();
+            if (APP.unlocked) {
+                try { console.log('[Rondo] riesgo cargado desde archivo:', items.length, 'zonas'); } catch (_) {}
+            }
+            adviceOk('Dataset cargado', items.length + ' zonas');
+        };
+        reader.onerror = () => {
+            APP.riesgoErr = 'No se pudo leer el archivo';
+            APP.riesgo = null;
+            APP.riesgoEstado = 'error';
+            paintRiesgo();
+        };
+        reader.readAsText(file);
     }
 
     /* ====================== INIT ====================== */

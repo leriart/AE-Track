@@ -254,5 +254,54 @@ ok('riesgoDetalleHTML: incluye buffer', detalle.indexOf('1500') >= 0);
 ok('riesgoDetalleHTML: incluye coordenadas', detalle.indexOf('lat') < 0 && /\d+\.\d+,\s*-\d+\.\d+/.test(detalle));
 ok('riesgoDetalleHTML: vacio -> ""', mod.riesgoDetalleHTML(null) === '');
 
+/* ── Parser: derivacion de score/radio ──────────────────────────
+ * El dataset real (gist) trae score:0 y radio_m:0 en todos los items y
+ * los delitos en un objeto. El parser debe conservarlos y derivar score
+ * (desde el total de delitos normalizado) y radio (desde el score).
+ */
+const iniP = src.indexOf('function _normItem');
+const finP = src.indexOf('async function cargarRiesgo', iniP);
+if (iniP < 0 || finP < 0) { console.error('No se encontro el parser de riesgo'); process.exit(1); }
+const codeP = 'const isFinite2=isFinite;\n' + src.slice(iniP, finP) +
+    '\nreturn {_normItem,_radioDeScore,_itemsFromJSON};';
+const modP = new Function(codeP)();
+
+ok('_radioDeScore: 85 -> 4000', modP._radioDeScore(85) === 4000);
+ok('_radioDeScore: 70 -> 4000', modP._radioDeScore(70) === 4000);
+ok('_radioDeScore: 50 -> 2200', modP._radioDeScore(50) === 2200);
+ok('_radioDeScore: 25 -> 1400', modP._radioDeScore(25) === 1400);
+ok('_radioDeScore: 5 -> 500', modP._radioDeScore(5) === 500);
+
+// Item con radio 0 y score 0 + delitos: debe conservarse (antes se descartaba).
+const it1 = modP._normItem({ id:'a', estado:'CDMX', municipio:'X', centro:[19.43,-99.13], radio_m:0, score:0, delitos:{Robo:10, Asalto:5} }, 'json', 0);
+ok('_normItem: conserva item con radio=0', !!it1);
+ok('_normItem: suma total de delitos', it1 && it1._total === 15);
+ok('_normItem: radio 0 se conserva tal cual', it1 && it1.radio_m === 0);
+// Item sin centro -> null
+ok('_normItem: sin coordenadas -> null', modP._normItem({ id:'b', radio_m:100 }, 'json', 0) === null);
+
+// _itemsFromJSON deriva score y radio cuando falta.
+const ds = { items: [
+    { id:'a', estado:'CDMX', municipio:'X', centro:[19.43,-99.13], radio_m:0, score:0, delitos:{Robo:100} },
+    { id:'b', estado:'Jalisco', municipio:'Y', centro:[20.65,-103.34], radio_m:0, score:0, delitos:{Robo:25} },
+    { id:'c', estado:'Nuevo Leon', municipio:'Z', centro:[25.68,-100.31], radio_m:0, score:0, delitos:{Robo:1} },
+]};
+const parsed = modP._itemsFromJSON(ds);
+ok('_itemsFromJSON: conserva los 3 items', parsed.length === 3);
+ok('_itemsFromJSON: deriva score (max -> 100)', parsed[0].score === 100);
+ok('_itemsFromJSON: deriva score proporcional (sqrt)', parsed[1].score === Math.round(Math.sqrt(25/100)*100));
+ok('_itemsFromJSON: score minimo 1', parsed[2].score >= 1);
+ok('_itemsFromJSON: deriva radio desde score', parsed.every(z => z.radio_m > 0));
+ok('_itemsFromJSON: item max -> radio 4000', parsed[0].radio_m === 4000);
+ok('_itemsFromJSON: limpia _total', parsed.every(z => z._total === undefined));
+
+// Dataset con score explicito: no debe sobreescribirse.
+const ds2 = { items: [
+    { id:'a', centro:[19.43,-99.13], score:55, radio_m:1500, delitos:{Robo:1} },
+]};
+const p2 = modP._itemsFromJSON(ds2);
+ok('_itemsFromJSON: respeta score explicito', p2[0].score === 55);
+ok('_itemsFromJSON: respeta radio explicito', p2[0].radio_m === 1500);
+
 console.log('\n' + (fallos === 0 ? 'Todos los tests pasaron' : 'Hay ' + fallos + ' test(s) fallido(s)'));
 process.exit(fallos === 0 ? 0 : 1);

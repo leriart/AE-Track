@@ -5,6 +5,7 @@ este proyecto se llamaba **HJP Wialon** y el archivo era `HJP-Wialon.user.js`;
 el contenido es compatible y la primera vez Rondo migra automaticamente la
 configuracion, la lista vigilada, las rutas, el odometro y los perfiles.
 
+- [5.7.0](./5.7.0.md) - Dashboard rehecho, soporte del dataset nacional de incidencia delictiva, config de riesgo movida a Ajustes, barra de herramientas contextual y cabecera ampliada.
 - [5.6.1](./5.6.1.md) - Pestanas solo con icono y sin parpadeo ni marco verde en la pestaña de Zonas de riesgo.
 - [5.6.0](./5.6.0.md) - Unidad en tarjetas sin desbordes, arreglo de las zonas de riesgo que no aparecian, y modo sidebar unico (sin panel flotante).
 - [5.5.0](./5.5.0.md) - Expansion mayor de la UI de Riesgo: dona SVG, histograma, KPIs clicables, slider de score, sticky filters, drag-and-drop, export CSV/GeoJSON/copiar, tooltip rico y empty states con onboarding.
