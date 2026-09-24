@@ -284,7 +284,8 @@ ok('icono SoundOutlined en NA_ICONS', /\bspeak:\s*\['/.test(src));
 ok('pestana IA en configuracion', /data-cfg="ia"/.test(src));
 ok('proveedor DeepSeek', /deepseek-chat/.test(src));
 ok('proveedor NVIDIA NIM', /integrate\.api\.nvidia\.com/.test(src));
-ok('proveedor Kimi.ai (api.kimi.ai)', /api\.kimi\.ai\/v1\/chat\/completions/.test(src));
+ok('proveedor Kimi for Coding (/coding/v1)', /api\.kimi\.ai\/coding\/v1\/chat\/completions/.test(src));
+ok('modelo Kimi for Coding por defecto', /kimi-for-coding/.test(src));
 ok('proveedor Moonshot (api.moonshot.ai)', /api\.moonshot\.ai\/v1\/chat\/completions/.test(src));
 ok('proveedor MiniMax', /api\.minimax\.io\/v1\/chat\/completions/.test(src));
 ok('proveedor Personalizado (custom)', /custom:\s*\{[\s\S]*?Personalizado/.test(src));
@@ -297,6 +298,8 @@ ok('campo endpoint IA existe', /id="c-ia-endpoint"/.test(src));
 ok('default iaEndpoint en DEFAULTS', /iaEndpoint:\s*''/.test(src));
 ok('la IA usa iaEndpoint si esta definido', /String\(cfg\.iaEndpoint \|\| ''\)\.trim\(\) \|\| prov\.endpoint/.test(src));
 ok('pista 401 en el error de la IA', /endpoint '\s*\+\s*endpoint/.test(src) || /Revisa que la API key corresponda/.test(src));
+ok('pista 404 (ruta del endpoint) en la IA', /La RUTA del endpoint no existe/.test(src));
+ok('pista 429 (rate limit) en la IA', /Limite de uso alcanzado/.test(src));
 
 // Indicador/toggle de IA en la cabecera (junto al tema).
 ok('boton IA en cabecera existe', /id="rondo-ia"/.test(src));

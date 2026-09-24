@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.2
+// @version      5.12.3
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -303,7 +303,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.2';
+    const VER = '5.12.3';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -1995,12 +1995,12 @@
     // El endpoint OpenAI de cada proveedor y el modelo por defecto se
     // exponen aqui para que sea facil añadir un proveedor nuevo.
     //
-    // OJO con Kimi: "Kimi.ai" (kimi.com, keys `kimi-...`) y "Moonshot"
-    // (platform.moonshot.ai, keys `sk-...`) son productos DISTINTOS con
-    // endpoints distintos. Si usas la API general de Kimi.ai, el endpoint
-    // es api.kimi.ai/v1; si usas Moonshot, es api.moonshot.ai/v1. Por eso
-    // hay dos proveedores separados + un campo "Endpoint" opcional en la
-    // UI para sobreescribir cualquiera de ellos.
+    // OJO con Kimi: "Kimi for Coding" (kimi.com/code, keys `kimi-...`) y
+    // "Moonshot" (platform.moonshot.ai, keys `sk-...`) son productos
+    // DISTINTOS con endpoints distintos. Kimi for Coding usa
+    // api.kimi.ai/coding/v1 (NO /v1, que da 404); Moonshot usa
+    // api.moonshot.ai/v1. Por eso hay dos proveedores separados + un campo
+    // "Endpoint" opcional en la UI para sobreescribir cualquiera de ellos.
     const IA_PROVEEDORES = Object.freeze({
         deepseek: {
             nombre: 'DeepSeek',
@@ -2019,12 +2019,14 @@
             nota: 'keys nvapi-...'
         },
         kimi: {
-            nombre: 'Kimi.ai (API general)',
-            endpoint: 'https://api.kimi.ai/v1/chat/completions',
-            modelo: 'kimi-k2.5',
+            // Kimi Code (kimi.com/code). OJO: la API vive bajo /coding/v1,
+            // NO bajo /v1 (api.kimi.ai/v1 da 404 de nginx). Keys kimi-...
+            nombre: 'Kimi for Coding (kimi.com)',
+            endpoint: 'https://api.kimi.ai/coding/v1/chat/completions',
+            modelo: 'kimi-for-coding',
             headerAuth: 'Authorization',
             prefijo: 'Bearer ',
-            nota: 'keys kimi-... (kimi.com)'
+            nota: 'keys kimi-... de kimi.com/code · endpoint /coding/v1'
         },
         moonshot: {
             nombre: 'Moonshot (platform.moonshot.ai)',
@@ -2206,15 +2208,21 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             };
         }
         if (!res.ok) {
-            // 401 casi siempre significa key de OTRO producto o endpoint.
-            // Damos una pista concreta en vez del volcado crudo.
+            // 401/403: la key suele ser de OTRO producto o endpoint.
+            // 404: la RUTA del endpoint esta mal (p. ej. Kimi usa /coding/v1).
+            // Damos pistas concretas en vez del volcado crudo.
             let pista = '';
             if (res.status === 401 || res.status === 403) {
                 pista = ' · Revisa que la API key corresponda a ' + prov.nombre +
                     ' (endpoint ' + endpoint + ')' + (prov.nota ? '. ' + prov.nota : '') +
                     '. Si tu key es de otro producto (p. ej. Kimi.ai vs Moonshot), cambia de proveedor o ajusta el endpoint.';
+            } else if (res.status === 404) {
+                pista = ' · La RUTA del endpoint no existe. ' + (prov.nota ? prov.nota + '. ' : '') +
+                    'Endpoint actual: ' + endpoint + '. Revisa la URL exacta del proveedor.';
+            } else if (res.status === 429) {
+                pista = ' · Limite de uso alcanzado (rate limit). Espera un poco o cambia de proveedor.';
             }
-            return { error: prov.nombre + ' HTTP ' + res.status + pista + (res.texto ? ' · ' + res.texto.slice(0, 180) : '') };
+            return { error: prov.nombre + ' HTTP ' + res.status + pista + (res.texto ? ' · ' + res.texto.slice(0, 160) : '') };
         }
         let data;
         try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
@@ -5836,14 +5844,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '<label>Proveedor <select id="c-ia-prov">' +
             '<option value="deepseek">DeepSeek · deepseek-chat</option>' +
             '<option value="nvidia">NVIDIA NIM · meta/llama-3.1-70b-instruct</option>' +
-            '<option value="kimi">Kimi.ai (API general) · kimi-k2.5</option>' +
+            '<option value="kimi">Kimi for Coding (kimi.com) · kimi-for-coding</option>' +
             '<option value="moonshot">Moonshot (platform.moonshot.ai) · kimi-k2.6</option>' +
             '<option value="minimax">MiniMax · MiniMax-M3</option>' +
             '<option value="custom">Personalizado (OpenAI-compatible)</option>' +
             '</select></label>' +
             '<span id="c-ia-prov-nota" style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin-top:-2px"></span>' +
             '<label>API key <input type="password" id="c-ia-key" autocomplete="off" spellcheck="false" placeholder="sk-... / kimi-... / nvapi-..." title="Solo se envia al endpoint del proveedor; nunca a Rondo. Se guarda en este navegador."></label>' +
-            '<label>Endpoint (opcional, vacio = el del proveedor) <input type="text" id="c-ia-endpoint" autocomplete="off" placeholder="https://api.kimi.ai/v1/chat/completions" spellcheck="false" title="Sobreescribe la URL. Util si tu key es de otra region o producto (Kimi.ai vs Moonshot)."></label>' +
+            '<label>Endpoint (opcional, vacio = el del proveedor) <input type="text" id="c-ia-endpoint" autocomplete="off" placeholder="https://api.kimi.ai/coding/v1/chat/completions" spellcheck="false" title="Sobreescribe la URL. Util si tu key es de otra region o producto (Kimi.ai vs Moonshot)."></label>' +
             '<label>Modelo (opcional, vacio = el del proveedor) <input type="text" id="c-ia-modelo" autocomplete="off" placeholder="(modelo por defecto)" spellcheck="false"></label>' +
             numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
             numRow('c-ia-timeout', 'Timeout (s)') +
@@ -5852,7 +5860,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                 '<button type="button" class="accbtn" id="c-ia-clear"><span class="rondo-usym">' + UIS.clear + '</span> Borrar API key</button>' +
             '</div>' +
             '<div id="c-ia-status" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px"></div>' +
-            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:8px 0 0">Si <b>Kimi.ai</b> te da 401: suele ser una key del otro producto. Prueba el proveedor <b>Kimi.ai (api.kimi.ai/v1)</b> con keys <code>kimi-...</code> o <b>Moonshot</b> con keys <code>sk-...</code>. Tambien puedes pegar la URL exacta en <b>Endpoint</b>.</p>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:8px 0 0">Si te da <b>401</b>: la key suele ser de otro producto. Usa <b>Kimi for Coding</b> con keys <code>kimi-...</code> de kimi.com/code (endpoint <code>/coding/v1</code>) o <b>Moonshot</b> con keys <code>sk-...</code> de platform.moonshot.ai. Si te da <b>404</b>: la ruta del endpoint esta mal; pega la URL exacta en <b>Endpoint</b>.</p>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
