@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.14.7-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.14.7.md)
-[![tests](https://img.shields.io/badge/tests-828%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.14.8-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.14.8.md)
+[![tests](https://img.shields.io/badge/tests-851%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -137,6 +137,12 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   unidad / regla / hora / zona y propone sugerencias concretas de
   ajuste de parametros del script con un boton **Aplicar** por
   sugerencia.
+- **Chat IA** (pestana propia, `Alt+7`): asistente conversacional que
+  conoce el **manual de Rondo** y el **estado actual de la flota**.
+  Sirve para consultar datos ("que unidades estan sin senal") o
+  resolver dudas de uso ("como activo la regla de destino"). Switch
+  **Toda la flota** / solo vigiladas. Ver
+  [Chat con la IA](./MANUAL.md#chat-con-la-ia).
 - **Cache TTL + tope diario** blando (configurable, 200 por defecto)
   para no agotar la cuota del proveedor.
 - La API key se guarda en `localStorage` y solo se envia al endpoint del

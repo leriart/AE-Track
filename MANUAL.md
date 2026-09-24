@@ -108,7 +108,7 @@ deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
 La barra **recuerda como la dejaste**: el lado, el ancho y si estaba abierta o
 cerrada. Al recargar la pagina se restaura en ese estado.
 
-## Las seis pestanas
+## Las siete pestanas
 
 En la parte superior del panel:
 
@@ -141,6 +141,10 @@ En la parte superior del panel:
   cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
+- **Chat IA**: asistente conversacional. Solo aparece si la IA esta
+  habilitada con una API key en Ajustes > IA. Sirve tanto para consultar
+  el estado de la flota como para resolver dudas del propio Rondo. Ver
+  [Chat con la IA](#chat-con-la-ia).
 
 ## Vigilar unidades (lista vigilada)
 
@@ -215,6 +219,8 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | Giro en U | Toma rumbo opuesto al de la ruta | 130 grados durante 3 min |
 | Retorno / viaje cancelado | Retrocede o vuelve al origen | 25 % de retroceso o 400 m del origen |
 | Perdio senal en zona de riesgo | Transicion online -> offline y ultima posicion valida cae dentro de una zona de riesgo cargada | depende de los parametros de la zona (radio y score) |
+| Aproximacion a zona de riesgo | Una unidad en movimiento se acerca a una zona de alto score | score >= 4, buffer 500 m (apagada por defecto) |
+| Detenida en geocerca | Lleva parada dentro de una geocerca | 5 min (una sola vez por episodio) |
 
 Notas:
 
@@ -310,6 +316,86 @@ Ultima posicion en <municipio>, <estado> (score N/100). Sin reporte hace X min.
 
 Se entrega como **critica** (color rojo, sonido de alarma, TTS grave)
 y queda registrada en la pestana Avisos como cualquier otra alerta.
+
+### Alerta predictiva (aproximacion a zona de riesgo)
+
+Opcional y apagada por defecto. Cuando una unidad **en movimiento** se
+esta **acercando** a una zona de riesgo de alto score, avisa **antes**
+de que llegue o pierda senal. Se configura en Ajustes > Reglas:
+
+- **Score minimo para anticipar** (4 por defecto).
+- **Buffer de anticipacion** en metros (500 por defecto).
+- **Velocidad minima** para considerar que va en marcha (5 km/h).
+- **Cooldown** por unidad+zona.
+- **Solo de noche** con ventana horaria (22:00 a 05:00 por defecto),
+  util porque la mayoria de robos ocurren de madrugada.
+
+### Detenida en geocerca
+
+Opcional (activada por defecto). Cuando una unidad lleva **parada**
+dentro de una geocerca al menos N minutos (5 por defecto), avisa una
+sola vez por episodio con el texto:
+
+```
+DETENIDA EN GEOCERCA · <unidad>
+La unidad <eco> se encuentra detenida en la geocerca <nombre> · hace N min
+```
+
+Se rearma cuando la unidad se mueve o sale de la geocerca. Ajusta el
+minimo en Ajustes > Reglas > "Min detenido para alertar (min)".
+
+## Chat con la IA
+
+La pestana **Chat IA** es un asistente conversacional integrado. **Solo
+aparece si la IA esta habilitada y con API key** en Ajustes > IA. Si
+desactivas la IA, la pestana se oculta.
+
+### Para que sirve
+
+El chat conoce **dos cosas**:
+
+1. **El manual de Rondo**: puede explicarte como usar el sistema, que
+   hace cada pestana, como activar una regla, que significa un boton o
+   un atajo, etc.
+2. **El estado actual de la flota**: unidades (estado, zona, ultimo
+   reporte, velocidad), alertas de hoy por severidad y los ultimos
+   avisos. Se adjunta automaticamente en cada mensaje.
+
+### Ejemplos de consultas
+
+Dudas de uso:
+
+- "Como activo la regla de destino?"
+- "Que hace el boton Analizar lote?"
+- "Para que sirve la zona de riesgo y como la cargo?"
+- "Que atajos de teclado hay?"
+
+Estado de la flota:
+
+- "Que unidades estan sin senal ahora y donde fue su ultima posicion?"
+- "Que unidades estan fuera de geocerca y detenidas?"
+- "Cual es la alerta mas urgente de revisar?"
+- "Cuantas unidades estan en movimiento?"
+
+### Controles
+
+- **Toda la flota**: switch en la cabecera del chat. **Off** (por
+  defecto) = la IA ve solo las unidades que vigilas. **On** = la IA ve
+  todas las unidades que reportan en la plataforma.
+- **Limpiar**: borra la conversacion actual (pide confirmacion).
+- **Enter** envia el mensaje; **Shift + Enter** inserta un salto de
+  linea. La caja de texto crece sola hasta 140 px.
+- La conversacion se guarda **por pestaña** (sessionStorage): al cerrar
+  la pestaña se descarta. Se conservan los ultimos 50 mensajes.
+
+### Notas
+
+- El chat respeta el **limite diario de llamadas** de Ajustes > IA.
+- Cada turno envia los ultimos 20 mensajes del historial mas el contexto.
+- La IA **no inventa** datos que no esten en el contexto: si preguntas
+  por algo que no tiene (por ejemplo, el historial de un dia anterior),
+  te lo dira y te indicara que reporte o accion lo daria.
+- Atajo: **Alt + 7** abre la pestana de Chat IA (si la IA esta activa).
 
 ## Notificaciones
 
@@ -560,6 +646,7 @@ te pedirá confirmación.
 | `Alt` + `4` | Rutas |
 | `Alt` + `5` | Zonas |
 | `Alt` + `6` | Caravana |
+| `Alt` + `7` | Chat IA (si la IA esta activa) |
 | `Alt` + `P` | Mostrar u ocultar la barra lateral |
 | `Alt` + `L` | Mostrar u ocultar la barra lateral |
 | `Alt` + `H` | Plegar la barra de botones |
@@ -599,6 +686,13 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   hacer clic fuera, confirmacion al cerrar todas las ventanas, botones de la
   barra, orientacion, verificacion automatica y tamano del panel.
 - **Rutas**: servicios de OpenStreetMap, trazado y alertas de ruta.
+- **IA**: habilita la IA de razonamiento. Elige proveedor (DeepSeek,
+  NVIDIA NIM, Kimi for Coding, Moonshot, MiniMax o Personalizado), pega
+  tu API key y, opcionalmente, endpoint y modelo. Aqui tambien estan el
+  radio de POIs, el timeout, el limite diario de llamadas, el maximo de
+  avisos por analisis en lote y los botones **Probar conexion**,
+  **Detectar patrones** y **Borrar API key**. Ver
+  [Chat con la IA](#chat-con-la-ia).
 - **Avanzado**: versiones y busqueda de actualizaciones, perfiles de
   configuracion, limpiar bitacora y resets.
 

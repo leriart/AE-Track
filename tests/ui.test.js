@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.7 en @UserScript', /@version\s+5\.14\.7/.test(src));
+ok('version 5.14.8 en @UserScript', /@version\s+5\.14\.8/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -561,7 +561,7 @@ ok('CSS switch checked mueve el dot', /input:checked \+ \.rondo-chat-scope-track
 ok('chatContextoFlota respeta chatTodaFlota', /const toda = !!APP\.config\.chatTodaFlota/.test(src));
 ok('chatContextoFlota filtra por shouldWatch si no toda', /if \(toda\) return true;[\s\S]{0,120}shouldWatch\(u\)/.test(src));
 ok('chatContextoFlota devuelve alcance', /alcance: toda \? 'toda la flota' : 'solo unidades vigiladas'/.test(src));
-ok('chatContextoFlota devuelve unidadesEnAlcance', /unidadesEnAlcance: unidades\.length/.test(src));
+ok('chatContextoFlota devuelve unidadesEnAlcance', /unidadesEnAlcance: unidadesRaw\.length/.test(src));
 ok('helper chatMsgHTML existe', /function chatMsgHTML\(/.test(src));
 ok('helper chatEmptyHTML existe', /function chatEmptyHTML\(/.test(src));
 ok('helper setChatTyping existe', /function setChatTyping\(/.test(src));
@@ -579,9 +579,34 @@ ok('bindings: chatAllEl guarda en config', /APP\.config\.chatTodaFlota = !!chatA
 ok('bindings: chatAllEl persiste en LS', /chatAllEl\.addEventListener\('change'[\s\S]{0,400}writeJSON\(LS\.cfg/.test(src));
 ok('limpiarChat usa renderChatLog', /limpiarChat[\s\S]{0,300}renderChatLog\(\)/.test(src));
 
+// v5.14.8: manual como contexto de la IA + contexto de flota enriquecido.
+ok('RONDO_DOC existe como String.raw', /const RONDO_DOC = String\.raw/.test(src));
+ok('RONDO_DOC describe el panel y las tabs', /RONDO_DOC[\s\S]{0,4000}Dashboard[\s\S]{0,2000}Unidades[\s\S]{0,2000}Chat IA/.test(src));
+ok('RONDO_DOC lista reglas', /Sin senal \(5 min\)[\s\S]{0,2000}Detenida en geocerca/.test(src));
+ok('RONDO_DOC lista ajustes', /AJUSTES \(engranaje[\s\S]{0,2000}IA: habilitar/.test(src));
+ok('RONDO_DOC lista atajos', /ATAJOS: Alt\+1..6/.test(src));
+ok('CHAT_SYS inyecta RONDO_DOC', /=== MANUAL DE RONDO \(contexto de uso\) ===\n` \+ RONDO_DOC/.test(src));
+ok('CHAT_SYS menciona las dos fuentes', /Tienes DOS fuentes de informacion/.test(src));
+ok('chatContextoFlota incluye detalle por unidad', /detalle\.push\(\{[\s\S]{0,300}eco: info\.eco/.test(src));
+ok('chatContextoFlota incluye zona o null (fuera)', /zona: zona \|\| null/.test(src));
+ok('chatContextoFlota cuenta unidadesFueraDeGeocerca', /unidadesFueraDeGeocerca: detalle\.filter\(\(d\) => !d\.zona\)\.length/.test(src));
+ok('chatContextoFlota lista offlineFueraDeGeocerca', /offlineFueraDeGeocerca: offlineFuera\.slice\(0, 40\)/.test(src));
+ok('chatContextoFlota devuelve unidades[]', /unidades: detalle/.test(src));
+ok('chatContextoFlota cap de detalle a 80', /detalle\.length < 80/.test(src));
+ok('atajo Alt+7 abre chat', /'6': 'caravana', '7': 'chat'/.test(src));
+ok('Alt+7 solo si IA configurada', /tabs\[e\.key\] !== 'chat' \|\| \(APP\.config\.iaHabilitada && APP\.config\.iaApiKey\)/.test(src));
+ok('ayuda rapida menciona Chat IA', /<b>Chat IA<\/b>: consultas libres a la IA/.test(src));
+ok('ayuda rapida tiene seccion Chat con la IA', /<h4>Chat con la IA<\/h4>/.test(src));
+ok('ayuda rapida menciona Alt+7', /<kbd>Alt<\/kbd>\+<kbd>7<\/kbd>: Chat IA/.test(src));
+ok('MANUAL.md tiene seccion Chat con la IA', /## Chat con la IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+ok('MANUAL.md menciona las siete pestanas', /## Las siete pestanas/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+ok('MANUAL.md lista regla Detenida en geocerca', /Detenida en geocerca \| Lleva parada dentro de una geocerca/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+ok('MANUAL.md lista regla Aproximacion a zona de riesgo', /Aproximacion a zona de riesgo \| Una unidad en movimiento/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+ok('MANUAL.md atajo Alt+7', /Alt.*\+.*7.*Chat IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.14\.7['"]/.test(src));
-ok('@version 5.14.7 sincronizado con VER', /@version\s+5\.14\.7[\s\S]{0,50000}const VER = ['"]5\.14\.7['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.14\.8['"]/.test(src));
+ok('@version 5.14.8 sincronizado con VER', /@version\s+5\.14\.8[\s\S]{0,50000}const VER = ['"]5\.14\.8['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));

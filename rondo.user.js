@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.7
+// @version      5.14.8
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -391,7 +391,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.14.7';
+    const VER = '5.14.8';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -3261,16 +3261,61 @@ Reglas:
     // historial al proveedor con un system prompt que incluye contexto
     // actual de la flota (numero de unidades, alertas recientes, etc.)
     const CHAT_KEY = 'rondo.api.chat';
-    const CHAT_SYS = String.raw`Eres un asistente de operaciones de flotas de vehiculos en Mexico. Responde en espanol, de forma concisa y profesional. Tienes acceso a un resumen del estado actual de la flota que se adjunta en cada mensaje del usuario.
+    // v5.14.8: base de conocimiento condensada de Rondo. Se inyecta en el
+    // system prompt del chat para que la IA pueda responder dudas de uso
+    // (que hace cada pestana, como activar una regla, atajos, etc.) ademas
+    // de consultas sobre el estado de la flota.
+    const RONDO_DOC = String.raw`RONDO — GUIA DE USO (resumen del manual)
+Rondo es un userscript (Tampermonkey/Violentmonkey) que corre sobre AE-Track o Wialon Hosting. Anade vigilancia de flota: evalua reglas, notifica (voz, pitido, toasts, notificacion del navegador) y muestra un panel lateral con tabs. No envia datos a servidores propios; usa la API nativa de la plataforma y servicios publicos de OpenStreetMap.
+
+PANEL (barra lateral a pantalla completa, lado y ancho configurables):
+- Dashboard: salud de la flota, KPIs (en linea, sin senal, detenidas, en movimiento, en zonas, avisos hoy), unidades que requieren atencion, zonas con unidades, rutas activas, avisos recientes. Las tarjetas KPI son clicables y filtran.
+- Unidades: tarjetas por unidad con estado, placa, velocidad, ultimo reporte, zona y ruta. Clic para abrir su ventana; clic derecho para mas opciones (planear ruta, geocerca, odometro, limite de velocidad, silenciar). Barra "Ordenar".
+- Avisos: historial de alertas filtrable por severidad (criticas/altas/medias/bajas). Boton IA por aviso, boton "Analizar lote" (resumen + ranking) y "Avisos CSV".
+- Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad.
+- Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:).
+- Caravana: unidades cerca de una unidad lider (distancia firmada, sentido contrario, no vigiladas).
+- Chat IA: consultas libres a la IA (solo si la IA esta habilitada con API key). La IA ve el estado de la flota.
+- Riesgo: se ve dentro de Zonas (segmentado).
+
+REGLAS DE ALERTA (se activan y ajustan en Ajustes > Reglas):
+Sin senal (5 min), Reconecto, GPS perdido en marcha (15 min), Detenido (30 min, fuera de bases), Zona no prevista (20 min), Geocercas (entra/sale, inmediato), Destino (progreso >=95% o <400 m), Desconexion (25 min), Velocidad (110 km/h), Desvio de ruta (250 m durante 5 min), Giro en U (130 grados durante 3 min), Retorno/viaje cancelado (25% o 400 m), Perdio senal en zona de riesgo (critico), Aproximacion a zona de riesgo (predictiva, opcional), Detenida en geocerca (opcional).
+Cooldown por unidad+regla (45 min por defecto). Se puede limitar a un horario. Las zonas tipo base (patio, cedis, taller) no generan "detenido".
+
+AJUSTES (engranaje del panel):
+- General: refresco (ms), umbral sin senal, cooldown, monitorear todas, abrir al caer, cargar geocercas, geocodificacion, historico.
+- Reglas: umbrales + activacion de cada regla, zonas de riesgo (URL/formato/score/radio) y alerta predictiva.
+- Avisos: voz (Web/StreamElements/Google), idioma y voz, pitido y volumen, notificacion del navegador, duracion de toasts, severidad minima, horario, editor de la lista vigilada.
+- Visual: tema (oscuro/claro/auto), densidad, tamano de interfaz, color de acento, coordenadas, contornos.
+- Ventanas: lado y ancho de la barra, ocultar al clic fuera, confirmacion al cerrar, botones de la barra.
+- Rutas: OSRM/Overpass, trazado automatico, alertas de ruta.
+- IA: habilitar, proveedor (DeepSeek, NVIDIA NIM, Kimi for Coding, Moonshot, MiniMax, Personalizado), API key, endpoint/modelo opcionales, temperatura, max tokens, radio de POIs, timeout, limite diario, max avisos por lote, botones Probar conexion, Detectar patrones y Borrar API key.
+- Avanzado: buscar actualizaciones, perfiles de configuracion, exportar/importar config, probar avisos, limpiar historial, resets.
+
+ATAJOS: Alt+1..6 cambia de tab (Dashboard..Caravana), Alt+P y Alt+L muestran/ocultan el panel, Alt+H pliega la barra, Esc cierra dialogos.
+
+IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres.
+
+POPULAR: los avisos criticos abren la ventana de la unidad (si esta activado). Las ventanas de unidad se resaltan con un contorno del color de la severidad. El odometro y el limite de velocidad se editan con clic derecho sobre la unidad.`;
+
+    const CHAT_SYS = String.raw`Eres el asistente integrado de Rondo, un sistema de vigilancia de flotas de vehiculos en Mexico. Respondes en espanol, de forma concisa y profesional.
+
+Tienes DOS fuentes de informacion:
+1) El MANUAL DE RONDO (abajo): usalo para explicar como funciona el sistema, que hace cada pestana, como activar reglas, atajos, configuracion, etc. Si te preguntan "como hago X" o "que hace Y", responde con el manual.
+2) El CONTEXTO DE LA FLOTA que se adjunta en cada mensaje del usuario (JSON): usalo para datos concretos y actuales (unidades, estados, alertas, zonas).
 
 Reglas:
 - Se breve: 2-5 lineas salvo que pidan detalle.
-- Si te piden datos concretos (velocidad, posicion, alertas), usa SOLO lo que esta en el contexto adjunto. Si no esta, di que no tienes ese dato.
-- NO inventes numeros de telefono, direcciones exactas, kilometrajes ni coordenadas.
-- Si te preguntan algo fuera de tu alcance, dilo honestamente.
-- Para preguntas operativas (recomendaciones, priorizacion), razona con el contexto que tienes.
+- Para datos concretos (velocidad, posicion, cuantas unidades, alertas del dia) usa SOLO el contexto adjunto. Si el dato no esta, dilo y explica que reporte o accion lo daria.
+- Para dudas de uso, apóyate en el manual y da pasos concretos (ruta de menu incluida).
+- NO inventes numeros, telefonos, direcciones exactas, coordenadas ni kilometrajes.
+- Si no estas seguro, dilo honestamente.
+- Para recomendaciones operativas, razona con el contexto.
 - Usa listas o pasos solo cuando aporten claridad.
-- Espanol Mexico, sin emojis.`;
+- Espanol Mexico, sin emojis.
+
+=== MANUAL DE RONDO (contexto de uso) ===
+` + RONDO_DOC;
 
     // Estado del chat: lista de mensajes (cargada de sessionStorage al inicio).
     let CHAT = { mensajes: [], cargando: false };
@@ -3306,32 +3351,62 @@ Reglas:
             const toda = !!APP.config.chatTodaFlota;
             // v5.14.7: si "Toda la flota" esta activo, contamos todas las
             // unidades que reportan; si no, solo las vigiladas (shouldWatch).
-            const unidades = (APP.unidades || []).filter((u) => {
+            const unidadesRaw = (APP.unidades || []).filter((u) => {
                 if (toda) return true;
                 try { return shouldWatch(u); } catch (_) { return false; }
             });
             const hoy = (APP.historial || []).filter((a) => a.ts >= ini.getTime());
             // Si "Toda la flota", limitamos las alertas a las unidades del
             // conjunto elegido para que el contexto sea coherente.
-            const ecos = new Set(unidades.map((u) => { try { return parseUnitName(u).eco; } catch (_) { return ''; } }));
+            const ecos = new Set(unidadesRaw.map((u) => { try { return parseUnitName(u).eco; } catch (_) { return ''; } }));
             const hoyFiltrado = toda ? hoy : hoy.filter((a) => !a.eco || ecos.has(a.eco));
             const porSev = {};
             hoyFiltrado.forEach((a) => { porSev[a.sev] = (porSev[a.sev] || 0) + 1; });
-            const enLinea = unidades.filter((u) => { try { return !!unitState(u).online; } catch (_) { return false; } }).length;
+            // v5.14.8: detalle por unidad para que la IA pueda responder
+            // preguntas especificas (p.ej. "que unidades fuera de geocerca
+            // estan sin senal?"). Cap a 80 para no inflar tokens.
+            const detalle = [];
+            const offlineFuera = [];
+            for (const u of unidadesRaw) {
+                let info, st;
+                try { info = parseUnitName(u); st = unitState(u); } catch (_) { continue; }
+                const zona = (() => { try { return st.lat != null ? zoneAt(st.lat, st.lon) : ''; } catch (_) { return ''; } })();
+                const online = !!st.online;
+                const edad = isFinite(st.edadMin) ? Math.round(st.edadMin) : null;
+                if (!online && !zona) offlineFuera.push(info.eco || info.clave || String(info.id));
+                if (detalle.length < 80) {
+                    detalle.push({
+                        eco: info.eco || info.clave || String(info.id),
+                        placa: info.placa || '',
+                        estado: online ? 'online' : 'offline',
+                        zona: zona || null,           // null = fuera de toda geocerca
+                        edadMin: edad,
+                        vel: isFinite(st.vel) ? Math.round(st.vel) : 0
+                    });
+                }
+            }
+            // El conteo total se hace sobre todas las unidades (no solo las
+            // 80 del detalle) para que no mienta en flotas grandes.
+            let enLinea = 0;
+            for (const u of unidadesRaw) {
+                try { if (unitState(u).online) enLinea++; } catch (_) { /* noop */ }
+            }
             const ultimos = (APP.historial || []).filter((a) => toda || !a.eco || ecos.has(a.eco))
-                .slice(0, 5).map((a) => ({
+                .slice(0, 8).map((a) => ({
                     ts: new Date(a.ts).toISOString().slice(11, 16),
                     sev: a.sev, regla: a.regla, eco: a.eco, titulo: a.titulo
                 }));
             return {
                 alcance: toda ? 'toda la flota' : 'solo unidades vigiladas',
                 fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
-                unidadesEnAlcance: unidades.length,
-                unidadesVigiladas: unidades.length,
-                enLinea, sinSenal: unidades.length - enLinea,
+                unidadesEnAlcance: unidadesRaw.length,
+                enLinea, sinSenal: unidadesRaw.length - enLinea,
+                unidadesFueraDeGeocerca: detalle.filter((d) => !d.zona).length,
+                offlineFueraDeGeocerca: offlineFuera.slice(0, 40),
                 alertasHoy: hoyFiltrado.length,
                 porSeveridad: porSev,
-                ultimosAvisos: ultimos
+                ultimosAvisos: ultimos,
+                unidades: detalle
             };
         } catch (_) { return { fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; }
     }
@@ -7676,9 +7751,20 @@ ta.value = '';
             '<li><b>Rutas</b>: progreso de cada ruta trazada (OSRM o A*) con ETA. Se planea desde el clic derecho de una unidad.</li>' +
             '<li><b>Zonas</b>: segmentado con dos vistas: <b>Geocercas</b> de la plataforma (unidades dentro) y <b>Zonas de riesgo</b> (dona, histograma, KPIs, filtros, export). Las alertas por zonas de riesgo se ven como la regla <i>riesgoSinSenal</i>.</li>' +
             '<li><b>Caravana</b>: unidades (vigiladas o no) cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada.</li>' +
+            '<li><b>Chat IA</b>: consultas libres a la IA (solo si la IA esta habilitada con API key). Pregunta por el estado de la flota ("que unidades estan sin senal", "cual es la alerta mas urgente") o por el uso del propio Rondo ("como activo la regla de destino"). Tiene un selector <b>Toda la flota</b> / solo vigiladas y un boton <b>Limpiar</b>.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +
             '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes > Rutas.</p>' +
+            '<h4>Chat con la IA</h4>' +
+            '<p>La pestana <b>Chat IA</b> (arriba) es un asistente conversacional. Conoce el <b>manual de Rondo</b> y el <b>estado actual de la flota</b>, asi que puedes preguntarle tanto datos como dudas de uso. Ejemplos:</p>' +
+            '<ul>' +
+            '<li>"Que unidades estan sin senal ahora y donde fue su ultima posicion?"</li>' +
+            '<li>"Que unidades estan fuera de geocerca y detenidas?"</li>' +
+            '<li>"Cual es la alerta mas urgente de revisar?"</li>' +
+            '<li>"Como activo la regla de destino?" / "Para que sirve la zona de riesgo?"</li>' +
+            '<li>"Que hace el boton Analizar lote?"</li>' +
+            '</ul>' +
+            '<p>El selector <b>Toda la flota</b> decide si la IA ve todas las unidades o solo las vigiladas. El contexto incluye: unidades (estado, zona, ultimo reporte, velocidad), alertas de hoy por severidad y los ultimos avisos. Requiere la IA habilitada con API key en Ajustes > IA.</p>' +
             '<h4>Voz y notificaciones</h4>' +
             '<p>En <i>Ajustes > Avisos</i> puedes:</p>' +
             '<ul>' +
@@ -7691,6 +7777,7 @@ ta.value = '';
             '<h4>Atajos de teclado</h4>' +
             '<ul>' +
             '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>6</kbd>: cambiar de pestana (Dashboard, Unidades, Avisos, Rutas, Zonas, Caravana).</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>7</kbd>: Chat IA (si la IA esta activa).</li>' +
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar la barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>L</kbd>: mostrar u ocultar la barra lateral (atajo alternativo).</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
@@ -9629,8 +9716,9 @@ ta.value = '';
     function bindKeys() {
         document.addEventListener('keydown', (e) => {
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana' };
-                if (tabs[e.key]) {
+                // v5.14.8: Alt+7 = Chat IA (solo si la IA esta configurada).
+                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana', '7': 'chat' };
+                if (tabs[e.key] && (tabs[e.key] !== 'chat' || (APP.config.iaHabilitada && APP.config.iaApiKey))) {
                     setTab(tabs[e.key]);
                     if (APP.panelHidden) togglePanel();
                     e.preventDefault();
