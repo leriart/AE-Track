@@ -165,6 +165,39 @@ ok('dash usa rondo-dash-block', src.indexOf('rondo-dash-block') >= 0);
 ok('dash sin kpi-grid viejo', src.indexOf('class="kpi-grid"') < 0);
 ok('dash sin sparkline visible en HTML', src.indexOf('id="rondo-spark"') < 0);
 
+// Sin tarjeta de actualizaciones en el Dashboard (se quito).
+ok('dash sin tarjeta de update', src.indexOf('rondo-upd-card') < 0);
+ok('dash sin boton de update', src.indexOf('rondo-upd-btn') < 0);
+
+// Anti-solapamiento en la pestana Zonas: los hijos no deben encogerse.
+ok('zonas hijos flex-shrink:0', /#rondo-wrap-zonas > \*\{flex-shrink:0/.test(src));
+ok('dash hijos flex-shrink:0', /#rondo-dash > \*\{flex-shrink:0/.test(src));
+ok('filtros de riesgo sin sticky', src.indexOf('.rondo-riesgo-filters{position:sticky') < 0);
+ok('hero de riesgo sin animacion', !/\.rondo-riesgo-hero\{[^}]*animation:/.test(src));
+ok('seccion sin animacion (anti-parpadeo)', !/\.rondo-seccion\{[^}]*animation: rondoFadeUp/.test(src));
+
+// Los simbolos UIS deben estar solo en bloques seguros:
+// ASCII, Latin-1, bullet, flechas (U+2190-21FF), geometricos (U+25A0-25FF).
+(function () {
+    const m = src.match(/const UIS = Object\.freeze\(\{([\s\S]*?)\n    \}\);/);
+    ok('UIS localizado', !!m);
+    if (!m) return;
+    const codepoints = [];
+    const re = /'\\u([0-9A-Fa-f]{4})'/g;
+    let mm;
+    while ((mm = re.exec(m[1]))) codepoints.push(parseInt(mm[1], 16));
+    // Bloques seguros: ASCII, Latin-1, bullet, flechas, matematicos y
+    // geometricos. Fuera de aqui (Misc Symbols, Technical, Dingbats...) el
+    // glyph puede faltar y el navegador muestra basura (p.ej. una "G").
+    const inseguros = codepoints.filter((c) => !(
+        (c >= 0x20 && c <= 0x7E) || (c >= 0xA0 && c <= 0xFF) ||
+        c === 0x2022 || (c >= 0x2190 && c <= 0x21FF) ||
+        (c >= 0x2200 && c <= 0x22FF) || (c >= 0x25A0 && c <= 0x25FF)
+    ));
+    ok('UIS solo usa bloques seguros', inseguros.length === 0,
+        inseguros.map((c) => 'U+' + c.toString(16)).join(','));
+})();
+
 // Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
 ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);
 ok('riesgo tiene container de drop', src.indexOf('id="rondo-riesgo-drop"') >= 0);

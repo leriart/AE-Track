@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.8.0
+// @version      5.8.1
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -127,45 +127,51 @@
      * otros lugares donde queremos que el icono renderice aunque la fuente
      * no este disponible. Todos son caracteres estandar que cualquier
      * fuente sans-serif moderna sabe dibujar. */
+    /* Simbolos Unicode para iconos en texto plano. IMPORTANTE: se usan solo
+     * caracteres de los bloques "Geometric Shapes" (U+25A0-U+25FF) y "Arrows"
+     * (U+2190-U+21FF), presentes en practicamente toda fuente sans-serif.
+     * Evitamos bloques como Misc Symbols (⚙ ⚠ ⚑ ⓘ) o Technical (⎘ ⤓ ⌫) porque
+     * muchas fuentes no los traen y el navegador cae a una fuente rara que
+     * muestra glifos incorrectos (p.ej. una "G" en vez del icono). */
     const UIS = Object.freeze({
-        dashboard: '\u25A6',   // ▦ cuadricula (resumen)
-        panel:     '\u25A4',   // ▤ lista
+        dashboard: '\u25A4',   // ▤ resumen (lista)
+        panel:     '\u25A4',   // ▤
         online:    '\u25CF',   // ● en linea
         offline:   '\u25CB',   // ○ sin senal
         moving:    '\u25B6',   // ▶ en movimiento
         stopped:   '\u25A0',   // ■ detenida
-        zone:      '\u25A2',   // ▢ zona / geocerca
+        zone:      '\u25A1',   // □ zona / geocerca
         map:       '\u25A3',   // ▣ zonas ocupadas
-        riesgo:    '\u26A0',   // ⚠ zona de riesgo
-        alertas:   '\u2691',   // ⚑ avisos
-        info:      '\u24D8',   // ⓘ informacion
-        warn:      '\u26A0',   // ⚠ advertencia
-        ok:        '\u2713',   // ✓ correcto
-        error:     '\u2716',   // ✖ error
-        refresh:   '\u27F3',   // ⟳ recargar
-        load:      '\u231B',   // ⌛ cargando
-        clear:     '\u232B',   // ⌫ limpiar
-        gear:      '\u2699',   // ⚙ ajustes
+        riesgo:    '\u25B2',   // ▲ zona de riesgo / alerta
+        alertas:   '\u25B2',   // ▲ avisos
+        info:      '\u25CF',   // ● informacion
+        warn:      '\u25B2',   // ▲ advertencia
+        ok:        '\u221A',   // √ correcto
+        error:     '\u00D7',   // × error
+        refresh:   '\u21BB',   // ↻ recargar
+        load:      '\u25CC',   // ◌ cargando (gira)
+        clear:     '\u00D7',   // × limpiar
+        gear:      '\u25A4',   // ▤ ajustes
         filter:    '\u25BD',   // ▽ filtrar
-        search:    '\u2315',   // ⌕ buscar
-        drop:      '\u21A7',   // ↧ soltar archivo
-        csv:       '\u2913',   // ⤓ descargar
-        export:    '\u2912',   // ⤒ exportar
-        copy:      '\u2398',   // ⎘ copiar
-        expand:    '\u229E',   // ⊞ expandir
-        collapse:  '\u229F',   // ⊟ colapsar
+        search:    '\u25CB',   // ○ buscar
+        drop:      '\u2193',   // ↓ soltar archivo
+        csv:       '\u2193',   // ↓ descargar
+        export:    '\u2191',   // ↑ exportar
+        copy:      '\u25A4',   // ▤ copiar
+        expand:    '\u25B2',   // ▲ expandir
+        collapse:  '\u25BC',   // ▼ colapsar
         down:      '\u25BE',   // ▾ abajo
         up:        '\u25B4',   // ▴ arriba
         smallDown: '\u25BE',   // ▾
         smallRight:'\u25B8',   // ▸
         bullet:    '\u2022',   // • punto
-        pin:       '\u25CE',   // ◎ ubicacion
-        route:     '\u27A4',   // ➤ ruta
-        clock:     '\u25F4',   // ◴ tiempo
+        pin:       '\u25C9',   // ◉ ubicacion
+        route:     '\u2192',   // → ruta
+        clock:     '\u25CB',   // ○ tiempo
         speed:     '\u25B6',   // ▶ velocidad
-        trash:     '\u2716',   // ✖ borrar
-        check:     '\u2713',   // ✓
-        x:         '\u2715',   // ✕
+        trash:     '\u00D7',   // × borrar
+        check:     '\u221A',   // √
+        x:         '\u00D7',   // ×
         right:     '\u2192',   // →
         left:      '\u2190'    // ←
     });
@@ -192,7 +198,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.8.0';
+    const VER = '5.8.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -4014,15 +4020,6 @@
             "#rondo-dash .kpi .kpi-etq{padding-right:18px}\n" +
             "#rondo-dash .rondo-atencion-item:hover{background:var(--rondo-bg-strong)}\n" +
             /* Tarjeta de actualizaciones del Dashboard */
-            "#rondo-dash .rondo-upd{display:flex;align-items:center;gap:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:7px 9px}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-ico{font-size:16px;color:var(--rondo-accent-2);flex-shrink:0;width:18px;text-align:center}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-ico.ok{color:var(--rondo-ok-fg)}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-ico.warn{color:var(--rondo-warn-fg)}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-ico.load{color:var(--rondo-accent-2)}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-txt b{font-size:11.5px;color:var(--rondo-fg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-txt span{font-size:10.5px;color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
-            "#rondo-dash .rondo-upd .rondo-upd-btn-ok{background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;border-color:transparent}\n" +
             "#rondo-panel .tabla{padding:8px 4px}\n" +
             "#rondo-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
             "#rondo-panel .rondo-caravana-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
@@ -4042,10 +4039,14 @@
             "#rondo-panel .rondo-cv-card.contrario{border-color:rgba(var(--rondo-crit-rgb),.6)}\n" +
             "#rondo-panel .rondo-cv-empty{padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
             /* ── Pestaña Riesgo ───────────────────────────────────── */
-            "#rondo-panel #rondo-wrap-zonas{padding:8px;display:flex;flex-direction:column;gap:9px;overflow:auto;flex:1}\n" +
+            "#rondo-panel #rondo-wrap-zonas{padding:8px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:0}\n" +
+            /* Los hijos NO deben encogerse: si no, el contenido se desborda
+             * sobre la seccion siguiente (solapamiento). */
+            "#rondo-panel #rondo-wrap-zonas > *{flex-shrink:0;min-width:0}\n" +
+            "#rondo-dash > *{flex-shrink:0;min-width:0}\n" +
             /* Hero: header grande con titulo, KPIs y distribution bar */
-            "#rondo-panel .rondo-riesgo-hero{background:linear-gradient(135deg,var(--rondo-bg-soft),var(--rondo-bg));border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius);padding:10px 12px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
-            "#rondo-panel .rondo-riesgo-hero::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--rondo-bad),var(--rondo-warn),var(--rondo-fg-mute))}\n" +
+            "#rondo-panel .rondo-riesgo-hero{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:3px solid var(--rondo-accent-2);border-radius:var(--rondo-radius-sm);padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:relative}\n" +
+            "#rondo-panel .rondo-riesgo-hero::before{content:none}\n" +
             "#rondo-panel .rondo-riesgo-hero-head{display:flex;align-items:center;gap:9px}\n" +
             "#rondo-panel .rondo-riesgo-hero-head .rondo-mi{font-size:22px;color:var(--rondo-accent-2)}\n" +
             "#rondo-panel .rondo-riesgo-hero-head .ht{font:700 13.5px var(--rondo-font);color:var(--rondo-fg);letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
@@ -4072,7 +4073,7 @@
             "#rondo-panel .rondo-riesgo-dist-legend i.medio{background:var(--rondo-warn)}\n" +
             "#rondo-panel .rondo-riesgo-dist-legend i.bajo{background:var(--rondo-fg-mute)}\n" +
             /* Seccion generica (config, filtros, lista) */
-            "#rondo-panel .rondo-seccion{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:9px 11px;display:flex;flex-direction:column;gap:8px;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
+            "#rondo-panel .rondo-seccion{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:9px 11px;display:flex;flex-direction:column;gap:8px}\n" +
             "#rondo-panel .rondo-seccion h4{margin:0;font-size:11px;color:var(--rondo-accent-2);text-transform:uppercase;letter-spacing:.6px;display:flex;align-items:center;gap:6px;font-weight:700}\n" +
             "#rondo-panel .rondo-seccion h4 .rondo-mi{font-size:14px;color:var(--rondo-accent-2);line-height:1}\n" +
             "#rondo-panel .rondo-seccion h4 .rondo-count{margin-left:auto;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:2px 8px;border-radius:9px;font:700 10px/1 var(--rondo-font);letter-spacing:.2px}\n" +
@@ -4186,8 +4187,7 @@
             /* Footer de la lista */
             "#rondo-panel .rondo-riesgo-foot{font-size:10.5px;color:var(--rondo-fg-mute);padding:6px 4px 0;text-align:right;border-top:1px dashed var(--rondo-border-soft);margin-top:4px;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap}\n" +
             "#rondo-panel .rondo-riesgo-foot b{color:var(--rondo-fg-dim);font-weight:600}\n" +
-            /* ── Hero expandido: dona SVG + histograma + KPIs clickeables ── */
-            "#rondo-panel .rondo-riesgo-hero{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:11px 12px}\n" +
+            /* ── Hero: dona SVG + KPIs clickeables ── */
             "#rondo-panel .rondo-riesgo-dona{position:relative;width:74px;height:74px;flex-shrink:0;cursor:default;transition:transform .2s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-riesgo-dona:hover{transform:scale(1.04)}\n" +
             "#rondo-panel .rondo-riesgo-dona svg{width:100%;height:100%;transform:rotate(-90deg);overflow:visible}\n" +
@@ -4199,7 +4199,7 @@
             "#rondo-panel .rondo-riesgo-dona-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}\n" +
             "#rondo-panel .rondo-riesgo-dona-center .dona-val{font:700 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
             "#rondo-panel .rondo-riesgo-dona-center .dona-etq{font:600 9px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.5px;margin-top:2px}\n" +
-            "#rondo-panel .rondo-riesgo-hero-side{display:flex;flex-direction:column;gap:7px;min-width:0}\n" +
+            "#rondo-panel .rondo-riesgo-hero-side{display:flex;flex-direction:column;gap:7px;min-width:0;flex:1}\n" +
             "#rondo-panel .rondo-riesgo-hero-side .ht{font:700 13.5px var(--rondo-font);color:var(--rondo-fg);letter-spacing:.2px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .rondo-riesgo-hero-side .hs{font:600 11px var(--rondo-font);color:var(--rondo-fg-dim);display:flex;gap:4px;align-items:center}\n" +
             /* KPI clickeable */
@@ -4229,7 +4229,7 @@
             /* Slider de score min. */
             /* Toggle: anade icono */
             /* Sticky filters */
-            "#rondo-panel .rondo-riesgo-filters{position:sticky;top:0;z-index:3;background:var(--rondo-bg-soft);padding-top:2px;margin-top:-2px}\n" +
+            "#rondo-panel .rondo-riesgo-filters{display:grid;grid-template-columns:1fr;gap:6px}\n" +
             "#rondo-panel .rondo-riesgo-filters-row{grid-template-columns:1fr auto auto auto auto auto}\n" +
             "#rondo-panel .rondo-riesgo-filters-row > .search-wrap{position:relative;display:flex;align-items:center}\n" +
             "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > .rondo-mi{position:absolute;left:7px;color:var(--rondo-fg-mute);font-size:14px;pointer-events:none}\n" +
@@ -4320,7 +4320,9 @@
             "#rondo-panel table.zone th:first-child,#rondo-panel table.zone td:first-child{width:42%}\n" +
             "#rondo-panel table.zone td{padding:5px 8px;white-space:normal;word-break:break-word;vertical-align:top;font-size:11.5px}\n" +
             "#rondo-panel .rondo-geo-tools{display:flex;gap:5px;flex-wrap:wrap}\n" +
-            "#rondo-panel .rondo-geo-list{max-height:220px;overflow:auto;border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);background:var(--rondo-bg)}\n" +
+            "#rondo-panel .rondo-geo-list{max-height:240px;overflow:auto;border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);background:var(--rondo-bg)}\n" +
+            "#rondo-panel .rondo-geo-list .rondo-vacio{padding:16px 12px}\n" +
+            "#rondo-panel .rondo-geo-list .rondo-vacio .rondo-mi{font-size:26px}\n" +
             "#rondo-panel table.zone tr.fila td:first-child{color:var(--rondo-accent-2);font-weight:600}\n" +
             "#rondo-panel .zone .contador-unidades{color:var(--rondo-ok-fg);font-weight:600}\n" +
             "#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);padding:14px;\n" +
@@ -4736,14 +4738,6 @@
             '<span class="rondo-usym md">' + UIS.dashboard + '</span> ' +
             '<b>Resumen de la flota</b>' +
             '<span class="rondo-dash-vel" id="rondo-dash-vel"></span>' +
-            '</div>' +
-            '<div class="rondo-upd" id="rondo-upd-card">' +
-            '<span class="rondo-usym rondo-upd-ico" id="rondo-upd-ico">' + UIS.refresh + '</span>' +
-            '<div class="rondo-upd-txt">' +
-            '<b id="rondo-upd-titulo">Version ' + VER + '</b>' +
-            '<span id="rondo-upd-sub">Comprobando actualizaciones\u2026</span>' +
-            '</div>' +
-            '<button class="mini" id="rondo-upd-btn" title="Buscar actualizaciones"><span class="rondo-usym">' + UIS.refresh + '</span> Buscar</button>' +
             '</div>' +
             '<div class="rondo-dash-kpis">' +
             '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.online + '</span><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
@@ -5630,7 +5624,6 @@
                 )).join('')
                 : '<div class="rondo-dash-empty">' + LANG.recientesNone + '</div>');
         }
-        pintarUpdCard();
         // paintSparkline ya no se usa (sparkline oculto). Mantengo la funcion vacia
         // por compatibilidad si alguien la llama desde otro lugar.
         paintSparkline();
@@ -6540,64 +6533,6 @@
             }
         }
         pintarInfoUpdate();
-        pintarUpdCard();
-    }
-    // Tarjeta de actualizaciones del Dashboard. Muestra el estado y un boton
-    // que, cuando hay version nueva, lleva al raw de GitHub para que el gestor
-    // de userscripts muestre el dialogo de instalacion.
-    function pintarUpdCard() {
-        const card = byId('rondo-upd-card');
-        if (!card) return;
-        const u = APP.update;
-        const ico = byId('rondo-upd-ico');
-        const tit = byId('rondo-upd-titulo');
-        const sub = byId('rondo-upd-sub');
-        const btn = byId('rondo-upd-btn');
-        const setIco = (sym, cls) => {
-            if (!ico) return;
-            ico.textContent = sym;
-            ico.className = 'rondo-usym rondo-upd-ico' + (cls ? ' ' + cls : '') + (sym === UIS.load ? ' rondo-usym-spin' : '');
-        };
-        const canal = (u.canal === 'dev') ? ' (dev)' : '';
-        if (u.state === 'checking') {
-            setIco(UIS.load, 'load');
-            if (tit) tit.textContent = 'Version ' + VER;
-            if (sub) sub.textContent = 'Comprobando actualizaciones\u2026';
-            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="rondo-usym">' + UIS.load + '</span> Comprobando'; }
-        } else if (u.state === 'available') {
-            setIco(UIS.export, 'ok');
-            if (tit) tit.textContent = 'Actualizacion disponible: ' + (u.remote || '') + canal;
-            if (sub) sub.textContent = 'Instalada ' + VER + ' \u00b7 pulsa Actualizar para instalar desde GitHub';
-            if (btn) { btn.disabled = false; btn.classList.add('rondo-upd-btn-ok'); btn.innerHTML = '<span class="rondo-usym">' + UIS.export + '</span> Actualizar'; }
-        } else if (u.state === 'installed') {
-            setIco(UIS.check, 'ok');
-            if (tit) tit.textContent = 'Actualizacion instalada' + canal;
-            if (sub) sub.textContent = 'Recarga para aplicar la version nueva';
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Recargar'; }
-        } else if (u.state === 'current') {
-            setIco(UIS.check, 'ok');
-            if (tit) tit.textContent = 'Al dia \u00b7 ' + VER;
-            if (sub) sub.textContent = u.lastCheck ? ('Ultima comprobacion ' + new Date(u.lastCheck).toLocaleTimeString().slice(0, 5)) : 'Sin cambios';
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar'; }
-        } else if (u.state === 'error') {
-            setIco(UIS.warn, 'warn');
-            if (tit) tit.textContent = 'No se pudo comprobar';
-            if (sub) sub.textContent = (u.lastError || 'sin conexion') + ' \u00b7 pulsa Reintentar';
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Reintentar'; }
-        } else {
-            setIco(UIS.refresh, '');
-            if (tit) tit.textContent = 'Version ' + VER;
-            if (sub) sub.textContent = 'Comprueba si hay una version nueva';
-            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar'; }
-        }
-        if (btn) btn.classList.toggle('rondo-upd-btn-ok', u.state === 'available' || u.state === 'installed');
-    }
-    // Accion del boton de la tarjeta de actualizaciones.
-    function updCardClick() {
-        const u = APP.update;
-        if (u.state === 'available') aplicarActualizacion();
-        else if (u.state === 'installed') recargarUnaVez();
-        else comprobarActualizacion();
     }
     function pintarInfoUpdate() {
         const el = byId('rondo-update-info');
@@ -7129,8 +7064,6 @@
         });
         byId('rondo-actualizar').addEventListener('click', aplicarActualizacion);
         updateBtn.addEventListener('click', aplicarActualizacion);
-        const updBtn = byId('rondo-upd-btn');
-        if (updBtn) updBtn.addEventListener('click', updCardClick);
         byId('rondo-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
         byId('rondo-test-btn').addEventListener('click', testNotify);
         byId('rondo-exportar-btn').addEventListener('click', exportConfig);
