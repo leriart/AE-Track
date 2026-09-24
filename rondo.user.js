@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.6
+// @version      5.12.7
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -22,6 +22,8 @@
 // @connect      api.moonshot.ai
 // @connect      api.minimax.io
 // @connect      overpass-api.de
+// @connect      api.streamelements.com
+// @connect      translate.google.com
 // @connect      *
 // ==/UserScript==
 
@@ -287,7 +289,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.6';
+    const VER = '5.12.7';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -1840,6 +1842,7 @@
     // (StreamElements, gratis y con CORS) y 'google' (Google Translate TTS
     // via <audio>). Los dos ultimos necesitan internet.
     let _ttsAudioEl = null;
+    let _ttsBufSrc = null;
     let _ttsSeq = [];
     let _ttsLastErr = '';
     let _ttsWatchdog = null;
@@ -1858,38 +1861,121 @@
     function _ttsDetener() {
         _ttsSeq = [];
         if (_ttsWatchdog) { clearTimeout(_ttsWatchdog); _ttsWatchdog = null; }
+        if (_ttsBufSrc) { try { _ttsBufSrc.stop(); } catch (_) { /* noop */ } _ttsBufSrc = null; }
         if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch (_) { /* noop */ } _ttsAudioEl = null; }
         try { if (PAGE.speechSynthesis) PAGE.speechSynthesis.cancel(); } catch (_) { /* noop */ }
     }
-    function _ttsPlay(url) {
-        _ttsDetener();
-        const A = pageCtor('Audio');
-        if (!A) { _ttsLastErr = 'sin Audio'; return false; }
-        try {
-            const a = new A(url);
-            a.volume = _ttsVolumen();
-            _ttsAudioEl = a;
-            const p = a.play();
-            if (p && p.catch) p.catch((e) => { _ttsLastErr = 'play: ' + (e && e.message || e); });
-            return true;
-        } catch (e) { _ttsLastErr = 'Audio: ' + (e && e.message || e); return false; }
+    // Trae los bytes de una URL de audio por GM_xmlhttpRequest (salta CORS y
+    // la CSP de la pagina, que suele bloquear media-src/connect-src externo).
+    // Devuelve Promise<ArrayBuffer|null>, o null si no hay GM disponible.
+    function _ttsBytesViaGM(url) {
+        const gm = gmXhr();
+        if (!gm) return null;
+        return new Promise((resolve) => {
+            let hecho = false;
+            const fin = (v) => { if (!hecho) { hecho = true; resolve(v); } };
+            try {
+                gm({
+                    method: 'GET', url: url, responseType: 'arraybuffer', timeout: 15000,
+                    onload: (r) => {
+                        if (r.status >= 200 && r.status < 300 && r.response) fin(r.response);
+                        else { _ttsLastErr = 'TTS HTTP ' + r.status; fin(null); }
+                    },
+                    onerror: () => { _ttsLastErr = 'TTS fallo de red'; fin(null); },
+                    ontimeout: () => { _ttsLastErr = 'TTS timeout'; fin(null); }
+                });
+            } catch (e) { _ttsLastErr = 'TTS: ' + (e && e.message || e); fin(null); }
+        });
     }
+    // Reproduce un <audio> desde una URL (blob o remota). Devuelve true si
+    // pudo lanzar el play().
+    function _ttsPlayUrl(src, onEnd, onError) {
+        const A = pageCtor('Audio');
+        if (!A) { _ttsLastErr = 'sin Audio'; if (onError) onError(); return false; }
+        let a;
+        try { a = new A(src); } catch (e) { _ttsLastErr = 'Audio: ' + (e && e.message || e); if (onError) onError(); return false; }
+        a.volume = _ttsVolumen();
+        _ttsAudioEl = a;
+        if (onEnd) a.onended = onEnd;
+        a.onerror = () => {
+            const me = a.error;
+            _ttsLastErr = me ? ('media ' + me.code) : 'error de audio';
+            if (onError) onError();
+        };
+        const p = a.play();
+        if (p && p.catch) p.catch((e) => { _ttsLastErr = 'play: ' + (e && e.message || e); if (onError) onError(); });
+        return true;
+    }
+    // Reproduce bytes descargados. Primero Web Audio (decodeAudioData): no le
+    // afecta la CSP ni el media-src. Si no se puede, cae a <audio> con blob.
+    function _ttsPlayBytes(bytes, mime, onEnd, onError) {
+        const ctx = audioCtx();
+        if (ctx) {
+            try {
+                if (ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (_) { /* noop */ } }
+                const data = bytes && bytes.slice ? bytes.slice(0) : bytes;
+                const done = (buf) => {
+                    try {
+                        const src = ctx.createBufferSource();
+                        src.buffer = buf;
+                        const g = ctx.createGain();
+                        g.gain.value = _ttsVolumen();
+                        src.connect(g); g.connect(ctx.destination);
+                        _ttsBufSrc = src;
+                        if (onEnd) src.onended = onEnd;
+                        src.start(0);
+                    } catch (e) { _ttsLastErr = 'buffer: ' + (e && e.message || e); if (onError) onError(); }
+                };
+                const fail = () => { _ttsLastErr = 'decode: audio no decodable'; _ttsPlayBlob(bytes, mime, onEnd, onError); };
+                const p = ctx.decodeAudioData(data);
+                if (p && p.then) p.then(done).catch(fail);
+                else ctx.decodeAudioData(data, done, fail);
+                return true;
+            } catch (e) { _ttsLastErr = 'decode: ' + (e && e.message || e); }
+        }
+        return _ttsPlayBlob(bytes, mime, onEnd, onError);
+    }
+    function _ttsPlayBlob(bytes, mime, onEnd, onError) {
+        const B = pageCtor('Blob');
+        const U = PAGE.URL || (typeof URL !== 'undefined' ? URL : null);
+        if (!B || !U) { if (onError) onError(); return false; }
+        let url;
+        try { url = U.createObjectURL(new B([bytes], { type: mime || 'audio/mpeg' })); }
+        catch (e) { _ttsLastErr = 'blob: ' + (e && e.message || e); if (onError) onError(); return false; }
+        return _ttsPlayUrl(url, onEnd, onError);
+    }
+    // Reproduce una URL remota: baja bytes por GM y los reproduce; si no hay
+    // GM, intenta el <audio> directo.
+    function _ttsPlay(url, onEnd, onError) {
+        _ttsDetener();
+        _ttsSeq = [];
+        const prom = _ttsBytesViaGM(url);
+        if (prom) {
+            prom.then((bytes) => {
+                if (bytes) _ttsPlayBytes(bytes, 'audio/mpeg', onEnd, onError);
+                else { if (!_ttsPlayUrl(url, onEnd, onError) && onError) onError(); }
+            });
+            return true;
+        }
+        return _ttsPlayUrl(url, onEnd, onError);
+    }
+    // Encadena varios audios (Google Translate parte el texto).
     function _ttsPlaySeq(urls) {
         _ttsDetener();
-        const A = pageCtor('Audio');
-        if (!A) { _ttsLastErr = 'sin Audio'; return false; }
         _ttsSeq = urls.slice();
         const next = () => {
             if (!_ttsSeq.length) return;
             const url = _ttsSeq.shift();
-            let a;
-            try { a = new A(url); } catch (e) { _ttsLastErr = 'Audio: ' + (e && e.message || e); return; }
-            a.volume = _ttsVolumen();
-            _ttsAudioEl = a;
-            a.onended = next;
-            a.onerror = next;
-            const p = a.play();
-            if (p && p.catch) p.catch(() => { setTimeout(next, 10); });
+            const avanzar = () => setTimeout(next, 10);
+            const prom = _ttsBytesViaGM(url);
+            if (prom) {
+                prom.then((bytes) => {
+                    if (bytes) _ttsPlayBytes(bytes, 'audio/mpeg', avanzar, avanzar);
+                    else _ttsPlayUrl(url, avanzar, avanzar);
+                });
+            } else {
+                _ttsPlayUrl(url, avanzar, avanzar);
+            }
         };
         next();
         return true;
@@ -1963,7 +2049,7 @@
         } catch (e) { _ttsLastErr = 'speak: ' + (e && e.message || e); return false; }
     }
     // StreamElements (Polly). Endpoint publico, gratis, con CORS.
-    function speakOnline(text) {
+    function speakOnline(text, sinFallback) {
         try {
             // Solo voces en espanol: si la guardada no es una de las validas
             // (p. ej. config antigua con una voz inglesa), usamos Mia.
@@ -1971,7 +2057,10 @@
             const voz = TTS_ONLINE_VOCES.some((v) => v.v === pedida) ? pedida : 'Mia';
             const url = 'https://api.streamelements.com/kappa/v2/speech?voice='
                 + encodeURIComponent(voz) + '&text=' + encodeURIComponent(text);
-            return _ttsPlay(url);
+            return _ttsPlay(url, null, () => {
+                // Ultimo recurso: Google Translate TTS.
+                if (!sinFallback && APP.config.vozMotor !== 'google') speakGoogle(text);
+            });
         } catch (e) { _ttsLastErr = 'online: ' + (e && e.message || e); return false; }
     }
     // Google Translate TTS. Se reproduce via <audio> (no requiere CORS).
