@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.1
+// @version      5.14.2
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -391,7 +391,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.14.1';
+    const VER = '5.14.2';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -2628,55 +2628,42 @@ Reglas:
 - NO inventes unidades que no aparezcan en el JSON. Si no sabes un detalle, no lo menciones.`;
 
     // v5.14: prompt para DETECCION DE PATRONES en la bitacora historica.
-    // Pide un JSON con dos listas: patrones recurrentes observados y
-    // sugerencias concretas de ajuste de umbrales.
-    const IA_SYSTEM_PATRONES = String.raw`Eres un analista senior de flotas de vehiculos en Mexico. Recibes la bitacora historica de alertas de Rondo (ultimas 50-300 alertas, con timestamp ISO, severidad, regla disparada, eco de la unidad, titulo y detalle) y debes identificar PATRONES RECURRENTES y proponer AJUSTES CONCRETOS a los umbrales del sistema.
+// v5.14.2: prompt recortado ~50% (lo que mas ocupa: la lista de
+// parametros). El modelo solo necesita los NOMBRES, no las descripciones
+// largas de cada uno (los defaults vienen en el JSON de contexto).
+const IA_SYSTEM_PATRONES = String.raw`Eres analista senior de flotas en Mexico. Recibes la bitacora de alertas de Rondo (JSON con timestamp ISO, severidad, regla, eco, titulo, detalle) y debes identificar PATRONES RECURRENTES y proponer AJUSTES CONCRETOS de parametros.
 
-PARAMETROS QUE RONDO PERMITE AJUSTAR (los unicos que puedes sugerir):
-- "pollMs" (numero, ms entre refrescos, default 10000, rango 2000-60000)
-- "offlineMin" (minutos sin reporte para alertar, default 5, rango 1-120)
-- "gpsMin" (minutos sin GPS para alertar, default 15, rango 1-120)
-- "stopMin" (minutos detenido para alertar, default 30, rango 1-240)
-- "zonaMin" (minutos en zona no prevista para alertar, default 20, rango 1-120)
-- "descoMin" (minutos desconexion para alertar, default 25, rango 1-120)
-- "velMax" (km/h limite velocidad, default 110, rango 10-200)
-- "cooldownMin" (minutos entre avisos repetidos, default 45, rango 1-240)
-- "desvioM" (metros de desvio de ruta para alertar, default 250, rango 30-2000)
-- "desvioMin" (minutos sostenidos de desvio, default 5, rango 1-30)
-- "retornoM" (metros para detectar retorno al origen, default 400, rango 50-2000)
-- "retornoPct" (% de viaje recorrido para retorno, default 25, rango 5-90)
-- "giroGrados" (angulo minimo para giro en U, default 130, rango 90-180)
-- "giroMin" (minutos sostenidos de giro, default 3, rango 1-30)
-- "demoraBaseMin" (minutos detenido en CEDIS para alertar, default 30, rango 5-240)
-- "paradaMin" (minutos minimos para considerar una parada en el viaje, default 15, rango 1-120)
-- "partidaHoras" (horas-parada para identificar punto de partida, default 6, rango 1-24)
+PARAMETROS AJUSTABLES (usar exactamente estos nombres):
+pollMs, offlineMin, gpsMin, stopMin, zonaMin, descoMin, velMax, cooldownMin,
+desvioM, desvioMin, retornoM, retornoPct, giroGrados, giroMin, demoraBaseMin,
+paradaMin, partidaHoras.
 
-Reglas del JSON (sin markdown, sin prosa):
+Devuelve SOLO este JSON (sin markdown, sin prosa):
 {
   "patrones": [
     {
       "tipo": "unidad" | "regla" | "hora" | "zona" | "regla_unidad",
-      "descripcion": "frase explicando el patron observado, ej 'La unidad 4381 acumula 8 de 12 avisos de tipo sinSenal entre 02:00 y 04:00'",
-      "evidencia": ["clave1", "clave2", "..."] // 1-5 claves reales del JSON
+      "descripcion": "frase explicando el patron observado",
+      "evidencia": ["clave1", "clave2"]
     }
   ],
   "sugerencias": [
     {
-      "parametro": "nombre exacto del parametro de la lista de arriba",
-      "valor_actual": numero // valor que Rondo usa actualmente (puedes estimarlo si no lo sabes)
+      "parametro": "nombre exacto de la lista",
+      "valor_actual": numero,
       "valor_sugerido": numero,
-      "motivo": "una frase en espanol justificando el cambio con base en los patrones observados"
+      "motivo": "frase justificando el cambio"
     }
   ]
 }
 
-Reglas de oro:
-- Solo sugiere ajustes cuando haya evidencia clara (>=3 ocurrencias del patron).
-- Si los parametros actuales ya parecen razonables, devuelve "sugerencias": [].
-- NO sugieras activar/desactivar reglas (eso se hace manualmente).
-- NO inventes claves: solo referencia "clave" y "ts" del JSON de entrada.
-- Si hay muy pocos datos (menos de 10 alertas), devuelve "patrones": [] y "sugerencias": [].
-- Todo en espanol, sin emojis, JSON estricto.`;
+Reglas:
+- Solo sugiere si hay >=3 ocurrencias claras.
+- Si los parametros parecen razonables, devuelve sugerencias vacio.
+- NO sugieras activar/desactivar reglas.
+- NO inventes claves; usa solo las del JSON.
+- Si hay <10 alertas, devuelve ambos arrays vacios.
+- Espanol, sin emojis, JSON estricto.`;
 
     // Junta el contexto para una alerta: eco, placa, estado, ultima posicion,
     // geocerca actual, POIs cercanos por Overpass y ultimas alertas.
@@ -2932,13 +2919,18 @@ Reglas de oro:
     // ultimas N alertas al proveedor con un prompt que pide identificar
     // patrones (por unidad, regla, hora, zona, combinaciones) y proponer
     // sugerencias concretas de ajuste de umbrales del script.
+    //
+    // v5.14.2: limite de muestra bajado de max(50, iaBatchMax*4)/200 a
+    // max(15, iaBatchMax*2)/80 para no exceder el context window de
+    // modelos como DeepSeek-chat (8K). detalle truncado a 80 chars (era
+    // 160). Esto elimina la mayoria de los 400 "context length exceeded".
     async function aiPatrones(historial) {
         if (!APP.config.iaHabilitada) return { error: 'IA deshabilitada' };
         if (!APP.config.iaApiKey) return { error: 'Falta API key' };
         const lista = Array.isArray(historial) ? historial : (APP.historial || []);
         if (lista.length < 10) return { error: 'Se necesitan al menos 10 avisos en el historial para buscar patrones.' };
-        // Limite duro para no inflar tokens: max(iaBatchMax*4, 50) <= 200.
-        const max = clamp(Math.round(Math.max(50, (+APP.config.iaBatchMax || 25) * 4)), 50, 200);
+        // v5.14.2: limite conservador para no reventar el context window.
+        const max = clamp(Math.round(Math.max(15, (+APP.config.iaBatchMax || 25) * 2)), 15, 80);
         const muestra = lista.slice(0, max);
         const cacheKey = 'patrones:' + muestra.length + ':' + (muestra[0] ? muestra[0].ts : 0) + ':' +
             (muestra[muestra.length - 1] ? muestra[muestra.length - 1].ts : 0);
@@ -2951,30 +2943,58 @@ Reglas de oro:
             regla: a.regla,
             eco: a.eco || '',
             titulo: a.titulo,
-            detalle: (a.detalle || '').slice(0, 160)
+            detalle: (a.detalle || '').slice(0, 80)
         }));
-        // Parametros actuales que Rondo usa, para que la IA los compare.
+        // v5.14.2: solo mandamos defaults (no descripciones largas) para
+        // que la IA sepa los valores actuales; los rangos validos los
+        // tiene en el system prompt.
         const cf = APP.config || {};
-        const parametrosActuales = {
-            pollMs: cf.pollMs, offlineMin: cf.offlineMin, gpsMin: cf.gpsMin,
-            stopMin: cf.stopMin, zonaMin: cf.zonaMin, descoMin: cf.descoMin,
-            velMax: cf.velMax, cooldownMin: cf.cooldownMin,
-            desvioM: cf.desvioM, desvioMin: cf.desvioMin,
-            retornoM: cf.retornoM, retornoPct: cf.retornoPct,
-            giroGrados: cf.giroGrados, giroMin: cf.giroMin,
-            demoraBaseMin: cf.demoraBaseMin,
-            paradaMin: cf.paradaMin, partidaHoras: cf.partidaHoras
-        };
+        const defaults = DEFAULTS || {};
+        const params = ['pollMs', 'offlineMin', 'gpsMin', 'stopMin', 'zonaMin', 'descoMin',
+            'velMax', 'cooldownMin', 'desvioM', 'desvioMin', 'retornoM', 'retornoPct',
+            'giroGrados', 'giroMin', 'demoraBaseMin', 'paradaMin', 'partidaHoras'];
+        const parametrosActuales = {};
+        for (const k of params) parametrosActuales[k] = cf[k] != null ? cf[k] : defaults[k];
         const ctx = {
             total: muestra.length,
-            ventana: { desde: compact[compact.length - 1].ts, hasta: compact[0].ts },
-            unidadesVigiladas: APP.unidades.filter(shouldWatch).length,
+            ventana: compact.length > 1 ? { desde: compact[compact.length - 1].ts, hasta: compact[0].ts } : null,
+            unidadesVigiladas: (APP.unidades || []).filter((u) => { try { return shouldWatch(u); } catch (_) { return false; } }).length,
             parametrosActuales,
             alertas: compact
         };
         const r = await aiLlamarProveedorPrompt(IA_SYSTEM_PATRONES, ctx);
+        // v5.14.2: si el proveedor devolvio JSON malformado pero contiene
+        // texto util, intentamos extraer las listas basicas por regex.
+        if (r && r.error && /JSON parseable/i.test(String(r.error))) {
+            const reparado = extraerPatronesDeTexto(r.raw);
+            if (reparado) {
+                r.reparadoDeTexto = true;
+                return { patrones: reparado.patrones || [], sugerencias: reparado.sugerencias || [] };
+            }
+        }
         if (r && !r.error) iaCacheSet(cacheKey, r);
         return r;
+    }
+    // v5.14.2: fallback regex cuando el proveedor devuelve texto libre
+    // en vez de JSON estricto. Busca "parametro": "X", "valor_sugerido": Y.
+    function extraerPatronesDeTexto(texto) {
+        if (!texto || typeof texto !== 'string') return null;
+        // Sugerencias: "parametro" + "valor_sugerido" en el mismo bloque.
+        const sugRegex = /"parametro"\s*:\s*"([a-zA-Z]+)"[\s\S]{0,200}?"valor_sugerido"\s*:\s*([0-9.]+)/g;
+        const sugerencias = [];
+        let m;
+        while ((m = sugRegex.exec(texto)) !== null) {
+            sugerencias.push({ parametro: m[1], valor_sugerido: parseFloat(m[2]), motivo: '(extraido de texto libre)' });
+        }
+        // Patrones: cualquier bloque "descripcion" con texto de mas de 20 chars.
+        const patRegex = /"descripcion"\s*:\s*"([^"]{20,200})"/g;
+        const patrones = [];
+        while ((m = patRegex.exec(texto)) !== null) {
+            patrones.push({ tipo: 'observado', descripcion: m[1], evidencia: [] });
+            if (patrones.length >= 10) break;
+        }
+        if (!sugerencias.length && !patrones.length) return null;
+        return { patrones, sugerencias };
     }
 
     // v5.14: aplica una sugerencia puntual al config (con confirmacion).
@@ -3282,14 +3302,50 @@ Reglas de oro:
         setBusy(btn, true);
         try {
             const r = await aiPatrones(APP.historial || []);
+            // Por si aiPatrones reventara con un error no controlado
+            // (p.ej. la IA devuelve un JSON valido pero con campos
+            // inesperados que rompen aiPatronesUI), mostramos el error
+            // en un dialogo en lugar de un toast.
             paintIAUso();
+            // v5.14.2: en vez de un toast generico, abrimos un dialogo
+            // con el error completo y pistas. Asi el operador sabe si
+            // es un 400 (context length), 401 (key mala), 429 (rate
+            // limit) o un parseo de JSON fallido.
             if (r.error) {
-                adviceErr('Patrones IA', r.error);
+                const errTxt = String(r.error);
+                let pista = '';
+                if (/context length|too long|max tokens/i.test(errTxt)) {
+                    pista = 'El prompt + alertas exceden el limite del modelo. Prueba con un modelo mas grande (ej. moonshot/kimi-k2.6, nvidia/llama-3.1-70b) o baja "Max avisos por analisis en lote" en Ajustes > IA.';
+                } else if (/401|403/.test(errTxt)) {
+                    pista = 'La API key no corresponde a este proveedor/modelo. Cambia de proveedor en Ajustes > IA o corrige la key.';
+                } else if (/429/.test(errTxt)) {
+                    pista = 'Limite de uso del proveedor alcanzado. Espera o cambia a otro proveedor.';
+                } else if (/400/.test(errTxt)) {
+                    pista = 'El modelo rechazo un parametro (temperatura/max_tokens/modelo).';
+                } else if (/JSON|no-JSON|parseable/i.test(errTxt)) {
+                    pista = 'La IA devolvio texto que no se pudo parsear como JSON. Esto es un problema del modelo, no de Rondo. Reintentar suele funcionar.';
+                } else if (/timeout|red/i.test(errTxt)) {
+                    pista = 'Timeout o fallo de red. Verifica tu conexion y reintenta.';
+                }
+                abrirDialogo({
+                    titulo: 'Error al detectar patrones',
+                    html: '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
+                        '<div style="margin:0 0 8px"><b>Detalle:</b> ' + esc(errTxt) + '</div>' +
+                        (pista ? '<div style="margin:0 0 8px;color:var(--rondo-fg-dim)"><b>Sugerencia:</b> ' + esc(pista) + '</div>' : '') +
+                        (r.raw ? '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--rondo-fg-dim)">Respuesta cruda del modelo</summary>' +
+                            '<pre style="font-size:11px;background:var(--rondo-bg-soft);padding:8px;border-radius:4px;overflow:auto;max-height:200px;margin:6px 0 0;white-space:pre-wrap">' + esc(String(r.raw).slice(0, 1500)) + '</pre></details>' : '') +
+                        '</div>',
+                    cancelText: 'Cerrar',
+                    okText: 'Cerrar',
+                    onOk: () => {},
+                    ancho: 560
+                });
                 return;
             }
             const patrones = Array.isArray(r.patrones) ? r.patrones : [];
             const sugerencias = Array.isArray(r.sugerencias) ? r.sugerencias : [];
             const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+            const reparadoDeTexto = !!r.reparadoDeTexto;
             if (!patrones.length && !sugerencias.length) {
                 abrirDialogo({
                     titulo: 'Patrones en la bitacora',
@@ -3331,7 +3387,8 @@ Reglas de oro:
             // Guardamos las sugerencias en el dataset del dialogo para
             // que el handler de aplicar las recupere por indice.
             abrirDialogo({
-                titulo: 'Patrones en la bitacora · ' + patrones.length + ' patrones, ' + sugerencias.length + ' sugerencias',
+                titulo: 'Patrones en la bitacora · ' + patrones.length + ' patrones, ' + sugerencias.length + ' sugerencias' +
+                    (reparadoDeTexto ? ' · (recuperado de texto)' : ''),
                 html: html,
                 cancelText: 'Cerrar',
                 okText: 'Cerrar',
@@ -3355,6 +3412,24 @@ Reglas de oro:
                         });
                     });
                 }
+            });
+        } catch (e) {
+            // v5.14.2: si algo reventaba aqui (p.ej. la IA devolvio un
+            // JSON con campos inesperados que rompen un .map), antes el
+            // boton se quedaba en estado busy para siempre y el operador
+            // veia solo un toast rojo generico. Ahora abrimos un dialogo
+            // con el stack trace para diagnosticar.
+            try { console.error('[Rondo] aiPatronesUI:', e); } catch (_) { /* noop */ }
+            abrirDialogo({
+                titulo: 'Error interno al detectar patrones',
+                html: '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
+                    '<div style="margin:0 0 6px"><b>Mensaje:</b> ' + esc((e && e.message) || String(e)) + '</div>' +
+                    '<pre style="font-size:10.5px;background:var(--rondo-bg-soft);padding:8px;border-radius:4px;overflow:auto;max-height:200px;margin:6px 0 0;white-space:pre-wrap">' +
+                    esc((e && e.stack) || '(sin stack)') + '</pre></div>',
+                cancelText: 'Cerrar',
+                okText: 'Cerrar',
+                onOk: () => {},
+                ancho: 560
             });
         } finally {
             setBusy(btn, false);
@@ -5711,17 +5786,20 @@ Reglas de oro:
             "#rondo-rail.izquierda{left:0;border-radius:0 17px 17px 0;padding-left:2px}\n" +
             "@keyframes rondoRailIn{from{opacity:0;transform:translateY(-50%) scale(.8)}to{opacity:1;transform:translateY(-50%) scale(1)}}\n" +
             "#rondo-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--rondo-bg-strong),var(--rondo-bg-soft));cursor:move;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
-            "#rondo-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px}\n" +
-            // v5.14.1: chip de version (mini-badge con la version actual).
-            "#rondo-panel .rondo-version-chip{display:inline-flex;align-items:center;justify-content:center;height:24px;padding:0 8px;font:700 11px var(--rondo-font);border-radius:11px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg-dim);cursor:pointer;transition:all .15s var(--rondo-easing);min-width:auto;width:auto;gap:0}\n" +
-            "#rondo-panel .rondo-version-chip[data-estado=\"current\"]{color:var(--rondo-ok-fg,#2e7d32);border-color:rgba(46,125,50,.4);background:rgba(46,125,50,.08)}\n" +
-            "#rondo-panel .rondo-version-chip[data-estado=\"available\"]{color:var(--rondo-bad-fg,#b71c1c);border-color:rgba(183,28,28,.4);background:rgba(183,28,28,.1);animation:rondo-ver-pulse 1.6s ease-in-out infinite}\n" +
-            "#rondo-panel .rondo-version-chip[data-estado=\"ahead\"]{color:var(--rondo-fg-dim);border-color:var(--rondo-border)}\n" +
-            "#rondo-panel .rondo-version-chip[data-estado=\"checking\"]{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.4);background:rgba(var(--rondo-accent-rgb),.06)}\n" +
-            "#rondo-panel .rondo-version-chip[data-estado=\"unknown\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.4);background:rgba(249,168,37,.1)}\n" +
-            "#rondo-panel .rondo-version-chip[data-estado=\"error\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.4);background:rgba(249,168,37,.1)}\n" +
-            "#rondo-panel .rondo-version-chip:hover{transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
-            "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.4)}50%{box-shadow:0 0 0 6px rgba(183,28,28,0)}}\n" +
+            "#rondo-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}\n" +
+            // v5.14.2: chip de version en linea con el titulo. v5.14.1 lo
+            // puso como boton aparte al final de la cabecera; el usuario
+            // prefierio tenerlo pegado al 'Rondo'. Sigue siendo boton
+            // (clickable) pero vive dentro del h3, con estilo mas discreto.
+            "#rondo-panel #rondo-version-chip{display:inline-flex;align-items:center;height:18px;padding:0 7px;font:700 10.5px var(--rondo-font);border-radius:9px;border:1px solid var(--rondo-border);background:var(--rondo-bg-soft);color:var(--rondo-fg-dim);cursor:pointer;transition:all .15s var(--rondo-easing);margin-left:2px;vertical-align:middle;line-height:1}\n" +
+            "#rondo-panel #rondo-version-chip:hover{transform:translateY(-1px);box-shadow:var(--rondo-shadow);border-color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"current\"]{color:var(--rondo-ok-fg,#2e7d32);border-color:rgba(46,125,50,.45);background:rgba(46,125,50,.1)}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"available\"]{color:var(--rondo-bad-fg,#b71c1c);border-color:rgba(183,28,28,.5);background:rgba(183,28,28,.12);animation:rondo-ver-pulse 1.6s ease-in-out infinite}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"ahead\"]{color:var(--rondo-fg-dim);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"checking\"]{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.5);background:rgba(var(--rondo-accent-rgb),.08)}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"unknown\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"error\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
+            "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.45)}50%{box-shadow:0 0 0 5px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
             "#rondo-panel .rondo-iconbtn:hover{background:var(--rondo-bg);border-color:var(--rondo-border);color:var(--rondo-fg);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
@@ -6554,13 +6632,14 @@ Reglas de oro:
             '</div>' +
 '<header id="rondo-drag">' +
              '<span id="rondo-estado-barra" class="rondo-badge-estado"></span>' +
-             '<h3>' + esc(LANG.titlePanel) + '</h3>' +
-             // v5.14.1: chip de version siempre visible en la cabecera.
-             // Cambia de color segun el estado del check (verde=al dia,
-             // ambar=desconocido, rojo=update disponible, azul=comprobando).
-             // Click -> fuerza una comprobacion.
-             '<button type="button" class="rondo-iconbtn rondo-version-chip" id="rondo-version-chip" title="Version instalada" data-estado="idle">' +
+             '<h3>' + esc(LANG.titlePanel) +
+             // v5.14.2: chip de version en linea con el titulo. Color por
+             // estado del check (verde=al dia, rojo=update, ambar=unknown,
+             // azul=checking, gris=ahead). Click = fuerza check;
+             // doble click = abre Ajustes > Avanzado.
+             ' <button type="button" id="rondo-version-chip" data-estado="idle" title="Version instalada">' +
              '<span class="rondo-version-label">v' + esc(VER) + '</span></button>' +
+             '</h3>' +
              '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-usym md">' + UIS.refresh + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-tema" title="Tema"><span class="rondo-usym md">' + UIS.theme + '</span></button>' +
             // Indicador/toggle de IA en la cabecera, junto al tema. Muestra

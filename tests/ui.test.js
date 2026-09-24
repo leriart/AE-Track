@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.1 en @UserScript', /@version\s+5\.14\.1/.test(src));
+ok('version 5.14.2 en @UserScript', /@version\s+5\.14\.2/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -439,18 +439,38 @@ ok('funcion aiPatrones existe', /async function aiPatrones\(/.test(src));
 ok('funcion aiPatronesUI existe', /async function aiPatronesUI\(/.test(src));
 ok('funcion aplicarSugerenciaIA existe', /function aplicarSugerenciaIA\(/.test(src));
 ok('boton Detectar patrones en pestana IA', /id="c-ia-patrones"/.test(src));
-ok('prompt de patrones lista parametros ajustables', /"pollMs"[\s\S]{0,80}"offlineMin"[\s\S]{0,80}"gpsMin"/.test(src));
+ok('prompt de patrones lista parametros ajustables (v5.14.2: sin comillas)', /\bpollMs\b[\s\S]{0,200}\bofflineMin\b[\s\S]{0,200}\bgpsMin\b/.test(src));
 ok('prompt de patrones exige JSON con patrones y sugerencias', /"patrones":[\s\S]{0,200}"sugerencias":/.test(src));
 ok('aiPatrones valida minimo 10 avisos', /lista\.length < 10[\s\S]{0,80}Se necesitan al menos 10 avisos/.test(src));
-ok('aiPatrones envia parametrosActuales al prompt', /parametrosActuales[\s\S]{0,200}pollMs/.test(src));
+ok('aiPatrones envia parametrosActuales al prompt', /\bpollMs\b[\s\S]{0,400}parametrosActuales/.test(src));
 ok('aplicarSugerenciaIA valida parametro conocido', /if \(!['"]\(s && s\.parametro['"]\)/.test(src) || /if \(!s \|\| !s\.parametro\) return;/.test(src));
 ok('aiPatronesUI engancha handler por sugerencia', /rondo-ia-aplicar[\s\S]{0,2000}aplicarSugerenciaIA/.test(src));
 ok('abrirDialogo soporta onOpen', /if \(typeof opts\.onOpen === 'function'\)[\s\S]{0,200}opts\.onOpen\(el\)/.test(src));
 ok('save handler no requiere cambios para patrones', !/c-ia-patrones[\s\S]{0,300}cf\.ia/.test(src));
 
+// v5.14.2: detectar patrones robusto.
+ok('IA_SYSTEM_PATRONES recortado (sin descripcion de rangos por parametro)', /pollMs[\s\S]{0,500}partidaHoras[\s\S]{0,200}Devuelve SOLO/.test(src));
+ok('aiPatrones limite de muestra a 80 max', /Math\.max\(15, \(\+APP\.config\.iaBatchMax \|\| 25\) \* 2\)\), 15, 80/.test(src));
+ok('aiPatrones detalle truncado a 80 chars', /a\.detalle \|\| ''\)\.slice\(0, 80\)/.test(src));
+ok('aiPatrones parametrosActuales desde DEFAULTS', /DEFAULTS \|\| {}/.test(src) && /params = \['pollMs'/.test(src));
+ok('aiPatrones valida shouldWatch con try/catch', /try \{ return shouldWatch\(u\); \} catch \(_\) \{ return false; \}/.test(src));
+ok('extraerPatronesDeTexto fallback existe', /function extraerPatronesDeTexto\(texto\)/.test(src));
+ok('extraerPatronesDeTexto usa regex para sugerencias', /sugRegex[\s\S]{0,300}valor_sugerido/.test(src));
+ok('extraerPatronesDeTexto usa regex para patrones', /patRegex[\s\S]{0,300}descripcion/.test(src));
+ok('aiPatrones llama fallback si JSON parseable', /reparado[\s\S]{0,400}extraerPatronesDeTexto/.test(src));
+ok('extraerPatronesDeTexto marca reparadoDeTexto', /r\.reparadoDeTexto = true/.test(src));
+ok('aiPatronesUI muestra error en dialog con pista', /parse/.test(src) || /400/.test(src));
+ok('aiPatronesUI dialog distingue 401/429/400/timeout', /401\|403/.test(src) && /429/.test(src) && /400/.test(src));
+ok('aiPatronesUI muestra respuesta cruda del modelo en details', /details[\s\S]{0,500}Respuesta cruda/.test(src));
+ok('aiPatronesUI try/catch con dialog de error interno', /\} catch \(e\) \{[\s\S]{0,1500}Error interno al detectar patrones/.test(src));
+ok('aiPatronesUI limpia setBusy en finally', /\} finally \{[\s\S]{0,100}setBusy\(btn, false\)/.test(src));
+ok('chip de version dentro del h3', /<h3>[^<]+<button type="button" id="rondo-version-chip"/.test(src));
+ok('chip CSS mas compacto (18px height)', /height:18px/.test(src));
+ok('chip CSS no es .rondo-iconbtn (estilo inline)', !/#rondo-panel\s+\.rondo-iconbtn[\s\S]{0,400}#rondo-version-chip/.test(src));
+
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.14\.1['"]/.test(src));
-ok('@version 5.14.1 sincronizado con VER', /@version\s+5\.14\.1[\s\S]{0,50000}const VER = ['"]5\.14\.1['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.14\.2['"]/.test(src));
+ok('@version 5.14.2 sincronizado con VER', /@version\s+5\.14\.2[\s\S]{0,50000}const VER = ['"]5\.14\.2['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
@@ -506,7 +526,7 @@ ok('regla predictiva usa cooldowns por unidad+zona', /info\.clave \+ '::riesgoPr
 ok('evaluateUnit llama reglaRiesgoPredict', /await reglaRiesgoSinSenal\(st, prev, R, info, etq\)[\s\S]{0,80}await reglaRiesgoPredict\(st, prev, R, info, etq\)/.test(src));
 ok('regla predictiva filtra por velocidad minima', /riesgoPredictVelMin \|\| 5/.test(src) && /st\.vel < velMin/.test(src));
 ok('regla predictiva exige distancia previa mayor', /distPrev > candidata\.dist \+ 5/.test(src));
-ok('prompt patrones lista parametros con cooldownMin/giroGrados', /"cooldownMin"[\s\S]{0,1000}"giroGrados"/.test(src));
+ok('prompt patrones lista parametros con cooldownMin/giroGrados (sin comillas)', /\bcooldownMin\b[\s\S]{0,500}\bgiroGrados\b/.test(src));
 
 // Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
 ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);
