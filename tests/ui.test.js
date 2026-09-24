@@ -224,6 +224,10 @@ ok('SVG con class rondo-na', src.indexOf("class=\"rondo-na\"") >= 0);
 // Ya no se usan los simbolos Unicode crudos del set anterior.
 ok('sin UIS Unicode crudo', !/const UIS = Object\.freeze\(\{/.test(src));
 ok('CSS de .rondo-na', src.indexOf('.rondo-na{width:1em') >= 0);
+// Los iconos SVG nunca deben asignarse con textContent (se verian como texto).
+ok('sin SVG en textContent', !/\.textContent\s*=\s*[^;]*UIS\./.test(src));
+ok('sin SVG en .textContent con ternario', !/\.textContent\s*=\s*\([^;]*UIS\./.test(src));
+ok('sin iconos en detalle de alertas', !/detalle:\s*UIS\./.test(src));
 
 // Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
 ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);

@@ -3008,13 +3008,13 @@
             pushAlert({
                 regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
                 titulo: 'ENTRO · ' + etq,
-                detalle: UIS.drop + ' ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
+                detalle: 'entro a ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
             });
         } else if (prev.zona) {
             pushAlert({
                 regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
                 titulo: 'SALIO · ' + etq,
-                detalle: UIS.export + ' ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
+                detalle: 'salio de ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
             });
         }
     }
@@ -3941,7 +3941,7 @@
         if (theme === 'claro') document.body.setAttribute('data-rondo-theme', 'claro');
         else document.body.removeAttribute('data-rondo-theme');
         const ti = document.querySelector('#rondo-tema .rondo-usym');
-        if (ti) ti.textContent = (theme === 'claro') ? UIS.theme : UIS.theme;
+        if (ti) ti.innerHTML = (theme === 'claro') ? UIS.theme : UIS.theme;
         const btnTema = byId('rondo-tema');
         if (btnTema) btnTema.title = 'Tema: ' + theme;
         if (c.acento) {
@@ -5520,7 +5520,7 @@
         if (lado === 'izquierda') { panelEl.style.left = '0px'; panelEl.style.right = 'auto'; }
         else { panelEl.style.left = 'auto'; panelEl.style.right = '0px'; }
         const colIcon = document.querySelector('#rondo-collapse .rondo-usym');
-        if (colIcon) colIcon.textContent = UIS.collapse;
+        if (colIcon) colIcon.innerHTML = UIS.collapse;
         const colBtn = byId('rondo-collapse');
         if (colBtn) colBtn.title = APP.panelHidden ? 'Mostrar barra lateral' : 'Ocultar barra lateral';
         panelEl.style.display = 'flex';
@@ -5544,7 +5544,7 @@
         panelEl.style.display = 'flex';
         aplicarModoPanel();
         const icon = document.querySelector('#rondo-btn-panel .rondo-usym');
-        if (icon) icon.textContent = APP.panelHidden ? UIS.panel : UIS.close;
+        if (icon) icon.innerHTML = APP.panelHidden ? UIS.panel : UIS.close;
         const t = byId('rondo-btn-panel');
         if (t) t.title = APP.panelHidden ? 'Mostrar la barra lateral (Alt+P)' : 'Ocultar la barra lateral (Alt+P)';
         if (APP.panelHidden) advice('Panel', 'oculto · usa el boton de la barra o el rail para mostrarlo');
@@ -6019,7 +6019,7 @@
         const dir = byId('rondo-uni-dir');
         if (dir) {
             const icon = dir.querySelector('.rondo-usym');
-            if (icon) icon.textContent = APP.sortDir === 'desc' ? UIS.down : UIS.up;
+            if (icon) icon.innerHTML = APP.sortDir === 'desc' ? UIS.down : UIS.up;
             dir.title = APP.sortDir === 'desc' ? 'Orden descendente (clic para ascendente)' : 'Orden ascendente (clic para descendente)';
         }
     }
@@ -6113,7 +6113,7 @@
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
             aviso.style.display = noHaySel ? 'block' : 'none';
         }
-        byId('rondo-upd').textContent = UIS.clock + ' ' + new Date().toLocaleTimeString();
+        byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
         actualizarCabecerasOrden();
         paintInfo();
     }
@@ -6747,7 +6747,7 @@
         if (APP.tab === 'caravana') paintCaravana();
         // Riesgo NO se repinta cada segundo para evitar parpadeo: solo se
         // re-pinta cuando cambian los datos, los filtros o se carga el dataset.
-        byId('rondo-upd').textContent = UIS.clock + ' ' + new Date().toLocaleTimeString();
+        byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
         paintStateBadge();
         paintInfo();
@@ -6863,20 +6863,20 @@
                 b.style.display = '';
                 b.classList.add('activo');
                 const icon = b.querySelector('.rondo-usym');
-                if (icon) icon.textContent = UIS.refresh;
+                if (icon) icon.innerHTML = UIS.refresh;
                 b.title = 'Actualizar a la version ' + u.remote + ' (instalada ' + u.local + ')';
             } else if (u.state === 'installed') {
                 b.style.display = '';
                 b.classList.add('activo');
                 const icon = b.querySelector('.rondo-usym');
-                if (icon) icon.textContent = UIS.refresh;
+                if (icon) icon.innerHTML = UIS.refresh;
                 b.title = 'Actualizacion instalada · recarga para aplicar';
             } else if (u.state === 'error') {
                 b.style.display = '';
                 b.classList.remove('activo');
                 b.classList.add('warn');
                 const icon = b.querySelector('.rondo-usym');
-                if (icon) icon.textContent = UIS.warn;
+                if (icon) icon.innerHTML = UIS.warn;
                 b.title = 'No se pudo comprobar actualizaciones' + (u.lastError ? ' (' + u.lastError + ')' : '') + ' · clic para reintentar';
             } else {
                 b.style.display = 'none';
