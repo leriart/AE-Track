@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.5
+// @version      5.14.6
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -391,7 +391,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.14.5';
+    const VER = '5.14.6';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -3251,6 +3251,216 @@ Reglas:
         return iaContadorHoy().llamadas >= limite;
     }
 
+    // ── v5.14.6: chat con la IA ────────────────────────────────────────
+    // Conversacion persistente en sessionStorage (se borra al cerrar
+    // la pestaña). Mensajes: { role: 'user' | 'ia' | 'system', text, ts,
+    // meta?: {provider, modelo, ms} }. Cada turno envia todo el
+    // historial al proveedor con un system prompt que incluye contexto
+    // actual de la flota (numero de unidades, alertas recientes, etc.)
+    const CHAT_KEY = 'rondo.api.chat';
+    const CHAT_SYS = String.raw`Eres un asistente de operaciones de flotas de vehiculos en Mexico. Responde en espanol, de forma concisa y profesional. Tienes acceso a un resumen del estado actual de la flota que se adjunta en cada mensaje del usuario.
+
+Reglas:
+- Se breve: 2-5 lineas salvo que pidan detalle.
+- Si te piden datos concretos (velocidad, posicion, alertas), usa SOLO lo que esta en el contexto adjunto. Si no esta, di que no tienes ese dato.
+- NO inventes numeros de telefono, direcciones exactas, kilometrajes ni coordenadas.
+- Si te preguntan algo fuera de tu alcance, dilo honestamente.
+- Para preguntas operativas (recomendaciones, priorizacion), razona con el contexto que tienes.
+- Usa listas o pasos solo cuando aporten claridad.
+- Espanol Mexico, sin emojis.`;
+
+    // Estado del chat: lista de mensajes (cargada de sessionStorage al inicio).
+    let CHAT = { mensajes: [], cargando: false };
+    function cargarChat() {
+        try {
+            const raw = sessionStorage.getItem(CHAT_KEY);
+            if (!raw) return;
+            const j = JSON.parse(raw);
+            if (j && Array.isArray(j.mensajes)) CHAT.mensajes = j.mensajes;
+        } catch (_) { /* noop */ }
+    }
+    function guardarChat() {
+        try {
+            // Solo guardamos los ultimos 50 mensajes para no inflar LS.
+            const slice = CHAT.mensajes.slice(-50);
+            sessionStorage.setItem(CHAT_KEY, JSON.stringify({ mensajes: slice, ts: Date.now() }));
+        } catch (_) { /* noop */ }
+    }
+    function limpiarChat() {
+        CHAT.mensajes = [];
+        try { sessionStorage.removeItem(CHAT_KEY); } catch (_) { /* noop */ }
+        pintarChat();
+    }
+    // Devuelve un resumen del estado actual de la flota para inyectar en
+    // cada turno del system prompt. Asi la IA tiene contexto fresco
+    // (numero de unidades, alertas del dia, ultimos avisos) sin que el
+    // usuario tenga que explicarselo.
+    function chatContextoFlota() {
+        try {
+            const ini = new Date(); ini.setHours(0, 0, 0, 0);
+            const hoy = (APP.historial || []).filter((a) => a.ts >= ini.getTime());
+            const porSev = {};
+            hoy.forEach((a) => { porSev[a.sev] = (porSev[a.sev] || 0) + 1; });
+            const watched = (APP.unidades || []).filter((u) => {
+                try { return shouldWatch(u); } catch (_) { return false; }
+            });
+            const enLinea = watched.filter((u) => { try { return !!unitState(u).online; } catch (_) { return false; } }).length;
+            const ultimos = (APP.historial || []).slice(0, 5).map((a) => ({
+                ts: new Date(a.ts).toISOString().slice(11, 16),
+                sev: a.sev, regla: a.regla, eco: a.eco, titulo: a.titulo
+            }));
+            return {
+                fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                unidadesVigiladas: watched.length,
+                enLinea, sinSenal: watched.length - enLinea,
+                alertasHoy: hoy.length,
+                porSeveridad: porSev,
+                ultimosAvisos: ultimos
+            };
+        } catch (_) { return { fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; }
+    }
+    function pintarChat() {
+        const log = byId('rondo-chat-log');
+        if (!log) return;
+        const provNombre = ((IA_PROVEEDORES || {})[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor || '-';
+        const provEl = byId('rondo-chat-prov');
+        if (provEl) provEl.textContent = provNombre + (APP.config.iaModelo ? ' \u00b7 ' + APP.config.iaModelo : '');
+        // Empty state
+        if (!CHAT.mensajes.length && !CHAT.cargando) {
+            log.innerHTML = '<div class="rondo-chat-empty">' +
+                '<span class="rondo-usym">' + UIS.robot + '</span>' +
+                '<div>Preguntale algo a la IA. Ejemplos:</div>' +
+                '<div style="opacity:.7;font-size:11.5px;line-height:1.5">' +
+                '\u00bfCuantas unidades tengo sin senal ahora?<br>' +
+                '\u00bfQue unidades llevan mas tiempo detenidas?<br>' +
+                '\u00bfQue alerta critica es la mas urgente de revisar?' +
+                '</div></div>';
+            return;
+        }
+        const html = CHAT.mensajes.map((m) => {
+            const cls = m.role === 'user' ? 'user' : (m.role === 'system' ? 'system' : (m.role === 'error' ? 'ia error' : 'ia'));
+            const meta = m.role === 'ia' ? '<div class="rondo-chat-meta">' +
+                (m.meta && m.meta.ms != null ? Math.round(m.meta.ms / 100) / 10 + 's' : '') +
+                (m.meta && m.meta.proveedor ? ' \u00b7 ' + esc(m.meta.proveedor) : '') +
+                '</div>' : (m.role === 'user' ? '<div class="rondo-chat-meta">' +
+                new Date(m.ts || Date.now()).toLocaleTimeString().slice(0, 5) + '</div>' : '');
+            return '<div class="rondo-chat-msg ' + cls + '"><div class="rondo-chat-bubble">' +
+                esc(m.text || '') + '</div>' + meta + '</div>';
+        }).join('');
+        const typing = CHAT.cargando ? '<div class="rondo-chat-msg ia"><div class="rondo-chat-bubble">' +
+            '<span class="rondo-chat-typing"><span></span><span></span><span></span></span></div></div>' : '';
+        log.innerHTML = html + typing;
+        // Auto-scroll al fondo
+        log.scrollTop = log.scrollHeight;
+    }
+    // Llamada al proveedor para chat: envia todo el historial al
+    // endpoint actual con CHAT_SYS + contexto de flota + mensajes.
+    async function aiChatLlamar(mensajes, onChunk) {
+        const cfg = APP.config || {};
+        if (!cfg.iaHabilitada) return { error: 'IA deshabilitada' };
+        if (!cfg.iaApiKey) return { error: 'Falta API key' };
+        const prov = (IA_PROVEEDORES || {})[cfg.iaProveedor];
+        if (!prov) return { error: 'Proveedor desconocido: ' + cfg.iaProveedor };
+        const endpoint = String(cfg.iaEndpoint || '').trim() || prov.endpoint;
+        const modelo = (cfg.iaModelo && String(cfg.iaModelo).trim()) || prov.modelo;
+        if (!endpoint) return { error: 'Falta endpoint' };
+        if (!modelo) return { error: 'Falta modelo' };
+        if (iaLimiteExcedido()) {
+            const hoy = iaContadorHoy();
+            return { error: 'Limite diario alcanzado (' + (hoy.llamadas || 0) + '/' +
+                (+cfg.iaLimiteDiario || 200) + ')' };
+        }
+        const messages = [
+            { role: 'system', content: CHAT_SYS + '\n\nContexto actual de la flota:\n' +
+                JSON.stringify(chatContextoFlota(), null, 0) },
+            ...mensajes.map((m) => ({ role: m.role === 'ia' ? 'assistant' : m.role, content: m.text || '' }))
+        ];
+        const body = {
+            model: modelo,
+            messages,
+            stream: false
+        };
+        if (cfg.iaTemperature !== '' && cfg.iaTemperature != null && isFinite(Number(cfg.iaTemperature))) {
+            body.temperature = Number(cfg.iaTemperature);
+        }
+        if (cfg.iaMaxTokens !== '' && cfg.iaMaxTokens != null && isFinite(Number(cfg.iaMaxTokens))) {
+            body.max_tokens = Math.max(64, Math.min(4000, Number(cfg.iaMaxTokens)));
+        }
+        const headers = { 'Content-Type': 'application/json' };
+        headers[prov.headerAuth || 'Authorization'] = (prov.prefijo || 'Bearer ') + cfg.iaApiKey;
+        const ms = Math.max(2000, (+cfg.iaTimeoutS || 25) * 1000);
+        const t0 = Date.now();
+        const res = await httpRequest({
+            method: 'POST', url: endpoint, headers: headers,
+            body: JSON.stringify(body), timeoutMs: ms
+        });
+        iaContadorSumar(res && !res.red && res.ok);
+        if (res.red) return { error: 'Sin conexion (' + (res.timeout ? 'timeout' : 'red') + ')' };
+        if (!res.ok) {
+            let pista = '';
+            if (res.status === 401 || res.status === 403) pista = 'API key invalida';
+            else if (res.status === 429) pista = 'rate limit';
+            else if (res.status === 404) pista = 'endpoint incorrecto';
+            else if (res.status === 400) pista = 'parametros rechazados';
+            return { error: 'HTTP ' + res.status + (pista ? ' \u00b7 ' + pista : '') + (res.texto ? ' \u00b7 ' + res.texto.slice(0, 200) : '') };
+        }
+        let data;
+        try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON' }; }
+        const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+        if (!txt) return { error: 'Sin contenido en la respuesta' };
+        return { texto: String(txt), ms: Date.now() - t0, proveedor: prov.nombre };
+    }
+    async function chatEnviar() {
+        const ta = byId('rondo-chat-input');
+        const btn = byId('rondo-chat-send');
+        if (!ta || !btn) return;
+        const texto = String(ta.value || '').trim();
+        if (!texto || CHAT.cargando) return;
+        if (!APP.config.iaHabilitada || !APP.config.iaApiKey) {
+            adviceWarn('IA no configurada', 'Activa la IA y mete tu API key en Ajustes > IA para usar el chat.');
+            abrirCfg();
+            const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="ia"]');
+            if (tab) tab.click();
+            return;
+        }
+        ta.value = '';
+        ta.style.height = 'auto';
+        const userMsg = { role: 'user', text: texto, ts: Date.now() };
+        CHAT.mensajes.push(userMsg);
+        CHAT.cargando = true;
+        btn.disabled = true;
+        pintarChat();
+        // Enviamos SOLO los ultimos 20 mensajes para mantener el
+        // contexto manejable y no agotar tokens.
+        const slice = CHAT.mensajes.slice(-20);
+        const r = await aiChatLlamar(slice);
+        CHAT.cargando = false;
+        btn.disabled = false;
+        if (r.error) {
+            CHAT.mensajes.push({ role: 'error', text: 'Error: ' + r.error, ts: Date.now() });
+        } else {
+            CHAT.mensajes.push({
+                role: 'ia', text: r.texto, ts: Date.now(),
+                meta: { ms: r.ms, proveedor: r.proveedor }
+            });
+        }
+        guardarChat();
+        pintarChat();
+    }
+    function paintTabsChat() {
+        // Muestra la tab de chat solo si la IA esta habilitada y con API key.
+        const tab = document.querySelector('#rondo-tabs .tab[data-tab="chat"]');
+        if (!tab) return;
+        const visible = !!(APP.config.iaHabilitada && APP.config.iaApiKey);
+        tab.style.display = visible ? '' : 'none';
+        if (!visible && APP.tab === 'chat') {
+            // Si estaba abierta y se desactivo la IA, salta al dashboard.
+            APP.tab = 'dash';
+            const dashTab = document.querySelector('#rondo-tabs .tab[data-tab="dash"]');
+            if (dashTab) dashTab.click();
+        }
+    }
+
     // Mini-probe de conexion (la pestana IA). Manda un ping corto y
     // devuelve texto listo para pintar en #c-ia-status.
     async function aiProbar() {
@@ -3515,6 +3725,7 @@ Reglas:
         writeJSON(LS.cfg, cfg);
         paintIASwitch();
         paintIABatchBtn();
+        paintTabsChat();
         if (APP.tab === 'alertas') paintAlertas();
         advice(cfg.iaHabilitada ? 'IA activada' : 'IA desactivada',
             cfg.iaHabilitada
@@ -3700,6 +3911,14 @@ Reglas:
         dlgPrevFocus = document.activeElement;
         const inputId = opts.input ? 'rondo-dlg-input' : '';
         const inp = opts.input || {};
+        // v5.14.6: auto-hide del boton Cancel si su texto coincide con
+        // el del OK (ej. cancelText:'Cerrar' + okText:'Cerrar'). Antes
+        // salian DOS botones identicos, lo que confundia al operador.
+        // El caller sigue pudiendo forzar ambos pasando opts.cancel ===
+        // 'forzar' (cualquier string truthy distinto de false).
+        const cancelText = esc(opts.cancelText || 'Cancelar');
+        const okText = esc(opts.okText || 'Aceptar');
+        const showCancel = opts.cancel !== false && cancelText !== okText;
         el.innerHTML =
             '<div class="dlg-head"><span class="rondo-usym">' + (opts.icon || UIS.info) + '</span>' +
             '<span>' + esc(opts.titulo) + '</span></div>' +
@@ -3709,8 +3928,8 @@ Reglas:
                 esc(inp.placeholder || '') + '" value="' + esc(inp.value == null ? '' : inp.value) + '">' : '') +
             '</div>' +
             '<div class="dlg-foot">' +
-            (opts.cancel === false ? '' : '<button class="dlg-cancel">' + esc(opts.cancelText || 'Cancelar') + '</button>') +
-            '<button class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + esc(opts.okText || 'Aceptar') + '</button>' +
+            (showCancel ? '<button class="dlg-cancel">' + cancelText + '</button>' : '') +
+            '<button class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + okText + '</button>' +
             '</div>';
         el.classList.add('abierto');
         const okBtn = el.querySelector('.dlg-ok');
@@ -6043,6 +6262,43 @@ Reglas:
             "#rondo-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
             "#rondo-panel .rondo-caravana-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
             "#rondo-panel .rondo-caravana-body{padding:8px 10px;display:flex;flex-direction:column;gap:8px}\n" +
+            // v5.14.6: chat con IA. Layout vertical: cabecera + log scrollable
+            // + barra de input fija abajo.
+            "#rondo-panel #rondo-wrap-chat{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden}\n" +
+            "#rondo-panel .rondo-chat-head{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft);flex-shrink:0}\n" +
+            "#rondo-panel .rondo-chat-info{flex:1;display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--rondo-fg);min-width:0}\n" +
+            "#rondo-panel .rondo-chat-info .rondo-usym{color:var(--rondo-accent-2);font-size:16px}\n" +
+            "#rondo-panel .rondo-chat-info #rondo-chat-prov{color:var(--rondo-fg-dim);font-weight:600;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}\n" +
+            "#rondo-panel .rondo-chat-actions{flex-shrink:0}\n" +
+            "#rondo-panel .rondo-chat-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--rondo-bg);scroll-behavior:smooth}\n" +
+            "#rondo-panel .rondo-chat-msg{display:flex;flex-direction:column;gap:3px;max-width:88%;animation:rondo-chat-in .25s var(--rondo-easing)}\n" +
+            "@keyframes rondo-chat-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}\n" +
+            "#rondo-panel .rondo-chat-msg.user{align-self:flex-end;align-items:flex-end}\n" +
+            "#rondo-panel .rondo-chat-msg.ia{align-self:flex-start;align-items:flex-start}\n" +
+            "#rondo-panel .rondo-chat-msg.system{align-self:center;align-items:center;max-width:100%}\n" +
+            "#rondo-panel .rondo-chat-bubble{padding:8px 12px;border-radius:12px;line-height:1.45;font-size:12.5px;word-wrap:break-word;white-space:pre-wrap}\n" +
+            "#rondo-panel .rondo-chat-msg.user .rondo-chat-bubble{background:var(--rondo-accent);color:#fff;border-bottom-right-radius:3px}\n" +
+            "#rondo-panel .rondo-chat-msg.ia .rondo-chat-bubble{background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);border-bottom-left-radius:3px}\n" +
+            "#rondo-panel .rondo-chat-msg.system .rondo-chat-bubble{background:transparent;color:var(--rondo-fg-dim);font-size:11.5px;font-style:italic}\n" +
+            "#rondo-panel .rondo-chat-msg.error .rondo-chat-bubble{background:rgba(229,57,53,.1);color:var(--rondo-bad-fg);border:1px solid rgba(229,57,53,.3)}\n" +
+            "#rondo-panel .rondo-chat-meta{font-size:10.5px;color:var(--rondo-fg-dim);padding:0 4px;display:flex;gap:6px;align-items:center}\n" +
+            "#rondo-panel .rondo-chat-msg.user .rondo-chat-meta{flex-direction:row-reverse}\n" +
+            "#rondo-panel .rondo-chat-empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:var(--rondo-fg-dim);font-size:12.5px;text-align:center;padding:24px;height:100%}\n" +
+            "#rondo-panel .rondo-chat-empty .rondo-usym{font-size:32px;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-chat-typing{display:inline-flex;gap:4px;align-items:center}\n" +
+            "#rondo-panel .rondo-chat-typing span{width:6px;height:6px;border-radius:50%;background:var(--rondo-fg-dim);animation:rondo-chat-typing 1.2s infinite ease-in-out}\n" +
+            "#rondo-panel .rondo-chat-typing span:nth-child(2){animation-delay:.15s}\n" +
+            "#rondo-panel .rondo-chat-typing span:nth-child(3){animation-delay:.3s}\n" +
+            "@keyframes rondo-chat-typing{0%,60%,100%{opacity:.3;transform:translateY(0)}30%{opacity:1;transform:translateY(-3px)}}\n" +
+            "#rondo-panel .rondo-chat-input-bar{display:flex;gap:6px;padding:8px 10px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft);flex-shrink:0;align-items:flex-end}\n" +
+            "#rondo-panel .rondo-chat-input-bar textarea{flex:1;min-height:36px;max-height:140px;resize:vertical;padding:8px 10px;border-radius:var(--rondo-radius-sm);border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);font:400 12.5px var(--rondo-font);line-height:1.4;outline:none}\n" +
+            "#rondo-panel .rondo-chat-input-bar textarea:focus{border-color:var(--rondo-accent-2);box-shadow:0 0 0 1px rgba(var(--rondo-accent-rgb),.25)}\n" +
+            "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send{height:36px;padding:0 14px;background:var(--rondo-accent);color:#fff;border:0;border-radius:var(--rondo-radius-sm);cursor:pointer;font-size:14px;display:inline-flex;align-items:center;gap:4px;transition:filter .15s,transform .1s}\n" +
+            "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send:hover:not(:disabled){filter:brightness(1.1)}\n" +
+            "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send:disabled{opacity:.4;cursor:not-allowed}\n" +
+            "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send .rondo-usym{font-size:14px}\n" +
+            // Cuando la tab de chat esta oculta, su contenido tambien.
+            "#rondo-panel .tab-ia[style*=\"display: none\"] + #rondo-tabs-content #rondo-wrap-chat,html:not(.ia-chat) #rondo-wrap-chat{display:none}\n" +
             "#rondo-panel .rondo-cv-card{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:8px 10px;display:flex;flex-direction:column;gap:4px}\n" +
             "#rondo-panel .rondo-cv-card.lider{border-color:var(--rondo-accent-2);box-shadow:0 0 0 1px rgba(var(--rondo-accent-rgb),.25)}\n" +
             "#rondo-panel .rondo-cv-card .cv-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}\n" +
@@ -6768,6 +7024,9 @@ Reglas:
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-usym md">' + UIS.route + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="zonas" title="Geocercas de la plataforma y zonas de riesgo"><span class="rondo-usym md">' + UIS.map + '</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-usym md">' + UIS.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
+            // v5.14.6: tab de chat con IA. Visible solo si la IA esta
+            // habilitada y tiene API key (se oculta desde paintTabs() si no).
+            '<button class="tab tab-ia" data-tab="chat" title="Chat con la IA (consultas libres)" style="display:none"><span class="rondo-usym md">' + UIS.robot + '</span><span class="etqt">Chat IA</span></button>' +
             
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
@@ -6880,13 +7139,26 @@ Reglas:
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
             '</div>' +
-            '<div class="tabla" id="rondo-wrap-caravana" style="display:none">' +
-            '<div class="rondo-caravana-bar">' +
-            '<label for="rondo-caravana-sel" style="font-size:11px;color:var(--rondo-fg-dim)">Unidad vigilada:</label>' +
-            '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
-            '</div>' +
-            '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
-            '</div>' +
+'<div class="tabla" id="rondo-wrap-caravana" style="display:none">' +
+             '<div class="rondo-caravana-bar">' +
+             '<label for="rondo-caravana-sel" style="font-size:11px;color:var(--rondo-fg-dim)">Unidad vigilada:</label>' +
+             '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
+             '</div>' +
+             '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
+             '</div>' +
+             // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
+             // habilitada y con API key (ver paintTabsChat()).
+             '<div class="tabla" id="rondo-wrap-chat" style="display:none">' +
+             '<div class="rondo-chat-head">' +
+             '<div class="rondo-chat-info"><span class="rondo-usym">' + UIS.robot + '</span> Chat IA · <span id="rondo-chat-prov">-</span></div>' +
+             '<div class="rondo-chat-actions"><button type="button" class="mini" id="rondo-chat-clear" title="Limpiar conversacion"><span class="rondo-usym sm">' + UIS.clear + '</span> Limpiar</button></div>' +
+             '</div>' +
+             '<div id="rondo-chat-log" class="rondo-chat-log"></div>' +
+             '<div class="rondo-chat-input-bar">' +
+             '<textarea id="rondo-chat-input" rows="1" placeholder="Escribe tu consulta a la IA..."></textarea>' +
+             '<button type="button" id="rondo-chat-send" title="Enviar (Enter)"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
+             '</div>' +
+             '</div>' +
             '<div class="tabla" id="rondo-wrap-zonas" style="display:none">' +
             '<div class="rondo-zonas-seg" id="rondo-zonas-seg">' +
             '<button class="rondo-zseg activo" data-ztab="geocercas"><span class="rondo-usym">' + UIS.map + '</span> Geocercas</button>' +
@@ -7552,7 +7824,7 @@ Reglas:
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
-        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'zonas'];
+        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'chat', 'zonas'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
@@ -7568,6 +7840,7 @@ Reglas:
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
         else if (name === 'caravana') paintCaravana();
+        else if (name === 'chat') pintarChat();
         else if (name === 'zonas') { aplicarZonasVista(); paintGeocercas(); paintRiesgo(); }
         paintCounters();
         paintStateBadge();
@@ -9925,6 +10198,26 @@ Reglas:
         // v5.14: deteccion de patrones desde la pestana IA.
         const iaPatronesBtn = byId('c-ia-patrones');
         if (iaPatronesBtn) iaPatronesBtn.addEventListener('click', () => aiPatronesUI());
+        // v5.14.6: chat con IA (send, clear, textarea autoresize, enter).
+        const chatSendBtn = byId('rondo-chat-send');
+        if (chatSendBtn) chatSendBtn.addEventListener('click', () => chatEnviar());
+        const chatInput = byId('rondo-chat-input');
+        if (chatInput) {
+            chatInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    chatEnviar();
+                }
+            });
+            chatInput.addEventListener('input', () => {
+                chatInput.style.height = 'auto';
+                chatInput.style.height = Math.min(140, chatInput.scrollHeight) + 'px';
+            });
+        }
+        const chatClearBtn = byId('rondo-chat-clear');
+        if (chatClearBtn) chatClearBtn.addEventListener('click', () => {
+            rondoConfirm('Limpiar conversacion', 'Se borraran todos los mensajes del chat actual.', () => limpiarChat());
+        });
         // Al cambiar cualquier toggle/input de IA, refresca el contador de uso.
         ['c-ia-batchmax', 'c-ia-limite'].forEach((id) => {
             const el = byId(id);
@@ -10536,6 +10829,10 @@ Reglas:
         // 2) Self-check de la constante VER contra el @version detectado
         //    del propio archivo (catches la deriva silenciosa).
         autodetectarVER();
+        // v5.14.6: cargar historial de chat de sessionStorage.
+        cargarChat();
+        paintTabsChat();
+        setTimeout(pintarChat, 0);
         // 3) Primer check diferido para no bloquear el arranque.
         setTimeout(comprobarActualizacion, 5000);
         // 4) Check periodico cada 6h (antes 30min -> demasiado ruido).

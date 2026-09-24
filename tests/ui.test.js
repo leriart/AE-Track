@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.5 en @UserScript', /@version\s+5\.14\.5/.test(src));
+ok('version 5.14.6 en @UserScript', /@version\s+5\.14\.6/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -505,9 +505,56 @@ ok('evaluateUnit llama reglaGeocercaDetenido', /reglaGeocerca\(st, prev, R, info
 ok('reglaGeocercaDetenido usa severity bajo', /regla: 'geocercaDetenido', sev: 'bajo'/.test(src));
 ok('reglaGeocercaDetenido respeta geocercaDetenidoMin >= 1', /Math\.max\(1, \+APP\.config\.geocercaDetenidoMin/.test(src));
 
+// v5.14.6: fix de los dos botones Cerrar + nueva tab Chat IA.
+ok('abrirDialogo auto-hide cancel si mismo texto que OK', /cancelText !== okText/.test(src));
+ok('abrirDialogo conserva cancel si cancel === false', /opts\.cancel !== false && cancelText !== okText/.test(src));
+ok('tab Chat IA existe', /data-tab="chat"/.test(src));
+ok('tab Chat IA arranca oculta (display:none)', /tab-ia[\s\S]{0,80}style="display:none"/.test(src));
+ok('wrap-chat existe', /id="rondo-wrap-chat"/.test(src));
+ok('chat-log existe', /id="rondo-chat-log"/.test(src));
+ok('chat-input existe', /id="rondo-chat-input"/.test(src));
+ok('chat-send button existe', /id="rondo-chat-send"/.test(src));
+ok('chat-clear button existe', /id="rondo-chat-clear"/.test(src));
+ok('paintTabsChat existe', /function paintTabsChat\(/.test(src));
+ok('paintTabsChat muestra solo si IA habilitada + key', /APP\.config\.iaHabilitada && APP\.config\.iaApiKey/.test(src));
+ok('paintTabsChat redirige a dash si tab chat estaba abierta', /APP\.tab === 'chat'[\s\S]{0,100}APP\.tab = 'dash'/.test(src));
+ok('pintarChat existe', /function pintarChat\(/.test(src));
+ok('pintarChat muestra empty state con ejemplos', /Preguntale algo a la IA/.test(src));
+ok('pintarChat usa rondo-chat-bubble', /class="rondo-chat-bubble"/.test(src));
+ok('pintarChat auto-scroll al fondo', /log\.scrollTop = log\.scrollHeight/.test(src));
+ok('pintarChat usa animacion de entrada', /@keyframes rondo-chat-in/.test(src));
+ok('pintarChat usa typing indicator', /@keyframes rondo-chat-typing/.test(src));
+ok('aiChatLlamar existe', /async function aiChatLlamar\(/.test(src));
+ok('aiChatLlamar usa iaLimiteExcedido', /aiChatLlamar[\s\S]{0,1500}iaLimiteExcedido\(\)/.test(src));
+ok('aiChatLlamar construye messages con system + historial', /role: m\.role === 'ia' \? 'assistant' : m\.role/.test(src));
+ok('aiChatLlamar contabiliza la llamada', /async function aiChatLlamar[\s\S]{0,4000}iaContadorSumar/.test(src));
+ok('chatEnviar existe', /async function chatEnviar\(/.test(src));
+ok('chatEnviar verifica IA habilitada', /APP\.config\.iaHabilitada \|\| !APP\.config\.iaApiKey/.test(src));
+ok('chatEnviar abre Ajustes si IA no configurada', /abrirCfg\(\)[\s\S]{0,200}data-cfg="ia"/.test(src));
+ok('chatEnviar envia ultimos 20 mensajes', /slice\(0, -20\)/.test(src) || /slice\(-20\)/.test(src));
+ok('chatEnviar maneja errores con mensaje tipo error', /role: 'error'/.test(src));
+ok('chatEnviar guarda en sessionStorage', /guardarChat\(\)/.test(src));
+ok('limpiarChat existe', /function limpiarChat\(/.test(src));
+ok('limpiarChat borra sessionStorage', /sessionStorage\.removeItem\(CHAT_KEY\)/.test(src));
+ok('chatContextoFlota existe', /function chatContextoFlota\(/.test(src));
+ok('chatContextoFlota devuelve alertasHoy y porSeveridad', /alertasHoy: hoy\.length[\s\S]{0,200}porSeveridad/.test(src));
+ok('CHAT_SYS es string.raw con reglas', /const CHAT_SYS = String\.raw[\s\S]{0,5000}sin emojis/.test(src));
+ok('CHAT_SYS menciona Mexico y espanol', /Mexico[\s\S]{0,2000}espanol/.test(src));
+ok('bindings: chatSendBtn -> chatEnviar', /chatSendBtn\.addEventListener\('click', \(\) => chatEnviar\(\)\)/.test(src));
+ok('bindings: Enter envia, Shift+Enter inserta nueva linea', /e\.key === 'Enter' && !e\.shiftKey/.test(src));
+ok('bindings: textarea autoresize', /Math\.min\(140, chatInput\.scrollHeight\)/.test(src));
+ok('bindings: chatClearBtn con confirmacion', /rondoConfirm\('Limpiar conversacion'/.test(src));
+ok('setTab incluye chat en ids', /'dash', 'unidades', 'alertas', 'rutas', 'caravana', 'chat', 'zonas'/.test(src));
+ok('setTab pinta chat al cambiar', /else if \(name === 'chat'\) pintarChat\(\)/.test(src));
+ok('toggleIA llama paintTabsChat', /paintIABatchBtn\(\);[\s\S]{0,200}paintTabsChat/.test(src));
+ok('cargarChat al arranque', /cargarChat\(\);[\s\S]{0,200}paintTabsChat\(\)/.test(src));
+ok('CSS chat: bubble user alineado derecha', /\.rondo-chat-msg\.user\{align-self:flex-end/.test(src));
+ok('CSS chat: bubble ia alineado izquierda', /\.rondo-chat-msg\.ia\{align-self:flex-start/.test(src));
+ok('CSS chat: typing indicator', /\.rondo-chat-typing span\{width:6px/.test(src));
+
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.14\.5['"]/.test(src));
-ok('@version 5.14.5 sincronizado con VER', /@version\s+5\.14\.5[\s\S]{0,50000}const VER = ['"]5\.14\.5['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.14\.6['"]/.test(src));
+ok('@version 5.14.6 sincronizado con VER', /@version\s+5\.14\.6[\s\S]{0,50000}const VER = ['"]5\.14\.6['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
