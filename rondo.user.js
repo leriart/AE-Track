@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.0
+// @version      5.12.1
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -225,7 +225,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.0';
+    const VER = '5.12.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -313,8 +313,9 @@
         //   {verdict:'falso_positivo'|'normal'|'sospechoso'|'critico',
         //    resumen:'...', recomendaciones:['...']}
         iaHabilitada: false,    // requiere API key para activarse
-        iaProveedor: 'deepseek', // 'deepseek' | 'nvidia' | 'kimi'
+        iaProveedor: 'deepseek', // 'deepseek'|'nvidia'|'kimi'|'moonshot'|'minimax'|'custom'
         iaApiKey: '',           // API key (NUNCA sale del navegador salvo al endpoint)
+        iaEndpoint: '',         // opcional: override del endpoint (util para Kimi.ai vs Moonshot)
         iaModelo: '',           // opcional: override del modelo (si vacio, usa el del proveedor)
         iaRadioPoisM: 250,      // radio (m) para pedir POIs a Overpass
         iaTimeoutS: 25,         // timeout para la llamada a la IA
@@ -1911,25 +1912,62 @@
     // aviso de la pestana Avisos. No toca el flujo automatico de reglas.
     //
     // El endpoint OpenAI de cada proveedor y el modelo por defecto se
-    // exponen aqui para que sea facil añadir un cuarto proveedor luego.
+    // exponen aqui para que sea facil añadir un proveedor nuevo.
+    //
+    // OJO con Kimi: "Kimi.ai" (kimi.com, keys `kimi-...`) y "Moonshot"
+    // (platform.moonshot.ai, keys `sk-...`) son productos DISTINTOS con
+    // endpoints distintos. Si usas la API general de Kimi.ai, el endpoint
+    // es api.kimi.ai/v1; si usas Moonshot, es api.moonshot.ai/v1. Por eso
+    // hay dos proveedores separados + un campo "Endpoint" opcional en la
+    // UI para sobreescribir cualquiera de ellos.
     const IA_PROVEEDORES = Object.freeze({
         deepseek: {
             nombre: 'DeepSeek',
             endpoint: 'https://api.deepseek.com/v1/chat/completions',
             modelo: 'deepseek-chat',
-            headers: { 'Content-Type': 'application/json', 'Authorization': '' }
+            headerAuth: 'Authorization',
+            prefijo: 'Bearer ',
+            nota: 'keys sk-...'
         },
         nvidia: {
             nombre: 'NVIDIA NIM',
             endpoint: 'https://integrate.api.nvidia.com/v1/chat/completions',
             modelo: 'meta/llama-3.1-70b-instruct',
-            headers: { 'Content-Type': 'application/json', 'Authorization': '' }
+            headerAuth: 'Authorization',
+            prefijo: 'Bearer ',
+            nota: 'keys nvapi-...'
         },
         kimi: {
-            nombre: 'Moonshot Kimi',
+            nombre: 'Kimi.ai (API general)',
+            endpoint: 'https://api.kimi.ai/v1/chat/completions',
+            modelo: 'kimi-k2.5',
+            headerAuth: 'Authorization',
+            prefijo: 'Bearer ',
+            nota: 'keys kimi-... (kimi.com)'
+        },
+        moonshot: {
+            nombre: 'Moonshot (platform.moonshot.ai)',
             endpoint: 'https://api.moonshot.ai/v1/chat/completions',
-            modelo: 'kimi-k2.7-code-highspeed',
-            headers: { 'Content-Type': 'application/json', 'Authorization': '' }
+            modelo: 'kimi-k2.6',
+            headerAuth: 'Authorization',
+            prefijo: 'Bearer ',
+            nota: 'keys sk-... (platform.moonshot.ai)'
+        },
+        minimax: {
+            nombre: 'MiniMax',
+            endpoint: 'https://api.minimax.io/v1/chat/completions',
+            modelo: 'MiniMax-M3',
+            headerAuth: 'Authorization',
+            prefijo: 'Bearer ',
+            nota: 'keys sk-... (platform.minimax.io)'
+        },
+        custom: {
+            nombre: 'Personalizado (OpenAI-compatible)',
+            endpoint: '',
+            modelo: '',
+            headerAuth: 'Authorization',
+            prefijo: 'Bearer ',
+            nota: 'cualquier endpoint compatible con OpenAI'
         }
     });
 
@@ -2053,8 +2091,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         if (!cfg.iaApiKey) return { error: 'Falta la API key. Pegala en Ajustes > IA.' };
         const prov = IA_PROVEEDORES[cfg.iaProveedor];
         if (!prov) return { error: 'Proveedor IA desconocido: ' + cfg.iaProveedor };
+        // El endpoint puede sobreescribirse en la UI (campo "Endpoint").
+        // Asi un cambio de region/producto no exige tocar el script.
+        const endpoint = String(cfg.iaEndpoint || '').trim() || prov.endpoint;
+        if (!endpoint) return { error: 'Falta el endpoint del proveedor. Rellenalo en Ajustes > IA.' };
+        const modelo = cfg.iaModelo && String(cfg.iaModelo).trim() ? cfg.iaModelo : prov.modelo;
+        if (!modelo) return { error: 'Falta el modelo. Rellenalo en Ajustes > IA.' };
         const body = {
-            model: cfg.iaModelo && String(cfg.iaModelo).trim() ? cfg.iaModelo : prov.modelo,
+            model: modelo,
             messages: [
                 { role: 'system', content: IA_SYSTEM },
                 { role: 'user', content: 'Contexto de la alerta (JSON):\n' + JSON.stringify(contexto, null, 0) }
@@ -2063,14 +2107,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             max_tokens: 500,
             stream: false
         };
-        const headers = Object.assign({}, prov.headers);
-        headers['Authorization'] = 'Bearer ' + cfg.iaApiKey;
+        const headers = { 'Content-Type': 'application/json' };
+        headers[prov.headerAuth || 'Authorization'] = (prov.prefijo || 'Bearer ') + cfg.iaApiKey;
         const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         const ms = Math.max(2000, (+cfg.iaTimeoutS || 25) * 1000);
         const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
         let res;
         try {
-            res = await fetch(prov.endpoint, {
+            res = await fetch(endpoint, {
                 method: 'POST',
                 headers: headers,
                 body: JSON.stringify(body),
@@ -2084,7 +2128,15 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         if (!res.ok) {
             let txt = '';
             try { txt = await res.text(); } catch (_) { /* noop */ }
-            return { error: prov.nombre + ' HTTP ' + res.status + (txt ? ' · ' + txt.slice(0, 220) : '') };
+            // 401 casi siempre significa key de OTRO producto o endpoint.
+            // Damos una pista concreta en vez del volcado crudo.
+            let pista = '';
+            if (res.status === 401 || res.status === 403) {
+                pista = ' · Revisa que la API key corresponda a ' + prov.nombre +
+                    ' (endpoint ' + endpoint + ')' + (prov.nota ? '. ' + prov.nota : '') +
+                    '. Si tu key es de otro producto (p. ej. Kimi.ai vs Moonshot), cambia de proveedor o ajusta el endpoint.';
+            }
+            return { error: prov.nombre + ' HTTP ' + res.status + pista + (txt ? ' · ' + txt.slice(0, 180) : '') };
         }
         let data;
         try { data = await res.json(); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
@@ -2124,6 +2176,71 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         set('OK · ' + provNombre + ' respondio · veredicto=' + (r.veredicto || '?') +
             ' · confianza=' + (r.confianza != null ? r.confianza : '?'), true);
         return true;
+    }
+
+    // Pinta el boton de IA de la cabecera segun el estado:
+    //   - sin API key: oculto (no se puede usar)
+    //   - key + desactivada: robot atenuado + punto ambar ("disponible")
+    //   - key + activa: robot + check verde ("activa")
+    // El boton sirve para activar/desactivar la IA (analisis en Avisos)
+    // y, en el estado sin key, abre Ajustes > IA.
+    function paintIASwitch() {
+        const b = byId('rondo-ia');
+        if (!b) return;
+        const cfg = APP.config || {};
+        const tieneKey = !!(cfg.iaApiKey && String(cfg.iaApiKey).trim());
+        const activa = !!cfg.iaHabilitada && tieneKey;
+        if (!tieneKey) {
+            b.style.display = 'none';
+            b.setAttribute('aria-pressed', 'false');
+            return;
+        }
+        b.style.display = '';
+        b.setAttribute('aria-pressed', activa ? 'true' : 'false');
+        b.classList.toggle('ia-on', activa);
+        b.classList.toggle('ia-off', !activa);
+        const prov = (IA_PROVEEDORES[cfg.iaProveedor] || {}).nombre || cfg.iaProveedor || '';
+        b.title = activa
+            ? 'IA activa (' + prov + ') · analiza los avisos · clic para desactivar'
+            : 'IA disponible pero desactivada (' + prov + ') · clic para activar';
+    }
+    // Alterna la IA desde la cabecera. Si no hay API key, lleva a Ajustes > IA.
+    function toggleIA() {
+        const cfg = APP.config || {};
+        const tieneKey = !!(cfg.iaApiKey && String(cfg.iaApiKey).trim());
+        if (!tieneKey) {
+            abrirCfg();
+            const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="ia"]');
+            if (tab) tab.click();
+            adviceWarn('IA sin API key', 'Pega tu API key en Ajustes > IA para activarla.');
+            return;
+        }
+        cfg.iaHabilitada = !cfg.iaHabilitada;
+        writeJSON(LS.cfg, cfg);
+        paintIASwitch();
+        if (APP.tab === 'alertas') paintAlertas();
+        advice(cfg.iaHabilitada ? 'IA activada' : 'IA desactivada',
+            cfg.iaHabilitada
+                ? 'El boton IA aparece en cada aviso y la IA puede analizarlos.'
+                : 'La IA dejo de usarse para analisis y notificaciones.');
+    }
+
+    // Ajusta la nota y los placeholders de la pestana IA segun el
+    // proveedor elegido. NO borra lo que el user haya escrito.
+    function actualizarNotaProveedorIA() {
+        const sel = byId('c-ia-prov');
+        if (!sel) return;
+        const prov = IA_PROVEEDORES[sel.value] || {};
+        const notaEl = byId('c-ia-prov-nota');
+        if (notaEl) {
+            notaEl.textContent = prov.nota
+                ? 'Se esperan keys del tipo ' + prov.nota + '. Endpoint por defecto: ' + (prov.endpoint || '(lo rellenas tu)')
+                : '';
+        }
+        const ep = byId('c-ia-endpoint');
+        if (ep && prov.endpoint && !ep.value) ep.placeholder = prov.endpoint;
+        const mod = byId('c-ia-modelo');
+        if (mod && prov.modelo && !mod.value) mod.placeholder = prov.modelo;
     }
 
     function beep(sev) {
@@ -4332,6 +4449,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             "#rondo-panel .rondo-iconbtn:hover{background:var(--rondo-bg);border-color:var(--rondo-border);color:var(--rondo-fg);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
             "#rondo-panel .rondo-iconbtn:active{transform:translateY(0)}\n" +
             "#rondo-panel .rondo-iconbtn.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.4)}\n" +
+            // Indicador de IA en cabecera: badge (punto/check) sobre el robot.
+            "#rondo-panel .rondo-ia-head{position:relative}\n" +
+            "#rondo-panel .rondo-ia-badge{position:absolute;top:2px;right:2px;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--rondo-bg);box-sizing:content-box;pointer-events:none;transition:background .15s,box-shadow .15s}\n" +
+            "#rondo-panel .rondo-ia-head.ia-off .rondo-ia-badge{background:var(--rondo-warn-fg,#f9a825)}\n" +
+            "#rondo-panel .rondo-ia-head.ia-on .rondo-ia-badge{background:var(--rondo-ok-fg,#2e7d32);box-shadow:0 0 0 2px rgba(46,125,50,.22)}\n" +
+            "#rondo-panel .rondo-ia-head.ia-on{color:var(--rondo-ok-fg,#2e7d32)}\n" +
+            "#rondo-panel .rondo-ia-head.ia-off{color:var(--rondo-warn-fg,#f9a825)}\n" +
+            "#rondo-panel .rondo-ia-head.ia-on .rondo-ia-badge::after{content:'';position:absolute;left:2.5px;top:0.5px;width:3px;height:5px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}\n" +
             "#rondo-panel .tabs{display:flex;gap:3px;background:var(--rondo-bg-soft);padding:5px 6px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:9px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
             +
@@ -5154,6 +5279,12 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '<h3>' + esc(LANG.titlePanel) + '</h3>' +
             '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-usym md">' + UIS.refresh + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-tema" title="Tema"><span class="rondo-usym md">' + UIS.theme + '</span></button>' +
+            // Indicador/toggle de IA en la cabecera, junto al tema. Muestra
+            // si hay una API disponible (punto) y si la IA esta activa
+            // (check). Oculto si no hay API key configurada.
+            '<button class="rondo-iconbtn rondo-ia-head" id="rondo-ia" title="IA" style="display:none" aria-pressed="false">' +
+            '<span class="rondo-usym md">' + UIS.robot + '</span>' +
+            '<span class="rondo-ia-badge" aria-hidden="true"></span></button>' +
             '<button class="rondo-iconbtn" id="rondo-nmolestar" title="No molestar"><span class="rondo-usym md">' + UIS.mute + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-refresh" title="Refrescar datos"><span class="rondo-usym md">' + UIS.refresh + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-cfg-btn" title="Ajustes"><span class="rondo-usym md">' + UIS.gear + '</span></button>' +
@@ -5625,11 +5756,16 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '<p style="font-size:11.5px;color:var(--rondo-fg-dim);margin:0 0 8px">Cuando pulses <b>Analizar con IA</b> en un aviso, Rondo junta contexto (estado de la unidad, geocercas, POIs cercanos por Overpass, alertas recientes) y se lo envia al proveedor. La IA devuelve un veredicto (falso positivo / normal / sospechoso / critico) y un resumen. Tu <b>API key</b> se guarda solo en este navegador y solo se envia al endpoint del proveedor.</p>' +
             checkRow('c-ia-on', 'Habilitar IA (boton Analizar en Avisos)') +
             '<label>Proveedor <select id="c-ia-prov">' +
-            '<option value="deepseek">DeepSeek (deepseek-chat, free tier)</option>' +
-            '<option value="nvidia">NVIDIA NIM (meta/llama-3.1-70b-instruct, free tier)</option>' +
-            '<option value="kimi">Moonshot Kimi (kimi-k2.7-code-highspeed, free tier)</option>' +
+            '<option value="deepseek">DeepSeek · deepseek-chat</option>' +
+            '<option value="nvidia">NVIDIA NIM · meta/llama-3.1-70b-instruct</option>' +
+            '<option value="kimi">Kimi.ai (API general) · kimi-k2.5</option>' +
+            '<option value="moonshot">Moonshot (platform.moonshot.ai) · kimi-k2.6</option>' +
+            '<option value="minimax">MiniMax · MiniMax-M3</option>' +
+            '<option value="custom">Personalizado (OpenAI-compatible)</option>' +
             '</select></label>' +
-            '<label>API key <input type="password" id="c-ia-key" autocomplete="off" spellcheck="false" placeholder="sk-..." title="Solo se envia al endpoint del proveedor; nunca a Rondo"></label>' +
+            '<span id="c-ia-prov-nota" style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin-top:-2px"></span>' +
+            '<label>API key <input type="password" id="c-ia-key" autocomplete="off" spellcheck="false" placeholder="sk-... / kimi-... / nvapi-..." title="Solo se envia al endpoint del proveedor; nunca a Rondo. Se guarda en este navegador."></label>' +
+            '<label>Endpoint (opcional, vacio = el del proveedor) <input type="text" id="c-ia-endpoint" autocomplete="off" placeholder="https://api.kimi.ai/v1/chat/completions" spellcheck="false" title="Sobreescribe la URL. Util si tu key es de otra region o producto (Kimi.ai vs Moonshot)."></label>' +
             '<label>Modelo (opcional, vacio = el del proveedor) <input type="text" id="c-ia-modelo" autocomplete="off" placeholder="(modelo por defecto)" spellcheck="false"></label>' +
             numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
             numRow('c-ia-timeout', 'Timeout (s)') +
@@ -5638,6 +5774,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                 '<button type="button" class="accbtn" id="c-ia-clear"><span class="rondo-usym">' + UIS.clear + '</span> Borrar API key</button>' +
             '</div>' +
             '<div id="c-ia-status" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px"></div>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:8px 0 0">Si <b>Kimi.ai</b> te da 401: suele ser una key del otro producto. Prueba el proveedor <b>Kimi.ai (api.kimi.ai/v1)</b> con keys <code>kimi-...</code> o <b>Moonshot</b> con keys <code>sk-...</code>. Tambien puedes pegar la URL exacta en <b>Endpoint</b>.</p>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
@@ -7351,6 +7488,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
                     applyBar(); applyTheme(); placePanel();
                     refresh();
+                    paintIASwitch();
+                    paintAlertas();
                     adviceOk('Configuración importada');
                 } catch (e) {
                     adviceErr('Error importando', (e && e.message) || '');
@@ -7748,6 +7887,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             applyTheme();
             advice('Tema', APP.config.theme);
         });
+        byId('rondo-ia').addEventListener('click', () => toggleIA());
         // Despues de Guardar config: repintar Avisos para que aparezcan/
         // desaparezcan los botones "IA" segun iaHabilitada + iaApiKey.
         // Se hace en cerrarCfg/Guardar abajo, pero nos aseguramos tambien
@@ -7932,6 +8072,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             if (iaProvEl) iaProvEl.value = APP.config.iaProveedor || 'deepseek';
             const iaKeyEl = byId('c-ia-key');
             if (iaKeyEl) iaKeyEl.value = APP.config.iaApiKey ? '********' : '';
+            const iaEndpointEl = byId('c-ia-endpoint');
+            if (iaEndpointEl) iaEndpointEl.value = APP.config.iaEndpoint || '';
             const iaModeloEl = byId('c-ia-modelo');
             if (iaModeloEl) iaModeloEl.value = APP.config.iaModelo || '';
             const iaRadioEl = byId('c-ia-radio');
@@ -7940,6 +8082,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             if (iaTimeoutEl) iaTimeoutEl.value = APP.config.iaTimeoutS != null ? APP.config.iaTimeoutS : 25;
             const iaStatusEl = byId('c-ia-status');
             if (iaStatusEl) iaStatusEl.textContent = '';
+            actualizarNotaProveedorIA();
             g('c-beep').checked = !!APP.config.beep;
             g('c-beep-vol').value = APP.config.beepVol;
             g('c-beep-vol').step = '0.01';
@@ -8039,10 +8182,18 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         const iaClearBtn = byId('c-ia-clear');
         if (iaClearBtn) iaClearBtn.addEventListener('click', () => {
             APP.config.iaApiKey = '';
+            writeJSON(LS.cfg, APP.config);
             const k = byId('c-ia-key'); if (k) k.value = '';
             const s = byId('c-ia-status');
             if (s) { s.textContent = 'API key borrada.'; s.style.color = 'var(--rondo-fg-dim)'; }
+            paintIASwitch();
+            if (APP.tab === 'alertas') paintAlertas();
         });
+        // Al cambiar de proveedor, actualizamos la nota (keys esperadas) y
+        // los placeholders de endpoint/modelo. No borramos lo que el user
+        // haya escrito: solo ajustamos las pistas visuales.
+        const iaProvSel = byId('c-ia-prov');
+        if (iaProvSel) iaProvSel.addEventListener('change', () => actualizarNotaProveedorIA());
         // Las voces del navegador cargan de forma asincrona.
         if ('speechSynthesis' in window && window.speechSynthesis.onvoiceschanged !== undefined) {
             window.speechSynthesis.onvoiceschanged = () => {
@@ -8108,7 +8259,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                 if (v && v !== '********') cf.iaApiKey = v;
                 // Si el usuario la dejo enmascarada y no la cambio, se conserva.
             }
-            const iaModeloEl = byId('c-ia-modelo'); if (iaModeloEl) cf.iaModelo = String(iaModeloEl.value || '').trim();
+            const iaEndpointEl = byId('c-ia-endpoint'); if (iaEndpointEl) cf.iaEndpoint = String(iaEndpointEl.value || '').trim().slice(0, 300);
+            const iaModeloEl = byId('c-ia-modelo'); if (iaModeloEl) cf.iaModelo = String(iaModeloEl.value || '').trim().slice(0, 120);
             const iaRadioEl = byId('c-ia-radio'); if (iaRadioEl) cf.iaRadioPoisM = clamp(isoNum(iaRadioEl.value, 250), 50, 2000);
             const iaTimeoutEl = byId('c-ia-timeout'); if (iaTimeoutEl) cf.iaTimeoutS = clamp(isoNum(iaTimeoutEl.value, 25), 5, 120);
             cf.voice = g('c-voz').checked;
@@ -8210,8 +8362,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             limpiarCfgDirty();
             cfgWinEl.style.display = 'none';
             refresh();
-            // Repintar Avisos para que aparezcan/desaparezcan los botones IA.
+            // Repintar Avisos para que aparezcan/desaparezcan los botones IA
+            // y actualizar el indicador de IA de la cabecera.
             paintAlertas();
+            paintIASwitch();
             adviceOk(LANG.guardado);
         });
 
@@ -8579,6 +8733,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         placePanel();
         paintVerifyButton();
         updateNoMolestar();
+        paintIASwitch();
         await refresh();
         // Carga en background (no bloquea el inicio). Sin URL por defecto -> queda inactivo.
         cargarRiesgo();
