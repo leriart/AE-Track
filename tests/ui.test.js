@@ -118,16 +118,22 @@ const mSetTab = src.match(/const ids = \[([^\]]*)\];/);
 ok('setTab declara un arreglo de pestanas', !!mSetTab);
 if (mSetTab) {
     const ids = mSetTab[1].split(',').map((s) => s.trim().replace(/['"]/g, '')).filter(Boolean);
-    ['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana', 'riesgo'].forEach((t) => {
+    // Geocercas y zonas de riesgo se fusionaron en la pestana 'zonas'.
+    ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'zonas'].forEach((t) => {
         ok('setTab incluye "' + t + '"', ids.indexOf(t) >= 0, ids.join(','));
     });
 }
-// Los 7 contenedores deben existir en el HTML del panel.
-['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana', 'riesgo'].forEach((t) => {
+// Los 6 contenedores deben existir en el HTML del panel.
+['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'zonas'].forEach((t) => {
     ok('HTML tiene rondo-wrap-' + t, src.indexOf("id=\"rondo-wrap-" + t + "\"") >= 0);
 });
-// Alt+1..7 incluye la pestana riesgo.
-ok('atajo Alt+7 -> riesgo', /'7':\s*'riesgo'/.test(src));
+// Ya no debe existir la pestana riesgo separada.
+ok('sin pestana riesgo separada', src.indexOf("data-tab=\"riesgo\"") < 0);
+ok('sin wrap riesgo separado', src.indexOf("rondo-wrap-riesgo") < 0);
+// Alt+5 -> zonas.
+ok('atajo Alt+5 -> zonas', /'5':\s*'zonas'/.test(src));
+// La pestana zonas pinta geocercas y riesgo.
+ok('zonas pinta geocercas y riesgo', /name === 'zonas'\)\s*\{\s*paintGeocercas\(\);\s*paintRiesgo\(\);/.test(src));
 
 // Modo sidebar unico: sin boton ni selector de modo flotante.
 ok('sin boton rondo-btn-modo', src.indexOf('rondo-btn-modo') < 0);

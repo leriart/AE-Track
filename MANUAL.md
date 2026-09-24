@@ -9,7 +9,7 @@ Indice:
 - [Primeros pasos](#primeros-pasos)
 - [La barra de botones](#la-barra-de-botones)
 - [El panel: barra lateral](#el-panel-barra-lateral)
-- [Las siete pestanas](#las-siete-pestanas)
+- [Las seis pestanas](#las-seis-pestanas)
 - [Vigilar unidades (lista vigilada)](#vigilar-unidades-lista-vigilada)
 - [Reglas de alerta](#reglas-de-alerta)
 - [Notificaciones](#notificaciones)
@@ -108,14 +108,14 @@ deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
 La barra **recuerda como la dejaste**: el lado, el ancho y si estaba abierta o
 cerrada. Al recargar la pagina se restaura en ese estado.
 
-## Las siete pestanas
+## Las seis pestanas
 
 En la parte superior del panel:
 
 - **Dashboard**: resumen de la flota. Tarjetas con en línea, sin señal,
   detenidas, en movimiento, en zonas y avisos del día. Las tarjetas son
   **clicables**: al pulsar una se abre la pestaña Unidades filtrada por ese
-  estado (o Avisos / Geocercas). Incluye una **barra de distribución** de la
+  estado (o Avisos / Zonas). Incluye una **barra de distribución** de la
   flota (en movimiento / detenidas / sin señal), la gráfica de unidades en
   línea, una lista de **"Requieren atención"** con las 5 unidades más
   urgentes (sin señal, exceso, desviadas o detenidas) que abren su ventana
@@ -130,19 +130,17 @@ En la parte superior del panel:
   medias, bajas). Cada aviso indica la regla que lo genero y la hora.
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
   trazado, ETA y acciones para recalcular, exportar o eliminar.
-- **Geocercas**: cuantas unidades hay dentro de cada geocerca y cuales.
+- **Zonas**: fusiona las **geocercas de la plataforma** (nombre y unidades
+  dentro, con boton **Recargar**) y las **zonas de riesgo** (dona con la
+  distribucion por nivel, histograma de scores, KPIs clicables Total/Alto/
+  Medio/Bajo, busqueda libre, chips de nivel, 6 criterios de orden, vista
+  agrupada o plana, drag-and-drop de CSV/JSON y exportacion a CSV / GeoJSON /
+  portapapeles). Ver [Zonas de riesgo](#zonas-de-riesgo).
 - **Caravana**: unidades (vigiladas o no) que acompanian a una unidad
   "lider" en la misma ruta (proyeccion al eje) o dentro del radio de
   cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
-- **Riesgo**: zonas de alto riesgo delictivo alimentadas por una URL o un
-  archivo CSV/JSON local. Muestra una **dona** con la distribucion por nivel,
-  un **histograma** de scores, KPIs clicables (Total / Alto / Medio / Bajo),
-  un slider para el score minimo, busqueda libre, chips de nivel, 6 criterios
-  de orden, vista agrupada por estado o plana, **drag-and-drop** de archivos y
-  exportacion a CSV / GeoJSON / portapapeles. Ver
-  [Zonas de riesgo](#zonas-de-riesgo).
 
 ## Vigilar unidades (lista vigilada)
 
@@ -556,9 +554,8 @@ te pedirá confirmación.
 | `Alt` + `2` | Unidades |
 | `Alt` + `3` | Avisos |
 | `Alt` + `4` | Rutas |
-| `Alt` + `5` | Geocercas |
+| `Alt` + `5` | Zonas |
 | `Alt` + `6` | Caravana |
-| `Alt` + `7` | Riesgo |
 | `Alt` + `P` | Mostrar u ocultar la barra lateral |
 | `Alt` + `L` | Mostrar u ocultar la barra lateral |
 | `Alt` + `H` | Plegar la barra de botones |

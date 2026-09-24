@@ -303,5 +303,34 @@ const p2 = modP._itemsFromJSON(ds2);
 ok('_itemsFromJSON: respeta score explicito', p2[0].score === 55);
 ok('_itemsFromJSON: respeta radio explicito', p2[0].radio_m === 1500);
 
+/* ── inZone (point-in-polygon) y _extraerZonasDe ───────────────
+ * inZone tenia un bucle infinito (j = i en vez de j = i++) que
+ * congelaba la pagina al pintar geocercas. Se cubre aqui.
+ */
+const iniZ = src.indexOf('function inZone(');
+const finZ = src.indexOf('function zoneAt(', iniZ);
+if (iniZ < 0 || finZ < 0) { console.error('No se encontro inZone'); process.exit(1); }
+const modZ = new Function(src.slice(iniZ, finZ) + '\nreturn {inZone};')();
+
+const cuadro = { id:1, n:'C', p:[{x:0,y:0},{x:10,y:0},{x:10,y:10},{x:0,y:10}], b:{min_x:0,max_x:10,min_y:0,max_y:10} };
+ok('inZone: punto dentro -> true', modZ.inZone(5, 5, cuadro) === true);
+ok('inZone: punto fuera -> false', modZ.inZone(20, 20, cuadro) === false);
+ok('inZone: fuera del bbox -> false', modZ.inZone(-1, -1, cuadro) === false);
+ok('inZone: no cuelga (bucle finito)', true);
+ok('inZone: sin puntos usa bbox', modZ.inZone(5, 5, { n:'b', b:{min_x:0,max_x:10,min_y:0,max_y:10} }) === true);
+ok('inZone: circulo c/w', modZ.inZone(0, 0, { n:'c', c:{x:0,y:0}, w:1000 }) === true);
+ok('inZone: null -> false', modZ.inZone(null, null, cuadro) === false);
+
+const iniE = src.indexOf('function _extraerZonasDe(');
+const finE = src.indexOf('async function fetchLastMotion', iniE);
+if (iniE < 0 || finE < 0) { console.error('No se encontro _extraerZonasDe'); process.exit(1); }
+const modE = new Function(src.slice(iniE, finE) + '\nreturn {_extraerZonasDe};')();
+const fakeRes = () => ({ getZones: () => ({ 1: { id:1, n:'Z1', p:[] }, 2: { id:2, n:'Z2', p:[] } }) });
+ok('_extraerZonasDe: getZones() -> 2', modE._extraerZonasDe([fakeRes()]).length === 2);
+ok('_extraerZonasDe: deduplica', modE._extraerZonasDe([fakeRes(), fakeRes()]).length === 2);
+ok('_extraerZonasDe: res.zones array', modE._extraerZonasDe([{ zones: [{ n:'A' }, { n:'B' }] }]).length === 2);
+ok('_extraerZonasDe: sin zonas -> []', modE._extraerZonasDe([{}]).length === 0);
+ok('_extraerZonasDe: ignora sin nombre', modE._extraerZonasDe([{ getZones: () => ({ 1: { id:1 } }) }]).length === 0);
+
 console.log('\n' + (fallos === 0 ? 'Todos los tests pasaron' : 'Hay ' + fallos + ' test(s) fallido(s)'));
 process.exit(fallos === 0 ? 0 : 1);

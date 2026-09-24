@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.7.0
+// @version      5.8.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -128,16 +128,46 @@
      * no este disponible. Todos son caracteres estandar que cualquier
      * fuente sans-serif moderna sabe dibujar. */
     const UIS = Object.freeze({
-        riesgo: '\u26A0',     refresh: '\u27F3',  load: '\u231B',
-        clear: '\u232B',       gear: '\u2699',     info: '\u24D8',
-        warn: '\u26A0',        down: '\u25BE',     up: '\u25B4',
-        arrowDown: '\u2193',   arrowUp: '\u2191',  smallDown: '\u25BE',
-        smallRight: '\u25B8',  filter: '\u25A3',   find: '\u2315',
-        csv: '\u2193',         export: '\u2913',   copy: '\u2398',
-        zone: '\u25A2',        expand: '\u229E',   collapse: '\u229F',
-        bullet: '\u2022',      pin: '\u25CE',
-        drop: '\u2913',        trash: '\u2716',    check: '\u2713',
-        x: '\u2715',           right: '\u2192',    left: '\u2190'
+        dashboard: '\u25A6',   // ▦ cuadricula (resumen)
+        panel:     '\u25A4',   // ▤ lista
+        online:    '\u25CF',   // ● en linea
+        offline:   '\u25CB',   // ○ sin senal
+        moving:    '\u25B6',   // ▶ en movimiento
+        stopped:   '\u25A0',   // ■ detenida
+        zone:      '\u25A2',   // ▢ zona / geocerca
+        map:       '\u25A3',   // ▣ zonas ocupadas
+        riesgo:    '\u26A0',   // ⚠ zona de riesgo
+        alertas:   '\u2691',   // ⚑ avisos
+        info:      '\u24D8',   // ⓘ informacion
+        warn:      '\u26A0',   // ⚠ advertencia
+        ok:        '\u2713',   // ✓ correcto
+        error:     '\u2716',   // ✖ error
+        refresh:   '\u27F3',   // ⟳ recargar
+        load:      '\u231B',   // ⌛ cargando
+        clear:     '\u232B',   // ⌫ limpiar
+        gear:      '\u2699',   // ⚙ ajustes
+        filter:    '\u25BD',   // ▽ filtrar
+        search:    '\u2315',   // ⌕ buscar
+        drop:      '\u21A7',   // ↧ soltar archivo
+        csv:       '\u2913',   // ⤓ descargar
+        export:    '\u2912',   // ⤒ exportar
+        copy:      '\u2398',   // ⎘ copiar
+        expand:    '\u229E',   // ⊞ expandir
+        collapse:  '\u229F',   // ⊟ colapsar
+        down:      '\u25BE',   // ▾ abajo
+        up:        '\u25B4',   // ▴ arriba
+        smallDown: '\u25BE',   // ▾
+        smallRight:'\u25B8',   // ▸
+        bullet:    '\u2022',   // • punto
+        pin:       '\u25CE',   // ◎ ubicacion
+        route:     '\u27A4',   // ➤ ruta
+        clock:     '\u25F4',   // ◴ tiempo
+        speed:     '\u25B6',   // ▶ velocidad
+        trash:     '\u2716',   // ✖ borrar
+        check:     '\u2713',   // ✓
+        x:         '\u2715',   // ✕
+        right:     '\u2192',   // →
+        left:      '\u2190'    // ←
     });
 
     const COL = Object.freeze({
@@ -162,7 +192,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.7.0';
+    const VER = '5.8.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -521,20 +551,55 @@
     }
     async function fetchZones() {
         if (!APP.config.loadZones) return [];
-        const r = await remoteCall('core/search_items', {
-            spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
-            force: 1, flags: 1 | 4096, from: 0, to: 0
-        });
-        const out = [];
-        ((r.items || [])).forEach((res) => {
+        // Wialon expone las geocercas (zones) en los recursos. El flag puede
+        // variar entre versiones, asi que probamos varias combinaciones y
+        // aceptamos getZones() o la propiedad zones.
+        const intentos = [1 | 4096, 1 | 4096 | 2, 1 | 8192, 1 | 4096 | 8192];
+        let out = [];
+        for (let i = 0; i < intentos.length; i++) {
+            let r;
             try {
-                if (typeof res.getZones !== 'function') return;
-                const zs = res.getZones() || {};
-                Object.keys(zs).forEach((k) => out.push(zs[k]));
+                r = await remoteCall('core/search_items', {
+                    spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
+                    force: 1, flags: intentos[i], from: 0, to: 0
+                });
+            } catch (_) { continue; }
+            const items = r.items || [];
+            const zs = _extraerZonasDe(items);
+            if (zs.length) { out = zs; break; }
+        }
+        APP.zonasPorNombre = new Map(out.map((z) => [z.n || '', z]));
+        if (APP.unlocked) { try { log('geocercas:', out.length); } catch (_) {} }
+        return out;
+    }
+    // Extrae las geocercas de la lista de recursos de Wialon, tolerando
+    // distintas formas (getZones(), res.zones objeto o array).
+    function _extraerZonasDe(items) {
+        const out = [];
+        (items || []).forEach((res) => {
+            try {
+                let zs = null;
+                if (typeof res.getZones === 'function') zs = res.getZones();
+                if (!zs && res.zones && typeof res.zones === 'object') zs = res.zones;
+                if (!zs) return;
+                if (Array.isArray(zs)) {
+                    zs.forEach((z) => { if (z && z.n) out.push(z); });
+                } else {
+                    Object.keys(zs).forEach((k) => {
+                        const z = zs[k];
+                        if (z && z.n) out.push(z);
+                    });
+                }
             } catch (_) { /* noop */ }
         });
-        APP.zonasPorNombre = new Map(out.map((z) => [z.n || '', z]));
-        return out;
+        // Desduplica por id/nombre para no repetir si varios flags devuelven lo mismo.
+        const vistos = new Set();
+        return out.filter((z) => {
+            const k = z.id != null ? ('id:' + z.id) : ('n:' + z.n);
+            if (vistos.has(k)) return false;
+            vistos.add(k);
+            return true;
+        });
     }
     async function fetchLastMotion(uid, minutos) {
         const ahora = Math.floor(Date.now() / 1000);
@@ -559,7 +624,9 @@
             const p = z.p;
             if (Array.isArray(p) && p.length >= 3) {
                 let inside = false;
-                for (let i = 0, j = p.length - 1; i < p.length; j = i) {
+                // Ray-casting. OJO: j = i++ incrementa i; con j = i el bucle
+                // se quedaba infinito y congelaba la pagina al pintar geocercas.
+                for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
                     const a = p[i], c = p[j];
                     const xi = (a.x != null) ? a.x : a[0];
                     const yi = (a.y != null) ? a.y : a[1];
@@ -3939,8 +4006,23 @@
             "#rondo-dash .rondo-dash-list .rondo-atencion-item{padding:4px 6px;border-radius:0;background:transparent}\n" +
             "#rondo-dash .rondo-dash-empty{padding:8px;color:var(--rondo-fg-mute);font-size:11px;text-align:center}\n" +
             "#rondo-dash .kpi[data-kpi]{cursor:pointer}\n" +
-            "#rondo-dash .kpi[data-kpi]::after{content:''}\n" +
+            "#rondo-dash .kpi .kpi-ico{position:absolute;right:7px;top:6px;font-size:14px;line-height:1;opacity:.85}\n" +
+            "#rondo-dash .kpi.ok .kpi-ico{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-dash .kpi.bad .kpi-ico{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dash .kpi.warn .kpi-ico{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dash .kpi.sub .kpi-ico{color:var(--rondo-accent-2)}\n" +
+            "#rondo-dash .kpi .kpi-etq{padding-right:18px}\n" +
             "#rondo-dash .rondo-atencion-item:hover{background:var(--rondo-bg-strong)}\n" +
+            /* Tarjeta de actualizaciones del Dashboard */
+            "#rondo-dash .rondo-upd{display:flex;align-items:center;gap:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:7px 9px}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-ico{font-size:16px;color:var(--rondo-accent-2);flex-shrink:0;width:18px;text-align:center}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-ico.ok{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-ico.warn{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-ico.load{color:var(--rondo-accent-2)}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-txt b{font-size:11.5px;color:var(--rondo-fg);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-txt span{font-size:10.5px;color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash .rondo-upd .rondo-upd-btn-ok{background:linear-gradient(135deg,#2e7d32,#43a047);color:#fff;border-color:transparent}\n" +
             "#rondo-panel .tabla{padding:8px 4px}\n" +
             "#rondo-panel .tabla table{width:auto;max-width:100%;min-width:100%;margin:0 auto;border-collapse:collapse}\n" +
             "#rondo-panel .rondo-caravana-bar{display:flex;align-items:center;gap:8px;padding:8px 10px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
@@ -3960,7 +4042,7 @@
             "#rondo-panel .rondo-cv-card.contrario{border-color:rgba(var(--rondo-crit-rgb),.6)}\n" +
             "#rondo-panel .rondo-cv-empty{padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
             /* ── Pestaña Riesgo ───────────────────────────────────── */
-            "#rondo-panel #rondo-wrap-riesgo{padding:8px;display:flex;flex-direction:column;gap:9px;overflow:auto;flex:1}\n" +
+            "#rondo-panel #rondo-wrap-zonas{padding:8px;display:flex;flex-direction:column;gap:9px;overflow:auto;flex:1}\n" +
             /* Hero: header grande con titulo, KPIs y distribution bar */
             "#rondo-panel .rondo-riesgo-hero{background:linear-gradient(135deg,var(--rondo-bg-soft),var(--rondo-bg));border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius);padding:10px 12px;display:flex;flex-direction:column;gap:8px;position:relative;overflow:hidden;animation: rondoFadeUp .3s var(--rondo-easing) both}\n" +
             "#rondo-panel .rondo-riesgo-hero::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:linear-gradient(180deg,var(--rondo-bad),var(--rondo-warn),var(--rondo-fg-mute))}\n" +
@@ -4233,9 +4315,12 @@
             "#rondo-panel .rondo-uni-card .u-ruta-bar{flex:1;height:5px;background:var(--rondo-bg);border-radius:3px;overflow:hidden;min-width:40px}\n" +
             "#rondo-panel .rondo-uni-card .u-ruta-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-uni-card .u-ruta-meta{font:600 10px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;flex-shrink:0}\n" +
-            "#rondo-panel table.zone{table-layout:fixed}\n" +
-            "#rondo-panel table.zone th:first-child,#rondo-panel table.zone td:first-child{width:45%}\n" +
-            "#rondo-panel table.zone td{padding:5px 9px;white-space:normal;word-break:break-word;vertical-align:top}\n" +
+            "#rondo-panel table.zone{width:100%;border-collapse:collapse;table-layout:fixed}\n" +
+            "#rondo-panel table.zone th{position:sticky;top:0;background:var(--rondo-bg-soft);z-index:1}\n" +
+            "#rondo-panel table.zone th:first-child,#rondo-panel table.zone td:first-child{width:42%}\n" +
+            "#rondo-panel table.zone td{padding:5px 8px;white-space:normal;word-break:break-word;vertical-align:top;font-size:11.5px}\n" +
+            "#rondo-panel .rondo-geo-tools{display:flex;gap:5px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-geo-list{max-height:220px;overflow:auto;border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);background:var(--rondo-bg)}\n" +
             "#rondo-panel table.zone tr.fila td:first-child{color:var(--rondo-accent-2);font-weight:600}\n" +
             "#rondo-panel .zone .contador-unidades{color:var(--rondo-ok-fg);font-weight:600}\n" +
             "#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);padding:14px;\n" +
@@ -4614,9 +4699,9 @@
             '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones"><span class="rondo-mi">' + ICO.panel + '</span><span class="etqt">Unidades</span><span class="contador" id="rondo-c-tot">0</span></button>' +
             '<button class="tab" data-tab="alertas" title="Historial de avisos"><span class="rondo-mi">' + ICO.alertas + '</span><span class="etqt">Avisos</span><span class="contador" id="rondo-c-al">0</span></button>' +
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
-            '<button class="tab" data-tab="geocercas" title="Geocercas y unidades dentro"><span class="rondo-mi">' + ICO.geocercas + '</span><span class="etqt">Geocercas</span><span class="contador" id="rondo-c-zn">0</span></button>' +
+            '<button class="tab" data-tab="zonas" title="Geocercas de la plataforma y zonas de riesgo"><span class="rondo-usym md">' + UIS.map + '</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-mi">' + ICO.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
-            '<button class="tab" data-tab="riesgo" title="Zonas de riesgo"><span class="rondo-mi">' + ICO.riesgo + '</span><span class="contador" id="rondo-c-riesgo">0</span></button>' +
+            
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
             '<input class="filtro rondo-tool" id="rondo-filtro" data-tabs="unidades,alertas,geocercas" placeholder="' + esc(LANG.busq) + '">' +
@@ -4652,13 +4737,21 @@
             '<b>Resumen de la flota</b>' +
             '<span class="rondo-dash-vel" id="rondo-dash-vel"></span>' +
             '</div>' +
+            '<div class="rondo-upd" id="rondo-upd-card">' +
+            '<span class="rondo-usym rondo-upd-ico" id="rondo-upd-ico">' + UIS.refresh + '</span>' +
+            '<div class="rondo-upd-txt">' +
+            '<b id="rondo-upd-titulo">Version ' + VER + '</b>' +
+            '<span id="rondo-upd-sub">Comprobando actualizaciones\u2026</span>' +
+            '</div>' +
+            '<button class="mini" id="rondo-upd-btn" title="Buscar actualizaciones"><span class="rondo-usym">' + UIS.refresh + '</span> Buscar</button>' +
+            '</div>' +
             '<div class="rondo-dash-kpis">' +
-            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
-            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo ultimo reporte supero el umbral · clic para verlas"><span class="kpi-etq">Sin senal</span><span class="kpi-val" id="rondo-kpi-off">0</span><span class="kpi-pct" id="rondo-kpi-off-pct"></span></div>' +
-            '<div class="kpi warn" data-kpi="detenida" title="Unidades en linea con velocidad muy baja · clic para verlas"><span class="kpi-etq">Det.</span><span class="kpi-val" id="rondo-kpi-det">0</span></div>' +
-            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en linea con velocidad normal · clic para verlas"><span class="kpi-etq">En mov.</span><span class="kpi-val" id="rondo-kpi-mov">0</span></div>' +
-            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas · clic para verlas"><span class="kpi-etq">En zonas</span><span class="kpi-val" id="rondo-kpi-zonas">0</span><span class="kpi-pct" id="rondo-kpi-zonas-pct"></span></div>' +
-            '<div class="kpi" data-kpi="alertas" title="Avisos desde la medianoche · clic para verlos"><span class="kpi-etq">Avisos hoy</span><span class="kpi-val" id="rondo-kpi-aho">0</span><span class="kpi-pct" id="rondo-kpi-criticos"></span></div>' +
+            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.online + '</span><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
+            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo ultimo reporte supero el umbral · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.offline + '</span><span class="kpi-etq">Sin senal</span><span class="kpi-val" id="rondo-kpi-off">0</span><span class="kpi-pct" id="rondo-kpi-off-pct"></span></div>' +
+            '<div class="kpi warn" data-kpi="detenida" title="Unidades en linea con velocidad muy baja · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.stopped + '</span><span class="kpi-etq">Det.</span><span class="kpi-val" id="rondo-kpi-det">0</span></div>' +
+            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en linea con velocidad normal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.moving + '</span><span class="kpi-etq">En mov.</span><span class="kpi-val" id="rondo-kpi-mov">0</span></div>' +
+            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.map + '</span><span class="kpi-etq">En zonas</span><span class="kpi-val" id="rondo-kpi-zonas">0</span><span class="kpi-pct" id="rondo-kpi-zonas-pct"></span></div>' +
+            '<div class="kpi" data-kpi="alertas" title="Avisos desde la medianoche · clic para verlos"><span class="kpi-ico rondo-usym">' + UIS.alertas + '</span><span class="kpi-etq">Avisos hoy</span><span class="kpi-val" id="rondo-kpi-aho">0</span><span class="kpi-pct" id="rondo-kpi-criticos"></span></div>' +
             '</div>' +
             '<div class="rondo-dash-block">' +
             '<div class="rondo-dash-block-head">Distribucion de la flota</div>' +
@@ -4712,10 +4805,6 @@
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
             '</div>' +
-            '<div class="tabla" id="rondo-wrap-geocercas" style="display:none">' +
-            '<table class="zone"><thead><tr><th>Geocerca</th><th>Dentro</th></tr></thead>' +
-            '<tbody id="rondo-body-zonas"></tbody></table>' +
-            '</div>' +
             '<div class="tabla" id="rondo-wrap-caravana" style="display:none">' +
             '<div class="rondo-caravana-bar">' +
             '<label for="rondo-caravana-sel" style="font-size:11px;color:var(--rondo-fg-dim)">Unidad vigilada:</label>' +
@@ -4723,7 +4812,19 @@
             '</div>' +
             '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
             '</div>' +
-            '<div class="tabla" id="rondo-wrap-riesgo" style="display:none">' +
+            '<div class="tabla" id="rondo-wrap-zonas" style="display:none">' +
+            '<div class="rondo-seccion">' +
+            '<h4><span class="rondo-usym md">' + UIS.map + '</span> Geocercas<span class="rondo-count" id="rondo-geo-count">0</span></h4>' +
+            '<div class="rondo-geo-tools">' +
+            '<button class="mini" id="rondo-geo-recargar" title="Volver a consultar las geocercas de la plataforma"><span class="rondo-usym">' + UIS.refresh + '</span> Recargar</button>' +
+            '<button class="mini" id="rondo-geo-configurar" title="Ajustes > General: Cargar geocercas"><span class="rondo-usym">' + UIS.gear + '</span> Ajustes</button>' +
+            '</div>' +
+            '<div class="rondo-geo-list">' +
+            '<table class="zone"><thead><tr><th>Geocerca</th><th>Dentro</th></tr></thead>' +
+            '<tbody id="rondo-body-zonas"></tbody></table>' +
+            '</div>' +
+            '</div>' +
+            
             '<div class="rondo-riesgo-hero">' +
             '<div class="rondo-riesgo-dona" id="rondo-riesgo-dona" title="Distribucion por nivel">' +
             '<svg viewBox="0 0 74 74" aria-hidden="true">' +
@@ -5328,7 +5429,7 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
-        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'geocercas', 'caravana', 'riesgo'];
+        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'zonas'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
@@ -5343,9 +5444,8 @@
         else if (name === 'unidades') paintTabla();
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
-        else if (name === 'geocercas') paintGeocercas();
         else if (name === 'caravana') paintCaravana();
-        else if (name === 'riesgo') paintRiesgo();
+        else if (name === 'zonas') { paintGeocercas(); paintRiesgo(); }
         paintCounters();
         paintStateBadge();
         paintInfo();
@@ -5458,11 +5558,11 @@
             return;
         }
         const meta = {
-            offline: { col: 'var(--rondo-bad-fg)', ic: UIS.x },
-            vel: { col: 'var(--rondo-warn-fg)', ic: UIS.up },
-            desv: { col: 'var(--rondo-warn-fg)', ic: UIS.zone },
-            det: { col: 'var(--rondo-accent-2)', ic: UIS.bullet },
-            'ruta-pend': { col: 'var(--rondo-warn-fg)', ic: UIS.zone }
+            offline: { col: 'var(--rondo-bad-fg)', ic: UIS.offline },
+            vel: { col: 'var(--rondo-warn-fg)', ic: UIS.speed },
+            desv: { col: 'var(--rondo-warn-fg)', ic: UIS.route },
+            det: { col: 'var(--rondo-accent-2)', ic: UIS.stopped },
+            'ruta-pend': { col: 'var(--rondo-warn-fg)', ic: UIS.route }
         };
         setHtml(cont, top.map((it) => {
             const mm = meta[it.tipo] || meta.det;
@@ -5530,13 +5630,14 @@
                 )).join('')
                 : '<div class="rondo-dash-empty">' + LANG.recientesNone + '</div>');
         }
+        pintarUpdCard();
         // paintSparkline ya no se usa (sparkline oculto). Mantengo la funcion vacia
         // por compatibilidad si alguien la llama desde otro lugar.
         paintSparkline();
     }
     function paintSparkline() {
         const svg = byId('rondo-spark');
-        if (!svg) return;
+        if (!svg) { return; }
         const on = (APP.kpi.online || []).slice(-60);
         const off = (APP.kpi.offline || []).slice(-60);
         if (on.length < 2) {
@@ -5732,13 +5833,21 @@
     }
     function paintGeocercas() {
         const body = byId('rondo-body-zonas');
+        const countEl = byId('rondo-geo-count');
+        const total = APP.zonas.length;
+        if (countEl) countEl.textContent = total;
         if (!body) return;
-        if (!APP.config.loadZones || !APP.zonas.length) {
-            setHtml(body, '<tr><td colspan="2">' + emptyState(ICO.geocercas, 'Sin geocercas cargadas',
-                APP.config.loadZones
-                    ? 'No se encontraron geocercas en tu cuenta de Wialon.'
-                    : 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.',
-                APP.config.loadZones ? '' : '<button class="mini rondo-vacio-acc" data-acc="ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span> Abrir Ajustes</button>') + '</td></tr>');
+        if (!APP.config.loadZones || !total) {
+            const icon = UIS.map;
+            const hint = !APP.config.loadZones
+                ? 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.'
+                : 'No se encontraron geocercas en tu cuenta. Usa <b>Recargar</b> o revisa que tu usuario tenga geocercas en la plataforma.';
+            const accion = !APP.config.loadZones
+                ? '<button class="mini rondo-vacio-acc" data-acc="ajustes"><span class="rondo-usym">' + UIS.gear + '</span> Abrir Ajustes</button>'
+                : '<button class="mini" id="rondo-geo-vacio-recargar"><span class="rondo-usym">' + UIS.refresh + '</span> Recargar</button>';
+            setHtml(body, '<tr><td colspan="2">' + emptyState(icon, 'Sin geocercas cargadas', hint, accion) + '</td></tr>');
+            const b = byId('rondo-geo-vacio-recargar');
+            if (b) b.addEventListener('click', () => recargarGeocercas());
             return;
         }
         const unidades = APP.unidades.filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
@@ -5756,13 +5865,26 @@
                 '<tr class="fila" data-zona="' + esc(z.n || '') + '">' +
                 '<td>' + esc(z.n || ('Zona ' + z.id)) + '</td>' +
                 '<td><span class="contador-unidades">' + dentro.length + '</span> ' +
-                (dentro.length ? '· ' + esc(ecos.slice(0, 6).join(' · ')) + (ecos.length > 6 ? ' +' + (ecos.length - 6) : '') : 'vacia') +
+                (dentro.length ? esc(ecos.slice(0, 8).join(' \u00b7 ')) + (ecos.length > 8 ? ' +' + (ecos.length - 8) : '') : 'vacia') +
                 '</td>' +
                 '</tr>'
             );
         }
-        setHtml(body, rows.join('') || '<tr><td colspan="2">' + emptyState(ICO.filtro, LANG.sinCoin,
+        setHtml(body, rows.join('') || '<tr><td colspan="2">' + emptyState(UIS.filter, LANG.sinCoin,
             'Ninguna geocerca coincide con el filtro actual.') + '</td></tr>');
+    }
+    // Vuelve a consultar las geocercas de la plataforma y repinta la pestaña.
+    async function recargarGeocercas() {
+        try {
+            APP.config.loadZones = true;
+            APP.zonas = await fetchZones();
+            paintGeocercas();
+            if (APP.tab === 'zonas') paintRiesgo();
+            if (APP.zonas.length) adviceOk('Geocercas recargadas', APP.zonas.length + ' geocercas');
+            else adviceWarn('Sin geocercas', 'La plataforma no devolvio geocercas. Revisa que tu usuario las tenga.');
+        } catch (e) {
+            adviceErr('No se pudieron cargar', (e && e.message) || 'error');
+        }
     }
     function paintViajes() {
         const cont = byId('rondo-lista-viajes');
@@ -6052,7 +6174,7 @@
         const bajoEl = byId('rondo-riesgo-kpi-bajo');
         if (bajoEl) bajoEl.textContent = stats.bajo;
         // Marca el KPI activo segun el nivel filtrado
-        document.querySelectorAll('#rondo-wrap-riesgo .rondo-riesgo-kpi').forEach((k) => {
+        document.querySelectorAll('#rondo-wrap-zonas .rondo-riesgo-kpi').forEach((k) => {
             k.classList.toggle('activo', k.dataset.kpiNivel === (APP.riesgoNivel || 'todas'));
         });
         // ── Filtros (sync UI con APP.riesgoFiltro/Nivel/Orden/Vista) ──
@@ -6064,7 +6186,7 @@
         if (ordenSel && ordenSel.value !== (APP.riesgoOrden || 'score')) ordenSel.value = APP.riesgoOrden || 'score';
         const vistaSel = byId('rondo-riesgo-vista');
         if (vistaSel && vistaSel.value !== (APP.riesgoVista || 'grupo')) vistaSel.value = APP.riesgoVista || 'grupo';
-        document.querySelectorAll('#rondo-wrap-riesgo .rondo-chip').forEach((c) => {
+        document.querySelectorAll('#rondo-wrap-zonas .rondo-chip').forEach((c) => {
             c.classList.toggle('activo', c.dataset.nivel === (APP.riesgoNivel || 'todas'));
         });
         // ── Lista: filtrar -> ordenar -> (agrupar o plano) ────────────
@@ -6418,6 +6540,64 @@
             }
         }
         pintarInfoUpdate();
+        pintarUpdCard();
+    }
+    // Tarjeta de actualizaciones del Dashboard. Muestra el estado y un boton
+    // que, cuando hay version nueva, lleva al raw de GitHub para que el gestor
+    // de userscripts muestre el dialogo de instalacion.
+    function pintarUpdCard() {
+        const card = byId('rondo-upd-card');
+        if (!card) return;
+        const u = APP.update;
+        const ico = byId('rondo-upd-ico');
+        const tit = byId('rondo-upd-titulo');
+        const sub = byId('rondo-upd-sub');
+        const btn = byId('rondo-upd-btn');
+        const setIco = (sym, cls) => {
+            if (!ico) return;
+            ico.textContent = sym;
+            ico.className = 'rondo-usym rondo-upd-ico' + (cls ? ' ' + cls : '') + (sym === UIS.load ? ' rondo-usym-spin' : '');
+        };
+        const canal = (u.canal === 'dev') ? ' (dev)' : '';
+        if (u.state === 'checking') {
+            setIco(UIS.load, 'load');
+            if (tit) tit.textContent = 'Version ' + VER;
+            if (sub) sub.textContent = 'Comprobando actualizaciones\u2026';
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="rondo-usym">' + UIS.load + '</span> Comprobando'; }
+        } else if (u.state === 'available') {
+            setIco(UIS.export, 'ok');
+            if (tit) tit.textContent = 'Actualizacion disponible: ' + (u.remote || '') + canal;
+            if (sub) sub.textContent = 'Instalada ' + VER + ' \u00b7 pulsa Actualizar para instalar desde GitHub';
+            if (btn) { btn.disabled = false; btn.classList.add('rondo-upd-btn-ok'); btn.innerHTML = '<span class="rondo-usym">' + UIS.export + '</span> Actualizar'; }
+        } else if (u.state === 'installed') {
+            setIco(UIS.check, 'ok');
+            if (tit) tit.textContent = 'Actualizacion instalada' + canal;
+            if (sub) sub.textContent = 'Recarga para aplicar la version nueva';
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Recargar'; }
+        } else if (u.state === 'current') {
+            setIco(UIS.check, 'ok');
+            if (tit) tit.textContent = 'Al dia \u00b7 ' + VER;
+            if (sub) sub.textContent = u.lastCheck ? ('Ultima comprobacion ' + new Date(u.lastCheck).toLocaleTimeString().slice(0, 5)) : 'Sin cambios';
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar'; }
+        } else if (u.state === 'error') {
+            setIco(UIS.warn, 'warn');
+            if (tit) tit.textContent = 'No se pudo comprobar';
+            if (sub) sub.textContent = (u.lastError || 'sin conexion') + ' \u00b7 pulsa Reintentar';
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Reintentar'; }
+        } else {
+            setIco(UIS.refresh, '');
+            if (tit) tit.textContent = 'Version ' + VER;
+            if (sub) sub.textContent = 'Comprueba si hay una version nueva';
+            if (btn) { btn.disabled = false; btn.innerHTML = '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar'; }
+        }
+        if (btn) btn.classList.toggle('rondo-upd-btn-ok', u.state === 'available' || u.state === 'installed');
+    }
+    // Accion del boton de la tarjeta de actualizaciones.
+    function updCardClick() {
+        const u = APP.update;
+        if (u.state === 'available') aplicarActualizacion();
+        else if (u.state === 'installed') recargarUnaVez();
+        else comprobarActualizacion();
     }
     function pintarInfoUpdate() {
         const el = byId('rondo-update-info');
@@ -6660,7 +6840,7 @@
     function bindKeys() {
         document.addEventListener('keydown', (e) => {
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
-                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'geocercas', '6': 'caravana', '7': 'riesgo' };
+                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana' };
                 if (tabs[e.key]) {
                     setTab(tabs[e.key]);
                     if (APP.panelHidden) togglePanel();
@@ -6927,7 +7107,7 @@
                 if (!kpi) return;
                 const acc = kpi.dataset.kpi;
                 if (acc === 'alertas') { setTab('alertas'); return; }
-                if (acc === 'zonas') { setTab('geocercas'); return; }
+                if (acc === 'zonas') { setTab('zonas'); return; }
                 APP.filtEstado = (acc === 'online') ? 'todas' : acc;
                 const selF = byId('rondo-filtro-estado');
                 if (selF) selF.value = APP.filtEstado;
@@ -6949,6 +7129,8 @@
         });
         byId('rondo-actualizar').addEventListener('click', aplicarActualizacion);
         updateBtn.addEventListener('click', aplicarActualizacion);
+        const updBtn = byId('rondo-upd-btn');
+        if (updBtn) updBtn.addEventListener('click', updCardClick);
         byId('rondo-nmolestar').addEventListener('click', () => { toggleNoMolestar(); });
         byId('rondo-test-btn').addEventListener('click', testNotify);
         byId('rondo-exportar-btn').addEventListener('click', exportConfig);
@@ -7412,7 +7594,7 @@
 
     /* ====================== RIESGO: BINDINGS ====================== */
     function bindRiesgo() {
-        const wrap = byId('rondo-wrap-riesgo');
+        const wrap = byId('rondo-wrap-zonas');
         if (!wrap) return;
         // ── Delegacion de change en inputs/selects de la pestana ──────
         wrap.addEventListener('change', (e) => {
@@ -7573,6 +7755,11 @@
         // Boton "Exportar" grande (muestra menu).
         const exportBig = byId('rondo-riesgo-exportar');
         if (exportBig) exportBig.addEventListener('click', () => mostrarMenuExportarRiesgo());
+        // ── Geocercas de la plataforma (pestana Zonas) ────────────────
+        const geoRec = byId('rondo-geo-recargar');
+        if (geoRec) geoRec.addEventListener('click', () => recargarGeocercas());
+        const geoCfg = byId('rondo-geo-configurar');
+        if (geoCfg) geoCfg.addEventListener('click', () => abrirAjustes());
         // ── Botones existentes (recargar / limpiar / archivo) ─────────
         const rec = byId('rondo-riesgo-recargar');
         if (rec) rec.addEventListener('click', () => cargarRiesgo());
