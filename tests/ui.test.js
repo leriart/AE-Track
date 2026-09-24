@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.0 en @UserScript', /@version\s+5\.14\.0/.test(src));
+ok('version 5.14.1 en @UserScript', /@version\s+5\.14\.1/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -447,6 +447,37 @@ ok('aplicarSugerenciaIA valida parametro conocido', /if \(!['"]\(s && s\.paramet
 ok('aiPatronesUI engancha handler por sugerencia', /rondo-ia-aplicar[\s\S]{0,2000}aplicarSugerenciaIA/.test(src));
 ok('abrirDialogo soporta onOpen', /if \(typeof opts\.onOpen === 'function'\)[\s\S]{0,200}opts\.onOpen\(el\)/.test(src));
 ok('save handler no requiere cambios para patrones', !/c-ia-patrones[\s\S]{0,300}cf\.ia/.test(src));
+
+// v5.14.1: sistema de updates rehecho.
+ok('VER constante existe', /const VER = ['"]5\.14\.1['"]/.test(src));
+ok('@version 5.14.1 sincronizado con VER', /@version\s+5\.14\.1[\s\S]{0,50000}const VER = ['"]5\.14\.1['"]/.test(src));
+ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
+ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
+ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
+ok('parseVersionHeader usa regex estricto', /parseVersionHeader[\s\S]{0,200}0-9/.test(src));
+ok('cmpVersion null-safe', /if \(!a \|\| !b \|\| typeof a !== 'string' \|\| typeof b !== 'string'\) return 0/.test(src));
+ok('parseVersionFromFilename existe', /function parseVersionFromFilename\(name\)/.test(src));
+ok('autodetectarVER existe', /function autodetectarVER\(/.test(src));
+ok('autodetectarVER usa document.currentScript', /document\.currentScript/.test(src));
+ok('autodetectarVER usa GM_xmlhttpRequest', /const gm = gmXhr\(\)/.test(src));
+ok('autodetectarVER avisa si VER declarado deriva', /VER declarado \([\s\S]+?\) no coincide con @version detectado/.test(src));
+ok('fetchVersionRemota usa httpRequest (no fetch directo)', /async function fetchVersionRemota[\s\S]{0,500}httpRequest\(/.test(src));
+ok('fetchVersionRemota no usa fetch directo', !/function fetchVersionRemota[\s\S]{0,400}await fetch\(/.test(src));
+ok('fetchVersionDesdeChangelogs existe', /async function fetchVersionDesdeChangelogs\(/.test(src));
+ok('UPDATE_CHANGELOGS_API apunta a api.github.com', /UPDATE_CHANGELOGS_API = 'https:\/\/api\.github\.com\/repos\/leriart\/AE-Track\/contents\/changelogs'/.test(src));
+ok('comprobarActualizacion prueba multiples fuentes', /intentos\.push\(\{ fuente: 'main'/.test(src) && /intentos\.push\(\{ fuente: 'dev'/.test(src) && /intentos\.push\(\{ fuente: 'changelogs'/.test(src));
+ok('estado unknown cuando todas las fuentes fallan', /APP\.update\.state = 'unknown'/.test(src));
+ok('finalizarUpdate maneja available/ahead/current', /APP\.update\.state = 'available'[\s\S]{0,2000}APP\.update\.state = 'ahead'[\s\S]{0,2000}APP\.update\.state = 'current'/.test(src));
+ok('guardarUpdatePersistente persiste lastCheck', /localStorage\.setItem\('rondo\.api\.update'/.test(src));
+ok('cargarUpdatePersistente restaura lastCheck', /localStorage\.getItem\('rondo\.api\.update'\)[\s\S]{0,400}APP\.update\.lastCheck/.test(src));
+ok('paintVersionChip existe', /function paintVersionChip\(/.test(src));
+ok('chip de version en cabecera', /id="rondo-version-chip"/.test(src));
+ok('CSS chip version color por estado', /rondo-version-chip\[data-estado=\\?"(available|current|ahead|checking|unknown|error)\\?"\]/.test(src));
+ok('click del chip fuerza comprobacion', /verChip[\s\S]{0,1500}comprobarActualizacion\(\)/.test(src));
+ok('doble click del chip abre Ajustes', /ahora - lastClickChip < 350[\s\S]{0,400}cfg="avanzado"/.test(src));
+ok('intervalo de check a 6h (no 30min)', /UPDATE_CHECK_INTERVAL_MS = 6 \* 60 \* 60 \* 1000/.test(src) && /setInterval\(comprobarActualizacion, UPDATE_CHECK_INTERVAL_MS\)/.test(src));
+ok('re-check al recuperar foco', /window\.addEventListener\('focus', focusHandler\)/.test(src) && /visibilitychange[\s\S]{0,300}focusHandler/.test(src));
+ok('cargarUpdatePersistente al arranque', /cargarUpdatePersistente\(\);[\s\S]{0,400}autodetectarVER\(\)/.test(src));
 
 // v5.14: regla predictiva de aproximacion a zona de riesgo.
 ok('default riesgoPredictMinScore = 4', /riesgoPredictMinScore:\s*4/.test(src));

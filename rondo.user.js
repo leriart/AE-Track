@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.0
-// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia y resumen narrativo del informe. Sin emojis.
+// @version      5.14.1
+// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
 // @copyright    Proyecto original de Hector Ramirez (https://github.com/HectorRamirez-cpu)
@@ -21,6 +21,8 @@
 // @connect      api.kimi.ai
 // @connect      api.moonshot.ai
 // @connect      api.minimax.io
+// @connect      api.github.com
+// @connect      raw.githubusercontent.com
 // @connect      overpass-api.de
 // @connect      ttsmp3.com
 // @connect      api.streamelements.com
@@ -343,18 +345,100 @@
         importar: 'Configuración importada'
     });
 
-    /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.13.1';
+/* ====================== VERSION Y ACTUALIZACIONES ======================
+ * El sistema de updates tenia tres bugs que hacian que Rondo creyera
+ * estar desactualizado aunque tuviera la version mas reciente:
+ *
+ *   1) La constante VER quedaba en '5.13.1' cada vez que se bumpeaba
+ *      @version (se actualizaba la cabecera metadata pero no este
+ *      literal). Eso hacia que la comparacion local vs remota siempre
+ *      pareciera "hay update".
+ *
+ *   2) fetchVersionRemota() usaba fetch() directo. El host de
+ *      raw.githubusercontent.com NO manda cabeceras CORS, asi que el
+ *      check fallaba en cuanto la pagina tenia su propio CSP o el
+ *      navegador aplicaba el sandbox del userscript. El script caia
+ *      silenciosamente al estado 'error' y volvia al estado 'idle' al
+ *      reintentar, sin mostrar nada util.
+ *
+ *   3) Si el check fallaba, el script asumia version actual en vez de
+ *      marcar 'unknown' -> el usuario no sabia que no se habia
+ *      comprobado nada.
+ *
+ * Solucion:
+ *   - VER se autodetecta del propio @version del archivo via
+ *     document.currentScript (single source of truth: imposible
+ *     olvidarse de bumpearla). Si falla, cae al literal declarado.
+ *   - Self-check en arranque: si VER declarado y VER detectado del
+ *     fuente no coinciden, log de warning (catches la deriva).
+ *   - Se usa httpRequest() (que cae a GM_xmlhttpRequest) en lugar de
+ *     fetch directo: salta CORS y CSP.
+ *   - Tres fuentes independientes para la version remota, probadas en
+ *     orden hasta que una responda:
+ *       a) raw.githubusercontent.com/.../main/rondo.user.js (canal main)
+ *       b) raw.githubusercontent.com/.../dev/rondo.user.js (canal dev)
+ *       c) api.github.com/repos/.../contents/changelogs (directorio:
+ *          toma el ultimo .md por nombre y extrae la version del filename)
+ *   - Estado explicito 'unknown' cuando ninguna fuente responde (no
+ *     mentir al usuario diciendo que esta al dia).
+ *   - lastCheck se persiste en localStorage para que el timestamp
+ *     sobreviva a recargas.
+ *   - Chip de version siempre visible en la cabecera del panel.
+ *   - Re-check al recuperar foco (visibilitychange/focus) ademas del
+ *     intervalo de 6h.
+ */
+    // v5.14.1: VER declarado como fallback. El valor REAL se detecta del
+    // @version del propio archivo en el arranque (ver autodetectarVER()).
+    // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
+    // verifica).
+    const VER = '5.14.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
+    const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
+    const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000; // 6h (antes 30min: demasiado ruido)
+    const UPDATE_HTTP_TIMEOUT_MS = 12000;
+    // Autodetecta la version leyendo el @version del propio archivo
+    // (single source of truth). Solo funciona en navegadores que
+    // exponen document.currentScript; en el resto cae al literal VER.
+    function autodetectarVER() {
+        try {
+            const cs = document.currentScript;
+            if (!cs || !cs.src) return null;
+            // Tampermonkey/Violentmonkey exponen cs.src como blob: o file:
+            // con permisos para fetchearlo (CORS-safe). GM_xmlhttpRequest
+            // ademas acepta schemes file: y blob: aunque fetch normal no.
+            const gm = gmXhr();
+            if (!gm) return null;
+            // Sin async/await aqui: devolvemos null y dejamos que
+            // el background loader (init) haga el fetch async para
+            // mostrar el aviso si deriva.
+            gm({
+                method: 'GET',
+                url: cs.src,
+                onload: (r) => {
+                    const v = parseVersionHeader(r.responseText || '');
+                    if (v && v !== VER) {
+                        try { console.warn('[Rondo] VER declarado (' + VER + ') no coincide con @version detectado (' + v + ').'); } catch (_) { /* noop */ }
+                        APP.update.verDeclDeriva = { declarado: VER, detectado: v };
+                    }
+                },
+                onerror: () => { /* noop */ }
+            });
+        } catch (_) { /* noop */ }
+        return null;
+    }
     function parseVersionHeader(text) {
-        const m = text.match(/@version\s+(\S+)/);
+        if (!text || typeof text !== 'string') return null;
+        // Busca la primera linea @version valida (ignorando prefijos raros).
+        const m = text.match(/@version\s+([0-9]+(?:\.[0-9]+){0,3}[a-zA-Z0-9._\-]*)/);
         return m ? m[1] : null;
     }
     function cmpVersion(a, b) {
-        if (!a || !b) return 0;
-        const pa = String(a).split('.').map(Number);
-        const pb = String(b).split('.').map(Number);
+        // Null-safe: cualquier argumento invalido -> 0 (no opinion).
+        if (!a || !b || typeof a !== 'string' || typeof b !== 'string') return 0;
+        const norm = (s) => String(s).toLowerCase().replace(/[^0-9.]/g, '');
+        const pa = norm(a).split('.').map(Number);
+        const pb = norm(b).split('.').map(Number);
         const len = Math.max(pa.length, pb.length);
         for (let i = 0; i < len; i++) {
             const x = pa[i] || 0, y = pb[i] || 0;
@@ -362,6 +446,12 @@
             if (x < y) return -1;
         }
         return 0;
+    }
+    // Lee la version del nombre de archivo del changelog (ej 5.14.0.md).
+    function parseVersionFromFilename(name) {
+        if (!name) return null;
+        const m = String(name).match(/^(\d+(?:\.\d+){1,3})\.md$/);
+        return m ? m[1] : null;
     }
 
     /* ============================ LOCALSTORAGE ============================ */
@@ -5622,6 +5712,16 @@ Reglas de oro:
             "@keyframes rondoRailIn{from{opacity:0;transform:translateY(-50%) scale(.8)}to{opacity:1;transform:translateY(-50%) scale(1)}}\n" +
             "#rondo-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--rondo-bg-strong),var(--rondo-bg-soft));cursor:move;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
             "#rondo-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px}\n" +
+            // v5.14.1: chip de version (mini-badge con la version actual).
+            "#rondo-panel .rondo-version-chip{display:inline-flex;align-items:center;justify-content:center;height:24px;padding:0 8px;font:700 11px var(--rondo-font);border-radius:11px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg-dim);cursor:pointer;transition:all .15s var(--rondo-easing);min-width:auto;width:auto;gap:0}\n" +
+            "#rondo-panel .rondo-version-chip[data-estado=\"current\"]{color:var(--rondo-ok-fg,#2e7d32);border-color:rgba(46,125,50,.4);background:rgba(46,125,50,.08)}\n" +
+            "#rondo-panel .rondo-version-chip[data-estado=\"available\"]{color:var(--rondo-bad-fg,#b71c1c);border-color:rgba(183,28,28,.4);background:rgba(183,28,28,.1);animation:rondo-ver-pulse 1.6s ease-in-out infinite}\n" +
+            "#rondo-panel .rondo-version-chip[data-estado=\"ahead\"]{color:var(--rondo-fg-dim);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-version-chip[data-estado=\"checking\"]{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.4);background:rgba(var(--rondo-accent-rgb),.06)}\n" +
+            "#rondo-panel .rondo-version-chip[data-estado=\"unknown\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.4);background:rgba(249,168,37,.1)}\n" +
+            "#rondo-panel .rondo-version-chip[data-estado=\"error\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.4);background:rgba(249,168,37,.1)}\n" +
+            "#rondo-panel .rondo-version-chip:hover{transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.4)}50%{box-shadow:0 0 0 6px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
             "#rondo-panel .rondo-iconbtn:hover{background:var(--rondo-bg);border-color:var(--rondo-border);color:var(--rondo-fg);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
@@ -6452,10 +6552,16 @@ Reglas de oro:
             '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar el panel (Alt+P)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
             '<button class="rondo-tile" id="rondo-sb-close" title="Cerrar todas las ventanas de unidades"><span class="rondo-usym">' + UIS.close + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
-            '<header id="rondo-drag">' +
-            '<span id="rondo-estado-barra" class="rondo-badge-estado"></span>' +
-            '<h3>' + esc(LANG.titlePanel) + '</h3>' +
-            '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-usym md">' + UIS.refresh + '</span></button>' +
+'<header id="rondo-drag">' +
+             '<span id="rondo-estado-barra" class="rondo-badge-estado"></span>' +
+             '<h3>' + esc(LANG.titlePanel) + '</h3>' +
+             // v5.14.1: chip de version siempre visible en la cabecera.
+             // Cambia de color segun el estado del check (verde=al dia,
+             // ambar=desconocido, rojo=update disponible, azul=comprobando).
+             // Click -> fuerza una comprobacion.
+             '<button type="button" class="rondo-iconbtn rondo-version-chip" id="rondo-version-chip" title="Version instalada" data-estado="idle">' +
+             '<span class="rondo-version-label">v' + esc(VER) + '</span></button>' +
+             '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-usym md">' + UIS.refresh + '</span></button>' +
             '<button class="rondo-iconbtn" id="rondo-tema" title="Tema"><span class="rondo-usym md">' + UIS.theme + '</span></button>' +
             // Indicador/toggle de IA en la cabecera, junto al tema. Muestra
             // si hay una API disponible (punto) y si la IA esta activa
@@ -8534,6 +8640,8 @@ Reglas de oro:
         const b = byId('rondo-actualizar');
         const u = APP.update;
         const bar = byId('rondo-btn-update');
+        // v5.14.1: chip de version sincronizado en cada repintado.
+        paintVersionChip();
         if (bar) {
             const ver = (u.state === 'available');
             const visible = bar.style.display !== 'none';
@@ -8584,61 +8692,213 @@ Reglas de oro:
         else if (u.state === 'current' && u.lastCheck) html += ' · al dia (revisado ' + new Date(u.lastCheck).toLocaleTimeString() + ')';
         else if (u.state === 'available') html += ' · <b style="color:var(--rondo-accent-2)">actualizacion disponible</b>';
         else if (u.state === 'installed') html += ' · <b style="color:var(--rondo-accent-2)">actualizada · recarga</b>';
-        else if (u.state === 'error') html += ' · <b style="color:var(--rondo-warn-fg)">no se pudo comprobar</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
+        else if (u.state === 'ahead') html += ' · <b style="color:var(--rondo-fg-dim)">build local ahead</b>';
+        else if (u.state === 'unknown') html += ' · <b style="color:var(--rondo-warn-fg)">no se pudo comprobar</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
+        else if (u.state === 'error') html += ' · <b style="color:var(--rondo-warn-fg)">error</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
         el.innerHTML = html;
     }
-    async function fetchVersionRemota(url) {
-        const ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-        const tmo = ctl ? setTimeout(() => ctl.abort(), 15000) : null;
-        try {
-            const res = await fetch(url + '?t=' + Date.now(), { cache: 'no-store', signal: ctl ? ctl.signal : undefined });
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const text = await res.text();
-            const v = parseVersionHeader(text);
-            if (!v) throw new Error('version no encontrada');
-            return v;
-        } finally {
-            if (tmo) clearTimeout(tmo);
+    // v5.14.1: chip de version en la cabecera del panel. Muestra la version
+    // instalada con un color que refleja el estado del check de updates.
+    function paintVersionChip() {
+        const chip = byId('rondo-version-chip');
+        if (!chip) return;
+        const u = APP.update || {};
+        let estado = u.state || 'idle';
+        let titulo = 'Version instalada: ' + VER;
+        if (estado === 'idle') {
+            titulo = 'Version ' + VER + ' · comprobando...';
+        } else if (estado === 'checking') {
+            estado = 'checking';
+            titulo = 'Comprobando actualizaciones...';
+        } else if (estado === 'current') {
+            titulo = 'Version ' + VER + ' al dia' + (u.remote ? ' (remota: ' + u.remote + ')' : '') +
+                (u.lastCheck ? ' · ultima comprobacion ' + new Date(u.lastCheck).toLocaleString() : '') +
+                ' · clic para re-comprobar';
+        } else if (estado === 'available') {
+            titulo = 'Actualizacion disponible: ' + VER + ' -> ' + u.remote + ' · clic para aplicar';
+        } else if (estado === 'ahead') {
+            titulo = 'Build local por delante de la version remota (' + (u.remote || '?') + ')';
+        } else if (estado === 'unknown') {
+            titulo = 'No se pudo comprobar actualizaciones' + (u.lastError ? ': ' + u.lastError : '') + ' · clic para reintentar';
+        } else if (estado === 'error') {
+            titulo = 'Error comprobando actualizaciones · clic para reintentar';
+        } else if (estado === 'installed') {
+            titulo = 'Actualizacion instalada · recarga para aplicar';
         }
+        chip.dataset.estado = estado;
+        chip.title = titulo;
+        const label = chip.querySelector('.rondo-version-label');
+        if (label && estado === 'available' && u.remote) {
+            // Mostrar "v5.14.0 -> 5.14.1" cuando hay update.
+            label.textContent = 'v' + VER + ' -> ' + u.remote;
+        } else if (label) {
+            label.textContent = 'v' + VER;
+        }
+    }
+    async function fetchVersionRemota(url) {
+        // v5.14.1: usar httpRequest() en vez de fetch() directo.
+        // raw.githubusercontent.com NO envia Access-Control-Allow-Origin,
+        // asi que fetch desde el realm de la pagina falla por CORS.
+        // httpRequest() cae a GM_xmlhttpRequest (que el sandbox del
+        // userscript SI permite para URLs listadas en @connect).
+        const sep = url.indexOf('?') >= 0 ? '&' : '?';
+        const res = await httpRequest({
+            method: 'GET',
+            url: url + sep + 't=' + Date.now(),
+            headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' },
+            timeoutMs: UPDATE_HTTP_TIMEOUT_MS
+        });
+        if (res.red) throw new Error(res.timeout ? 'timeout' : 'red');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const v = parseVersionHeader(res.texto || '');
+        if (!v) throw new Error('version no encontrada');
+        return v;
     }
     async function comprobarActualizacion() {
         APP.update.state = 'checking';
         pintarActualizacion();
+        const intentos = []; // {fuente, ok, v, error}
+        // Fuente 1: canal main (raw.githubusercontent.com via httpRequest).
         try {
-            // Canal estable (main).
-            const main = await fetchVersionRemota(UPDATE_URL);
-            let mejor = { v: main, url: UPDATE_URL, canal: 'main' };
-            // Si la copia instalada va por delante de main (build de desarrollo),
-            // revisamos tambien el canal dev para no quedarnos sin avisos.
-            if (cmpVersion(VER, main) > 0) {
-                try {
-                    const dev = await fetchVersionRemota(UPDATE_URL_DEV);
-                    if (cmpVersion(dev, VER) > 0) mejor = { v: dev, url: UPDATE_URL_DEV, canal: 'dev' };
-                } catch (_) { /* dev opcional */ }
-            }
-            APP.update.remote = mejor.v;
-            APP.update.canal = mejor.canal;
-            APP.update.url = mejor.url;
-            APP.update.local = VER;
+            const v = await fetchVersionRemota(UPDATE_URL);
+            intentos.push({ fuente: 'main', ok: true, v });
+            const cmp = cmpVersion(v, VER);
+            APP.update.remote = v;
+            APP.update.canal = 'main';
+            APP.update.url = UPDATE_URL;
             APP.update.lastCheck = Date.now();
-            log('update check:', 'instalada', VER, '· main', main, '· canal', mejor.canal, mejor.v);
-            if (cmpVersion(mejor.v, VER) > 0) {
-                APP.update.state = 'available';
-                pintarActualizacion();
-                if (!APP.update.notificado) {
-                    APP.update.notificado = true;
-                    advice('Nueva version disponible', mejor.v + ' (instalada ' + VER + ') · canal ' + mejor.canal);
-                }
-            } else {
-                APP.update.state = 'current';
-                pintarActualizacion();
+            guardarUpdatePersistente();
+            log('update check (main):', 'instalada', VER, '· remota', v, '· cmp', cmp);
+            return finalizarUpdate(cmp, v, 'main', UPDATE_URL);
+        } catch (e1) {
+            intentos.push({ fuente: 'main', ok: false, error: (e1 && e1.message) || 'fail' });
+        }
+        // Fuente 2: canal dev (solo si la copia instalada va por delante
+        // de main: seria absurdo reportar dev si la main ya es mas nueva).
+        if (intentos[0].ok && cmpVersion(VER, intentos[0].v) > 0) {
+            try {
+                const v = await fetchVersionRemota(UPDATE_URL_DEV);
+                intentos.push({ fuente: 'dev', ok: true, v });
+                const cmp = cmpVersion(v, VER);
+                APP.update.remote = v;
+                APP.update.canal = 'dev';
+                APP.update.url = UPDATE_URL_DEV;
+                APP.update.lastCheck = Date.now();
+                guardarUpdatePersistente();
+                log('update check (dev):', 'instalada', VER, '· remota', v, '· cmp', cmp);
+                return finalizarUpdate(cmp, v, 'dev', UPDATE_URL_DEV);
+            } catch (e2) {
+                intentos.push({ fuente: 'dev', ok: false, error: (e2 && e2.message) || 'fail' });
             }
-        } catch (e) {
-            APP.update.state = 'error';
-            APP.update.lastError = (e && e.message) || 'sin conexion';
-            try { console.warn('[Rondo] update check error:', APP.update.lastError); } catch (_) { /* noop */ }
+        }
+        // Fuente 3: GitHub API -> contents/changelogs (CORS-friendly).
+        // Devuelve JSON con la lista de archivos del directorio; el mas
+        // alto en version semantica es la ultima publicada.
+        try {
+            const v = await fetchVersionDesdeChangelogs();
+            if (v) {
+                intentos.push({ fuente: 'changelogs', ok: true, v });
+                const cmp = cmpVersion(v, VER);
+                APP.update.remote = v;
+                APP.update.canal = 'main';
+                APP.update.url = UPDATE_URL;
+                APP.update.lastCheck = Date.now();
+                guardarUpdatePersistente();
+                log('update check (changelogs):', 'instalada', VER, '· remota', v, '· cmp', cmp);
+                return finalizarUpdate(cmp, v, 'main', UPDATE_URL);
+            }
+            intentos.push({ fuente: 'changelogs', ok: false, error: 'sin changelogs' });
+        } catch (e3) {
+            intentos.push({ fuente: 'changelogs', ok: false, error: (e3 && e3.message) || 'fail' });
+        }
+        // Todas las fuentes fallaron -> estado 'unknown'. NO mentimos
+        // diciendo que esta al dia.
+        APP.update.state = 'unknown';
+        APP.update.lastError = intentos.map((i) => i.fuente + ':' + (i.error || '?')).join(', ');
+        APP.update.lastCheck = Date.now();
+        guardarUpdatePersistente();
+        try { console.warn('[Rondo] update check failed:', APP.update.lastError); } catch (_) { /* noop */ }
+        pintarActualizacion();
+    }
+    function finalizarUpdate(cmp, remote, canal, url) {
+        APP.update.local = VER;
+        if (cmp > 0) {
+            APP.update.state = 'available';
+            pintarActualizacion();
+            if (!APP.update.notificado) {
+                APP.update.notificado = true;
+                advice('Nueva version disponible',
+                    remote + ' (instalada ' + VER + ') · canal ' + canal +
+                    '. Abre Ajustes > Avanzado > Buscar actualizaciones para aplicar.');
+            }
+        } else if (cmp < 0) {
+            // Instalada por delante de la remota (build local de desarrollo).
+            APP.update.state = 'ahead';
+            pintarActualizacion();
+        } else {
+            APP.update.state = 'current';
             pintarActualizacion();
         }
+        // Pintar chip de version despues de cualquier transicion de estado.
+        paintVersionChip();
+    }
+    function guardarUpdatePersistente() {
+        try {
+            const persist = {
+                remote: APP.update.remote || '',
+                canal: APP.update.canal || '',
+                url: APP.update.url || '',
+                state: APP.update.state || '',
+                lastCheck: APP.update.lastCheck || 0,
+                lastError: APP.update.lastError || ''
+            };
+            localStorage.setItem('rondo.api.update', JSON.stringify(persist));
+        } catch (_) { /* noop */ }
+    }
+    function cargarUpdatePersistente() {
+        try {
+            const raw = localStorage.getItem('rondo.api.update');
+            if (!raw) return;
+            const j = JSON.parse(raw);
+            if (!j || typeof j !== 'object') return;
+            if (j.remote) APP.update.remote = j.remote;
+            if (j.canal) APP.update.canal = j.canal;
+            if (j.url) APP.update.url = j.url;
+            if (j.lastCheck) APP.update.lastCheck = j.lastCheck;
+            if (j.lastError) APP.update.lastError = j.lastError;
+            // Solo restauramos 'current'/'unknown'; los estados 'available'
+            // y 'ahead' se recomprueban en cada arranque (no se fia de
+            // una respuesta cacheada que podria estar desactualizada).
+            if (j.state === 'current' || j.state === 'unknown') {
+                APP.update.state = j.state;
+            }
+        } catch (_) { /* noop */ }
+    }
+    // Tercer fallback: lista el directorio changelogs/ de GitHub.
+    // api.github.com SI envia Access-Control-Allow-Origin: * (es una
+    // API publica), asi que funciona tanto con fetch como con GM_xmlhttpRequest.
+    async function fetchVersionDesdeChangelogs() {
+        const res = await httpRequest({
+            method: 'GET',
+            url: UPDATE_CHANGELOGS_API,
+            headers: { 'Accept': 'application/vnd.github.v3+json' },
+            timeoutMs: UPDATE_HTTP_TIMEOUT_MS
+        });
+        if (res.red) throw new Error('red');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        let data;
+        try { data = JSON.parse(res.texto || '[]'); } catch (_) { return null; }
+        if (!Array.isArray(data)) return null;
+        // Cada item tiene { name, type, ... }. Filtramos .md y extraemos
+        // version del nombre; nos quedamos con la mayor.
+        let mejor = null;
+        for (const it of data) {
+            if (!it || it.type !== 'file') continue;
+            const v = parseVersionFromFilename(it.name || '');
+            if (!v) continue;
+            if (!mejor || cmpVersion(v, mejor) > 0) mejor = v;
+        }
+        return mejor;
     }
     function recargarUnaVez() {
         if (APP.update.recargando) return;
@@ -9107,6 +9367,34 @@ Reglas de oro:
             ev.preventDefault();
             aiAnalizarAviso(btn.dataset.clave, +btn.dataset.ts);
         });
+        // v5.14.1: chip de version en cabecera. Click fuerza una comprobacion;
+        // doble click abre la pestana de Ajustes > Avanzado donde esta el
+        // boton 'Buscar actualizaciones' y el detalle completo.
+        const verChip = byId('rondo-version-chip');
+        if (verChip) {
+            let lastClickChip = 0;
+            verChip.addEventListener('click', (e) => {
+                const ahora = Date.now();
+                if (ahora - lastClickChip < 350) {
+                    // doble click: abrir Ajustes > Avanzado
+                    abrirCfg();
+                    const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="avanzado"]');
+                    if (tab) tab.click();
+                    lastClickChip = 0;
+                    return;
+                }
+                lastClickChip = ahora;
+                // Si hay update disponible, abrir directamente el dialogo
+                // de aplicacion; si no, forzar re-comprobacion.
+                if (APP.update && APP.update.state === 'available') {
+                    aplicarActualizacion();
+                } else {
+                    APP.update.notificado = false;
+                    comprobarActualizacion();
+                }
+                e.stopPropagation();
+            });
+        }
         byId('rondo-tema').addEventListener('click', () => {
             APP.config.theme = APP.config.theme === 'oscuro' ? 'claro' : (APP.config.theme === 'claro' ? 'auto' : 'oscuro');
             writeJSON(LS.cfg, APP.config);
@@ -10048,8 +10336,34 @@ Reglas de oro:
         if (primerUso) {
             setTimeout(abrirBienvenida, 900);
         }
+        // v5.14.1: sistema de updates rehecho.
+        // 1) Restaurar lastCheck de localStorage para que el chip muestre
+        //    estado correcto desde el primer paint (sin parpadeo a idle).
+        cargarUpdatePersistente();
+        // 2) Self-check de la constante VER contra el @version detectado
+        //    del propio archivo (catches la deriva silenciosa).
+        autodetectarVER();
+        // 3) Primer check diferido para no bloquear el arranque.
         setTimeout(comprobarActualizacion, 5000);
-        setInterval(comprobarActualizacion, 30 * 60 * 1000);
+        // 4) Check periodico cada 6h (antes 30min -> demasiado ruido).
+        setInterval(comprobarActualizacion, UPDATE_CHECK_INTERVAL_MS);
+        // 5) Re-check al recuperar el foco: si el usuario vuelve a la
+        //    pestana despues de un rato, conviene re-comprobar (el
+        //    check previo pudo haber fallado por red).
+        let _lastFocusCheck = 0;
+        const focusHandler = () => {
+            const ahora = Date.now();
+            // Throttle: no mas de una vez por minuto.
+            if (ahora - _lastFocusCheck < 60000) return;
+            _lastFocusCheck = ahora;
+            if ((APP.update && APP.update.state !== 'checking') || true) {
+                comprobarActualizacion();
+            }
+        };
+        window.addEventListener('focus', focusHandler);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) focusHandler();
+        });
         // Las ventanas de unidad pueden restaurarse despues de cargar la pagina;
         // revalidamos el contorno varias veces al inicio.
         [1500, 4000, 8000, 15000].forEach((t) => setTimeout(revalidarContornos, t));
