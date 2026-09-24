@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.9
+// @version      5.13.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -22,6 +22,7 @@
 // @connect      api.moonshot.ai
 // @connect      api.minimax.io
 // @connect      overpass-api.de
+// @connect      ttsmp3.com
 // @connect      api.streamelements.com
 // @connect      translate.google.com
 // @connect      *
@@ -253,14 +254,68 @@
      * CORS-enabled y no requiere API key. Se usa como alternativa a las
      * voces del sistema (Web Speech API). */
     // Solo voces en ESPANOL (la interfaz y los avisos son en espanol).
-    // StreamElements / AWS Polly ofrece estas seis.
+    // Son las voces de AWS Polly; las entienden tanto ttsmp3.com (motor
+    // principal, gratis y sin key) como StreamElements (alternativa).
     const TTS_ONLINE_VOCES = Object.freeze([
         { v: 'Mia', l: 'es-MX', n: 'Mia \u00b7 espa\u00f1ol (M\u00e9xico)' },
         { v: 'Miguel', l: 'es-US', n: 'Miguel \u00b7 espa\u00f1ol (EE. UU.)' },
         { v: 'Penelope', l: 'es-US', n: 'Penelope \u00b7 espa\u00f1ol (EE. UU.)' },
+        { v: 'Lupe', l: 'es-US', n: 'Lupe \u00b7 espa\u00f1ol (EE. UU.)' },
         { v: 'Lucia', l: 'es-ES', n: 'Lucia \u00b7 espa\u00f1ol (Espa\u00f1a)' },
         { v: 'Enrique', l: 'es-ES', n: 'Enrique \u00b7 espa\u00f1ol (Espa\u00f1a)' },
         { v: 'Conchita', l: 'es-ES', n: 'Conchita \u00b7 espa\u00f1ol (Espa\u00f1a)' }
+    ]);
+    // Voces en ESPANOL de MiniMax (T2A). MiniMax da un free tier con API key
+    // y tiene 47 voces en espanol: mucha mas variedad que StreamElements.
+    // Se piden a https://api.minimax.io/v1/t2a_v2 (o el endpoint que pongas).
+    const TTS_MINIMAX_VOCES = Object.freeze([
+        { v: 'Spanish_SereneWoman', n: 'Serene Woman' },
+        { v: 'Spanish_MaturePartner', n: 'Mature Partner' },
+        { v: 'Spanish_CaptivatingStoryteller', n: 'Captivating Storyteller' },
+        { v: 'Spanish_Narrator', n: 'Narrator' },
+        { v: 'Spanish_WiseScholar', n: 'Wise Scholar' },
+        { v: 'Spanish_Kind-heartedGirl', n: 'Kind-hearted Girl' },
+        { v: 'Spanish_DeterminedManager', n: 'Determined Manager' },
+        { v: 'Spanish_BossyLeader', n: 'Bossy Leader' },
+        { v: 'Spanish_ReservedYoungMan', n: 'Reserved Young Man' },
+        { v: 'Spanish_ConfidentWoman', n: 'Confident Woman' },
+        { v: 'Spanish_ThoughtfulMan', n: 'Thoughtful Man' },
+        { v: 'Spanish_Strong-WilledBoy', n: 'Strong-willed Boy' },
+        { v: 'Spanish_SophisticatedLady', n: 'Sophisticated Lady' },
+        { v: 'Spanish_RationalMan', n: 'Rational Man' },
+        { v: 'Spanish_AnimeCharacter', n: 'Anime Character' },
+        { v: 'Spanish_Deep-tonedMan', n: 'Deep-toned Man' },
+        { v: 'Spanish_Fussyhostess', n: 'Fussy Hostess' },
+        { v: 'Spanish_SincereTeen', n: 'Sincere Teen' },
+        { v: 'Spanish_FrankLady', n: 'Frank Lady' },
+        { v: 'Spanish_Comedian', n: 'Comedian' },
+        { v: 'Spanish_Debator', n: 'Debator' },
+        { v: 'Spanish_ToughBoss', n: 'Tough Boss' },
+        { v: 'Spanish_Wiselady', n: 'Wise Lady' },
+        { v: 'Spanish_Steadymentor', n: 'Steady Mentor' },
+        { v: 'Spanish_Jovialman', n: 'Jovial Man' },
+        { v: 'Spanish_SantaClaus', n: 'Santa Claus' },
+        { v: 'Spanish_Rudolph', n: 'Rudolph' },
+        { v: 'Spanish_Intonategirl', n: 'Intonate Girl' },
+        { v: 'Spanish_Arnold', n: 'Arnold' },
+        { v: 'Spanish_Ghost', n: 'Ghost' },
+        { v: 'Spanish_HumorousElder', n: 'Humorous Elder' },
+        { v: 'Spanish_EnergeticBoy', n: 'Energetic Boy' },
+        { v: 'Spanish_WhimsicalGirl', n: 'Whimsical Girl' },
+        { v: 'Spanish_StrictBoss', n: 'Strict Boss' },
+        { v: 'Spanish_ReliableMan', n: 'Reliable Man' },
+        { v: 'Spanish_SereneElder', n: 'Serene Elder' },
+        { v: 'Spanish_AngryMan', n: 'Angry Man' },
+        { v: 'Spanish_AssertiveQueen', n: 'Assertive Queen' },
+        { v: 'Spanish_CaringGirlfriend', n: 'Caring Girlfriend' },
+        { v: 'Spanish_PowerfulSoldier', n: 'Powerful Soldier' },
+        { v: 'Spanish_PassionateWarrior', n: 'Passionate Warrior' },
+        { v: 'Spanish_ChattyGirl', n: 'Chatty Girl' },
+        { v: 'Spanish_RomanticHusband', n: 'Romantic Husband' },
+        { v: 'Spanish_CompellingGirl', n: 'Compelling Girl' },
+        { v: 'Spanish_PowerfulVeteran', n: 'Powerful Veteran' },
+        { v: 'Spanish_SensibleManager', n: 'Sensible Manager' },
+        { v: 'Spanish_ThoughtfulLady', n: 'Thoughtful Lady' }
     ]);
     // Simbolo Unicode por severidad (para listas que NO usan Material Icons).
     const SEV_UIS = Object.freeze({
@@ -289,7 +344,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.9';
+    const VER = '5.13.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -2030,13 +2085,16 @@
         if (!APP.config.voice || !txt) return false;
         _ttsLastErr = '';
         _ttsUsandoGoogle = false;
-        const motor = APP.config.vozMotor || 'web';
-        if (motor === 'online') return speakOnline(txt);
+        // Corta cualquier reproduccion previa (evita solapamientos).
+        _ttsDetener();
+        const motor = APP.config.vozMotor || 'online';
         if (motor === 'google') return speakGoogle(txt);
-        // 'web': si el navegador no tiene Web Speech API o no hay voces, cae a
-        // StreamElements. NO hay watchdog: esperar a ver si suena y lanzar
-        // otra voz encima causaba eco (doble) y un retardo de 1 s.
-        if (speakWeb(txt)) return true;
+        if (motor === 'web') {
+            // Si el navegador no tiene Web Speech API o no hay voces, cae a
+            // online. NO hay watchdog (esperar causaba eco y retardo).
+            if (speakWeb(txt)) return true;
+            return speakOnline(txt);
+        }
         return speakOnline(txt);
     }
     // Devuelve true si pudo lanzar la sintesis de voz del navegador. La
@@ -2069,26 +2127,58 @@
             return true;
         } catch (e) { _ttsLastErr = 'speak: ' + (e && e.message || e); return false; }
     }
-    // StreamElements (Polly). Endpoint publico, gratis, con CORS. Devuelve true.
-    // Si falla tras los reintentos, cae a Google (voz generica) y lo marca en
-    // _ttsUsandoGoogle para que la UI avise de que la voz elegida no sono.
-    function speakOnline(text, sinFallback) {
-        try {
-            _ttsUsandoGoogle = false;
-            // Solo voces en espanol: si la guardada no es una de las validas
-            // (p. ej. config antigua con una voz inglesa), usamos Mia.
-            const pedida = APP.config.vozOnline || '';
-            const voz = TTS_ONLINE_VOCES.some((v) => v.v === pedida) ? pedida : 'Mia';
+    // Voz "online". Cadena de proveedores GRATIS y SIN API KEY:
+    //   1) ttsmp3.com  (POST -> URL de MP3; el mas fiable, 7 voces es)
+    //   2) StreamElements (Polly; a veces se satura)
+    //   3) Google Translate TTS (una sola voz)
+    // La voz elegida se respeta en 1 y 2; en 3 es generica (se avisa).
+    function _vozOnlineValida() {
+        const pedida = APP.config.vozOnline || '';
+        return TTS_ONLINE_VOCES.some((v) => v.v === pedida) ? pedida : 'Mia';
+    }
+    function speakOnline(text) {
+        _ttsUsandoGoogle = false;
+        const voz = _vozOnlineValida();
+        const aGoogle = () => {
+            if (APP.config.vozMotor !== 'google') { _ttsUsandoGoogle = true; speakGoogle(text); }
+        };
+        const aStreamElements = () => {
             const url = 'https://api.streamelements.com/kappa/v2/speech?voice='
                 + encodeURIComponent(voz) + '&text=' + encodeURIComponent(text);
-            return _ttsPlay(url, null, () => {
-                // Ultimo recurso: Google Translate TTS (una sola voz).
-                if (!sinFallback && APP.config.vozMotor !== 'google') {
-                    _ttsUsandoGoogle = true;
-                    speakGoogle(text);
-                }
+            _ttsPlay(url, null, aGoogle);
+        };
+        return speakTtsmp3(text, voz, aStreamElements);
+    }
+    // ttsmp3.com: POST al formulario publico y obtiene la URL del MP3.
+    // Gratis, sin key. Si falla, llama a onFail (siguiente proveedor).
+    function speakTtsmp3(text, voz, onFail) {
+        const gm = gmXhr();
+        if (!gm) { if (onFail) onFail(); return false; }
+        const gen = _ttsGen;
+        const cuerpo = 'msg=' + encodeURIComponent(text) + '&lang=' + encodeURIComponent(voz) + '&source=ttsmp3';
+        try {
+            gm({
+                method: 'POST',
+                url: 'https://ttsmp3.com/makemp3_new.php',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                data: cuerpo,
+                timeout: 15000,
+                onload: (r) => {
+                    if (gen !== _ttsGen) return;
+                    let j = null;
+                    try { j = JSON.parse(r.responseText || '{}'); } catch (_) { /* noop */ }
+                    if (r.status >= 200 && r.status < 300 && j && j.URL) {
+                        _ttsPlay(j.URL, null, onFail); // baja el MP3 (GM) y lo reproduce
+                    } else {
+                        _ttsLastErr = 'ttsmp3 HTTP ' + r.status;
+                        if (onFail) onFail();
+                    }
+                },
+                onerror: () => { if (gen === _ttsGen) { _ttsLastErr = 'ttsmp3 fallo de red'; if (onFail) onFail(); } },
+                ontimeout: () => { if (gen === _ttsGen) { _ttsLastErr = 'ttsmp3 timeout'; if (onFail) onFail(); } }
             });
-        } catch (e) { _ttsLastErr = 'online: ' + (e && e.message || e); return false; }
+        } catch (e) { _ttsLastErr = 'ttsmp3: ' + (e && e.message || e); if (onFail) onFail(); }
+        return true;
     }
     // Google Translate TTS. Se reproduce via <audio> (no requiere CORS).
     function speakGoogle(text) {
@@ -2141,7 +2231,7 @@
         setStatus('Reproduciendo con ' + etq + '...', true);
         setTimeout(() => {
             if (_ttsUsandoGoogle) {
-                setStatus('StreamElements saturado: sono la voz generica de Google (por eso todas suenan igual). Reintenta en unos segundos.', false);
+                setStatus('El proveedor online no respondio: sono la voz generica de Google (por eso todas suenan igual). Reintenta en unos segundos.', false);
             } else if (_ttsLastErr) {
                 setStatus('Aviso de voz: ' + _ttsLastErr + '. Si no oyes nada, usa el motor Online.', false);
             } else if (!prev.voice) {
@@ -5937,7 +6027,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             checkRow('c-voz', 'Voz') +
             '<label>Motor de voz <select id="c-voz-motor">' +
             '<option value="web">Navegador (sin internet)</option>' +
-            '<option value="online">Online \u00b7 StreamElements</option>' +
+            '<option value="online">Online \u00b7 gratis (ttsmp3 / StreamElements)</option>' +
             '<option value="google">Online \u00b7 Google</option>' +
             '</select></label>' +
             '<label>Idioma de voz <select id="c-voz-lang">' +
@@ -5951,7 +6041,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                 '<button type="button" class="accbtn" id="c-voz-detener"><span class="rondo-usym">' + UIS.close + '</span> Detener</button>' +
             '</div>' +
             '<label>Texto de prueba <input type="text" id="c-voz-test-text" value="' + esc(DEFAULTS.vozTest) + '" maxlength="180" title="Frase que se lee al pulsar Probar voz"></label>' +
-            '<span style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin-top:-2px">Se lee con el motor, idioma y voz configurados arriba. Si eliges <b>Navegador</b> y tu equipo no tiene voces (Linux sin speech-dispatcher), Rondo usa <b>Online</b> automaticamente.</span>' +
+            '<span style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin-top:-2px">Se lee con el motor, idioma y voz configurados arriba. <b>Online</b> es gratis y sin API key (ttsmp3.com y, si falla, StreamElements y Google). Si eliges <b>Navegador</b> y tu equipo no tiene voces, Rondo usa <b>Online</b> automaticamente.</span>' +
             '<span id="c-voz-status" style="font-size:11.5px;display:block;margin-top:4px"></span>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
             numRow('c-beep-vol', 'Volumen del pitido (0-1)') +

@@ -363,7 +363,11 @@ ok('TTS fallback final a URL directa', /return _ttsPlayUrl\(url, onEnd, onError\
 ok('Notification via PAGE', /PAGE\.Notification/.test(src));
 ok('DOMMatrixReadOnly via PAGE', /PAGE\.DOMMatrixReadOnly/.test(src));
 ok('helper pageCtor existe', /function pageCtor\(nombre\)/.test(src));
-ok('speak devuelve boolean', /if \(motor === 'online'\) return speakOnline\(txt\)/.test(src));
+ok('speak devuelve boolean', /return speakOnline\(txt\)/.test(src) && /return speakGoogle\(txt\)/.test(src));
+ok('ttsmp3 como proveedor online', /ttsmp3\.com\/makemp3_new\.php/.test(src));
+ok('cadena online ttsmp3 -> StreamElements -> Google', /speakTtsmp3\(text, voz, aStreamElements\)/.test(src) && /_ttsPlay\(url, null, aGoogle\)/.test(src));
+ok('voz Lupe (es-US)', /v: 'Lupe'/.test(src));
+ok('connect ttsmp3', /\/\/ @connect\s+ttsmp3\.com/.test(src));
 ok('speakWeb fallback a online', /if \(speakWeb\(txt\)\) return true;[\s\S]*?return speakOnline\(txt\)/.test(src));
 ok('probarVoz existe', /function probarVoz\(/.test(src));
 ok('status de voz en la UI', /id="c-voz-status"/.test(src));

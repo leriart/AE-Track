@@ -5,6 +5,7 @@ este proyecto se llamaba **HJP Wialon** y el archivo era `HJP-Wialon.user.js`;
 el contenido es compatible y la primera vez Rondo migra automaticamente la
 configuracion, la lista vigilada, las rutas, el odometro y los perfiles.
 
+- [5.13.0](./5.13.0.md) - Nuevo motor de voz gratis y sin key: ttsmp3.com (7 voces en espanol), con StreamElements y Google como fallback.
 - [5.12.9](./5.12.9.md) - Voz: el test lee los desplegables (no la config guardada), reintentos ante la saturacion de StreamElements y aviso cuando se cae a la voz generica.
 - [5.12.8](./5.12.8.md) - Voz sin doble ni retardo: fuera el watchdog, motor online por defecto, migracion en Linux, guarda de generacion y cache de audio.
 - [5.12.7](./5.12.7.md) - Fix de la voz: descarga por GM_xmlhttpRequest y reproduccion por Web Audio (salta la CSP de la pagina).
