@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.6
+// @version      5.14.7
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -391,7 +391,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.14.6';
+    const VER = '5.14.7';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -603,6 +603,9 @@
         // una geocerca). Si la unidad se mueve o sale de la geocerca,
         // rearma para volver a avisar en el siguiente episodio.
         geocercaDetenidoMin: 5,          // minutos detenido dentro de geocerca para alertar
+        // v5.14.7: checkbox del chat IA. false = solo vigiladas (default,
+        // mas enfocado), true = toda la flota que reporta en la plataforma.
+        chatTodaFlota: false,
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -3289,7 +3292,9 @@ Reglas:
     function limpiarChat() {
         CHAT.mensajes = [];
         try { sessionStorage.removeItem(CHAT_KEY); } catch (_) { /* noop */ }
-        pintarChat();
+        // v5.14.7: renderChatLog en vez de pintarChat, porque pintarChat
+        // ya no re-renderiza el log si tiene hijos (para no parpadear).
+        renderChatLog();
     }
     // Devuelve un resumen del estado actual de la flota para inyectar en
     // cada turno del system prompt. Asi la IA tiene contexto fresco
@@ -3298,26 +3303,110 @@ Reglas:
     function chatContextoFlota() {
         try {
             const ini = new Date(); ini.setHours(0, 0, 0, 0);
-            const hoy = (APP.historial || []).filter((a) => a.ts >= ini.getTime());
-            const porSev = {};
-            hoy.forEach((a) => { porSev[a.sev] = (porSev[a.sev] || 0) + 1; });
-            const watched = (APP.unidades || []).filter((u) => {
+            const toda = !!APP.config.chatTodaFlota;
+            // v5.14.7: si "Toda la flota" esta activo, contamos todas las
+            // unidades que reportan; si no, solo las vigiladas (shouldWatch).
+            const unidades = (APP.unidades || []).filter((u) => {
+                if (toda) return true;
                 try { return shouldWatch(u); } catch (_) { return false; }
             });
-            const enLinea = watched.filter((u) => { try { return !!unitState(u).online; } catch (_) { return false; } }).length;
-            const ultimos = (APP.historial || []).slice(0, 5).map((a) => ({
-                ts: new Date(a.ts).toISOString().slice(11, 16),
-                sev: a.sev, regla: a.regla, eco: a.eco, titulo: a.titulo
-            }));
+            const hoy = (APP.historial || []).filter((a) => a.ts >= ini.getTime());
+            // Si "Toda la flota", limitamos las alertas a las unidades del
+            // conjunto elegido para que el contexto sea coherente.
+            const ecos = new Set(unidades.map((u) => { try { return parseUnitName(u).eco; } catch (_) { return ''; } }));
+            const hoyFiltrado = toda ? hoy : hoy.filter((a) => !a.eco || ecos.has(a.eco));
+            const porSev = {};
+            hoyFiltrado.forEach((a) => { porSev[a.sev] = (porSev[a.sev] || 0) + 1; });
+            const enLinea = unidades.filter((u) => { try { return !!unitState(u).online; } catch (_) { return false; } }).length;
+            const ultimos = (APP.historial || []).filter((a) => toda || !a.eco || ecos.has(a.eco))
+                .slice(0, 5).map((a) => ({
+                    ts: new Date(a.ts).toISOString().slice(11, 16),
+                    sev: a.sev, regla: a.regla, eco: a.eco, titulo: a.titulo
+                }));
             return {
+                alcance: toda ? 'toda la flota' : 'solo unidades vigiladas',
                 fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
-                unidadesVigiladas: watched.length,
-                enLinea, sinSenal: watched.length - enLinea,
-                alertasHoy: hoy.length,
+                unidadesEnAlcance: unidades.length,
+                unidadesVigiladas: unidades.length,
+                enLinea, sinSenal: unidades.length - enLinea,
+                alertasHoy: hoyFiltrado.length,
                 porSeveridad: porSev,
                 ultimosAvisos: ultimos
             };
         } catch (_) { return { fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; }
+    }
+    // v5.14.7: el chat se renderiza de forma INCREMENTAL para no parpadear.
+//   - pintarChat(): pinta la cabecera (provider) y, si no hay mensajes,
+//     el empty state. NO toca el log si ya hay contenido.
+//   - renderChatLog(): reconstruye el log entero (solo al limpiar o al
+//     cargar el historial inicial).
+//   - appendMensajeChat(m): anyade UN mensaje al final del log (sin
+//     re-renderizar lo anterior). Devuelve el nodo creado.
+//   - setChatTyping(on): muestra/oculta el indicador de escritura.
+//   - scrollChatBottom(): lleva el scroll al fondo de forma suave si
+//     el usuario ya estaba abajo; si ha scrolleado arriba, no lo mueve.
+function chatMsgHTML(m) {
+        const cls = m.role === 'user' ? 'user' : (m.role === 'system' ? 'system' : (m.role === 'error' ? 'ia error' : 'ia'));
+        const meta = m.role === 'ia' ? '<div class="rondo-chat-meta">' +
+            (m.meta && m.meta.ms != null ? Math.round(m.meta.ms / 100) / 10 + 's' : '') +
+            (m.meta && m.meta.proveedor ? ' \u00b7 ' + esc(m.meta.proveedor) : '') +
+            '</div>' : (m.role === 'user' ? '<div class="rondo-chat-meta">' +
+            new Date(m.ts || Date.now()).toLocaleTimeString().slice(0, 5) + '</div>' : '');
+        return '<div class="rondo-chat-msg ' + cls + '"><div class="rondo-chat-bubble">' +
+            esc(m.text || '') + '</div>' + meta + '</div>';
+    }
+    function chatEmptyHTML() {
+        return '<div class="rondo-chat-empty">' +
+            '<span class="rondo-usym">' + UIS.robot + '</span>' +
+            '<div>Preguntale algo a la IA. Ejemplos:</div>' +
+            '<div style="opacity:.7;font-size:11.5px;line-height:1.5">' +
+            '\u00bfCuantas unidades tengo sin senal ahora?<br>' +
+            '\u00bfQue unidades llevan mas tiempo detenidas?<br>' +
+            '\u00bfQue alerta critica es la mas urgente de revisar?' +
+            '</div></div>';
+    }
+    function setChatTyping(on) {
+        const log = byId('rondo-chat-log');
+        if (!log) return;
+        const el = log.querySelector('.rondo-chat-typing-msg');
+        if (on && !el) {
+            const wrap = makeEl('div', { className: 'rondo-chat-msg ia rondo-chat-typing-msg' });
+            wrap.innerHTML = '<div class="rondo-chat-bubble">' +
+                '<span class="rondo-chat-typing"><span></span><span></span><span></span></span></div>';
+            log.appendChild(wrap);
+            scrollChatBottom();
+        } else if (!on && el) {
+            if (el.parentNode) el.parentNode.removeChild(el);
+        }
+    }
+    function scrollChatBottom() {
+        const log = byId('rondo-chat-log');
+        if (!log) return;
+        // Solo autoscroll si ya estabamos cerca del fondo (no molestar
+        // a quien esta leyendo mensajes antiguos).
+        const lejos = log.scrollHeight - log.scrollTop - log.clientHeight;
+        if (lejos < 120) log.scrollTop = log.scrollHeight;
+    }
+    function appendMensajeChat(m) {
+        const log = byId('rondo-chat-log');
+        if (!log) return;
+        // Si el empty state estaba puesto, quitarlo.
+        const vacio = log.querySelector('.rondo-chat-empty');
+        if (vacio && vacio.parentNode) vacio.parentNode.removeChild(vacio);
+        const wrap = makeEl('div');
+        wrap.innerHTML = chatMsgHTML(m);
+        const nodo = wrap.firstChild;
+        log.appendChild(nodo);
+        scrollChatBottom();
+        return nodo;
+    }
+    function renderChatLog() {
+        const log = byId('rondo-chat-log');
+        if (!log) return;
+        if (!CHAT.mensajes.length) log.innerHTML = chatEmptyHTML();
+        else log.innerHTML = CHAT.mensajes.map(chatMsgHTML).join('');
+        setChatTyping(!!CHAT.cargando);
+        scrollChatBottom();
     }
     function pintarChat() {
         const log = byId('rondo-chat-log');
@@ -3325,33 +3414,14 @@ Reglas:
         const provNombre = ((IA_PROVEEDORES || {})[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor || '-';
         const provEl = byId('rondo-chat-prov');
         if (provEl) provEl.textContent = provNombre + (APP.config.iaModelo ? ' \u00b7 ' + APP.config.iaModelo : '');
-        // Empty state
-        if (!CHAT.mensajes.length && !CHAT.cargando) {
-            log.innerHTML = '<div class="rondo-chat-empty">' +
-                '<span class="rondo-usym">' + UIS.robot + '</span>' +
-                '<div>Preguntale algo a la IA. Ejemplos:</div>' +
-                '<div style="opacity:.7;font-size:11.5px;line-height:1.5">' +
-                '\u00bfCuantas unidades tengo sin senal ahora?<br>' +
-                '\u00bfQue unidades llevan mas tiempo detenidas?<br>' +
-                '\u00bfQue alerta critica es la mas urgente de revisar?' +
-                '</div></div>';
-            return;
-        }
-        const html = CHAT.mensajes.map((m) => {
-            const cls = m.role === 'user' ? 'user' : (m.role === 'system' ? 'system' : (m.role === 'error' ? 'ia error' : 'ia'));
-            const meta = m.role === 'ia' ? '<div class="rondo-chat-meta">' +
-                (m.meta && m.meta.ms != null ? Math.round(m.meta.ms / 100) / 10 + 's' : '') +
-                (m.meta && m.meta.proveedor ? ' \u00b7 ' + esc(m.meta.proveedor) : '') +
-                '</div>' : (m.role === 'user' ? '<div class="rondo-chat-meta">' +
-                new Date(m.ts || Date.now()).toLocaleTimeString().slice(0, 5) + '</div>' : '');
-            return '<div class="rondo-chat-msg ' + cls + '"><div class="rondo-chat-bubble">' +
-                esc(m.text || '') + '</div>' + meta + '</div>';
-        }).join('');
-        const typing = CHAT.cargando ? '<div class="rondo-chat-msg ia"><div class="rondo-chat-bubble">' +
-            '<span class="rondo-chat-typing"><span></span><span></span><span></span></span></div></div>' : '';
-        log.innerHTML = html + typing;
-        // Auto-scroll al fondo
-        log.scrollTop = log.scrollHeight;
+        // Sincroniza el toggle de alcance (Toda la flota).
+        const allEl = byId('rondo-chat-all');
+        if (allEl) allEl.checked = !!APP.config.chatTodaFlota;
+        // Si el log ya tiene el empty state o mensajes, no lo tocamos
+        // (evita el parpadeo al cambiar de tab). Solo lo pintamos si
+        // esta vacio del todo.
+        if (log.children.length) return;
+        renderChatLog();
     }
     // Llamada al proveedor para chat: envia todo el historial al
     // endpoint actual con CHAT_SYS + contexto de flota + mensajes.
@@ -3423,29 +3493,39 @@ Reglas:
             if (tab) tab.click();
             return;
         }
-        ta.value = '';
+ta.value = '';
         ta.style.height = 'auto';
         const userMsg = { role: 'user', text: texto, ts: Date.now() };
         CHAT.mensajes.push(userMsg);
         CHAT.cargando = true;
         btn.disabled = true;
-        pintarChat();
+        // v5.14.7: append incremental (no re-render completo) para que
+        // el chat no parpadee. Mostramos el typing y anyadimos el
+        // mensaje del usuario.
+        appendMensajeChat(userMsg);
+        setChatTyping(true);
         // Enviamos SOLO los ultimos 20 mensajes para mantener el
         // contexto manejable y no agotar tokens.
         const slice = CHAT.mensajes.slice(-20);
         const r = await aiChatLlamar(slice);
         CHAT.cargando = false;
         btn.disabled = false;
+        setChatTyping(false);
         if (r.error) {
-            CHAT.mensajes.push({ role: 'error', text: 'Error: ' + r.error, ts: Date.now() });
+            const errMsg = { role: 'error', text: 'Error: ' + r.error, ts: Date.now() };
+            CHAT.mensajes.push(errMsg);
+            appendMensajeChat(errMsg);
         } else {
-            CHAT.mensajes.push({
+            const iaMsg = {
                 role: 'ia', text: r.texto, ts: Date.now(),
                 meta: { ms: r.ms, proveedor: r.proveedor }
-            });
+            };
+            CHAT.mensajes.push(iaMsg);
+            appendMensajeChat(iaMsg);
         }
         guardarChat();
-        pintarChat();
+        // Foco de vuelta al input para escribir seguido.
+        try { ta.focus(); } catch (_) { /* noop */ }
     }
     function paintTabsChat() {
         // Muestra la tab de chat solo si la IA esta habilitada y con API key.
@@ -6270,6 +6350,15 @@ Reglas:
             "#rondo-panel .rondo-chat-info .rondo-usym{color:var(--rondo-accent-2);font-size:16px}\n" +
             "#rondo-panel .rondo-chat-info #rondo-chat-prov{color:var(--rondo-fg-dim);font-weight:600;font-size:11.5px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}\n" +
             "#rondo-panel .rondo-chat-actions{flex-shrink:0}\n" +
+            // v5.14.7: toggle "Toda la flota" (switch compacto).
+            "#rondo-panel .rondo-chat-scope{display:inline-flex;align-items:center;gap:5px;cursor:pointer;font-size:10.5px;color:var(--rondo-fg-dim);user-select:none;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-chat-scope input{position:absolute;opacity:0;pointer-events:none}\n" +
+            "#rondo-panel .rondo-chat-scope-track{position:relative;width:28px;height:15px;border-radius:8px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border);transition:background .15s,border-color .15s;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-chat-scope-dot{position:absolute;top:1.5px;left:1.5px;width:10px;height:10px;border-radius:50%;background:var(--rondo-fg-dim);transition:transform .15s,background .15s}\n" +
+            "#rondo-panel .rondo-chat-scope input:checked + .rondo-chat-scope-track{background:rgba(var(--rondo-accent-rgb),.35);border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-chat-scope input:checked + .rondo-chat-scope-track .rondo-chat-scope-dot{transform:translateX(13px);background:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-chat-scope input:checked ~ .rondo-chat-scope-lbl{color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-chat-scope:hover .rondo-chat-scope-lbl{color:var(--rondo-fg)}\n" +
             "#rondo-panel .rondo-chat-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--rondo-bg);scroll-behavior:smooth}\n" +
             "#rondo-panel .rondo-chat-msg{display:flex;flex-direction:column;gap:3px;max-width:88%;animation:rondo-chat-in .25s var(--rondo-easing)}\n" +
             "@keyframes rondo-chat-in{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}\n" +
@@ -7151,6 +7240,9 @@ Reglas:
              '<div class="tabla" id="rondo-wrap-chat" style="display:none">' +
              '<div class="rondo-chat-head">' +
              '<div class="rondo-chat-info"><span class="rondo-usym">' + UIS.robot + '</span> Chat IA · <span id="rondo-chat-prov">-</span></div>' +
+             // v5.14.7: toggle de alcance del contexto. false = solo
+             // unidades vigiladas, true = toda la flota que reporta.
+             '<label class="rondo-chat-scope" title="Que unidades incluir en el contexto que ve la IA"><input type="checkbox" id="rondo-chat-all"><span class="rondo-chat-scope-track"><span class="rondo-chat-scope-dot"></span></span><span class="rondo-chat-scope-lbl">Toda la flota</span></label>' +
              '<div class="rondo-chat-actions"><button type="button" class="mini" id="rondo-chat-clear" title="Limpiar conversacion"><span class="rondo-usym sm">' + UIS.clear + '</span> Limpiar</button></div>' +
              '</div>' +
              '<div id="rondo-chat-log" class="rondo-chat-log"></div>' +
@@ -10218,6 +10310,18 @@ Reglas:
         if (chatClearBtn) chatClearBtn.addEventListener('click', () => {
             rondoConfirm('Limpiar conversacion', 'Se borraran todos los mensajes del chat actual.', () => limpiarChat());
         });
+        // v5.14.7: toggle "Toda la flota" (alcance del contexto que ve la IA).
+        const chatAllEl = byId('rondo-chat-all');
+        if (chatAllEl) {
+            chatAllEl.checked = !!APP.config.chatTodaFlota;
+            chatAllEl.addEventListener('change', () => {
+                APP.config.chatTodaFlota = !!chatAllEl.checked;
+                writeJSON(LS.cfg, APP.config);
+                adviceOk('Alcance del chat', chatAllEl.checked
+                    ? 'La IA vera toda la flota que reporta en la plataforma.'
+                    : 'La IA vera solo las unidades que vigilas.');
+            });
+        }
         // Al cambiar cualquier toggle/input de IA, refresca el contador de uso.
         ['c-ia-batchmax', 'c-ia-limite'].forEach((id) => {
             const el = byId(id);

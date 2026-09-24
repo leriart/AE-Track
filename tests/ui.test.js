@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.6 en @UserScript', /@version\s+5\.14\.6/.test(src));
+ok('version 5.14.7 en @UserScript', /@version\s+5\.14\.7/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -537,7 +537,7 @@ ok('chatEnviar guarda en sessionStorage', /guardarChat\(\)/.test(src));
 ok('limpiarChat existe', /function limpiarChat\(/.test(src));
 ok('limpiarChat borra sessionStorage', /sessionStorage\.removeItem\(CHAT_KEY\)/.test(src));
 ok('chatContextoFlota existe', /function chatContextoFlota\(/.test(src));
-ok('chatContextoFlota devuelve alertasHoy y porSeveridad', /alertasHoy: hoy\.length[\s\S]{0,200}porSeveridad/.test(src));
+ok('chatContextoFlota devuelve alertasHoy y porSeveridad', /alertasHoy: hoyFiltrado\.length[\s\S]{0,200}porSeveridad/.test(src));
 ok('CHAT_SYS es string.raw con reglas', /const CHAT_SYS = String\.raw[\s\S]{0,5000}sin emojis/.test(src));
 ok('CHAT_SYS menciona Mexico y espanol', /Mexico[\s\S]{0,2000}espanol/.test(src));
 ok('bindings: chatSendBtn -> chatEnviar', /chatSendBtn\.addEventListener\('click', \(\) => chatEnviar\(\)\)/.test(src));
@@ -552,9 +552,36 @@ ok('CSS chat: bubble user alineado derecha', /\.rondo-chat-msg\.user\{align-self
 ok('CSS chat: bubble ia alineado izquierda', /\.rondo-chat-msg\.ia\{align-self:flex-start/.test(src));
 ok('CSS chat: typing indicator', /\.rondo-chat-typing span\{width:6px/.test(src));
 
+// v5.14.7: chat sin parpadeo + toggle "Toda la flota".
+ok('default chatTodaFlota = false', /chatTodaFlota:\s*false/.test(src));
+ok('checkbox rondo-chat-all existe', /id="rondo-chat-all"/.test(src));
+ok('label rondo-chat-scope existe', /class="rondo-chat-scope"/.test(src));
+ok('CSS switch chat-scope existe', /\.rondo-chat-scope-track\{/.test(src));
+ok('CSS switch checked mueve el dot', /input:checked \+ \.rondo-chat-scope-track \.rondo-chat-scope-dot\{transform:translateX\(13px\)/.test(src));
+ok('chatContextoFlota respeta chatTodaFlota', /const toda = !!APP\.config\.chatTodaFlota/.test(src));
+ok('chatContextoFlota filtra por shouldWatch si no toda', /if \(toda\) return true;[\s\S]{0,120}shouldWatch\(u\)/.test(src));
+ok('chatContextoFlota devuelve alcance', /alcance: toda \? 'toda la flota' : 'solo unidades vigiladas'/.test(src));
+ok('chatContextoFlota devuelve unidadesEnAlcance', /unidadesEnAlcance: unidades\.length/.test(src));
+ok('helper chatMsgHTML existe', /function chatMsgHTML\(/.test(src));
+ok('helper chatEmptyHTML existe', /function chatEmptyHTML\(/.test(src));
+ok('helper setChatTyping existe', /function setChatTyping\(/.test(src));
+ok('helper scrollChatBottom existe', /function scrollChatBottom\(/.test(src));
+ok('helper appendMensajeChat existe', /function appendMensajeChat\(/.test(src));
+ok('helper renderChatLog existe', /function renderChatLog\(/.test(src));
+ok('pintarChat NO re-renderiza si el log tiene hijos', /if \(log\.children\.length\) return;/.test(src));
+ok('pintarChat sincroniza el checkbox chat-all', /allEl\.checked = !!APP\.config\.chatTodaFlota/.test(src));
+ok('appendMensajeChat quita el empty state', /const vacio = log\.querySelector\('\.rondo-chat-empty'\)/.test(src));
+ok('scrollChatBottom no mueve si el usuario scrolleo arriba', /lejos < 120/.test(src));
+ok('chatEnviar usa appendMensajeChat (no re-render)', /appendMensajeChat\(userMsg\)/.test(src));
+ok('chatEnviar usa setChatTyping', /setChatTyping\(true\)/.test(src) && /setChatTyping\(false\)/.test(src));
+ok('chatEnviar no llama pintarChat', !/async function chatEnviar[\s\S]{0,2000}pintarChat\(\)/.test(src));
+ok('bindings: chatAllEl guarda en config', /APP\.config\.chatTodaFlota = !!chatAllEl\.checked/.test(src));
+ok('bindings: chatAllEl persiste en LS', /chatAllEl\.addEventListener\('change'[\s\S]{0,400}writeJSON\(LS\.cfg/.test(src));
+ok('limpiarChat usa renderChatLog', /limpiarChat[\s\S]{0,300}renderChatLog\(\)/.test(src));
+
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.14\.6['"]/.test(src));
-ok('@version 5.14.6 sincronizado con VER', /@version\s+5\.14\.6[\s\S]{0,50000}const VER = ['"]5\.14\.6['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.14\.7['"]/.test(src));
+ok('@version 5.14.7 sincronizado con VER', /@version\s+5\.14\.7[\s\S]{0,50000}const VER = ['"]5\.14\.7['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
