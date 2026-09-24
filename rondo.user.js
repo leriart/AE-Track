@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.1
+// @version      5.12.2
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -15,7 +15,14 @@
 // @match        *://*.wialon.com/*
 // @match        *://wialon.com/*
 // @run-at       document-idle
-// @grant        none
+// @grant        GM_xmlhttpRequest
+// @connect      api.deepseek.com
+// @connect      integrate.api.nvidia.com
+// @connect      api.kimi.ai
+// @connect      api.moonshot.ai
+// @connect      api.minimax.io
+// @connect      overpass-api.de
+// @connect      *
 // ==/UserScript==
 
 /* ============================================================================
@@ -30,6 +37,77 @@
 
 (function Rondo() {
     'use strict';
+
+    /* ====================== CONTEXTO Y PETICIONES ======================
+     * Desde la 5.12.2 el script declara @grant GM_xmlhttpRequest para poder
+     * llamar a las APIs de IA (que no mandan cabeceras CORS) sin que el
+     * navegador corte la peticion. Con ese grant el script corre en el
+     * sandbox del gestor de userscripts, asi que:
+     *
+     *   - La API de Wialon (global `wialon`) vive en el window REAL de la
+     *     pagina. La tomamos de `unsafeWindow` cuando exista (Tampermonkey y
+     *     Violentmonkey lo exponen con grants) y caemos a `window`.
+     *   - `window.localStorage`/`document`/etc. siguen funcionando porque el
+     *     sandbox los proxea.
+     *
+     * `httpRequest()` usa GM_xmlhttpRequest si esta disponible (salta CORS y
+     * CSP) y cae a `fetch` si no (por ejemplo con @grant none en algun
+     * gestor que no lo exponga).
+     */
+    const PAGE = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
+
+    function gmXhr() {
+        try {
+            if (typeof GM_xmlhttpRequest === 'function') return GM_xmlhttpRequest;
+            if (typeof GM !== 'undefined' && GM && typeof GM.xmlHttpRequest === 'function') return GM.xmlHttpRequest.bind(GM);
+        } catch (_) { /* noop */ }
+        return null;
+    }
+    // Peticion HTTP unificada. Devuelve Promise<{ok, status, texto, red?}>.
+    // `red:true` marca fallo de red/CORS (sin respuesta del servidor).
+    function httpRequest(opts) {
+        const metodo = (opts && opts.method) || 'GET';
+        const headers = (opts && opts.headers) || {};
+        const body = opts && opts.body;
+        const timeoutMs = Math.max(2000, (opts && opts.timeoutMs) || 25000);
+        const gm = gmXhr();
+        if (gm) {
+            return new Promise((resolve) => {
+                try {
+                    gm({
+                        method: metodo,
+                        url: opts.url,
+                        headers: headers,
+                        data: body,
+                        timeout: timeoutMs,
+                        onload: (r) => resolve({
+                            ok: r.status >= 200 && r.status < 300,
+                            status: r.status,
+                            texto: r.responseText || ''
+                        }),
+                        onerror: () => resolve({ ok: false, status: 0, texto: '', red: true }),
+                        ontimeout: () => resolve({ ok: false, status: 0, texto: '', red: true, timeout: true })
+                    });
+                } catch (e) {
+                    resolve({ ok: false, status: 0, texto: String((e && e.message) || e), red: true });
+                }
+            });
+        }
+        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+        return fetch(opts.url, {
+            method: metodo,
+            headers: headers,
+            body: body,
+            signal: ctrl ? ctrl.signal : undefined
+        }).then((r) => r.text().then((t) => {
+            if (timer) clearTimeout(timer);
+            return { ok: r.ok, status: r.status, texto: t };
+        })).catch((e) => {
+            if (timer) clearTimeout(timer);
+            return { ok: false, status: 0, texto: String((e && e.message) || e), red: true };
+        });
+    }
 
     /* ====================== MIGRACION DESDE HJP WIALON ======================
      * Rondo es un proyecto nuevo (namespace/nombre distinto). Para que los
@@ -225,7 +303,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.1';
+    const VER = '5.12.2';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -579,15 +657,18 @@
         const ms = timeout || 60000;
         const t0 = Date.now();
         while (true) {
-            if (typeof wialon !== 'undefined' && wialon.core && wialon.core.Session) return true;
+            // `PAGE` resuelve el window real de la pagina (unsafeWindow con
+            // grants, o window si corremos en contexto de pagina).
+            const w = PAGE.wialon;
+            if (w && w.core && w.core.Session) return true;
             if (Date.now() - t0 > ms) return false;
             await sleep(400);
         }
     }
-    function session() { return wialon.core.Session.getInstance(); }
+    function session() { return PAGE.wialon.core.Session.getInstance(); }
     function currentUser() { try { return session().getCurrUser(); } catch (_) { return null; } }
     function remoteCall(service, params) {
-        const remote = wialon.core.Remote.getInstance();
+        const remote = PAGE.wialon.core.Remote.getInstance();
         return new Promise((resolve, reject) => {
             try {
                 remote.remoteCall(service, params, (code, result) => {
@@ -2049,17 +2130,16 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             'way["amenity"~"parking|fuel|industrial"](around:' + radio + ',' + lat + ',' + lon + ');' +
             ');out body 30;';
         try {
-            const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-            const timer = ctrl ? setTimeout(() => ctrl.abort(), 8000) : null;
-            const res = await fetch('https://overpass-api.de/api/interpreter', {
+            const res = await httpRequest({
                 method: 'POST',
+                url: 'https://overpass-api.de/api/interpreter',
                 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                 body: 'data=' + encodeURIComponent(q),
-                signal: ctrl ? ctrl.signal : undefined
+                timeoutMs: 8000
             });
-            if (timer) clearTimeout(timer);
             if (!res.ok) return [];
-            const d = await res.json();
+            let d;
+            try { d = JSON.parse(res.texto || '{}'); } catch (_) { return []; }
             const out = [];
             (d.elements || []).forEach((el) => {
                 if (!el.lat || !el.lon) return;
@@ -2109,25 +2189,23 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         };
         const headers = { 'Content-Type': 'application/json' };
         headers[prov.headerAuth || 'Authorization'] = (prov.prefijo || 'Bearer ') + cfg.iaApiKey;
-        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         const ms = Math.max(2000, (+cfg.iaTimeoutS || 25) * 1000);
-        const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
-        let res;
-        try {
-            res = await fetch(endpoint, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(body),
-                signal: ctrl ? ctrl.signal : undefined
-            });
-        } catch (e) {
-            if (timer) clearTimeout(timer);
-            return { error: 'Red/CORS con ' + prov.nombre + ': ' + (e && e.message || e) };
+        const res = await httpRequest({
+            method: 'POST',
+            url: endpoint,
+            headers: headers,
+            body: JSON.stringify(body),
+            timeoutMs: ms
+        });
+        if (res.red) {
+            // Sin respuesta del servidor: red caida, CORS o URL mal.
+            const gm = !!gmXhr();
+            return {
+                error: 'No se pudo contactar ' + prov.nombre + ' (' + (res.timeout ? 'timeout' : 'fallo de red') + ')' +
+                    (gm ? '. Revisa el endpoint.' : ' · CORS: activa GM_xmlhttpRequest o usa un gestor que lo soporte.')
+            };
         }
-        if (timer) clearTimeout(timer);
         if (!res.ok) {
-            let txt = '';
-            try { txt = await res.text(); } catch (_) { /* noop */ }
             // 401 casi siempre significa key de OTRO producto o endpoint.
             // Damos una pista concreta en vez del volcado crudo.
             let pista = '';
@@ -2136,10 +2214,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                     ' (endpoint ' + endpoint + ')' + (prov.nota ? '. ' + prov.nota : '') +
                     '. Si tu key es de otro producto (p. ej. Kimi.ai vs Moonshot), cambia de proveedor o ajusta el endpoint.';
             }
-            return { error: prov.nombre + ' HTTP ' + res.status + pista + (txt ? ' · ' + txt.slice(0, 180) : '') };
+            return { error: prov.nombre + ' HTTP ' + res.status + pista + (res.texto ? ' · ' + res.texto.slice(0, 180) : '') };
         }
         let data;
-        try { data = await res.json(); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
+        try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
         const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!txt) return { error: 'Sin contenido en la respuesta de ' + prov.nombre, raw: data };
         // El modelo a veces envuelve el JSON en ```json ... ```. Lo limpiamos.

@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.12.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.12.0.md)
-[![tests](https://img.shields.io/badge/tests-473%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.12.2-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.12.2.md)
+[![tests](https://img.shields.io/badge/tests-505%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -338,6 +338,13 @@ tras verificar en `dev` se promueve a `main`.
   *Avisos de escritorio* en Ajustes.
 - **CSP-friendly**: funciona en paginas con Content-Security-Policy
   restrictiva porque no inyecta `<script>` remotos.
+- **IA optativa con `GM_xmlhttpRequest`**: para que la IA funcione, el
+  script declara `@grant GM_xmlhttpRequest` y `@connect` a los
+  proveedores (DeepSeek, NVIDIA, Moonshot, Kimi.ai, MiniMax, Overpass).
+  Esas peticiones salen por el gestor de userscripts (no por la pagina),
+  asi que **no las afecta CORS ni la CSP**. La API key solo se envia al
+  endpoint que configures. Si desactivas la IA (`Ajustes > IA`), Rondo no
+  hace ninguna peticion a esos proveedores.
 
 ## Creditos
 

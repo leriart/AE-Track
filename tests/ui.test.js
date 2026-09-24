@@ -309,6 +309,24 @@ ok('paintIASwitch tras guardar config', /paintAlertas\(\);\s*\n\s*paintIASwitch\
 ok('click de rondo-ia ligado a toggleIA', /byId\('rondo-ia'\)\.addEventListener\('click', \(\) => toggleIA\(\)\)/.test(src));
 ok('CSS ia-on con check', /rondo-ia-head\.ia-on \.rondo-ia-badge::after/.test(src));
 ok('CSS ia-off con punto ambar', /rondo-ia-head\.ia-off \.rondo-ia-badge/.test(src));
+
+// CORS: el script usa GM_xmlhttpRequest para las APIs de IA (que no
+// mandan cabeceras CORS) y un helper httpRequest con fallback a fetch.
+ok('grant GM_xmlhttpRequest', /\/\/ @grant\s+GM_xmlhttpRequest/.test(src));
+ok('connect deepseek', /\/\/ @connect\s+api\.deepseek\.com/.test(src));
+ok('connect nvidia', /\/\/ @connect\s+integrate\.api\.nvidia\.com/.test(src));
+ok('connect kimi.ai', /\/\/ @connect\s+api\.kimi\.ai/.test(src));
+ok('connect moonshot', /\/\/ @connect\s+api\.moonshot\.ai/.test(src));
+ok('connect minimax', /\/\/ @connect\s+api\.minimax\.io/.test(src));
+ok('connect comodin', /\/\/ @connect\s+\*/.test(src));
+ok('helper gmXhr existe', /function gmXhr\(/.test(src));
+ok('helper httpRequest existe', /function httpRequest\(/.test(src));
+ok('alias PAGE (unsafeWindow)', /const PAGE = \(typeof unsafeWindow !== 'undefined' && unsafeWindow\) \? unsafeWindow : window/.test(src));
+ok('IA usa httpRequest (no fetch directo)', /async function aiLlamarProveedor[\s\S]*?httpRequest\(\{/.test(src));
+ok('Overpass POIs usa httpRequest', /async function aiOverpassPois[\s\S]*?httpRequest\(\{/.test(src));
+ok('wialon via PAGE (no global crudo)', /function session\(\) \{ return PAGE\.wialon\.core\.Session\.getInstance\(\); \}/.test(src));
+ok('wialonReady via PAGE', /const w = PAGE\.wialon;/.test(src));
+ok('sin fetch directo al endpoint de IA', !/await fetch\(endpoint/.test(src));
 ok('Overpass para POIs en aiContexto', /amenity"~"workshop\|fuel\|parking/.test(src));
 ok('boton IA en alertas', /rondo-ia-btn/.test(src));
 ok('veredicto IA en alertas', /rondo-ia-verdict/.test(src));
