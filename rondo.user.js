@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.2
+// @version      5.14.3
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -391,7 +391,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.14.2';
+    const VER = '5.14.3';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -2997,6 +2997,87 @@ Reglas:
         return { patrones, sugerencias };
     }
 
+    // v5.14.3: dialogo de error estandar para llamadas IA (usado por
+    // aiPatronesUI y aiAnalizarLoteUI). Antes v5.14.2 era un bloque
+    // inline que se repetia; ahora vive aqui y muestra: detalle del
+    // error, pista contextual por tipo de error, endpoint que se
+    // intento, tips especificos del proveedor y un boton "Cambiar a
+    // DeepSeek" para los proveedores problematicos (Kimi/Moonshot).
+    function mostrarDialogoErrorIA(r, contexto) {
+        const errTxt = String((r && r.error) || 'error desconocido');
+        const prov = (IA_PROVEEDORES || {})[APP.config.iaProveedor] || {};
+        const provNombre = prov.nombre || APP.config.iaProveedor || '(sin proveedor)';
+        const endpoint = String(APP.config.iaEndpoint || '').trim() || prov.endpoint || '';
+        // Pista contextual segun el tipo de error.
+        let pista = '';
+        if (/context length|too long|max tokens/i.test(errTxt)) {
+            pista = 'El prompt + alertas exceden el limite del modelo. Prueba con un modelo mas grande (moonshot/kimi-k2.6, nvidia/llama-3.1-70b) o baja "Max avisos por analisis en lote" en Ajustes > IA.';
+        } else if (/401|403/.test(errTxt)) {
+            pista = 'La API key no corresponde a este proveedor/modelo. Cambia de proveedor en Ajustes > IA o corrige la key.';
+        } else if (/429/.test(errTxt)) {
+            pista = 'Limite de uso del proveedor alcanzado. Espera o cambia a otro proveedor.';
+        } else if (/400/.test(errTxt)) {
+            pista = 'El modelo rechazo un parametro (revisa Temperatura/Max tokens o el modelo elegido).';
+        } else if (/JSON|no-JSON|parseable/i.test(errTxt)) {
+            pista = 'La IA devolvio texto que no se pudo parsear como JSON. Problema del modelo, no de Rondo. Reintentar suele funcionar.';
+        } else if (/timeout|red/i.test(errTxt)) {
+            pista = 'Timeout o fallo de red. Verifica tu conexion, sube "Timeout" en Ajustes > IA o prueba con otro proveedor.';
+        }
+        // Tips especificos por proveedor.
+        const tipsPorProv = {
+            kimi: 'Kimi for Coding (kimi.com/code) usa el endpoint /coding/v1 con keys kimi-... Si te da timeout, prueba con Moonshot (sk-...) o DeepSeek (sk-...) que suelen ser mas estables.',
+            moonshot: 'Moonshot (platform.moonshot.ai) usa el endpoint /v1 con keys sk-... Si te da timeout o 404, prueba con DeepSeek que tiene baja latencia.',
+            nvidia: 'NVIDIA NIM requiere API key nvapi-... y tiene rate limits por minuto. Si te da 429, espera un minuto.',
+            deepseek: 'DeepSeek suele ser el mas estable. Si te da error, prueba subiendo "Timeout" en Ajustes > IA o reduciendo "Max avisos".',
+            minimax: 'MiniMax (platform.minimax.io) es estable y rapido. Si te da error de modelo, prueba con deepseek-chat o moonshot/kimi-k2.6.'
+        };
+        const provKey = String(APP.config.iaProveedor || '').toLowerCase();
+        const tipProv = tipsPorProv[provKey] || '';
+        // Sugerencias de proveedores alternativos (muestra los 3 mas
+        // fiables: deepseek, minimax, nvidia). Si el actual YA es uno
+        // de ellos, sugiere los otros dos.
+        const fiables = ['deepseek', 'minimax', 'nvidia'].filter((k) => k !== provKey);
+        const sugerenciasHTML = fiables.length ? '<div style="margin:8px 0;display:flex;gap:6px;flex-wrap:wrap">' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim);margin-right:4px">Probar con:</span>' +
+            fiables.map((k) => {
+                const p = (IA_PROVEEDORES || {})[k] || {};
+                return '<button type="button" class="mini rondo-ia-cambiar-prov" data-prov="' + esc(k) + '" style="font-size:11px" title="' + esc(p.nota || '') + '">' + esc(p.nombre || k) + '</button>';
+            }).join('') + '</div>' : '';
+        abrirDialogo({
+            titulo: contexto || 'Error al llamar a la IA',
+            html: '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
+                '<div style="margin:0 0 6px"><b>Proveedor:</b> ' + esc(provNombre) + '</div>' +
+                (endpoint ? '<div style="margin:0 0 8px;font-family:monospace;font-size:11px;color:var(--rondo-fg-dim);word-break:break-all;background:var(--rondo-bg-soft);padding:4px 6px;border-radius:4px">' + esc(endpoint) + '</div>' : '') +
+                '<div style="margin:0 0 8px"><b>Detalle:</b> ' + esc(errTxt) + '</div>' +
+                (pista ? '<div style="margin:0 0 8px;padding:6px 8px;border-left:3px solid var(--rondo-accent-2);background:var(--rondo-bg-soft);border-radius:3px"><b>Sugerencia:</b> ' + esc(pista) + '</div>' : '') +
+                (tipProv ? '<div style="margin:0 0 8px;font-size:11.5px;color:var(--rondo-fg-dim)"><b>Sobre este proveedor:</b> ' + esc(tipProv) + '</div>' : '') +
+                (sugerenciasHTML) +
+                (r.raw ? '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--rondo-fg-dim);font-size:11.5px">Respuesta cruda del modelo</summary>' +
+                    '<pre style="font-size:10.5px;background:var(--rondo-bg-soft);padding:6px;border-radius:4px;overflow:auto;max-height:180px;margin:6px 0 0;white-space:pre-wrap">' + esc(String(r.raw).slice(0, 1500)) + '</pre></details>' : '') +
+                '</div>',
+            cancelText: 'Cerrar',
+            okText: 'Cerrar',
+            onOk: () => {},
+            ancho: 580,
+            onOpen: (el) => {
+                el.querySelectorAll('.rondo-ia-cambiar-prov').forEach((b) => {
+                    b.addEventListener('click', () => {
+                        const nuevo = b.dataset.prov;
+                        if (!nuevo || !(nuevo in (IA_PROVEEDORES || {}))) return;
+                        APP.config.iaProveedor = nuevo;
+                        writeJSON(LS.cfg, APP.config);
+                        const sel = byId('c-ia-prov');
+                        if (sel) sel.value = nuevo;
+                        actualizarNotaProveedorIA();
+                        adviceOk('Proveedor cambiado a ' + ((IA_PROVEEDORES[nuevo] || {}).nombre || nuevo),
+                            'Vuelve a pulsar "Detectar patrones" o "Probar conexion" para verificar.');
+                        cerrarDialogo();
+                    });
+                });
+            }
+        });
+    }
+
     // v5.14: aplica una sugerencia puntual al config (con confirmacion).
     // Se llama desde aiPatronesUI cuando el operador pulsa "Aplicar" en
     // una sugerencia concreta del dialogo de patrones.
@@ -3248,8 +3329,9 @@ Reglas:
             const muestra = hoy.length >= cfg.iaBatchMax ? hoy : APP.historial.slice(0, cfg.iaBatchMax);
             const r = await aiAnalizarLote(muestra);
             paintIAUso();
+            // v5.14.3: dialog rico con endpoint + tips + cambio rapido.
             if (r.error) {
-                adviceErr('Error IA', r.error);
+                mostrarDialogoErrorIA(r, 'Error al analizar lote');
                 return;
             }
             // Construye el HTML del resultado: resumen ejecutivo + ranking.
@@ -3312,34 +3394,7 @@ Reglas:
             // es un 400 (context length), 401 (key mala), 429 (rate
             // limit) o un parseo de JSON fallido.
             if (r.error) {
-                const errTxt = String(r.error);
-                let pista = '';
-                if (/context length|too long|max tokens/i.test(errTxt)) {
-                    pista = 'El prompt + alertas exceden el limite del modelo. Prueba con un modelo mas grande (ej. moonshot/kimi-k2.6, nvidia/llama-3.1-70b) o baja "Max avisos por analisis en lote" en Ajustes > IA.';
-                } else if (/401|403/.test(errTxt)) {
-                    pista = 'La API key no corresponde a este proveedor/modelo. Cambia de proveedor en Ajustes > IA o corrige la key.';
-                } else if (/429/.test(errTxt)) {
-                    pista = 'Limite de uso del proveedor alcanzado. Espera o cambia a otro proveedor.';
-                } else if (/400/.test(errTxt)) {
-                    pista = 'El modelo rechazo un parametro (temperatura/max_tokens/modelo).';
-                } else if (/JSON|no-JSON|parseable/i.test(errTxt)) {
-                    pista = 'La IA devolvio texto que no se pudo parsear como JSON. Esto es un problema del modelo, no de Rondo. Reintentar suele funcionar.';
-                } else if (/timeout|red/i.test(errTxt)) {
-                    pista = 'Timeout o fallo de red. Verifica tu conexion y reintenta.';
-                }
-                abrirDialogo({
-                    titulo: 'Error al detectar patrones',
-                    html: '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
-                        '<div style="margin:0 0 8px"><b>Detalle:</b> ' + esc(errTxt) + '</div>' +
-                        (pista ? '<div style="margin:0 0 8px;color:var(--rondo-fg-dim)"><b>Sugerencia:</b> ' + esc(pista) + '</div>' : '') +
-                        (r.raw ? '<details style="margin-top:6px"><summary style="cursor:pointer;color:var(--rondo-fg-dim)">Respuesta cruda del modelo</summary>' +
-                            '<pre style="font-size:11px;background:var(--rondo-bg-soft);padding:8px;border-radius:4px;overflow:auto;max-height:200px;margin:6px 0 0;white-space:pre-wrap">' + esc(String(r.raw).slice(0, 1500)) + '</pre></details>' : '') +
-                        '</div>',
-                    cancelText: 'Cerrar',
-                    okText: 'Cerrar',
-                    onOk: () => {},
-                    ancho: 560
-                });
+                mostrarDialogoErrorIA(r, 'Error al detectar patrones');
                 return;
             }
             const patrones = Array.isArray(r.patrones) ? r.patrones : [];

@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.2 en @UserScript', /@version\s+5\.14\.2/.test(src));
+ok('version 5.14.3 en @UserScript', /@version\s+5\.14\.3/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -468,9 +468,26 @@ ok('chip de version dentro del h3', /<h3>[^<]+<button type="button" id="rondo-ve
 ok('chip CSS mas compacto (18px height)', /height:18px/.test(src));
 ok('chip CSS no es .rondo-iconbtn (estilo inline)', !/#rondo-panel\s+\.rondo-iconbtn[\s\S]{0,400}#rondo-version-chip/.test(src));
 
+// v5.14.3: dialogo de error IA rico (endpoint, tips, cambio rapido).
+ok('helper mostrarDialogoErrorIA existe', /function mostrarDialogoErrorIA\(/.test(src));
+ok('helper muestra endpoint en monospace', /font-family:monospace[\s\S]{0,500}word-break:break-all/.test(src));
+ok('helper detecta 400/401/429/timeout/JSON', /context length[\s\S]{0,3000}timeout\|red/.test(src));
+ok('helper tiene tips por proveedor', /tipsPorProv[\s\S]{0,3000}kimi:/.test(src));
+ok('helper tiene tip para Kimi', /kimi: 'Kimi for Coding/.test(src));
+ok('helper tiene tip para Moonshot', /moonshot: 'Moonshot/.test(src));
+ok('helper tiene tip para DeepSeek', /deepseek: 'DeepSeek/.test(src));
+ok('helper sugiere cambiar proveedor (botones)', /rondo-ia-cambiar-prov/.test(src));
+ok('helper genera botones de deepseek/minimax/nvidia', /fiables\s*=\s*\['deepseek',\s*'minimax',\s*'nvidia'\]/.test(src));
+ok('helper filtra proveedor actual', /\.filter\(\(k\) => k !== provKey\)/.test(src));
+ok('helper muestra respuesta cruda en details', /Respuesta cruda del modelo/.test(src));
+ok('aiPatronesUI usa helper', /mostrarDialogoErrorIA\(r,\s*'Error al detectar patrones'\)/.test(src));
+ok('aiAnalizarLoteUI usa helper', /mostrarDialogoErrorIA\(r,\s*'Error al analizar lote'\)/.test(src));
+ok('helper cambia config.iaProveedor al click', /APP\.config\.iaProveedor = nuevo/.test(src));
+ok('helper avisa al cambiar proveedor', /adviceOk\('Proveedor cambiado a/.test(src));
+
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.14\.2['"]/.test(src));
-ok('@version 5.14.2 sincronizado con VER', /@version\s+5\.14\.2[\s\S]{0,50000}const VER = ['"]5\.14\.2['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.14\.3['"]/.test(src));
+ok('@version 5.14.3 sincronizado con VER', /@version\s+5\.14\.3[\s\S]{0,50000}const VER = ['"]5\.14\.3['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
