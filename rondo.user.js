@@ -602,7 +602,7 @@
         // por episodio (cuando la unidad lleva N min parada dentro de
         // una geocerca). Si la unidad se mueve o sale de la geocerca,
         // rearma para volver a avisar en el siguiente episodio.
-        geocercaDetenidoMin: 5           // minutos detenido dentro de geocerca para alertar
+        geocercaDetenidoMin: 5,          // minutos detenido dentro de geocerca para alertar
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
