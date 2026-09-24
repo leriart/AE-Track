@@ -18,9 +18,16 @@ if (ini < 0 || fin < 0) {
     process.exit(1);
 }
 
+// inZone() vive antes del bloque de algoritmos; lo extraemos aparte y lo
+// prependemos (las funciones del bloque se hoistean, asi que puede usarlas).
+const iniInZone = src.indexOf('function inZone(');
+const finInZone = src.indexOf('function zoneAt(');
+const bloqueInZone = (iniInZone >= 0 && finInZone > iniInZone) ? src.slice(iniInZone, finInZone) : '';
+
 const code = 'const clamp=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);\n' +
+    bloqueInZone + '\n' +
     src.slice(ini, fin) +
-    '\nreturn {haversine,bearing,difAngulo,distPuntoSegmento,simplificarRuta,precomputarRuta,snapRuta,MinHeap,aEstrella,sentidoOneWay,parseMaxspeed,VEL_POR_TIPO};';
+    '\nreturn {haversine,bearing,difAngulo,distPuntoSegmento,simplificarRuta,precomputarRuta,snapRuta,MinHeap,aEstrella,sentidoOneWay,parseMaxspeed,VEL_POR_TIPO,inZone};';
 const mod = new Function(code)();
 
 let fallos = 0;
@@ -146,6 +153,52 @@ ok('parseMaxspeed: mph', mod.parseMaxspeed({ maxspeed: '30 mph' }) === 30);
 ok('parseMaxspeed: vacio -> null', mod.parseMaxspeed({}) === null);
 ok('VEL_POR_TIPO: motorway = 100', mod.VEL_POR_TIPO.motorway === 100);
 ok('VEL_POR_TIPO: residential = 30', mod.VEL_POR_TIPO.residential === 30);
+
+/* ── inZone: geocercas de Wialon ────────────────────────────────
+ * Formato real: `zl` trae `t` (1 linea, 2 poligono, 3 circulo), `w`
+ * (radio/ancho) y `b` (bbox + cen_x/cen_y); los puntos `p` vienen de
+ * resource/get_zone_data como [{x: lon, y: lat, r}].
+ */
+const sq = [
+    { x: -99.140, y: 19.430 }, { x: -99.130, y: 19.430 },
+    { x: -99.130, y: 19.440 }, { x: -99.140, y: 19.440 }
+];
+const bboxSq = { min_x: -99.140, min_y: 19.430, max_x: -99.130, max_y: 19.440, cen_x: -99.135, cen_y: 19.435 };
+ok('inZone poligono: dentro', mod.inZone(19.435, -99.135, { t: 2, p: sq, b: bboxSq }) === true);
+ok('inZone poligono: fuera', mod.inZone(19.450, -99.135, { t: 2, p: sq, b: bboxSq }) === false);
+// Triangulo: un punto puede estar dentro del bbox y fuera del poligono.
+const tri = [
+    { x: -99.140, y: 19.430 }, { x: -99.130, y: 19.430 }, { x: -99.140, y: 19.440 }
+];
+ok('inZone poligono (triangulo): dentro', mod.inZone(19.432, -99.1395, { t: 2, p: tri }) === true);
+ok('inZone poligono (triangulo): fuera del poligono pero dentro del bbox',
+    mod.inZone(19.4395, -99.1305, { t: 2, p: tri }) === false);
+ok('inZone poligono como string JSON', mod.inZone(19.435, -99.135, { t: 2, p: JSON.stringify(sq) }) === true);
+
+// Circulo: centro en c + radio w.
+ok('inZone circulo (c + w): dentro',
+    mod.inZone(19.4335, -99.1332, { t: 3, c: { x: -99.1332, y: 19.4326 }, w: 200 }) === true);
+ok('inZone circulo (c + w): fuera',
+    mod.inZone(19.4370, -99.1332, { t: 3, c: { x: -99.1332, y: 19.4326 }, w: 200 }) === false);
+
+// Circulo SIN `c`, con centro en b.cen_x/cen_y + w (lo que trae el `zl`).
+const circB = { min_x: -99.140, min_y: 19.430, max_x: -99.130, max_y: 19.440, cen_x: -99.1332, cen_y: 19.4326 };
+ok('inZone circulo (b.cen_x/y + w): dentro', mod.inZone(19.4335, -99.1332, { t: 3, w: 200, b: circB }) === true);
+ok('inZone circulo (b.cen_x/y + w): fuera (esquina del bbox)',
+    mod.inZone(19.4398, -99.1398, { t: 3, w: 200, b: circB }) === false);
+
+// Sin geometria fina: solo bbox (aproximacion).
+ok('inZone solo bbox: dentro', mod.inZone(19.435, -99.135, { t: 2, b: bboxSq }) === true);
+ok('inZone solo bbox: fuera', mod.inZone(19.460, -99.135, { t: 2, b: bboxSq }) === false);
+
+// Linea (t=1): dentro si esta a <= w/2 del trazado.
+const linea = [{ x: -99.140, y: 19.430 }, { x: -99.130, y: 19.430 }];
+ok('inZone linea: cerca', mod.inZone(19.4302, -99.135, { t: 1, w: 100, p: linea }) === true);
+ok('inZone linea: lejos', mod.inZone(19.4340, -99.135, { t: 1, w: 100, p: linea }) === false);
+
+// Robustez: null/valores no numericos no revientan.
+ok('inZone sin geometria -> false', mod.inZone(19.43, -99.13, { t: 2 }) === false);
+ok('inZone lat/lon null -> false', mod.inZone(null, null, { t: 2, p: sq }) === false);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

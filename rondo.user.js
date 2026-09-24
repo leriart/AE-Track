@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.13.0
+// @version      5.13.1
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -344,7 +344,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.13.0';
+    const VER = '5.13.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -760,9 +760,16 @@
             const zs = _extraerZonasDe(items);
             if (zs.length) { out = zs; break; }
         }
+        // Completa la geometria (puntos de poligono / centro de circulo) que
+        // el `zl` no trae. Si get_zone_data no existe, se seguira usando el
+        // bounding box como aproximacion.
+        try { await _enriquecerZonas(out); } catch (_) { /* noop */ }
         APP.zonasDiag = diag;
         APP.zonasPorNombre = new Map(out.map((z) => [z.n || '', z]));
-        if (APP.unlocked) { try { log('geocercas:', out.length, '· recursos:', diag.recursos, '· claves:', diag.claves.join(',')); } catch (_) {} }
+        if (APP.unlocked) {
+            const conGeo = out.filter((z) => !_zonaNecesitaGeometria(z)).length;
+            try { log('geocercas:', out.length, '· con geometria:', conGeo, '· recursos:', diag.recursos, '· claves:', diag.claves.join(',')); } catch (_) {}
+        }
         return out;
     }
     // Extrae las geocercas de la lista de recursos de Wialon.
@@ -770,31 +777,36 @@
     // objetos planos y NO tienen res.getZones() (eso es del SDK). El campo
     // crudo de las geocercas de un recurso es `zl` (zones library). Tambien
     // toleramos getZones()/zones por si el wrapper del SDK esta presente.
-    function _extraerZonasDe(items) {
+function _extraerZonasDe(items) {
         const out = [];
-        const add = (z) => { if (z && typeof z === 'object' && z.n) out.push(z); };
-        const addColl = (coll) => {
+        // `coll` puede ser un array, un objeto {id: zona} o un STRING JSON
+        // (algunas versiones de Wialon devuelven `zl` serializado).
+        const addColl = (coll, rid) => {
             if (!coll) return 0;
-            let n = 0;
-            if (Array.isArray(coll)) {
-                coll.forEach((z) => { if (z && typeof z === 'object' && z.n) { out.push(z); n++; } });
-            } else if (typeof coll === 'object') {
-                Object.keys(coll).forEach((k) => { const z = coll[k]; if (z && typeof z === 'object' && z.n) { out.push(z); n++; } });
+            if (typeof coll === 'string') {
+                try { return addColl(JSON.parse(coll), rid); } catch (_) { return 0; }
             }
+            let n = 0;
+            const push = (z) => {
+                if (z && typeof z === 'object' && z.n) { z._rid = rid; out.push(z); n++; }
+            };
+            if (Array.isArray(coll)) coll.forEach(push);
+            else if (typeof coll === 'object') Object.keys(coll).forEach((k) => push(coll[k]));
             return n;
         };
         (items || []).forEach((res) => {
             if (!res) return;
+            const rid = (res.id != null) ? res.id : ((res.rid != null) ? res.rid : null);
             let encontrados = 0;
             try {
                 if (typeof res.getZones === 'function') {
-                    encontrados += addColl(res.getZones());
+                    encontrados += addColl(res.getZones(), rid);
                 }
             } catch (_) { /* noop */ }
             if (!encontrados) {
                 // Campo crudo de la API: zl (zones library). Algunas versiones
                 // usan `zones`.
-                encontrados += addColl(res.zl || res.zones);
+                encontrados += addColl(res.zl || res.zones, rid);
             }
         });
         // Desduplica por id/nombre.
@@ -805,6 +817,46 @@
             vistos.add(k);
             return true;
         });
+    }
+    // El `zl` de search_items solo trae el bounding box (`b`), NO los puntos
+    // (`p`) ni el centro. La geometria real se pide con resource/get_zone_data
+    // (flags 0x1F = area+perimetro+centro+todos los puntos+basicos) y se
+    // fusiona en las zonas para que inZone() pueda hacer la comprobacion
+    // exacta (poligono/circulo) en vez de solo el rectangulo.
+    function _zonaNecesitaGeometria(z) {
+        // Circulo (t=3): basta el centro (b.cen_x/cen_y) y el radio (w).
+        if (z.t === 3) return !(z.b && z.b.cen_x != null && z.b.cen_y != null && z.w != null);
+        // Linea (t=1) o poligono (t=2): hacen falta los puntos.
+        return !(Array.isArray(z.p) && z.p.length >= 2);
+    }
+    async function _enriquecerZonas(zonas) {
+        const porRecurso = new Map();
+        (zonas || []).forEach((z) => {
+            if (z._rid == null) return;
+            if (!_zonaNecesitaGeometria(z)) return;
+            if (!porRecurso.has(z._rid)) porRecurso.set(z._rid, []);
+            porRecurso.get(z._rid).push(z);
+        });
+        for (const [rid, zs] of porRecurso) {
+            let datos = null;
+            try {
+                const col = zs.map((z) => z.id).filter((x) => x != null);
+                const r = await remoteCall('resource/get_zone_data', { itemId: rid, col: col, flags: 0x1F });
+                datos = Array.isArray(r) ? r : ((r && (r.items || r.zones)) || null);
+            } catch (_) { datos = null; }
+            if (!datos) continue;
+            const porId = new Map();
+            datos.forEach((dz) => { if (dz && dz.id != null) porId.set(dz.id, dz); });
+            zs.forEach((z) => {
+                const dz = porId.get(z.id);
+                if (!dz) return;
+                if (dz.b) z.b = dz.b;
+                if (Array.isArray(dz.p)) z.p = dz.p;
+                if (dz.t != null) z.t = dz.t;
+                if (dz.w != null) z.w = dz.w;
+            });
+        }
+        return zonas;
     }
     async function fetchLastMotion(uid, minutos) {
         const ahora = Math.floor(Date.now() / 1000);
@@ -824,30 +876,74 @@
     function inZone(lat, lon, z) {
         if (!z || lat == null || lon == null) return false;
         try {
-            const x = lon, y = lat, b = z.b;
-            if (b && (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y)) return false;
-            const p = z.p;
-            if (Array.isArray(p) && p.length >= 3) {
-                let inside = false;
-                // Ray-casting. OJO: j = i++ incrementa i; con j = i el bucle
-                // se quedaba infinito y congelaba la pagina al pintar geocercas.
-                for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
-                    const a = p[i], c = p[j];
-                    const xi = (a.x != null) ? a.x : a[0];
-                    const yi = (a.y != null) ? a.y : a[1];
-                    const xj = (c.x != null) ? c.x : c[0];
-                    const yj = (c.y != null) ? c.y : c[1];
-                    if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+            const y = +lat, x = +lon;
+            if (!isFinite(x) || !isFinite(y)) return false;
+            const b = z.b;
+            // Descarte rapido por bounding box (si viene).
+            if (b && b.min_x != null && (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y)) return false;
+            // Puntos: pueden venir como array o como string JSON.
+            let p = z.p;
+            if (typeof p === 'string') { try { p = JSON.parse(p); } catch (_) { p = null; } }
+            const t = z.t;
+            // Circulo (t=3) o cualquier zona con centro (c o b.cen_x/cen_y) + radio.
+            const cenX = (z.c && z.c.x != null) ? +z.c.x : (b && b.cen_x != null ? +b.cen_x : null);
+            const cenY = (z.c && z.c.y != null) ? +z.c.y : (b && b.cen_y != null ? +b.cen_y : null);
+            const radio = (z.w != null) ? +z.w : (z.r != null ? +z.r : null);
+            if (t === 3 || (t == null && cenX != null && cenY != null && radio != null)) {
+                if (cenX != null && cenY != null && radio != null) {
+                    return _geoDistM(y, x, cenY, cenX) <= radio;
                 }
-                return inside;
             }
-            if (z.c && z.w != null) {
-                const dx = (x - z.c.x) * Math.cos(y * Math.PI / 180) * 111320;
-                const dy = (y - z.c.y) * 110540;
-                return Math.sqrt(dx * dx + dy * dy) <= z.w;
+            if (Array.isArray(p) && p.length >= 2) {
+                const ptX = (a) => (a.x != null) ? +a.x : +a[0];
+                const ptY = (a) => (a.y != null) ? +a.y : +a[1];
+                // Linea (t=1): dentro si esta a <= radio/2 del trazado.
+                if (t === 1) {
+                    const r = (radio || 0);
+                    for (let i = 0; i < p.length - 1; i++) {
+                        const a = p[i], c = p[i + 1];
+                        const d = distPuntoSegmento(y, x, ptY(a), ptX(a), ptY(c), ptX(c));
+                        if (d && d.dist <= r) return true;
+                    }
+                    // Los puntos de una linea llevan su propio radio (a.r): si
+                    // no hay w, usa el mayor de los radios de los puntos.
+                    if (!r) {
+                        const rmax = p.reduce((m, a) => Math.max(m, a.r || 0), 0);
+                        if (rmax) {
+                            for (let i = 0; i < p.length - 1; i++) {
+                                const a = p[i], c = p[i + 1];
+                                const d = distPuntoSegmento(y, x, ptY(a), ptX(a), ptY(c), ptX(c));
+                                if (d && d.dist <= rmax) return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
+                // Poligono (t=2 o sin tipo): ray-casting.
+                if (p.length >= 3) {
+                    let inside = false;
+                    // OJO: j = i++ incrementa i; con j = i el bucle se
+                    // quedaba infinito y congelaba la pagina.
+                    for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+                        const a = p[i], c = p[j];
+                        const xi = ptX(a), yi = ptY(a), xj = ptX(c), yj = ptY(c);
+                        if (((yi > y) !== (yj > y)) && (x < (xj - xi) * (y - yi) / (yj - yi) + xi)) inside = !inside;
+                    }
+                    return inside;
+                }
             }
-            return !!b;
+            // Sin geometria fina: el bounding box sirve de aproximacion.
+            return !!(b && b.min_x != null);
         } catch (_) { return false; }
+    }
+    // Distancia local (equirectangular, metros). Autosuficiente para que
+    // inZone no dependa de helpers definidos mas abajo (los tests extraen
+    // solo el bloque inZone..zoneAt).
+    function _geoDistM(lat1, lon1, lat2, lon2) {
+        const lat0 = (lat1 + lat2) / 2;
+        const mx = 111320 * Math.cos(lat0 * Math.PI / 180), my = 110540;
+        const dx = (lon2 - lon1) * mx, dy = (lat2 - lat1) * my;
+        return Math.sqrt(dx * dx + dy * dy);
     }
     function zoneAt(lat, lon) {
         if (!APP.config.loadZones || lat == null || lon == null) return '';
@@ -2390,14 +2486,11 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         const pos = (st.lat != null && st.lon != null)
             ? { lat: +st.lat.toFixed(6), lon: +st.lon.toFixed(6), ts: u && u.pos ? u.pos.t : null }
             : null;
-        // Geocerca actual (si la unidad esta dentro).
+        // Geocerca actual (si la unidad esta dentro). Usa inZone (poligono/circulo).
         const geocercaActual = (function () {
             if (!pos) return null;
             for (const z of APP.zonas || []) {
-                const c = z.c || z.centro;
-                if (!c) continue;
-                const r = (z.r || z.radio || 100);
-                if (haversine(pos.lat, pos.lon, c[0], c[1]) <= r) return z.n || z.nombre || z.name || 'geocerca';
+                if (inZone(pos.lat, pos.lon, z)) return z.n || z.nombre || z.name || 'geocerca';
             }
             return null;
         })();
