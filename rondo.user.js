@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.8
+// @version      5.12.9
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -289,7 +289,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.8';
+    const VER = '5.12.9';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -1845,6 +1845,9 @@
     let _ttsBufSrc = null;
     let _ttsSeq = [];
     let _ttsLastErr = '';
+    // true si la ultima reproduccion "online" tuvo que caer a la voz generica
+    // de Google (StreamElements saturado). La UI lo avisa.
+    let _ttsUsandoGoogle = false;
     // Generacion de reproduccion: cada _ttsDetener() la incrementa, y los
     // callbacks async abortan si su generacion ya no es la actual. Evita que
     // un audio viejo (p. ej. una descarga lenta) suene encima del nuevo.
@@ -1873,25 +1876,35 @@
     }
     // Trae los bytes de una URL de audio por GM_xmlhttpRequest (salta CORS y
     // la CSP de la pagina, que suele bloquear media-src/connect-src externo).
-    // Devuelve Promise<ArrayBuffer|null>, o null si no hay GM disponible.
-    function _ttsBytesViaGM(url) {
+    // Reintenta ante 401/403/429/5xx (StreamElements se satura y luego se
+    // recupera). Devuelve Promise<ArrayBuffer|null>, o null si no hay GM.
+    function _ttsBytesViaGM(url, reintentos) {
         const gm = gmXhr();
         if (!gm) return null;
-        return new Promise((resolve) => {
+        const max = reintentos == null ? 2 : reintentos;
+        const intento = (n) => new Promise((resolve) => {
             let hecho = false;
             const fin = (v) => { if (!hecho) { hecho = true; resolve(v); } };
             try {
                 gm({
                     method: 'GET', url: url, responseType: 'arraybuffer', timeout: 15000,
                     onload: (r) => {
-                        if (r.status >= 200 && r.status < 300 && r.response) fin(r.response);
-                        else { _ttsLastErr = 'TTS HTTP ' + r.status; fin(null); }
+                        if (r.status >= 200 && r.status < 300 && r.response) { fin(r.response); return; }
+                        const recuperable = (r.status === 401 || r.status === 403 || r.status === 429 || r.status >= 500);
+                        if (recuperable && n < max) {
+                            _ttsLastErr = 'TTS HTTP ' + r.status + ' (reintentando)';
+                            setTimeout(() => { intento(n + 1).then(fin); }, 800 + n * 700);
+                        } else { _ttsLastErr = 'TTS HTTP ' + r.status; fin(null); }
                     },
-                    onerror: () => { _ttsLastErr = 'TTS fallo de red'; fin(null); },
+                    onerror: () => {
+                        if (n < max) setTimeout(() => { intento(n + 1).then(fin); }, 800 + n * 700);
+                        else { _ttsLastErr = 'TTS fallo de red'; fin(null); }
+                    },
                     ontimeout: () => { _ttsLastErr = 'TTS timeout'; fin(null); }
                 });
             } catch (e) { _ttsLastErr = 'TTS: ' + (e && e.message || e); fin(null); }
         });
+        return intento(0);
     }
     // Reproduce un <audio> desde una URL (blob o remota). Devuelve true si
     // pudo lanzar el play().
@@ -2016,6 +2029,7 @@
         const txt = String(text || '').trim();
         if (!APP.config.voice || !txt) return false;
         _ttsLastErr = '';
+        _ttsUsandoGoogle = false;
         const motor = APP.config.vozMotor || 'web';
         if (motor === 'online') return speakOnline(txt);
         if (motor === 'google') return speakGoogle(txt);
@@ -2055,9 +2069,12 @@
             return true;
         } catch (e) { _ttsLastErr = 'speak: ' + (e && e.message || e); return false; }
     }
-    // StreamElements (Polly). Endpoint publico, gratis, con CORS.
+    // StreamElements (Polly). Endpoint publico, gratis, con CORS. Devuelve true.
+    // Si falla tras los reintentos, cae a Google (voz generica) y lo marca en
+    // _ttsUsandoGoogle para que la UI avise de que la voz elegida no sono.
     function speakOnline(text, sinFallback) {
         try {
+            _ttsUsandoGoogle = false;
             // Solo voces en espanol: si la guardada no es una de las validas
             // (p. ej. config antigua con una voz inglesa), usamos Mia.
             const pedida = APP.config.vozOnline || '';
@@ -2065,8 +2082,11 @@
             const url = 'https://api.streamelements.com/kappa/v2/speech?voice='
                 + encodeURIComponent(voz) + '&text=' + encodeURIComponent(text);
             return _ttsPlay(url, null, () => {
-                // Ultimo recurso: Google Translate TTS.
-                if (!sinFallback && APP.config.vozMotor !== 'google') speakGoogle(text);
+                // Ultimo recurso: Google Translate TTS (una sola voz).
+                if (!sinFallback && APP.config.vozMotor !== 'google') {
+                    _ttsUsandoGoogle = true;
+                    speakGoogle(text);
+                }
             });
         } catch (e) { _ttsLastErr = 'online: ' + (e && e.message || e); return false; }
     }
@@ -2094,28 +2114,42 @@
         };
         const txtEl = byId('c-voz-test-text');
         const txt = String((txtEl && txtEl.value) || DEFAULTS.vozTest || '').trim();
-        const motor = (byId('c-voz-motor') || {}).value || APP.config.vozMotor || 'web';
-        unlockAudio();
         if (!txt) { setStatus('Escribe una frase de prueba.', false); return; }
-        // El boton de prueba debe sonar aunque "Voz" este desactivada: asi el
-        // user comprueba que funciona antes de activarla.
-        const prev = APP.config.voice;
-        APP.config.voice = true;
+        unlockAudio();
+        // Leemos los valores ACTUALES de los desplegables (no la config
+        // guardada): asi cambiar la voz y pulsar Probar suena esa voz, sin
+        // necesidad de Guardar. Los restauramos despues para no ensuciar.
+        const selMotor = byId('c-voz-motor');
+        const selLang = byId('c-voz-lang');
+        const selVoz = byId('c-voz-voice');
+        const motor = (selMotor && selMotor.value) || APP.config.vozMotor || 'online';
+        const lang = (selLang && selLang.value) || APP.config.voiceLang || 'es-MX';
+        const voz = selVoz ? selVoz.value : '';
+        const prev = {
+            vozMotor: APP.config.vozMotor, voiceLang: APP.config.voiceLang,
+            vozOnline: APP.config.vozOnline, voiceVoice: APP.config.voiceVoice, voice: APP.config.voice
+        };
+        APP.config.vozMotor = motor;
+        APP.config.voiceLang = lang;
+        APP.config.voice = true; // el test suena aunque "Voz" este desactivada
+        if (motor === 'online') APP.config.vozOnline = voz || (prev.vozOnline || 'Mia');
+        else if (motor === 'web') APP.config.voiceVoice = voz || '';
         const ok = speak(txt);
-        APP.config.voice = prev;
+        Object.assign(APP.config, prev);
         if (!ok) { setStatus('No se pudo reproducir: ' + (_ttsLastErr || 'desconocido'), false); return; }
-        setStatus('Reproduciendo con ' + motor + '...', true);
-        // Compruébalo un momento despues (descarga+decode es async) para
-        // reportar si hubo que caer al motor online.
+        const etq = (motor === 'online' && voz) ? (voz + ' · online') : motor;
+        setStatus('Reproduciendo con ' + etq + '...', true);
         setTimeout(() => {
-            if (_ttsLastErr) {
+            if (_ttsUsandoGoogle) {
+                setStatus('StreamElements saturado: sono la voz generica de Google (por eso todas suenan igual). Reintenta en unos segundos.', false);
+            } else if (_ttsLastErr) {
                 setStatus('Aviso de voz: ' + _ttsLastErr + '. Si no oyes nada, usa el motor Online.', false);
-            } else if (!APP.config.voice) {
-                setStatus('Suena el motor ' + motor + '. Ojo: "Voz" esta desactivada; activala para los avisos.', true);
+            } else if (!prev.voice) {
+                setStatus('Suena (' + etq + '). Ojo: "Voz" esta desactivada; activala para los avisos.', true);
             } else {
-                setStatus('Listo (' + motor + '). Si no lo oyes, usa "Online".', true);
+                setStatus('Listo (' + etq + '). Pulsa Guardar para dejarlo fijo.', true);
             }
-        }, 1600);
+        }, 4500);
     }
 
     // Rellena el desplegable de voces segun el motor elegido.
