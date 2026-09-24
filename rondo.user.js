@@ -3302,11 +3302,23 @@ POPULAR: los avisos criticos abren la ventana de la unidad (si esta activado). L
 
 Tienes DOS fuentes de informacion:
 1) El MANUAL DE RONDO (abajo): usalo para explicar como funciona el sistema, que hace cada pestana, como activar reglas, atajos, configuracion, etc. Si te preguntan "como hago X" o "que hace Y", responde con el manual.
-2) El CONTEXTO DE LA FLOTA que se adjunta en cada mensaje del usuario (JSON): usalo para datos concretos y actuales (unidades, estados, alertas, zonas).
+2) El CONTEXTO DE LA FLOTA que se adjunta en cada mensaje del usuario (JSON). Es un snapshot EN VIVO de los datos de la plataforma. Campos:
+   - unidadesEnAlcance, enLinea, sinSenal: conteos.
+   - geocercasCargadas: si son false, "fuera de geocerca" NO es fiable (no se pudieron evaluar).
+   - unidades[]: por unidad -> eco, placa, estado (online/offline), zona (nombre de la geocerca, null = fuera de toda geocerca), edadMin (minutos sin reportar), vel (km/h).
+   - unidadesFueraDeGeocerca / ecosFueraDeGeocerca: unidades fuera de toda geocerca.
+   - offlineFueraDeGeocerca: unidades SIN SENAL y fuera de geocerca (esta es la respuesta directa a "que unidades fuera de geocerca se desconectaron").
+   - geocercas[]: cada geocerca con las unidades dentro.
+   - zonasDeRiesgo: resumen (total/alto/medio/bajo) o null si no hay dataset.
+   - alertasHoy, porSeveridad: conteos de hoy.
+   - ultimosAvisos[]: ultimos avisos con ts, sev, regla, eco, titulo y detalle (el detalle suele indicar la zona o "fuera de geocercas").
+   - desconexionesHoy[]: avisos de sin senal/desconexion de hoy con su detalle (para correlacionar con la zona).
+   - rutasActivas: numero de rutas planificadas.
 
 Reglas:
 - Se breve: 2-5 lineas salvo que pidan detalle.
-- Para datos concretos (velocidad, posicion, cuantas unidades, alertas del dia) usa SOLO el contexto adjunto. Si el dato no esta, dilo y explica que reporte o accion lo daria.
+- Para datos concretos usa SOLO el contexto adjunto. Si el dato no esta (p.ej. historial de dias anteriores), dilo claramente y explica con que reporte/accion se obtendria.
+- Si geocercasCargadas es false, NO afirmes que una unidad esta "fuera de geocerca": di que las geocercas no estan cargadas.
 - Para dudas de uso, apóyate en el manual y da pasos concretos (ruta de menu incluida).
 - NO inventes numeros, telefonos, direcciones exactas, coordenadas ni kilometrajes.
 - Si no estas seguro, dilo honestamente.
@@ -3355,57 +3367,96 @@ Reglas:
                 if (toda) return true;
                 try { return shouldWatch(u); } catch (_) { return false; }
             });
+            const zonasCargadas = !!(APP.config.loadZones && (APP.zonas || []).length);
             const hoy = (APP.historial || []).filter((a) => a.ts >= ini.getTime());
-            // Si "Toda la flota", limitamos las alertas a las unidades del
-            // conjunto elegido para que el contexto sea coherente.
             const ecos = new Set(unidadesRaw.map((u) => { try { return parseUnitName(u).eco; } catch (_) { return ''; } }));
             const hoyFiltrado = toda ? hoy : hoy.filter((a) => !a.eco || ecos.has(a.eco));
             const porSev = {};
             hoyFiltrado.forEach((a) => { porSev[a.sev] = (porSev[a.sev] || 0) + 1; });
-            // v5.14.8: detalle por unidad para que la IA pueda responder
-            // preguntas especificas (p.ej. "que unidades fuera de geocerca
-            // estan sin senal?"). Cap a 80 para no inflar tokens.
+            // v5.14.8: snapshot por unidad con su geocerca actual. La IA
+            // puede responder "que unidades estan fuera de geocerca", "cuales
+            // estan sin senal", "donde esta la unidad X", etc.
             const detalle = [];
             const offlineFuera = [];
+            const fueraDeGeocerca = [];        // todas (online u offline)
             for (const u of unidadesRaw) {
                 let info, st;
                 try { info = parseUnitName(u); st = unitState(u); } catch (_) { continue; }
-                const zona = (() => { try { return st.lat != null ? zoneAt(st.lat, st.lon) : ''; } catch (_) { return ''; } })();
+                const eco = info.eco || info.clave || String(info.id);
+                // zona: nombre si esta dentro; '' si esta fuera (y hay
+                // geocercas cargadas); null si no se pudo determinar.
+                const zona = zonasCargadas ? (st.lat != null ? zoneAt(st.lat, st.lon) : '') : null;
                 const online = !!st.online;
                 const edad = isFinite(st.edadMin) ? Math.round(st.edadMin) : null;
-                if (!online && !zona) offlineFuera.push(info.eco || info.clave || String(info.id));
+                if (zona === '') {
+                    fueraDeGeocerca.push(eco);
+                    if (!online) offlineFuera.push(eco);
+                }
                 if (detalle.length < 80) {
                     detalle.push({
-                        eco: info.eco || info.clave || String(info.id),
-                        placa: info.placa || '',
+                        eco, placa: info.placa || '',
                         estado: online ? 'online' : 'offline',
-                        zona: zona || null,           // null = fuera de toda geocerca
+                        zona: zona || null,
                         edadMin: edad,
                         vel: isFinite(st.vel) ? Math.round(st.vel) : 0
                     });
                 }
             }
-            // El conteo total se hace sobre todas las unidades (no solo las
-            // 80 del detalle) para que no mienta en flotas grandes.
             let enLinea = 0;
             for (const u of unidadesRaw) {
                 try { if (unitState(u).online) enLinea++; } catch (_) { /* noop */ }
             }
+            // Geocercas de la plataforma con las unidades dentro de cada una.
+            // Permite responder "que unidades hay en CEDIS Norte", "cuantas
+            // geocercas tengo", etc.
+            const geocercas = zonasCargadas ? (APP.zonas || []).slice(0, 40).map((z) => {
+                const dentro = [];
+                for (const u of unidadesRaw) {
+                    try {
+                        const st = unitState(u);
+                        if (st.lat != null && inZone(st.lat, st.lon, z)) dentro.push(parseUnitName(u).eco);
+                    } catch (_) { /* noop */ }
+                }
+                return { nombre: z.n || z.nombre || ('Zona ' + z.id), unidadesDentro: dentro };
+            }) : [];
+            // Zonas de riesgo cargadas (resumen).
+            const riesgoResumen = (APP.riesgo && APP.riesgo.length) ? {
+                total: APP.riesgo.length,
+                alto: APP.riesgo.filter((z) => z.score >= 75).length,
+                medio: APP.riesgo.filter((z) => z.score >= 40 && z.score < 75).length,
+                bajo: APP.riesgo.filter((z) => z.score < 40).length
+            } : null;
+            // Ultimos avisos CON su detalle (que incluye la zona o "fuera de
+            // geocercas"), para que la IA pueda correlacionar geocerca + evento.
             const ultimos = (APP.historial || []).filter((a) => toda || !a.eco || ecos.has(a.eco))
-                .slice(0, 8).map((a) => ({
+                .slice(0, 10).map((a) => ({
                     ts: new Date(a.ts).toISOString().slice(11, 16),
-                    sev: a.sev, regla: a.regla, eco: a.eco, titulo: a.titulo
+                    sev: a.sev, regla: a.regla, eco: a.eco, titulo: a.titulo,
+                    detalle: (a.detalle || '').slice(0, 160)
+                }));
+            // Desconexiones de hoy con su contexto de zona (correlacion
+            // directa con la pregunta del reporte).
+            const desconexiones = hoyFiltrado.filter((a) => /offline|desconexion|riesgoSinSenal|gpsPerdido/i.test(a.regla || ''))
+                .slice(0, 20).map((a) => ({
+                    ts: new Date(a.ts).toISOString().slice(11, 16),
+                    eco: a.eco, regla: a.regla, detalle: (a.detalle || '').slice(0, 160)
                 }));
             return {
                 alcance: toda ? 'toda la flota' : 'solo unidades vigiladas',
                 fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
+                geocercasCargadas: zonasCargadas,
                 unidadesEnAlcance: unidadesRaw.length,
                 enLinea, sinSenal: unidadesRaw.length - enLinea,
-                unidadesFueraDeGeocerca: detalle.filter((d) => !d.zona).length,
+                unidadesFueraDeGeocerca: fueraDeGeocerca.length,
+                ecosFueraDeGeocerca: fueraDeGeocerca.slice(0, 40),
                 offlineFueraDeGeocerca: offlineFuera.slice(0, 40),
                 alertasHoy: hoyFiltrado.length,
                 porSeveridad: porSev,
                 ultimosAvisos: ultimos,
+                desconexionesHoy: desconexiones,
+                geocercas,
+                zonasDeRiesgo: riesgoResumen,
+                rutasActivas: Object.keys(APP.rutas || {}).length,
                 unidades: detalle
             };
         } catch (_) { return { fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; }

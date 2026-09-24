@@ -357,9 +357,25 @@ El chat conoce **dos cosas**:
 1. **El manual de Rondo**: puede explicarte como usar el sistema, que
    hace cada pestana, como activar una regla, que significa un boton o
    un atajo, etc.
-2. **El estado actual de la flota**: unidades (estado, zona, ultimo
-   reporte, velocidad), alertas de hoy por severidad y los ultimos
-   avisos. Se adjunta automaticamente en cada mensaje.
+2. **Los datos de la plataforma**: se adjunta automaticamente un
+   resumen en vivo en cada mensaje con:
+   - **Unidades** en el alcance: economico, placa, estado
+     (online/offline), geocerca actual (o fuera de toda geocerca),
+     minutos desde el ultimo reporte y velocidad.
+   - **Conteos**: en linea, sin senal, cuantas fuera de geocerca,
+     cuantas sin senal **y** fuera de geocerca.
+   - **Geocercas** de la plataforma, con las unidades dentro de cada una.
+   - **Zonas de riesgo** cargadas (total y por nivel).
+   - **Alertas de hoy** por severidad y los ultimos avisos con su
+     detalle, mas las **desconexiones** del dia.
+   - **Rutas** activas.
+
+Asi puedes preguntar, por ejemplo, "que unidades estan fuera de
+geocerca y sin senal" y la IA responde con la lista concreta.
+
+> Si las geocercas no estan cargadas (Ajustes > General > "Cargar
+> geocercas"), la IA te lo indicara y no afirmara que una unidad esta
+> fuera de geocerca.
 
 ### Ejemplos de consultas
 
