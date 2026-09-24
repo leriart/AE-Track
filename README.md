@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.13.1-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.13.1.md)
-[![tests](https://img.shields.io/badge/tests-575%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.14.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.14.0.md)
+[![tests](https://img.shields.io/badge/tests-644%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -118,15 +118,38 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 
 ### IA de razonamiento (optativa)
 
-- **3 proveedores gratis**: DeepSeek (`deepseek-chat`), NVIDIA NIM
-  (`meta/llama-3.1-70b-instruct`) y Moonshot Kimi (`kimi-k2.7-code-highspeed`).
+- **5 proveedores gratis** (OpenAI-compatible) mas uno Personalizado:
+  DeepSeek (`deepseek-chat`), NVIDIA NIM (`meta/llama-3.1-70b-instruct`),
+  Kimi for Coding (`kimi-for-coding`), Moonshot (`kimi-k2.6`) y MiniMax
+  (`MiniMax-M3`). El endpoint y el modelo se pueden sobreescribir en la UI.
 - En cada aviso de la pestana **Avisos** hay un boton **IA** que manda
   contexto (estado de la unidad, geocercas, POIs cercanos por Overpass
   y alertas recientes) al proveedor y devuelve un veredicto
   estructurado (`falso_positivo` / `normal` / `sospechoso` / `critico`)
   con resumen, evidencia y recomendacion.
+- **Analisis en lote** (cabecera de Avisos): envia hasta 25 avisos en
+  una sola llamada y devuelve resumen ejecutivo + ranking priorizado
+  + recomendaciones operativas.
+- **Resumen narrativo del informe** (boton Informe): el `.md` diario
+  arranca con un bloque `## Resumen IA` de 3-6 frases en espanol.
+- **Deteccion de patrones** (Ajustes > IA): la IA analiza las
+  ultimas 50-200 alertas, identifica patrones recurrentes por
+  unidad / regla / hora / zona y propone sugerencias concretas de
+  ajuste de parametros del script con un boton **Aplicar** por
+  sugerencia.
+- **Cache TTL + tope diario** blando (configurable, 200 por defecto)
+  para no agotar la cuota del proveedor.
 - La API key se guarda en `localStorage` y solo se envia al endpoint del
   proveedor; el flujo automatico de alertas no se ve afectado.
+
+### Regla predictiva de aproximacion a zona de riesgo
+
+Nueva regla `riesgoPredict` (apagada por defecto) que avisa **antes**
+de que la unidad llegue a una zona de alto score: cuando una unidad
+**en movimiento** se esta acercando y, opcionalmente, estamos dentro
+de la ventana nocturna (22:00-05:00 por defecto). Es complementaria a
+`riesgoSinSenal`: esta ultima sigue disparando cuando la unidad ya
+perdio senal dentro de la zona.
 
 ## Compatibilidad
 
