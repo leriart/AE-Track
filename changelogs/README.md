@@ -5,6 +5,7 @@ este proyecto se llamaba **HJP Wialon** y el archivo era `HJP-Wialon.user.js`;
 el contenido es compatible y la primera vez Rondo migra automaticamente la
 configuracion, la lista vigilada, las rutas, el odometro y los perfiles.
 
+- [5.12.6](./5.12.6.md) - Fix de la voz que no sonaba: fallback automatico Web -> StreamElements (Linux sin speech-dispatcher) y feedback en el boton Probar voz.
 - [5.12.5](./5.12.5.md) - Fix de las regresiones del sandbox (ventanas, voz y notificaciones via el realm de la pagina) y voces solo en espanol.
 - [5.12.4](./5.12.4.md) - Fix del 400 de Kimi for Coding: temperature y max_tokens opcionales (vacios = se omiten), pista 400.
 - [5.12.3](./5.12.3.md) - Fix del 404 de Kimi.ai (endpoint /coding/v1, modelo kimi-for-coding) y pistas para 404/429.

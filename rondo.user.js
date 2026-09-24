@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.5
+// @version      5.12.6
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -287,7 +287,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.5';
+    const VER = '5.12.6';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -1841,35 +1841,58 @@
     // via <audio>). Los dos ultimos necesitan internet.
     let _ttsAudioEl = null;
     let _ttsSeq = [];
+    let _ttsLastErr = '';
+    let _ttsWatchdog = null;
+    // Resuelve un constructor del navegador prefiriendo el realm de la
+    // pagina (necesario con el sandbox de Tampermonkey) y cayendo al global
+    // del script si PAGE no lo expone.
+    function pageCtor(nombre) {
+        try { if (PAGE && typeof PAGE[nombre] === 'function') return PAGE[nombre]; } catch (_) { /* noop */ }
+        try { if (typeof window !== 'undefined' && typeof window[nombre] === 'function') return window[nombre]; } catch (_) { /* noop */ }
+        try { if (typeof globalThis !== 'undefined' && typeof globalThis[nombre] === 'function') return globalThis[nombre]; } catch (_) { /* noop */ }
+        return null;
+    }
+    function _ttsVolumen() {
+        return Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
+    }
     function _ttsDetener() {
         _ttsSeq = [];
+        if (_ttsWatchdog) { clearTimeout(_ttsWatchdog); _ttsWatchdog = null; }
         if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch (_) { /* noop */ } _ttsAudioEl = null; }
         try { if (PAGE.speechSynthesis) PAGE.speechSynthesis.cancel(); } catch (_) { /* noop */ }
     }
     function _ttsPlay(url) {
         _ttsDetener();
-        // Audio del realm de la pagina (PAGE): con el sandbox de
-        // Tampermonkey, un Audio del realm del script no siempre suena.
-        const a = new PAGE.Audio(url);
-        a.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
-        _ttsAudioEl = a;
-        const p = a.play();
-        if (p && p.catch) p.catch(() => { /* autoplay bloqueado o error de red */ });
+        const A = pageCtor('Audio');
+        if (!A) { _ttsLastErr = 'sin Audio'; return false; }
+        try {
+            const a = new A(url);
+            a.volume = _ttsVolumen();
+            _ttsAudioEl = a;
+            const p = a.play();
+            if (p && p.catch) p.catch((e) => { _ttsLastErr = 'play: ' + (e && e.message || e); });
+            return true;
+        } catch (e) { _ttsLastErr = 'Audio: ' + (e && e.message || e); return false; }
     }
     function _ttsPlaySeq(urls) {
         _ttsDetener();
+        const A = pageCtor('Audio');
+        if (!A) { _ttsLastErr = 'sin Audio'; return false; }
         _ttsSeq = urls.slice();
         const next = () => {
             if (!_ttsSeq.length) return;
             const url = _ttsSeq.shift();
-            const a = new PAGE.Audio(url);
-            a.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
+            let a;
+            try { a = new A(url); } catch (e) { _ttsLastErr = 'Audio: ' + (e && e.message || e); return; }
+            a.volume = _ttsVolumen();
             _ttsAudioEl = a;
             a.onended = next;
             a.onerror = next;
-            a.play().catch(() => { setTimeout(next, 10); });
+            const p = a.play();
+            if (p && p.catch) p.catch(() => { setTimeout(next, 10); });
         };
         next();
+        return true;
     }
     // Parte un texto en trozos <= n (Google Translate tiene limite ~200).
     function _partirTexto(text, n) {
@@ -1885,26 +1908,36 @@
     }
     function speak(text) {
         const txt = String(text || '').trim();
-        if (!APP.config.voice || !txt) return;
+        if (!APP.config.voice || !txt) return false;
+        _ttsLastErr = '';
         const motor = APP.config.vozMotor || 'web';
         if (motor === 'online') return speakOnline(txt);
         if (motor === 'google') return speakGoogle(txt);
-        return speakWeb(txt);
+        // 'web': si el navegador/OS no tiene sintesis de voz (habitual en
+        // Linux sin speech-dispatcher), cae automaticamente a StreamElements
+        // para que el aviso SIEMPRE se oiga.
+        if (speakWeb(txt)) return true;
+        return speakOnline(txt);
     }
+    // Devuelve true si pudo lanzar la sintesis de voz del navegador. Si a los
+// 1 s no ha arrancado (tipico en Linux sin speech-dispatcher, donde
+// speechSynthesis existe pero no suena), cae a StreamElements para que el
+// aviso se oiga igual.
     function speakWeb(text) {
         const synth = PAGE.speechSynthesis;
-        const Utter = PAGE.SpeechSynthesisUtterance;
-        if (!synth || !Utter) return;
+        const Utter = pageCtor('SpeechSynthesisUtterance');
+        if (!synth || !Utter) { _ttsLastErr = 'sin Web Speech API'; return false; }
+        const voces = synth.getVoices() || [];
+        if (!voces.length) { _ttsLastErr = 'sin voces del sistema'; return false; }
         try {
             _ttsDetener();
-            // SpeechSynthesisUtterance del realm de la pagina: con el sandbox
-            // de Tampermonkey, uno del realm del script puede no pronunciarse.
+            // SpeechSynthesisUtterance del realm de la pagina (con el sandbox
+            // de Tampermonkey, uno del realm del script puede no pronunciarse).
             const u = new Utter(text);
             const lang = APP.config.voiceLang || 'es-MX';
             u.lang = lang;
             u.rate = 1.05; u.pitch = 1.0;
-            u.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
-            const voces = synth.getVoices() || [];
+            u.volume = _ttsVolumen();
             // Solo voces en espanol.
             const esVoces = voces.filter((v) => String(v.lang || '').toLowerCase().indexOf('es') === 0);
             const vozPorNombre = APP.config.voiceVoice && esVoces.find((v) => v.name === APP.config.voiceVoice);
@@ -1912,17 +1945,34 @@
                 || esVoces.find((v) => String(v.lang || '').toLowerCase().replace('_', '-') === lang.toLowerCase())
                 || esVoces[0];
             if (voz) u.voice = voz;
+            let arranco = false;
+            u.onstart = () => { arranco = true; };
+            u.onerror = () => { _ttsLastErr = 'error de sintesis'; };
             synth.speak(u);
-        } catch (_) { /* noop */ }
+            // Watchdog: si no arranca y no esta hablando, el sistema no tiene
+            // TTS real -> Online.
+            if (_ttsWatchdog) clearTimeout(_ttsWatchdog);
+            _ttsWatchdog = setTimeout(() => {
+                _ttsWatchdog = null;
+                if (!arranco && !synth.speaking && !synth.pending) {
+                    _ttsLastErr = 'el sistema no reprodujo la voz';
+                    speakOnline(text);
+                }
+            }, 1000);
+            return true;
+        } catch (e) { _ttsLastErr = 'speak: ' + (e && e.message || e); return false; }
     }
     // StreamElements (Polly). Endpoint publico, gratis, con CORS.
     function speakOnline(text) {
         try {
-            const voz = APP.config.vozOnline || 'Mia';
+            // Solo voces en espanol: si la guardada no es una de las validas
+            // (p. ej. config antigua con una voz inglesa), usamos Mia.
+            const pedida = APP.config.vozOnline || '';
+            const voz = TTS_ONLINE_VOCES.some((v) => v.v === pedida) ? pedida : 'Mia';
             const url = 'https://api.streamelements.com/kappa/v2/speech?voice='
                 + encodeURIComponent(voz) + '&text=' + encodeURIComponent(text);
-            _ttsPlay(url);
-        } catch (_) { /* noop */ }
+            return _ttsPlay(url);
+        } catch (e) { _ttsLastErr = 'online: ' + (e && e.message || e); return false; }
     }
     // Google Translate TTS. Se reproduce via <audio> (no requiere CORS).
     function speakGoogle(text) {
@@ -1935,9 +1985,42 @@
                 + '&tl=' + encodeURIComponent(tl)
                 + '&q=' + encodeURIComponent(p)
                 + '&total=' + partes.length + '&idx=' + i + '&textlen=' + p.length);
-            _ttsPlaySeq(urls);
-        } catch (_) { /* noop */ }
+            return _ttsPlaySeq(urls);
+        } catch (e) { _ttsLastErr = 'google: ' + (e && e.message || e); return false; }
     }
+    // Prueba de voz con feedback: lee la frase con el motor/idioma/voz
+// configurados y refleja en #c-voz-status que paso (para no quedarse en
+// silencio sin saber por que).
+    function probarVoz() {
+        const setStatus = (txt, ok) => {
+            const el = byId('c-voz-status');
+            if (el) { el.textContent = txt; el.style.color = ok ? 'var(--rondo-ok-fg)' : 'var(--rondo-warn-fg)'; }
+        };
+        const txtEl = byId('c-voz-test-text');
+        const txt = String((txtEl && txtEl.value) || DEFAULTS.vozTest || '').trim();
+        const motor = (byId('c-voz-motor') || {}).value || APP.config.vozMotor || 'web';
+        unlockAudio();
+        if (!txt) { setStatus('Escribe una frase de prueba.', false); return; }
+        // El boton de prueba debe sonar aunque "Voz" este desactivada: asi el
+        // user comprueba que funciona antes de activarla.
+        const prev = APP.config.voice;
+        APP.config.voice = true;
+        const ok = speak(txt);
+        APP.config.voice = prev;
+        if (!ok) { setStatus('No se pudo reproducir: ' + (_ttsLastErr || 'desconocido'), false); return; }
+        setStatus('Reproduciendo con ' + motor + '...', true);
+        // Al cabo de ~1.3 s comprobamos si el watchdog de 'web' cayo a Online.
+        setTimeout(() => {
+            if (_ttsLastErr) {
+                setStatus('Sin TTS del sistema: reproducido con Online. (' + _ttsLastErr + ')', true);
+            } else if (!APP.config.voice) {
+                setStatus('Suena el motor ' + motor + '. Ojo: "Voz" esta desactivada; activala para los avisos.', true);
+            } else {
+                setStatus('Listo (' + motor + '). Si no lo oyes, sube el volumen del sistema.', true);
+            }
+        }, 1300);
+    }
+
     // Rellena el desplegable de voces segun el motor elegido.
     function poblarVozSelect() {
         const sel = byId('c-voz-voice');
@@ -5737,7 +5820,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                 '<button type="button" class="accbtn" id="c-voz-detener"><span class="rondo-usym">' + UIS.close + '</span> Detener</button>' +
             '</div>' +
             '<label>Texto de prueba <input type="text" id="c-voz-test-text" value="' + esc(DEFAULTS.vozTest) + '" maxlength="180" title="Frase que se lee al pulsar Probar voz"></label>' +
-            '<span style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin-top:-2px">Se lee con el motor, idioma y voz configurados arriba.</span>' +
+            '<span style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin-top:-2px">Se lee con el motor, idioma y voz configurados arriba. Si eliges <b>Navegador</b> y tu equipo no tiene voces (Linux sin speech-dispatcher), Rondo usa <b>Online</b> automaticamente.</span>' +
+            '<span id="c-voz-status" style="font-size:11.5px;display:block;margin-top:4px"></span>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
             numRow('c-beep-vol', 'Volumen del pitido (0-1)') +
             checkRow('c-desktop', 'Notificación del navegador') +
@@ -8270,12 +8354,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         // y voz actuales. El texto se guarda en APP.config.vozTest al pulsar
         // Guardar en la pestana de Avisos.
         const vozTestBtn = byId('c-voz-test');
-        if (vozTestBtn) vozTestBtn.addEventListener('click', () => {
-            const txtEl = byId('c-voz-test-text');
-            const txt = (txtEl && txtEl.value) || DEFAULTS.vozTest;
-            unlockAudio();
-            speak(String(txt));
-        });
+        if (vozTestBtn) vozTestBtn.addEventListener('click', () => probarVoz());
         const vozStopBtn = byId('c-voz-detener');
         if (vozStopBtn) vozStopBtn.addEventListener('click', () => _ttsDetener());
 

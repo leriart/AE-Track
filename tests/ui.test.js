@@ -352,10 +352,21 @@ ok('HTMLInputElement via PAGE', /PAGE\.HTMLInputElement\.prototype/.test(src));
 ok('sin new MouseEvent crudo', !/new MouseEvent\(/.test(src));
 ok('sin new Event crudo', !/new Event\('input'/.test(src));
 ok('sin HTMLInputElement crudo', !/window\.HTMLInputElement/.test(src));
-ok('SpeechSynthesisUtterance via PAGE', /new Utter\(text\)/.test(src) && /PAGE\.SpeechSynthesisUtterance/.test(src));
-ok('Audio via PAGE', /new PAGE\.Audio\(url\)/.test(src));
+ok('SpeechSynthesisUtterance via pageCtor', /pageCtor\('SpeechSynthesisUtterance'\)/.test(src) && /new Utter\(text\)/.test(src));
+ok('Audio via pageCtor', /pageCtor\('Audio'\)/.test(src) && /new A\(url\)/.test(src));
 ok('Notification via PAGE', /PAGE\.Notification/.test(src));
 ok('DOMMatrixReadOnly via PAGE', /PAGE\.DOMMatrixReadOnly/.test(src));
+ok('helper pageCtor existe', /function pageCtor\(nombre\)/.test(src));
+ok('speak devuelve boolean', /if \(motor === 'online'\) return speakOnline\(txt\)/.test(src));
+ok('speakWeb fallback a online', /if \(speakWeb\(txt\)\) return true;[\s\S]*?return speakOnline\(txt\)/.test(src));
+ok('probarVoz existe', /function probarVoz\(/.test(src));
+ok('status de voz en la UI', /id="c-voz-status"/.test(src));
+ok('boton Probar voz llama probarVoz', /vozTestBtn\.addEventListener\('click', \(\) => probarVoz\(\)\)/.test(src));
+ok('watchdog de voz web', /_ttsWatchdog = setTimeout\(/.test(src) && /speakOnline\(text\)/.test(src));
+ok('watchdog se limpia al detener', /if \(_ttsWatchdog\) \{ clearTimeout\(_ttsWatchdog\)/.test(src));
+ok('probarVoz prueba aunque Voz este off', /El boton de prueba debe sonar aunque/.test(src));
+ok('StreamElements como fallback', /return speakOnline\(txt\)/.test(src));
+ok('voz reporta error de sintesis', /error de sintesis/.test(src));
 
 // Voces: solo espanol.
 (function () {
@@ -366,7 +377,7 @@ ok('DOMMatrixReadOnly via PAGE', /PAGE\.DOMMatrixReadOnly/.test(src));
 })();
 ok('selector de idioma solo espanol', /Idioma de voz[\s\S]{0,400}?c-voz-lang[\s\S]{0,400}?<\/select>/.test(src)
     && !/c-voz-lang[\s\S]{0,400}?en-GB/.test(src));
-ok('voces del navegador filtradas a es', /getVoices\(\)[\s\S]{0,80}?filter\(\(v\) => String\(v\.lang \|\| ''\)\.toLowerCase\(\)\.indexOf\('es'\) === 0\)/.test(src));
+ok('voces del navegador filtradas a es', /const voces = todas\.filter\(\(v\) => String\(v\.lang \|\| ''\)\.toLowerCase\(\)\.indexOf\('es'\) === 0\)/.test(src));
 ok('Overpass para POIs en aiContexto', /amenity"~"workshop\|fuel\|parking/.test(src));
 ok('boton IA en alertas', /rondo-ia-btn/.test(src));
 ok('veredicto IA en alertas', /rondo-ia-verdict/.test(src));
