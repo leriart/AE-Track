@@ -341,6 +341,32 @@ ok('Overpass POIs usa httpRequest', /async function aiOverpassPois[\s\S]*?httpRe
 ok('wialon via PAGE (no global crudo)', /function session\(\) \{ return PAGE\.wialon\.core\.Session\.getInstance\(\); \}/.test(src));
 ok('wialonReady via PAGE', /const w = PAGE\.wialon;/.test(src));
 ok('sin fetch directo al endpoint de IA', !/await fetch\(endpoint/.test(src));
+
+// Sandbox: los eventos y constructores del realm de la pagina (PAGE) son
+// necesarios para que React (Wialon) y las APIs del navegador funcionen.
+ok('eventos via PAGE.Event', /new PAGE\.Event\('input'/.test(src));
+ok('KeyboardEvent via PAGE', /new PAGE\.KeyboardEvent\(/.test(src));
+ok('MouseEvent via PAGE (doubleClick)', /new PAGE\.MouseEvent\(tipo/.test(src));
+ok('MouseEvent via PAGE (cerrar ventanas)', /new PAGE\.MouseEvent\('click'/.test(src));
+ok('HTMLInputElement via PAGE', /PAGE\.HTMLInputElement\.prototype/.test(src));
+ok('sin new MouseEvent crudo', !/new MouseEvent\(/.test(src));
+ok('sin new Event crudo', !/new Event\('input'/.test(src));
+ok('sin HTMLInputElement crudo', !/window\.HTMLInputElement/.test(src));
+ok('SpeechSynthesisUtterance via PAGE', /new Utter\(text\)/.test(src) && /PAGE\.SpeechSynthesisUtterance/.test(src));
+ok('Audio via PAGE', /new PAGE\.Audio\(url\)/.test(src));
+ok('Notification via PAGE', /PAGE\.Notification/.test(src));
+ok('DOMMatrixReadOnly via PAGE', /PAGE\.DOMMatrixReadOnly/.test(src));
+
+// Voces: solo espanol.
+(function () {
+    const m = src.match(/const TTS_ONLINE_VOCES = Object\.freeze\(\[([\s\S]*?)\]\);/);
+    if (!m) { ok('TTS_ONLINE_VOCES parseable', false); return; }
+    const langs = (m[1].match(/l:\s*'([^']+)'/g) || []).map((s) => s.replace(/^l:\s*'|'$/g, ''));
+    ok('TTS_ONLINE_VOCES solo espanol', langs.length > 0 && langs.every((l) => l.indexOf('es') === 0), langs.join(','));
+})();
+ok('selector de idioma solo espanol', /Idioma de voz[\s\S]{0,400}?c-voz-lang[\s\S]{0,400}?<\/select>/.test(src)
+    && !/c-voz-lang[\s\S]{0,400}?en-GB/.test(src));
+ok('voces del navegador filtradas a es', /getVoices\(\)[\s\S]{0,80}?filter\(\(v\) => String\(v\.lang \|\| ''\)\.toLowerCase\(\)\.indexOf\('es'\) === 0\)/.test(src));
 ok('Overpass para POIs en aiContexto', /amenity"~"workshop\|fuel\|parking/.test(src));
 ok('boton IA en alertas', /rondo-ia-btn/.test(src));
 ok('veredicto IA en alertas', /rondo-ia-verdict/.test(src));

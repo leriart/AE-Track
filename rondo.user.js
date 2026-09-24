@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.4
+// @version      5.12.5
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -250,31 +250,15 @@
     /* Voces online gratis (StreamElements / AWS Polly). El endpoint es
      * CORS-enabled y no requiere API key. Se usa como alternativa a las
      * voces del sistema (Web Speech API). */
+    // Solo voces en ESPANOL (la interfaz y los avisos son en espanol).
+    // StreamElements / AWS Polly ofrece estas seis.
     const TTS_ONLINE_VOCES = Object.freeze([
         { v: 'Mia', l: 'es-MX', n: 'Mia \u00b7 espa\u00f1ol (M\u00e9xico)' },
         { v: 'Miguel', l: 'es-US', n: 'Miguel \u00b7 espa\u00f1ol (EE. UU.)' },
         { v: 'Penelope', l: 'es-US', n: 'Penelope \u00b7 espa\u00f1ol (EE. UU.)' },
         { v: 'Lucia', l: 'es-ES', n: 'Lucia \u00b7 espa\u00f1ol (Espa\u00f1a)' },
         { v: 'Enrique', l: 'es-ES', n: 'Enrique \u00b7 espa\u00f1ol (Espa\u00f1a)' },
-        { v: 'Conchita', l: 'es-ES', n: 'Conchita \u00b7 espa\u00f1ol (Espa\u00f1a)' },
-        { v: 'Brian', l: 'en-GB', n: 'Brian \u00b7 ingl\u00e9s (Reino Unido)' },
-        { v: 'Amy', l: 'en-GB', n: 'Amy \u00b7 ingl\u00e9s (Reino Unido)' },
-        { v: 'Joanna', l: 'en-US', n: 'Joanna \u00b7 ingl\u00e9s (EE. UU.)' },
-        { v: 'Matthew', l: 'en-US', n: 'Matthew \u00b7 ingl\u00e9s (EE. UU.)' },
-        { v: 'Salli', l: 'en-US', n: 'Salli \u00b7 ingl\u00e9s (EE. UU.)' },
-        { v: 'Joey', l: 'en-US', n: 'Joey \u00b7 ingl\u00e9s (EE. UU.)' },
-        { v: 'Celine', l: 'fr-FR', n: 'Celine \u00b7 franc\u00e9s (Francia)' },
-        { v: 'Mathieu', l: 'fr-FR', n: 'Mathieu \u00b7 franc\u00e9s (Francia)' },
-        { v: 'Hans', l: 'de-DE', n: 'Hans \u00b7 alem\u00e1n' },
-        { v: 'Marlene', l: 'de-DE', n: 'Marlene \u00b7 alem\u00e1n' },
-        { v: 'Carla', l: 'it-IT', n: 'Carla \u00b7 italiano' },
-        { v: 'Giorgio', l: 'it-IT', n: 'Giorgio \u00b7 italiano' },
-        { v: 'Vitoria', l: 'pt-BR', n: 'Vitoria \u00b7 portugu\u00e9s (Brasil)' },
-        { v: 'Ricardo', l: 'pt-BR', n: 'Ricardo \u00b7 portugu\u00e9s (Brasil)' },
-        { v: 'Mizuki', l: 'ja-JP', n: 'Mizuki \u00b7 japon\u00e9s' },
-        { v: 'Zhiyu', l: 'zh-CN', n: 'Zhiyu \u00b7 chino (mandar\u00edn)' },
-        { v: 'Seoyeon', l: 'ko-KR', n: 'Seoyeon \u00b7 coreano' },
-        { v: 'Zeina', l: 'ar', n: 'Zeina \u00b7 \u00e1rabe' }
+        { v: 'Conchita', l: 'es-ES', n: 'Conchita \u00b7 espa\u00f1ol (Espa\u00f1a)' }
     ]);
     // Simbolo Unicode por severidad (para listas que NO usan Material Icons).
     const SEV_UIS = Object.freeze({
@@ -303,7 +287,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.4';
+    const VER = '5.12.5';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -1860,14 +1844,17 @@
     function _ttsDetener() {
         _ttsSeq = [];
         if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch (_) { /* noop */ } _ttsAudioEl = null; }
-        try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (_) { /* noop */ }
+        try { if (PAGE.speechSynthesis) PAGE.speechSynthesis.cancel(); } catch (_) { /* noop */ }
     }
     function _ttsPlay(url) {
         _ttsDetener();
-        const a = new Audio(url);
+        // Audio del realm de la pagina (PAGE): con el sandbox de
+        // Tampermonkey, un Audio del realm del script no siempre suena.
+        const a = new PAGE.Audio(url);
         a.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
         _ttsAudioEl = a;
-        a.play().catch(() => { /* autoplay bloqueado o error de red */ });
+        const p = a.play();
+        if (p && p.catch) p.catch(() => { /* autoplay bloqueado o error de red */ });
     }
     function _ttsPlaySeq(urls) {
         _ttsDetener();
@@ -1875,7 +1862,7 @@
         const next = () => {
             if (!_ttsSeq.length) return;
             const url = _ttsSeq.shift();
-            const a = new Audio(url);
+            const a = new PAGE.Audio(url);
             a.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
             _ttsAudioEl = a;
             a.onended = next;
@@ -1905,22 +1892,27 @@
         return speakWeb(txt);
     }
     function speakWeb(text) {
-        if (!('speechSynthesis' in window)) return;
+        const synth = PAGE.speechSynthesis;
+        const Utter = PAGE.SpeechSynthesisUtterance;
+        if (!synth || !Utter) return;
         try {
             _ttsDetener();
-            const u = new SpeechSynthesisUtterance(text);
+            // SpeechSynthesisUtterance del realm de la pagina: con el sandbox
+            // de Tampermonkey, uno del realm del script puede no pronunciarse.
+            const u = new Utter(text);
             const lang = APP.config.voiceLang || 'es-MX';
             u.lang = lang;
             u.rate = 1.05; u.pitch = 1.0;
             u.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
-            const pref = lang.slice(0, 2).toLowerCase();
-            const voces = window.speechSynthesis.getVoices() || [];
-            const vozPorNombre = APP.config.voiceVoice && voces.find((v) => v.name === APP.config.voiceVoice);
+            const voces = synth.getVoices() || [];
+            // Solo voces en espanol.
+            const esVoces = voces.filter((v) => String(v.lang || '').toLowerCase().indexOf('es') === 0);
+            const vozPorNombre = APP.config.voiceVoice && esVoces.find((v) => v.name === APP.config.voiceVoice);
             const voz = vozPorNombre
-                || voces.find((v) => String(v.lang || '').toLowerCase().replace('_', '-') === lang.toLowerCase())
-                || voces.find((v) => String(v.lang || '').toLowerCase().indexOf(pref) === 0);
+                || esVoces.find((v) => String(v.lang || '').toLowerCase().replace('_', '-') === lang.toLowerCase())
+                || esVoces[0];
             if (voz) u.voice = voz;
-            window.speechSynthesis.speak(u);
+            synth.speak(u);
         } catch (_) { /* noop */ }
     }
     // StreamElements (Polly). Endpoint publico, gratis, con CORS.
@@ -1970,7 +1962,10 @@
             sel.innerHTML = '<option value="">(usa el idioma de arriba)</option>';
         } else {
             sel.disabled = false;
-            const voces = (window.speechSynthesis ? window.speechSynthesis.getVoices() : []) || [];
+            const synth = PAGE.speechSynthesis;
+            const todas = (synth ? synth.getVoices() : []) || [];
+            // Solo voces en ESPANOL (la interfaz y los avisos son en espanol).
+            const voces = todas.filter((v) => String(v.lang || '').toLowerCase().indexOf('es') === 0);
             sel.innerHTML = '<option value="">Predeterminada</option>' +
                 voces.map((v) => '<option value="' + esc(v.name) + '">' + esc(v.name) + ' (' + esc(v.lang) + ')</option>').join('');
             if (APP.config.voiceVoice) sel.value = APP.config.voiceVoice;
@@ -1978,7 +1973,7 @@
     }
     function audioCtx() {
         try {
-            const Ctor = window.AudioContext || window.webkitAudioContext;
+            const Ctor = PAGE.AudioContext || PAGE.webkitAudioContext;
             if (!Ctor) return null;
             return beep._ctx || (beep._ctx = new Ctor());
         } catch (_) { return null; }
@@ -2215,6 +2210,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             const gm = !!gmXhr();
             return {
                 error: 'No se pudo contactar ' + prov.nombre + ' (' + (res.timeout ? 'timeout' : 'fallo de red') + ')' +
+                    ' [transporte=' + (gm ? 'GM' : 'fetch') + ']' +
                     (gm ? '. Revisa el endpoint.' : ' · CORS: activa GM_xmlhttpRequest o usa un gestor que lo soporte.')
             };
         }
@@ -2235,7 +2231,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             } else if (res.status === 400) {
                 pista = ' · El modelo rechazo un parametro (revisa Temperatura/Max tokens o el modelo elegido).';
             }
-            return { error: prov.nombre + ' HTTP ' + res.status + pista + (res.texto ? ' · ' + res.texto.slice(0, 160) : '') };
+            const gmUsado = !!gmXhr();
+            const error = prov.nombre + ' HTTP ' + res.status + pista + (res.texto ? ' · ' + res.texto : '');
+            try { console.log('[Rondo][IA] ' + error + ' · transporte=' + (gmUsado ? 'GM_xmlhttpRequest' : 'fetch')); } catch (_) { /* noop */ }
+            return { error: error };
         }
         let data;
         try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
@@ -2360,8 +2359,9 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
     }
     function desktopNotify(title, body) {
         if (!APP.config.desktop) return;
-        if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-        try { new Notification(title, { body }); } catch (_) { /* noop */ }
+        const N = PAGE.Notification;
+        if (typeof N === 'undefined' || N.permission !== 'granted') return;
+        try { new N(title, { body }); } catch (_) { /* noop */ }
     }
     function pruneCooldowns(ahora) {
         const keys = Object.keys(APP.cooldowns);
@@ -3751,19 +3751,22 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
     const escRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const RE_TITULO = /[A-Z0-9]{2,}\.\s?\d{3,5}\s*-\s*[A-Z0-9]{5,}/;
     function setValueReact(input, texto) {
-        const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        // Eventos y prototype del REALM DE LA PAGINA (PAGE): en el sandbox de
+        // Tampermonkey los constructores propios no los reconoce React y la
+        // automatizacion de ventanas deja de funcionar.
+        const d = Object.getOwnPropertyDescriptor(PAGE.HTMLInputElement.prototype, 'value');
         if (d && d.set) d.set.call(input, texto); else input.value = texto;
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new PAGE.Event('input', { bubbles: true }));
+        input.dispatchEvent(new PAGE.Event('change', { bubbles: true }));
         ['keydown', 'keyup'].forEach((t) => {
-            try { input.dispatchEvent(new KeyboardEvent(t, { bubbles: true, key: 'Enter', keyCode: 13 })); } catch (_) { /* noop */ }
+            try { input.dispatchEvent(new PAGE.KeyboardEvent(t, { bubbles: true, key: 'Enter', keyCode: 13 })); } catch (_) { /* noop */ }
         });
     }
     function clearInput(input) {
-        const d = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
+        const d = Object.getOwnPropertyDescriptor(PAGE.HTMLInputElement.prototype, 'value');
         if (d && d.set) d.set.call(input, ''); else input.value = '';
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
+        input.dispatchEvent(new PAGE.Event('input', { bubbles: true }));
+        input.dispatchEvent(new PAGE.Event('change', { bubbles: true }));
     }
     // Devuelve true si el elemento pertenece a la UI del propio script (panel,
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
@@ -3812,8 +3815,9 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         const x = r.left + Math.min(20, r.width / 2);
         const y = r.top + Math.max(4, r.height / 2);
         function mk(tipo, det) {
-            return new MouseEvent(tipo, Object.assign({
-                bubbles: true, cancelable: true, view: window,
+            // MouseEvent del realm de la pagina (PAGE) para que React lo acepte.
+            return new PAGE.MouseEvent(tipo, Object.assign({
+                bubbles: true, cancelable: true, view: PAGE,
                 clientX: x, clientY: y, button: 0
             }, det || {}));
         }
@@ -3974,7 +3978,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             const dy = targetY - vis.top;
             if (t && t !== 'none' && t.indexOf('matrix') === 0) {
                 try {
-                    const m = new DOMMatrixReadOnly(t);
+                    // DOMMatrixReadOnly del realm de la pagina; si no existe,
+                    // cae al try/catch y se usa left/top.
+                    const DMR = PAGE.DOMMatrixReadOnly || DOMMatrixReadOnly;
+                    const m = new DMR(t);
                     win.style.transform = 'translate(' + (m.m41 + dx) + 'px,' + (m.m42 + dy) + 'px)';
                     continue;
                 } catch (e) { /* fallback a left/top */ }
@@ -4012,12 +4019,12 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         const btn = cont.querySelector('[id$="_pursuit_win_close_id"]')
             || cont.querySelector('button[class*="close" i], [class*="close" i]');
         if (!btn) return false;
-        btn.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+        btn.dispatchEvent(new PAGE.MouseEvent('click', { bubbles: true, cancelable: true }));
         return true;
     }
     function closeAllWindows() {
         document.querySelectorAll('[id$="_pursuit_win_close_id"]').forEach((b) => {
-            b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+            b.dispatchEvent(new PAGE.MouseEvent('click', { bubbles: true, cancelable: true }));
         });
     }
     // Cierre seguro en dos pasos: el primer clic "arma" el boton y el segundo
@@ -5723,16 +5730,6 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '<option value="es-MX">Español (México)</option>' +
             '<option value="es-ES">Español (España)</option>' +
             '<option value="es-US">Español (EE. UU.)</option>' +
-            '<option value="en-GB">Inglés (Reino Unido)</option>' +
-            '<option value="en-US">Inglés (EE. UU.)</option>' +
-            '<option value="fr-FR">Francés</option>' +
-            '<option value="de-DE">Alemán</option>' +
-            '<option value="it-IT">Italiano</option>' +
-            '<option value="pt-BR">Portugués (Brasil)</option>' +
-            '<option value="ja-JP">Japonés</option>' +
-            '<option value="zh-CN">Chino (mandarín)</option>' +
-            '<option value="ko-KR">Coreano</option>' +
-            '<option value="ar">Árabe</option>' +
             '</select></label>' +
             '<label>Voz <select id="c-voz-voice"><option value="">Predeterminada</option></select></label>' +
             '<div class="rondo-acciones" style="margin-top:6px">' +
@@ -8256,8 +8253,9 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             g('c-hor-b').value = APP.config.horario.hasta;
             pintarPerfiles();
             pintarInfoUpdate();
-            if (APP.config.desktop && typeof Notification !== 'undefined' && Notification.permission === 'default') {
-                Notification.requestPermission();
+            const N = PAGE.Notification;
+            if (APP.config.desktop && typeof N !== 'undefined' && N.permission === 'default') {
+                N.requestPermission();
             }
             cfgWinEl.style.display = 'flex';
         }
