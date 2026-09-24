@@ -300,6 +300,17 @@ ok('la IA usa iaEndpoint si esta definido', /String\(cfg\.iaEndpoint \|\| ''\)\.
 ok('pista 401 en el error de la IA', /endpoint '\s*\+\s*endpoint/.test(src) || /Revisa que la API key corresponda/.test(src));
 ok('pista 404 (ruta del endpoint) en la IA', /La RUTA del endpoint no existe/.test(src));
 ok('pista 429 (rate limit) en la IA', /Limite de uso alcanzado/.test(src));
+ok('pista 400 (parametro rechazado) en la IA', /El modelo rechazo un parametro/.test(src));
+
+// temperature/max_tokens OPCIONALES: si no se definen, se omiten para no
+// romper modelos que solo aceptan temperature=1 (p. ej. Kimi for Coding).
+ok('temperature NO va fija en el body', !/temperature:\s*0\.2/.test(src));
+ok('temperature opcional en el body', /if \(cfg\.iaTemperature !== ''[\s\S]*?body\.temperature = Number\(cfg\.iaTemperature\)/.test(src));
+ok('max_tokens opcional en el body', /if \(cfg\.iaMaxTokens !== ''[\s\S]*?body\.max_tokens =/.test(src));
+ok('campo temperatura IA existe', /id="c-ia-temp"/.test(src));
+ok('campo max tokens IA existe', /id="c-ia-maxtok"/.test(src));
+ok('default iaTemperature en DEFAULTS', /iaTemperature:\s*''/.test(src));
+ok('default iaMaxTokens en DEFAULTS', /iaMaxTokens:\s*''/.test(src));
 
 // Indicador/toggle de IA en la cabecera (junto al tema).
 ok('boton IA en cabecera existe', /id="rondo-ia"/.test(src));

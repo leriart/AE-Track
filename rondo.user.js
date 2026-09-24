@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.3
+// @version      5.12.4
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -303,7 +303,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.3';
+    const VER = '5.12.4';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -395,6 +395,8 @@
         iaApiKey: '',           // API key (NUNCA sale del navegador salvo al endpoint)
         iaEndpoint: '',         // opcional: override del endpoint (util para Kimi.ai vs Moonshot)
         iaModelo: '',           // opcional: override del modelo (si vacio, usa el del proveedor)
+        iaTemperature: '',      // opcional: '' = omitir (usa el default del modelo)
+        iaMaxTokens: '',        // opcional: '' = omitir (usa el default del modelo)
         iaRadioPoisM: 250,      // radio (m) para pedir POIs a Overpass
         iaTimeoutS: 25,         // timeout para la llamada a la IA
         beep: true,
@@ -2185,10 +2187,19 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                 { role: 'system', content: IA_SYSTEM },
                 { role: 'user', content: 'Contexto de la alerta (JSON):\n' + JSON.stringify(contexto, null, 0) }
             ],
-            temperature: 0.2,
-            max_tokens: 500,
             stream: false
         };
+        // temperature es OPCIONAL: varios modelos (p. ej. Kimi for Coding)
+        // solo aceptan un valor concreto (1) y rechazan el resto con 400.
+        // Si el user no la define, se omite y el modelo usa su default.
+        if (cfg.iaTemperature !== '' && cfg.iaTemperature != null && isFinite(Number(cfg.iaTemperature))) {
+            body.temperature = Number(cfg.iaTemperature);
+        }
+        // max_tokens tambien es opcional por la misma razon (algunos modelos
+        // exigen max_completion_tokens o rechazan valores bajos).
+        if (cfg.iaMaxTokens !== '' && cfg.iaMaxTokens != null && isFinite(Number(cfg.iaMaxTokens))) {
+            body.max_tokens = Math.max(64, Math.min(4000, Number(cfg.iaMaxTokens)));
+        }
         const headers = { 'Content-Type': 'application/json' };
         headers[prov.headerAuth || 'Authorization'] = (prov.prefijo || 'Bearer ') + cfg.iaApiKey;
         const ms = Math.max(2000, (+cfg.iaTimeoutS || 25) * 1000);
@@ -2221,6 +2232,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                     'Endpoint actual: ' + endpoint + '. Revisa la URL exacta del proveedor.';
             } else if (res.status === 429) {
                 pista = ' · Limite de uso alcanzado (rate limit). Espera un poco o cambia de proveedor.';
+            } else if (res.status === 400) {
+                pista = ' · El modelo rechazo un parametro (revisa Temperatura/Max tokens o el modelo elegido).';
             }
             return { error: prov.nombre + ' HTTP ' + res.status + pista + (res.texto ? ' · ' + res.texto.slice(0, 160) : '') };
         }
@@ -5853,6 +5866,8 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '<label>API key <input type="password" id="c-ia-key" autocomplete="off" spellcheck="false" placeholder="sk-... / kimi-... / nvapi-..." title="Solo se envia al endpoint del proveedor; nunca a Rondo. Se guarda en este navegador."></label>' +
             '<label>Endpoint (opcional, vacio = el del proveedor) <input type="text" id="c-ia-endpoint" autocomplete="off" placeholder="https://api.kimi.ai/coding/v1/chat/completions" spellcheck="false" title="Sobreescribe la URL. Util si tu key es de otra region o producto (Kimi.ai vs Moonshot)."></label>' +
             '<label>Modelo (opcional, vacio = el del proveedor) <input type="text" id="c-ia-modelo" autocomplete="off" placeholder="(modelo por defecto)" spellcheck="false"></label>' +
+            '<label>Temperatura (opcional, vacio = la del modelo) <input type="text" id="c-ia-temp" autocomplete="off" placeholder="(omitir)" spellcheck="false" title="Algunos modelos (Kimi for Coding) solo aceptan 1. Vacio = se omite y usa la del modelo."></label>' +
+            '<label>Max tokens (opcional, vacio = el del modelo) <input type="text" id="c-ia-maxtok" autocomplete="off" placeholder="(omitir)" spellcheck="false" title="Vacio = se omite. Algunos modelos rechazan max_tokens bajo."></label>' +
             numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
             numRow('c-ia-timeout', 'Timeout (s)') +
             '<div class="rondo-acciones" style="margin-top:6px">' +
@@ -5860,7 +5875,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
                 '<button type="button" class="accbtn" id="c-ia-clear"><span class="rondo-usym">' + UIS.clear + '</span> Borrar API key</button>' +
             '</div>' +
             '<div id="c-ia-status" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px"></div>' +
-            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:8px 0 0">Si te da <b>401</b>: la key suele ser de otro producto. Usa <b>Kimi for Coding</b> con keys <code>kimi-...</code> de kimi.com/code (endpoint <code>/coding/v1</code>) o <b>Moonshot</b> con keys <code>sk-...</code> de platform.moonshot.ai. Si te da <b>404</b>: la ruta del endpoint esta mal; pega la URL exacta en <b>Endpoint</b>.</p>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:8px 0 0">Si te da <b>401</b>: la key suele ser de otro producto. Usa <b>Kimi for Coding</b> con keys <code>kimi-...</code> de kimi.com/code (endpoint <code>/coding/v1</code>) o <b>Moonshot</b> con keys <code>sk-...</code> de platform.moonshot.ai. Si te da <b>404</b>: la ruta del endpoint esta mal; pega la URL exacta en <b>Endpoint</b>. Si te da <b>400</b>: deja <b>Temperatura</b> y <b>Max tokens</b> vacios (algunos modelos como Kimi for Coding solo aceptan <code>temperature=1</code>).</p>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avanzado" style="display:none">' +
             '<h4>Actualizaciones</h4>' +
@@ -8162,6 +8177,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             if (iaEndpointEl) iaEndpointEl.value = APP.config.iaEndpoint || '';
             const iaModeloEl = byId('c-ia-modelo');
             if (iaModeloEl) iaModeloEl.value = APP.config.iaModelo || '';
+            const iaTempEl = byId('c-ia-temp');
+            if (iaTempEl) iaTempEl.value = (APP.config.iaTemperature == null ? '' : APP.config.iaTemperature);
+            const iaMaxTokEl = byId('c-ia-maxtok');
+            if (iaMaxTokEl) iaMaxTokEl.value = (APP.config.iaMaxTokens == null ? '' : APP.config.iaMaxTokens);
             const iaRadioEl = byId('c-ia-radio');
             if (iaRadioEl) iaRadioEl.value = APP.config.iaRadioPoisM != null ? APP.config.iaRadioPoisM : 250;
             const iaTimeoutEl = byId('c-ia-timeout');
@@ -8347,6 +8366,16 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             }
             const iaEndpointEl = byId('c-ia-endpoint'); if (iaEndpointEl) cf.iaEndpoint = String(iaEndpointEl.value || '').trim().slice(0, 300);
             const iaModeloEl = byId('c-ia-modelo'); if (iaModeloEl) cf.iaModelo = String(iaModeloEl.value || '').trim().slice(0, 120);
+            const iaTempEl = byId('c-ia-temp');
+            if (iaTempEl) {
+                const v = String(iaTempEl.value || '').trim();
+                cf.iaTemperature = (v === '' || !isFinite(Number(v))) ? '' : clamp(Number(v), 0, 2);
+            }
+            const iaMaxTokEl = byId('c-ia-maxtok');
+            if (iaMaxTokEl) {
+                const v = String(iaMaxTokEl.value || '').trim();
+                cf.iaMaxTokens = (v === '' || !isFinite(Number(v))) ? '' : clamp(Math.round(Number(v)), 64, 4000);
+            }
             const iaRadioEl = byId('c-ia-radio'); if (iaRadioEl) cf.iaRadioPoisM = clamp(isoNum(iaRadioEl.value, 250), 50, 2000);
             const iaTimeoutEl = byId('c-ia-timeout'); if (iaTimeoutEl) cf.iaTimeoutS = clamp(isoNum(iaTimeoutEl.value, 25), 5, 120);
             cf.voice = g('c-voz').checked;
