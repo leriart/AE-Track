@@ -329,6 +329,15 @@ const fakeRes = () => ({ getZones: () => ({ 1: { id:1, n:'Z1', p:[] }, 2: { id:2
 ok('_extraerZonasDe: getZones() -> 2', modE._extraerZonasDe([fakeRes()]).length === 2);
 ok('_extraerZonasDe: deduplica', modE._extraerZonasDe([fakeRes(), fakeRes()]).length === 2);
 ok('_extraerZonasDe: res.zones array', modE._extraerZonasDe([{ zones: [{ n:'A' }, { n:'B' }] }]).length === 2);
+// La respuesta CRUDA de Wialon trae las geocercas en `zl` (zones library),
+// NO via getZones() (eso es del SDK). Este es el caso que fallaba.
+ok('_extraerZonasDe: campo crudo zl (array)', modE._extraerZonasDe([{ zl: [{ id:1, n:'A', p:[] }, { id:2, n:'B', p:[] }] }]).length === 2);
+ok('_extraerZonasDe: campo crudo zl (objeto)', modE._extraerZonasDe([{ zl: { 1:{ id:1,n:'A' }, 2:{ id:2,n:'B' } } }]).length === 2);
+ok('_extraerZonasDe: prefiere getZones sobre zl', (function(){
+    const r = { getZones: () => ({ 1:{ id:1,n:'GZ' } }), zl: [{ id:9,n:'ZL' }] };
+    const out = modE._extraerZonasDe([r]);
+    return out.length === 1 && out[0].n === 'GZ';
+})());
 ok('_extraerZonasDe: sin zonas -> []', modE._extraerZonasDe([{}]).length === 0);
 ok('_extraerZonasDe: ignora sin nombre', modE._extraerZonasDe([{ getZones: () => ({ 1: { id:1 } }) }]).length === 0);
 

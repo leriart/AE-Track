@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.8.1
+// @version      5.9.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -175,6 +175,14 @@
         right:     '\u2192',   // →
         left:      '\u2190'    // ←
     });
+    // Simbolo Unicode por severidad (para listas que NO usan Material Icons).
+    const SEV_UIS = Object.freeze({
+        critico: '\u00D7',     // ×
+        alto:    '\u25B2',     // ▲
+        medio:   '\u25B2',     // ▲
+        bajo:    '\u25CF',     // ●
+        ok:      '\u221A'      // √
+    });
 
     const COL = Object.freeze({
         critico: '#b71c1c', alto: '#e65100', medio: '#f9a825',
@@ -198,7 +206,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.8.1';
+    const VER = '5.9.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -441,6 +449,7 @@
         unidades: [],
         zonas: [],
         zonasPorNombre: new Map(),
+        zonasDiag: null,        // diagnostico de la ultima extraccion de geocercas
         watchMap: readSessionObject(SS.watch, {}, LS.watch),
         seleccion: new Set(readSessionArray(SS.seleccion, [], LS.seleccion)),
         dismissed: new Set(readSessionArray(SS.dismissed, [], LS.dismissed)),
@@ -499,7 +508,8 @@
         riesgoNivel: 'todas',   // 'todas' | 'alto' | 'medio' | 'bajo'
         riesgoOrden: 'score',   // 'score' | 'estado' | 'municipio' | 'radio'
         riesgoVista: 'grupo',   // 'grupo' (por estado) | 'plano' (lista)
-        riesgoColapsado: {}     // mapa estado -> bool (true = colapsado)
+        riesgoColapsado: {},    // mapa estado -> bool (true = colapsado)
+        zonasVista: 'geocercas' // 'geocercas' | 'riesgo' (segmentado de la pestana Zonas)
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
@@ -557,48 +567,74 @@
     }
     async function fetchZones() {
         if (!APP.config.loadZones) return [];
-        // Wialon expone las geocercas (zones) en los recursos. El flag puede
-        // variar entre versiones, asi que probamos varias combinaciones y
-        // aceptamos getZones() o la propiedad zones.
-        const intentos = [1 | 4096, 1 | 4096 | 2, 1 | 8192, 1 | 4096 | 8192];
+        // Wialon expone las geocercas (zones) como subitems de los recursos.
+        // Probamos varias combinaciones de spec/flags (el flag documentado es
+        // 0x1000 = 4096): busqueda normal por sys_name y la busqueda por
+        // 'zones_library' con propType 'propitemname'.
+        const intentos = [
+            { spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' }, flags: 1 | 4096 },
+            { spec: { itemsType: 'avl_resource', propName: 'zones_library', propValueMask: '*', sortType: 'zones_library', propType: 'propitemname' }, flags: 1 | 4096 },
+            { spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' }, flags: 1 | 4096 | 2 },
+            { spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' }, flags: 1 | 8192 },
+        ];
         let out = [];
+        const diag = { recursos: 0, claves: [], error: '' };
         for (let i = 0; i < intentos.length; i++) {
             let r;
             try {
                 r = await remoteCall('core/search_items', {
-                    spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
-                    force: 1, flags: intentos[i], from: 0, to: 0
+                    spec: intentos[i].spec, force: 1, flags: intentos[i].flags, from: 0, to: 0
                 });
-            } catch (_) { continue; }
+            } catch (e) {
+                diag.error = (e && e.message) || 'error';
+                continue;
+            }
             const items = r.items || [];
+            diag.recursos = Math.max(diag.recursos, items.length);
+            if (items[0] && !diag.claves.length) {
+                try { diag.claves = Object.keys(items[0]).slice(0, 24); } catch (_) {}
+            }
             const zs = _extraerZonasDe(items);
             if (zs.length) { out = zs; break; }
         }
+        APP.zonasDiag = diag;
         APP.zonasPorNombre = new Map(out.map((z) => [z.n || '', z]));
-        if (APP.unlocked) { try { log('geocercas:', out.length); } catch (_) {} }
+        if (APP.unlocked) { try { log('geocercas:', out.length, '· recursos:', diag.recursos, '· claves:', diag.claves.join(',')); } catch (_) {} }
         return out;
     }
-    // Extrae las geocercas de la lista de recursos de Wialon, tolerando
-    // distintas formas (getZones(), res.zones objeto o array).
+    // Extrae las geocercas de la lista de recursos de Wialon.
+    // OJO: remoteCall devuelve la respuesta CRUDA, asi que los recursos son
+    // objetos planos y NO tienen res.getZones() (eso es del SDK). El campo
+    // crudo de las geocercas de un recurso es `zl` (zones library). Tambien
+    // toleramos getZones()/zones por si el wrapper del SDK esta presente.
     function _extraerZonasDe(items) {
         const out = [];
+        const add = (z) => { if (z && typeof z === 'object' && z.n) out.push(z); };
+        const addColl = (coll) => {
+            if (!coll) return 0;
+            let n = 0;
+            if (Array.isArray(coll)) {
+                coll.forEach((z) => { if (z && typeof z === 'object' && z.n) { out.push(z); n++; } });
+            } else if (typeof coll === 'object') {
+                Object.keys(coll).forEach((k) => { const z = coll[k]; if (z && typeof z === 'object' && z.n) { out.push(z); n++; } });
+            }
+            return n;
+        };
         (items || []).forEach((res) => {
+            if (!res) return;
+            let encontrados = 0;
             try {
-                let zs = null;
-                if (typeof res.getZones === 'function') zs = res.getZones();
-                if (!zs && res.zones && typeof res.zones === 'object') zs = res.zones;
-                if (!zs) return;
-                if (Array.isArray(zs)) {
-                    zs.forEach((z) => { if (z && z.n) out.push(z); });
-                } else {
-                    Object.keys(zs).forEach((k) => {
-                        const z = zs[k];
-                        if (z && z.n) out.push(z);
-                    });
+                if (typeof res.getZones === 'function') {
+                    encontrados += addColl(res.getZones());
                 }
             } catch (_) { /* noop */ }
+            if (!encontrados) {
+                // Campo crudo de la API: zl (zones library). Algunas versiones
+                // usan `zones`.
+                encontrados += addColl(res.zl || res.zones);
+            }
         });
-        // Desduplica por id/nombre para no repetir si varios flags devuelven lo mismo.
+        // Desduplica por id/nombre.
         const vistos = new Set();
         return out.filter((z) => {
             const k = z.id != null ? ('id:' + z.id) : ('n:' + z.n);
@@ -3990,6 +4026,36 @@
             "#rondo-dash .kpi.bad{border-left:3px solid var(--rondo-bad)}\n" +
             "#rondo-dash .kpi.warn{border-left:3px solid var(--rondo-warn)}\n" +
             "#rondo-dash .kpi.sub{border-left:3px solid var(--rondo-fg-mute)}\n" +
+            /* Salud de flota */
+            "#rondo-dash .rondo-salud{display:flex;flex-direction:column;gap:6px;padding:9px 10px}\n" +
+            "#rondo-dash .rondo-salud-top{display:flex;align-items:center;gap:8px}\n" +
+            "#rondo-dash .rondo-salud-pct{font:700 22px/1 var(--rondo-font);color:var(--rondo-ok-fg);min-width:64px;text-align:right}\n" +
+            "#rondo-dash .rondo-salud-pct.warn{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dash .rondo-salud-pct.bad{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dash .rondo-salud-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-dash .rondo-salud-txt b{font:700 11px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
+            "#rondo-dash .rondo-salud-txt span{font:500 11px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash .rondo-salud-tag{flex-shrink:0;background:var(--rondo-bg);color:var(--rondo-fg-dim);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 7px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px}\n" +
+            "#rondo-dash .rondo-salud-tag.ok{background:var(--rondo-ok-bg);color:var(--rondo-ok-fg);border-color:transparent}\n" +
+            "#rondo-dash .rondo-salud-tag.warn{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg);border-color:transparent}\n" +
+            "#rondo-dash .rondo-salud-tag.bad{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent}\n" +
+            "#rondo-dash-block-head .rondo-dash-chip{margin-left:auto;background:var(--rondo-bg);color:var(--rondo-fg-dim);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 6px;font:700 9.5px var(--rondo-font);letter-spacing:.2px}\n" +
+            "#rondo-dash-block-head .rondo-dash-chip.alerta{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dash-block-head .rondo-dash-chip.critico{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dash-list .rondo-geo-dash, #rondo-dash-list .rondo-ruta-dash{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dash-list .rondo-geo-dash + .rondo-geo-dash, #rondo-dash-list .rondo-ruta-dash + .rondo-ruta-dash{margin-top:3px}\n" +
+            "#rondo-dash-list .rondo-geo-dash .ico, #rondo-dash-list .rondo-ruta-dash .ico{font-size:14px;color:var(--rondo-accent-2);flex-shrink:0;width:14px;text-align:center}\n" +
+            "#rondo-dash-list .rondo-geo-dash .body, #rondo-dash-list .rondo-ruta-dash .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}\n" +
+            "#rondo-dash-list .rondo-geo-dash b, #rondo-dash-list .rondo-ruta-dash b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash-list .rondo-geo-dash span, #rondo-dash-list .rondo-ruta-dash span{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash-list .rondo-geo-dash .pct, #rondo-dash-list .rondo-ruta-dash .pct{flex-shrink:0;font:700 11px var(--rondo-font);color:var(--rondo-accent-2)}\n" +
+            "#rondo-dash-list .rondo-ruta-dash .ruta-bar{flex:1;min-width:0;height:4px;background:var(--rondo-bg);border-radius:2px;margin-top:3px;overflow:hidden}\n" +
+            "#rondo-dash-list .rondo-ruta-dash .ruta-bar-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
+            "#rondo-dash .rondo-dash-acciones{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;padding:8px 0 2px;border-top:1px dashed var(--rondo-border-soft);margin-top:2px}\n" +
+            "#rondo-dash .rondo-dash-acciones .mini{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:5px 7px;font:600 11px var(--rondo-font)}\n" +
+            "#rondo-dash .rondo-dash-acciones .mini .rondo-usym{font-size:12px}\n" +
+            "#rondo-dash .rondo-dash-acciones .mini:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dash .rondo-dash-empty{padding:8px;color:var(--rondo-fg-mute);font-size:11px;text-align:center}\n" +
             "#rondo-dash .kpi[data-kpi]::after{content:'';position:absolute;right:6px;top:6px;color:var(--rondo-fg-mute);font-size:11px;opacity:.5}\n" +
             "#rondo-dash .rondo-dash-block{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:7px 9px;display:flex;flex-direction:column;gap:5px}\n" +
             "#rondo-dash .rondo-dash-block-head{font:600 10px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;gap:5px}\n" +
@@ -4039,11 +4105,37 @@
             "#rondo-panel .rondo-cv-card.contrario{border-color:rgba(var(--rondo-crit-rgb),.6)}\n" +
             "#rondo-panel .rondo-cv-empty{padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
             /* ── Pestaña Riesgo ───────────────────────────────────── */
-            "#rondo-panel #rondo-wrap-zonas{padding:8px;display:flex;flex-direction:column;gap:9px;overflow-y:auto;overflow-x:hidden;flex:1;min-height:0}\n" +
+            /* La pestana Zonas tiene un segmentado fijo arriba y dos paneles
+             * (Geocercas / Riesgo) que scrollean por separado. */
+            "#rondo-panel #rondo-wrap-zonas{display:flex;flex-direction:column;flex:1;min-height:0;padding:0;overflow:hidden}\n" +
             /* Los hijos NO deben encogerse: si no, el contenido se desborda
              * sobre la seccion siguiente (solapamiento). */
             "#rondo-panel #rondo-wrap-zonas > *{flex-shrink:0;min-width:0}\n" +
+            "#rondo-panel .rondo-zpane{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:8px;display:flex;flex-direction:column;gap:9px}\n" +
+            "#rondo-panel .rondo-zpane > *{flex-shrink:0;min-width:0}\n" +
             "#rondo-dash > *{flex-shrink:0;min-width:0}\n" +
+            /* Segmentado Geocercas / Riesgo */
+            "#rondo-panel .rondo-zonas-seg{display:flex;gap:4px;padding:7px 9px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);flex-shrink:0}\n" +
+            "#rondo-panel .rondo-zseg{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:var(--rondo-radius-sm);padding:6px 8px;cursor:pointer;font:600 11.5px var(--rondo-font);transition:all .15s var(--rondo-easing);min-width:0}\n" +
+            "#rondo-panel .rondo-zseg:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-zseg.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.3)}\n" +
+            "#rondo-panel .rondo-zseg .rondo-usym{font-size:13px}\n" +
+            /* Barra de geocercas + tarjetas */
+            "#rondo-panel .rondo-zbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-zbar-info{flex:1;min-width:0;font-size:11.5px;color:var(--rondo-fg-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-zbar-info b{color:var(--rondo-fg);font-weight:700}\n" +
+            "#rondo-panel .rondo-geo-list{border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);background:var(--rondo-bg);overflow:hidden}\n" +
+            "#rondo-panel .rondo-geo-cards{display:flex;flex-direction:column;gap:5px;padding:7px}\n" +
+            "#rondo-panel .rondo-geo-card{display:flex;align-items:center;gap:9px;padding:6px 9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);transition:background .15s,border-color .15s}\n" +
+            "#rondo-panel .rondo-geo-card:hover{background:var(--rondo-bg-strong);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;background:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-geo-card.ocupada .rondo-geo-dot{background:var(--rondo-ok);box-shadow:0 0 0 3px rgba(67,160,71,.2)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-body{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-name{font-size:11.5px;font-weight:600;color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-inside{font-size:10.5px;color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-badge{flex-shrink:0;font:700 11px/1 var(--rondo-font);padding:3px 8px;border-radius:9px;background:var(--rondo-bg);color:var(--rondo-fg-mute);border:1px solid var(--rondo-border-soft);min-width:24px;text-align:center}\n" +
+            "#rondo-panel .rondo-geo-card.ocupada .rondo-geo-badge{background:var(--rondo-ok-bg);color:var(--rondo-ok-fg);border-color:transparent}\n" +
+            "#rondo-panel .rondo-geo-empty{padding:4px}\n" +
             /* Hero: header grande con titulo, KPIs y distribution bar */
             "#rondo-panel .rondo-riesgo-hero{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:3px solid var(--rondo-accent-2);border-radius:var(--rondo-radius-sm);padding:10px 12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;position:relative}\n" +
             "#rondo-panel .rondo-riesgo-hero::before{content:none}\n" +
@@ -4235,7 +4327,7 @@
             "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > .rondo-mi{position:absolute;left:7px;color:var(--rondo-fg-mute);font-size:14px;pointer-events:none}\n" +
             "#rondo-panel .rondo-riesgo-filters-row > .search-wrap > input{padding-left:24px!important;width:100%}\n" +
             /* Export bar */
-            "#rondo-panel .rondo-riesgo-export{display:flex;gap:4px;align-items:center;padding-top:4px;border-top:1px dashed var(--rondo-border-soft);margin-top:2px}\n" +
+            "#rondo-panel .rondo-riesgo-export{display:inline-flex;gap:4px;align-items:center;margin-left:auto}\n" +
             "#rondo-panel .rondo-riesgo-export .etq{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);margin-right:auto}\n" +
             /* Chips con feedback al cambiar */
             "#rondo-panel .rondo-riesgo-chips{transition:opacity .2s}\n" +
@@ -4319,10 +4411,6 @@
             "#rondo-panel table.zone th{position:sticky;top:0;background:var(--rondo-bg-soft);z-index:1}\n" +
             "#rondo-panel table.zone th:first-child,#rondo-panel table.zone td:first-child{width:42%}\n" +
             "#rondo-panel table.zone td{padding:5px 8px;white-space:normal;word-break:break-word;vertical-align:top;font-size:11.5px}\n" +
-            "#rondo-panel .rondo-geo-tools{display:flex;gap:5px;flex-wrap:wrap}\n" +
-            "#rondo-panel .rondo-geo-list{max-height:240px;overflow:auto;border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);background:var(--rondo-bg)}\n" +
-            "#rondo-panel .rondo-geo-list .rondo-vacio{padding:16px 12px}\n" +
-            "#rondo-panel .rondo-geo-list .rondo-vacio .rondo-mi{font-size:26px}\n" +
             "#rondo-panel table.zone tr.fila td:first-child{color:var(--rondo-accent-2);font-weight:600}\n" +
             "#rondo-panel .zone .contador-unidades{color:var(--rondo-ok-fg);font-weight:600}\n" +
             "#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);padding:14px;\n" +
@@ -4736,19 +4824,18 @@
             '<div id="rondo-dash">' +
             '<div class="rondo-dash-head">' +
             '<span class="rondo-usym md">' + UIS.dashboard + '</span> ' +
-            '<b>Resumen de la flota</b>' +
+            '<b>Centro de monitoreo</b>' +
             '<span class="rondo-dash-vel" id="rondo-dash-vel"></span>' +
             '</div>' +
-            '<div class="rondo-dash-kpis">' +
-            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.online + '</span><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
-            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo ultimo reporte supero el umbral · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.offline + '</span><span class="kpi-etq">Sin senal</span><span class="kpi-val" id="rondo-kpi-off">0</span><span class="kpi-pct" id="rondo-kpi-off-pct"></span></div>' +
-            '<div class="kpi warn" data-kpi="detenida" title="Unidades en linea con velocidad muy baja · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.stopped + '</span><span class="kpi-etq">Det.</span><span class="kpi-val" id="rondo-kpi-det">0</span></div>' +
-            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en linea con velocidad normal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.moving + '</span><span class="kpi-etq">En mov.</span><span class="kpi-val" id="rondo-kpi-mov">0</span></div>' +
-            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.map + '</span><span class="kpi-etq">En zonas</span><span class="kpi-val" id="rondo-kpi-zonas">0</span><span class="kpi-pct" id="rondo-kpi-zonas-pct"></span></div>' +
-            '<div class="kpi" data-kpi="alertas" title="Avisos desde la medianoche · clic para verlos"><span class="kpi-ico rondo-usym">' + UIS.alertas + '</span><span class="kpi-etq">Avisos hoy</span><span class="kpi-val" id="rondo-kpi-aho">0</span><span class="kpi-pct" id="rondo-kpi-criticos"></span></div>' +
+            '<div class="rondo-dash-block rondo-salud" id="rondo-salud">' +
+            '<div class="rondo-salud-top">' +
+            '<span class="rondo-salud-pct" id="rondo-salud-pct">\u2014</span>' +
+            '<div class="rondo-salud-txt">' +
+            '<b>Salud de la flota</b>' +
+            '<span id="rondo-salud-sub">Recolectando datos\u2026</span>' +
             '</div>' +
-            '<div class="rondo-dash-block">' +
-            '<div class="rondo-dash-block-head">Distribucion de la flota</div>' +
+            '<span class="rondo-salud-tag" id="rondo-salud-tag">\u2014</span>' +
+            '</div>' +
             '<div class="rondo-dash-dist-bar">' +
             '<span class="seg on" id="rondo-dist-on"></span>' +
             '<span class="seg det" id="rondo-dist-det"></span>' +
@@ -4756,13 +4843,35 @@
             '</div>' +
             '<div class="rondo-dash-dist-legend" id="rondo-dist-legend"></div>' +
             '</div>' +
+            '<div class="rondo-dash-kpis">' +
+            '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.online + '</span><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
+            '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo ultimo reporte supero el umbral · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.offline + '</span><span class="kpi-etq">Sin senal</span><span class="kpi-val" id="rondo-kpi-off">0</span><span class="kpi-pct" id="rondo-kpi-off-pct"></span></div>' +
+            '<div class="kpi warn" data-kpi="detenida" title="Unidades en linea con velocidad muy baja · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.stopped + '</span><span class="kpi-etq">Detenidas</span><span class="kpi-val" id="rondo-kpi-det">0</span></div>' +
+            '<div class="kpi sub" data-kpi="moviendo" title="Unidades en linea con velocidad normal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.moving + '</span><span class="kpi-etq">En mov.</span><span class="kpi-val" id="rondo-kpi-mov">0</span></div>' +
+            '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.map + '</span><span class="kpi-etq">En zonas</span><span class="kpi-val" id="rondo-kpi-zonas">0</span><span class="kpi-pct" id="rondo-kpi-zonas-pct"></span></div>' +
+            '<div class="kpi" data-kpi="alertas" title="Avisos desde la medianoche · clic para verlos"><span class="kpi-ico rondo-usym">' + UIS.alertas + '</span><span class="kpi-etq">Avisos hoy</span><span class="kpi-val" id="rondo-kpi-aho">0</span><span class="kpi-pct" id="rondo-kpi-criticos"></span></div>' +
+            '</div>' +
             '<div class="rondo-dash-block">' +
-            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.warn + '</span> Requieren atencion</div>' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.warn + '</span> Requieren atencion<span class="rondo-dash-chip" id="rondo-atencion-n">0</span></div>' +
             '<div id="rondo-atencion" class="rondo-dash-list"></div>' +
+            '</div>' +
+            '<div class="rondo-dash-block">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.map + '</span> Unidades en zonas<span class="rondo-dash-chip" id="rondo-zonas-n">0</span></div>' +
+            '<div id="rondo-dash-zonas" class="rondo-dash-list"></div>' +
+            '</div>' +
+            '<div class="rondo-dash-block">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.route + '</span> Rutas activas<span class="rondo-dash-chip" id="rondo-rutas-n">0</span></div>' +
+            '<div id="rondo-dash-rutas" class="rondo-dash-list"></div>' +
             '</div>' +
             '<div class="rondo-dash-block">' +
             '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.alertas + '</span> Avisos recientes</div>' +
             '<div id="rondo-kpi-recientes" class="rondo-dash-list"></div>' +
+            '</div>' +
+            '<div class="rondo-dash-acciones">' +
+            '<button class="mini" id="rondo-dash-lista" title="Abrir la lista de unidades para abrir y acomodar ventanas"><span class="rondo-usym">' + UIS.panel + '</span> Lista</button>' +
+            '<button class="mini" id="rondo-dash-verificar" title="Verificar y acomodar las ventanas abiertas"><span class="rondo-usym">' + UIS.check + '</span> Verificar</button>' +
+            '<button class="mini" id="rondo-dash-capturar" title="Capturar las ventanas abiertas"><span class="rondo-usym">' + UIS.map + '</span> Capturar</button>' +
+            '<button class="mini" id="rondo-dash-informe" title="Generar el informe del dia (Markdown)"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
             '</div>' +
             '</div>' +
             '</div>' +
@@ -4807,18 +4916,19 @@
             '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
             '</div>' +
             '<div class="tabla" id="rondo-wrap-zonas" style="display:none">' +
-            '<div class="rondo-seccion">' +
-            '<h4><span class="rondo-usym md">' + UIS.map + '</span> Geocercas<span class="rondo-count" id="rondo-geo-count">0</span></h4>' +
-            '<div class="rondo-geo-tools">' +
+            '<div class="rondo-zonas-seg" id="rondo-zonas-seg">' +
+            '<button class="rondo-zseg activo" data-ztab="geocercas"><span class="rondo-usym">' + UIS.map + '</span> Geocercas</button>' +
+            '<button class="rondo-zseg" data-ztab="riesgo"><span class="rondo-usym">' + UIS.riesgo + '</span> Riesgo</button>' +
+            '</div>' +
+            '<div class="rondo-zpane" id="rondo-zpane-geocercas">' +
+            '<div class="rondo-zbar">' +
+            '<span class="rondo-zbar-info"><b id="rondo-geo-count">0</b> geocercas</span>' +
             '<button class="mini" id="rondo-geo-recargar" title="Volver a consultar las geocercas de la plataforma"><span class="rondo-usym">' + UIS.refresh + '</span> Recargar</button>' +
             '<button class="mini" id="rondo-geo-configurar" title="Ajustes > General: Cargar geocercas"><span class="rondo-usym">' + UIS.gear + '</span> Ajustes</button>' +
             '</div>' +
-            '<div class="rondo-geo-list">' +
-            '<table class="zone"><thead><tr><th>Geocerca</th><th>Dentro</th></tr></thead>' +
-            '<tbody id="rondo-body-zonas"></tbody></table>' +
+            '<div class="rondo-geo-list"><div id="rondo-body-zonas" class="rondo-geo-cards"></div></div>' +
             '</div>' +
-            '</div>' +
-            
+            '<div class="rondo-zpane" id="rondo-zpane-riesgo" style="display:none">' +
             '<div class="rondo-riesgo-hero">' +
             '<div class="rondo-riesgo-dona" id="rondo-riesgo-dona" title="Distribucion por nivel">' +
             '<svg viewBox="0 0 74 74" aria-hidden="true">' +
@@ -4839,15 +4949,15 @@
             '</div>' +
             '<div class="rondo-riesgo-kpis" id="rondo-riesgo-kpis">' +
             '<div class="rondo-riesgo-kpi" data-kpi-nivel="todas"><span class="kpi-etq">Total</span><span class="kpi-val" id="rondo-riesgo-kpi-total">0</span><span class="kpi-res" id="rondo-riesgo-kpi-prom">&mdash;</span></div>' +
-            '<div class="rondo-riesgo-kpi alto" data-kpi-nivel="alto" title="Click para filtrar por Alto"><span class="kpi-etq">Alto</span><span class="kpi-val" id="rondo-riesgo-kpi-alto">0</span><span class="kpi-res">score &ge; 70</span></div>' +
-            '<div class="rondo-riesgo-kpi medio" data-kpi-nivel="medio" title="Click para filtrar por Medio"><span class="kpi-etq">Medio</span><span class="kpi-val" id="rondo-riesgo-kpi-medio">0</span><span class="kpi-res">40&ndash;69</span></div>' +
-            '<div class="rondo-riesgo-kpi bajo" data-kpi-nivel="bajo" title="Click para filtrar por Bajo"><span class="kpi-etq">Bajo</span><span class="kpi-val" id="rondo-riesgo-kpi-bajo">0</span><span class="kpi-res">&lt; 40</span></div>' +
-            '</div>' +
-            '</div>' +
+            '<div class="rondo-riesgo-kpi alto" data-kpi-nivel="alto" title="Clic para filtrar por Alto"><span class="kpi-etq">Alto</span><span class="kpi-val" id="rondo-riesgo-kpi-alto">0</span><span class="kpi-res">score &ge; 70</span></div>' +
+            '<div class="rondo-riesgo-kpi medio" data-kpi-nivel="medio" title="Clic para filtrar por Medio"><span class="kpi-etq">Medio</span><span class="kpi-val" id="rondo-riesgo-kpi-medio">0</span><span class="kpi-res">40&ndash;69</span></div>' +
+            '<div class="rondo-riesgo-kpi bajo" data-kpi-nivel="bajo" title="Clic para filtrar por Bajo"><span class="kpi-etq">Bajo</span><span class="kpi-val" id="rondo-riesgo-kpi-bajo">0</span><span class="kpi-res">&lt; 40</span></div>' +
             '</div>' +
             '<div class="rondo-riesgo-hist-wrap" id="rondo-riesgo-hist-wrap">' +
             '<div class="rondo-riesgo-hist-head"><span>Distribucion de score</span><b id="rondo-riesgo-hist-rango">0&ndash;100</b></div>' +
             '<div class="rondo-riesgo-hist" id="rondo-riesgo-hist"></div>' +
+            '</div>' +
+            '</div>' +
             '</div>' +
             '<div class="rondo-seccion rondo-riesgo-status-sec" id="rondo-riesgo-drop">' +
             '<div class="rondo-riesgo-status-row">' +
@@ -4856,27 +4966,19 @@
             '<b id="rondo-riesgo-status-cuenta">0 zonas</b>' +
             '<span id="rondo-riesgo-status-fuente" class="rondo-riesgo-status-sub"></span>' +
             '</div>' +
-            '<button class="mini rondo-riesgo-configurar" id="rondo-riesgo-configurar" title="Abrir Ajustes de Reglas (URL, formato, parametros y regla)">' +
-            '<span class="rondo-usym">' + UIS.gear + '</span> Configurar' +
-            '</button>' +
-            '<button class="mini rondo-riesgo-recargar" id="rondo-riesgo-recargar" title="Recargar el dataset desde la URL o el archivo">' +
-            '<span class="rondo-usym">' + UIS.refresh + '</span> Recargar' +
-            '</button>' +
-            '<button class="mini rondo-riesgo-limpiar" id="rondo-riesgo-limpiar" title="Olvidar el dataset en memoria">' +
-            '<span class="rondo-usym">' + UIS.clear + '</span> Limpiar' +
-            '</button>' +
+            '<button class="mini" id="rondo-riesgo-recargar" title="Recargar el dataset desde la URL"><span class="rondo-usym">' + UIS.refresh + '</span> Recargar</button>' +
+            '<button class="mini" id="rondo-riesgo-configurar" title="Abrir Ajustes de Reglas (URL, formato, parametros y regla)"><span class="rondo-usym">' + UIS.gear + '</span> Ajustes</button>' +
+            '<button class="mini" id="rondo-riesgo-limpiar" title="Olvidar el dataset en memoria"><span class="rondo-usym">' + UIS.clear + '</span></button>' +
             '</div>' +
             '<div id="rondo-riesgo-estado" class="rondo-riesgo-estado"></div>' +
-            '<p class="rondo-riesgo-status-hint">' + UIS.gear + ' Configura URL, formato, parametros y la regla desde <b>Ajustes &gt; Reglas</b>. ' + UIS.drop + ' Arrastra aqui un CSV/JSON o usa ' + UIS.refresh + ' Recargar.</p>' +
+            '<p class="rondo-riesgo-status-hint">Configura la URL, formato, parametros y la regla en <b>Ajustes &gt; Reglas</b>. Tambien puedes arrastrar aqui un CSV/JSON.</p>' +
             '<div class="rondo-riesgo-dropmask"><span class="rondo-usym md">' + UIS.drop + '</span> Suelta el archivo aqui</div>' +
             '</div>' +
             '<div class="rondo-seccion">' +
             '<h4><span class="rondo-usym md">' + UIS.filter + '</span> Filtros y vista<span class="rondo-count" id="rondo-riesgo-filtradas">0</span></h4>' +
             '<div class="rondo-riesgo-filters">' +
             '<div class="rondo-riesgo-filters-row">' +
-            '<div class="rondo-riesgo-search">' +
-            '<input id="rondo-riesgo-buscar" class="filtro" placeholder="Buscar estado, municipio, delito, id…">' +
-            '</div>' +
+            '<input id="rondo-riesgo-buscar" class="filtro" placeholder="Buscar estado, municipio, delito, id\u2026">' +
             '<select id="rondo-riesgo-orden" class="filtro" title="Ordenar">' +
             '<option value="score">Mayor score</option>' +
             '<option value="score-asc">Menor score</option>' +
@@ -4889,33 +4991,19 @@
             '<option value="grupo">Por estado</option>' +
             '<option value="plano">Lista plana</option>' +
             '</select>' +
-            '<button class="mini" id="rondo-riesgo-limpiar-filtros" title="Quitar filtros y ver todas las zonas">' +
-            '<span class="rondo-usym">' + UIS.clear + '</span> Limpiar filtros' +
-            '</button>' +
-            '<button class="mini" id="rondo-riesgo-expandir" title="Expandir o colapsar todos los grupos">' +
-            '<span class="rondo-usym">' + UIS.expand + '</span> Expandir todo' +
-            '</button>' +
-            '<button class="mini" id="rondo-riesgo-exportar" title="Exportar el subset visible (CSV, GeoJSON o portapapeles)">' +
-            '<span class="rondo-usym">' + UIS.export + '</span> Exportar' +
-            '</button>' +
-            '</div>' +
-            '<div class="rondo-riesgo-export">' +
-            '<span class="etq">Exportar lo visible:</span>' +
-            '<button class="mini" id="rondo-riesgo-csv" title="Descargar CSV">' +
-            '<span class="rondo-usym">' + UIS.csv + '</span> CSV' +
-            '</button>' +
-            '<button class="mini" id="rondo-riesgo-geo" title="Descargar GeoJSON">' +
-            '<span class="rondo-usym">' + UIS.export + '</span> GeoJSON' +
-            '</button>' +
-            '<button class="mini" id="rondo-riesgo-copiar" title="Copiar al portapapeles">' +
-            '<span class="rondo-usym">' + UIS.copy + '</span> Copiar' +
-            '</button>' +
+            '<button class="mini" id="rondo-riesgo-limpiar-filtros" title="Quitar filtros y ver todas las zonas"><span class="rondo-usym">' + UIS.clear + '</span></button>' +
+            '<button class="mini" id="rondo-riesgo-expandir" title="Expandir o colapsar todos los grupos"><span class="rondo-usym">' + UIS.expand + '</span></button>' +
             '</div>' +
             '<div class="rondo-riesgo-chips">' +
             '<span class="rondo-chip activo" data-nivel="todas">Todas</span>' +
             '<span class="rondo-chip alto" data-nivel="alto">Alto</span>' +
             '<span class="rondo-chip medio" data-nivel="medio">Medio</span>' +
             '<span class="rondo-chip bajo" data-nivel="bajo">Bajo</span>' +
+            '<span class="rondo-riesgo-export">' +
+            '<button class="mini" id="rondo-riesgo-csv" title="Descargar CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
+            '<button class="mini" id="rondo-riesgo-geo" title="Descargar GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
+            '<button class="mini" id="rondo-riesgo-copiar" title="Copiar al portapapeles"><span class="rondo-usym">' + UIS.copy + '</span> Copiar</button>' +
+            '</span>' +
             '</div>' +
             '<div class="rondo-riesgo-summary" id="rondo-riesgo-summary"></div>' +
             '</div>' +
@@ -4923,6 +5011,7 @@
             '<div class="rondo-seccion">' +
             '<h4><span class="rondo-usym md">' + UIS.zone + '</span> Zonas<span class="rondo-count" id="rondo-riesgo-total">0</span></h4>' +
             '<div id="rondo-riesgo-lista" class="rondo-riesgo-list"></div>' +
+            '</div>' +
             '</div>' +
             '</div>' +
             '<footer><span id="rondo-info">iniciando...</span><span id="rondo-upd"></span></footer>'
@@ -5439,7 +5528,7 @@
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
         else if (name === 'caravana') paintCaravana();
-        else if (name === 'zonas') { paintGeocercas(); paintRiesgo(); }
+        else if (name === 'zonas') { aplicarZonasVista(); paintGeocercas(); paintRiesgo(); }
         paintCounters();
         paintStateBadge();
         paintInfo();
@@ -5589,10 +5678,11 @@
         kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-zonas', enZona.size);
-        kv('rondo-kpi-zonas-pct', APP.zonas.length ? 'de ' + APP.zonas.length : ''); kv('rondo-kpi-aho', aho);
-        kv('rondo-kpi-criticos', critAho + ' críticas');
+        kv('rondo-kpi-zonas-pct', APP.zonas.length ? 'de ' + APP.zonas.length : '');
+        kv('rondo-kpi-aho', aho);
+        kv('rondo-kpi-criticos', critAho ? critAho + ' criticas' : '');
 
-        // Distribucion de la flota (barra + leyenda): movimiento / detenidas / sin señal.
+        paintSalud(on, off, total, mov, det);
         const totalD = Math.max(1, total);
         const segOn = byId('rondo-dist-on');
         const segDet = byId('rondo-dist-det');
@@ -5609,6 +5699,9 @@
                 '<span><i class="off"></i> Off ' + off + ' (' + pct(off) + ')</span>');
         }
         paintAtencion(watched);
+        paintZonasDash();
+        paintRutasDash();
+        paintDashAcciones();
 
         const recientes = byId('rondo-kpi-recientes');
         if (recientes) {
@@ -5616,7 +5709,7 @@
             setHtml(recientes, items.length
                 ? items.slice(0, 4).map((a) => (
                     '<div class="alerta" style="border-left:3px solid ' + (COL[a.sev] || '#555') + '">' +
-                    '<span class="ico rondo-usym" style="color:' + (COL[a.sev] || '#777') + '">' + (a.icono || UIS.info) + '</span>' +
+                    '<span class="ico rondo-usym" style="color:' + (COL[a.sev] || '#777') + '">' + (SEV_UIS[a.sev] || UIS.info) + '</span>' +
                     '<div class="cuerpo"><b>' + esc(a.titulo) + '</b>' +
                     (a.detalle ? '<span>' + esc(a.detalle) + '</span>' : '') + '</div>' +
                     '<span class="hora">' + new Date(a.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
@@ -5624,11 +5717,119 @@
                 )).join('')
                 : '<div class="rondo-dash-empty">' + LANG.recientesNone + '</div>');
         }
-        // paintSparkline ya no se usa (sparkline oculto). Mantengo la funcion vacia
-        // por compatibilidad si alguien la llama desde otro lugar.
         paintSparkline();
     }
-    function paintSparkline() {
+    function paintSalud(on, off, total, mov, det) {
+        const pctEl = byId('rondo-salud-pct');
+        const subEl = byId('rondo-salud-sub');
+        const tagEl = byId('rondo-salud-tag');
+        if (!pctEl) return;
+        const pct = total ? Math.round((on / total) * 100) : null;
+        pctEl.textContent = (pct == null) ? '\u2014' : pct + '%';
+        let cls = 'ok', tag = 'OK';
+        if (pct == null) { cls = ''; tag = '\u2014'; }
+        else if (pct < 50) { cls = 'bad'; tag = 'BAJA'; }
+        else if (pct < 85) { cls = 'warn'; tag = 'ATENCION'; }
+        pctEl.className = 'rondo-salud-pct ' + cls;
+        if (tagEl) { tagEl.className = 'rondo-salud-tag ' + cls; tagEl.textContent = tag; }
+        if (subEl) {
+            const resumen = total
+                ? '<b>' + on + '</b> en linea \u00b7 <b>' + off + '</b> sin senal \u00b7 <b>' + det + '</b> detenidas \u00b7 <b>' + mov + '</b> en mov.'
+                : 'Sin unidades vigiladas (abre la lista para anadir).';
+            subEl.innerHTML = resumen;
+        }
+    }
+    function paintZonasDash() {
+        const cont = byId('rondo-dash-zonas');
+        const countEl = byId('rondo-zonas-n');
+        if (!cont) return;
+        const watched = APP.unidades.filter(shouldWatch);
+        const items = [];
+        if (APP.zonas && APP.zonas.length) {
+            for (let i = 0; i < APP.zonas.length; i++) {
+                const z = APP.zonas[i];
+                const dentro = watched.filter((u) => {
+                    const st = unitState(u); return st.online && inZone(st.lat, st.lon, z);
+                });
+                if (dentro.length) {
+                    const ecos = dentro.map((u) => parseUnitName(u).eco || parseUnitName(u).placa).filter(Boolean);
+                    items.push({ z, dentro, ecos });
+                }
+            }
+        }
+        items.sort((a, b) => b.dentro.length - a.dentro.length);
+        const top = items.slice(0, 6);
+        if (countEl) countEl.textContent = items.length;
+        setHtml(cont, top.length
+            ? top.map((it) =>
+                '<div class="rondo-geo-dash" data-zona="' + esc(it.z.n || '') + '">' +
+                '<span class="ico rondo-usym">' + UIS.zone + '</span>' +
+                '<div class="body">' +
+                '<b>' + esc(it.z.n || ('Zona ' + it.z.id)) + '</b>' +
+                '<span>' + esc(it.ecos.slice(0, 6).join(' \u00b7 ')) + (it.ecos.length > 6 ? ' \u2026' : '') + '</span>' +
+                '</div>' +
+                '<span class="pct">' + it.dentro.length + '</span>' +
+                '</div>'
+              ).join('')
+            : '<div class="rondo-dash-empty">Ninguna geocerca con unidades dentro (activa <b>Cargar geocercas</b> en Ajustes).</div>');
+    }
+    function paintRutasDash() {
+        const cont = byId('rondo-dash-rutas');
+        const countEl = byId('rondo-rutas-n');
+        if (!cont) return;
+        const watched = APP.unidades.filter(shouldWatch);
+        const items = [];
+        for (let i = 0; i < watched.length; i++) {
+            const u = watched[i];
+            const info = parseUnitName(u);
+            const st = unitState(u);
+            const destino = watchDest(info);
+            const ruta = rutaDe(info);
+            if (!destino) continue;
+            const er = estadoRuta(info, st);
+            if (er.estado === 'SIN POSICION') continue;
+            const pct = er.snap ? Math.round(er.snap.progreso * 100) : null;
+            const etaSeg = er.snap ? calcularETA(er.snap, er.ruta, st.vel) : null;
+            items.push({ eco: info.eco || info.placa || String(info.id), estado: er.estado, pct, etaSeg, destino });
+        }
+        items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
+        const top = items.slice(0, 6);
+        if (countEl) countEl.textContent = items.length;
+        setHtml(cont, top.length
+            ? top.map((it) => {
+                const etaTxt = (it.etaSeg != null && isFinite(it.etaSeg)) ? (Math.round(it.etaSeg / 60) + ' min') : '\u2014';
+                return '<div class="rondo-ruta-dash" data-eco="' + esc(it.eco) + '">' +
+                    '<span class="ico rondo-usym">' + UIS.route + '</span>' +
+                    '<div class="body">' +
+                    '<b>' + esc(it.eco) + ' \u00b7 ' + esc(it.estado) + '</b>' +
+                    '<span>' + esc(it.destino || '') + '</span>' +
+                    (it.pct != null ? '<div class="ruta-bar"><div class="ruta-bar-fill" style="width:' + it.pct + '%"></div></div>' : '') +
+                    '</div>' +
+                    '<span class="pct">' + (it.pct != null ? (it.pct + '%') : '\u2014') + '</span>' +
+                    '</div>';
+              }).join('')
+            : '<div class="rondo-dash-empty">Sin rutas activas (define destinos desde la lista vigilada).</div>');
+    }
+    function paintDashAcciones() {
+        const bLista = byId('rondo-dash-lista');
+        if (bLista) bLista.onclick = () => mainBtn && mainBtn.click();
+        const bVer = byId('rondo-dash-verificar');
+        if (bVer) bVer.onclick = () => verifyWindows && verifyWindows(true);
+        const bCap = byId('rondo-dash-capturar');
+        if (bCap) bCap.onclick = () => capturarYmostrar();
+        const bInf = byId('rondo-dash-informe');
+        if (bInf) bInf.onclick = () => exportInforme();
+    }
+    function capturarYmostrar() {
+        if (typeof capturarVentanas !== 'undefined') capturarVentanas();
+        else if (typeof capturarTodas !== 'undefined') capturarTodas();
+        else adviceOk('Capturar', 'inicia la captura desde la lista de unidades');
+    }
+    function exportInforme() {
+        if (typeof generarInforme !== 'undefined') generarInforme();
+        else adviceOk('Informe', 'la funcion de informe no esta disponible');
+    }
+        function paintSparkline() {
         const svg = byId('rondo-spark');
         if (!svg) { return; }
         const on = (APP.kpi.online || []).slice(-60);
@@ -5831,40 +6032,67 @@
         if (countEl) countEl.textContent = total;
         if (!body) return;
         if (!APP.config.loadZones || !total) {
-            const icon = UIS.map;
-            const hint = !APP.config.loadZones
-                ? 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.'
-                : 'No se encontraron geocercas en tu cuenta. Usa <b>Recargar</b> o revisa que tu usuario tenga geocercas en la plataforma.';
+            let hint = 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.';
+            if (APP.config.loadZones) {
+                hint = 'No se encontraron geocercas. Usa <b>Recargar</b> o revisa que tu usuario tenga geocercas en la plataforma.';
+                const d = APP.zonasDiag;
+                if (d) {
+                    hint += '<br><span style="font-size:10px;color:var(--rondo-fg-mute)">'
+                        + 'Recursos: ' + (d.recursos || 0)
+                        + (d.claves && d.claves.length ? ' \u00b7 claves: ' + esc(d.claves.join(', ')) : '')
+                        + (d.error ? ' \u00b7 ' + esc(d.error) : '')
+                        + '</span>';
+                }
+            }
             const accion = !APP.config.loadZones
                 ? '<button class="mini rondo-vacio-acc" data-acc="ajustes"><span class="rondo-usym">' + UIS.gear + '</span> Abrir Ajustes</button>'
                 : '<button class="mini" id="rondo-geo-vacio-recargar"><span class="rondo-usym">' + UIS.refresh + '</span> Recargar</button>';
-            setHtml(body, '<tr><td colspan="2">' + emptyState(icon, 'Sin geocercas cargadas', hint, accion) + '</td></tr>');
+            setHtml(body, '<div class="rondo-geo-empty">' + emptyState(UIS.map, 'Sin geocercas cargadas', hint, accion) + '</div>');
             const b = byId('rondo-geo-vacio-recargar');
             if (b) b.addEventListener('click', () => recargarGeocercas());
             return;
         }
         const unidades = APP.unidades.filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
         const f = (APP.filtro || '').toLowerCase();
-        const rows = [];
+        const cards = [];
+        let ocupadas = 0;
         for (let i = 0; i < APP.zonas.length; i++) {
             const z = APP.zonas[i];
             const dentro = unidades.filter((u) => u.st.online && inZone(u.st.lat, u.st.lon, z));
-            const ecos = dentro.map((u) => u.info.eco);
+            const ecos = dentro.map((u) => u.info.eco).filter(Boolean);
             if (f) {
-                const hit = ecos.some((e) => e && e.indexOf(f) >= 0) || ((z.n || '').toLowerCase().indexOf(f) >= 0);
+                const hit = ecos.some((e) => e.toLowerCase().indexOf(f) >= 0) || ((z.n || '').toLowerCase().indexOf(f) >= 0);
                 if (!hit) continue;
             }
-            rows.push(
-                '<tr class="fila" data-zona="' + esc(z.n || '') + '">' +
-                '<td>' + esc(z.n || ('Zona ' + z.id)) + '</td>' +
-                '<td><span class="contador-unidades">' + dentro.length + '</span> ' +
-                (dentro.length ? esc(ecos.slice(0, 8).join(' \u00b7 ')) + (ecos.length > 8 ? ' +' + (ecos.length - 8) : '') : 'vacia') +
-                '</td>' +
-                '</tr>'
+            if (ecos.length) ocupadas++;
+            cards.push(
+                '<div class="rondo-geo-card' + (ecos.length ? ' ocupada' : '') + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
+                '<span class="rondo-geo-dot"></span>' +
+                '<div class="rondo-geo-body">' +
+                '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) + '</b>' +
+                '<span class="rondo-geo-inside">' +
+                (ecos.length
+                    ? esc(ecos.slice(0, 8).join(' \u00b7 ')) + (ecos.length > 8 ? ' +' + (ecos.length - 8) : '')
+                    : 'sin unidades dentro') +
+                '</span>' +
+                '</div>' +
+                '<span class="rondo-geo-badge">' + ecos.length + '</span>' +
+                '</div>'
             );
         }
-        setHtml(body, rows.join('') || '<tr><td colspan="2">' + emptyState(UIS.filter, LANG.sinCoin,
-            'Ninguna geocerca coincide con el filtro actual.') + '</td></tr>');
+        setHtml(body, cards.join('') || '<div class="rondo-geo-empty">' + emptyState(UIS.filter, LANG.sinCoin,
+            'Ninguna geocerca coincide con el filtro actual.') + '</div>');
+    }
+    // Muestra el panel de la pestana Zonas segun el segmentado (geocercas|riesgo).
+    function aplicarZonasVista() {
+        const v = (APP.zonasVista === 'riesgo') ? 'riesgo' : 'geocercas';
+        const g = byId('rondo-zpane-geocercas');
+        const r = byId('rondo-zpane-riesgo');
+        if (g) g.style.display = (v === 'geocercas') ? '' : 'none';
+        if (r) r.style.display = (v === 'riesgo') ? '' : 'none';
+        document.querySelectorAll('#rondo-zonas-seg .rondo-zseg').forEach((b) => {
+            b.classList.toggle('activo', b.dataset.ztab === v);
+        });
     }
     // Vuelve a consultar las geocercas de la plataforma y repinta la pestaña.
     async function recargarGeocercas() {
@@ -7688,6 +7916,18 @@
         // Boton "Exportar" grande (muestra menu).
         const exportBig = byId('rondo-riesgo-exportar');
         if (exportBig) exportBig.addEventListener('click', () => mostrarMenuExportarRiesgo());
+        // ── Segmentado Geocercas / Riesgo (pestana Zonas) ─────────────
+        const seg = byId('rondo-zonas-seg');
+        if (seg) {
+            seg.addEventListener('click', (ev) => {
+                const b = ev.target.closest('.rondo-zseg');
+                if (!b || !seg.contains(b) || !b.dataset.ztab) return;
+                APP.zonasVista = b.dataset.ztab;
+                aplicarZonasVista();
+                if (APP.zonasVista === 'riesgo') paintRiesgo();
+                else paintGeocercas();
+            });
+        }
         // ── Geocercas de la plataforma (pestana Zonas) ────────────────
         const geoRec = byId('rondo-geo-recargar');
         if (geoRec) geoRec.addEventListener('click', () => recargarGeocercas());

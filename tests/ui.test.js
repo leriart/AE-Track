@@ -133,7 +133,10 @@ ok('sin wrap riesgo separado', src.indexOf("rondo-wrap-riesgo") < 0);
 // Alt+5 -> zonas.
 ok('atajo Alt+5 -> zonas', /'5':\s*'zonas'/.test(src));
 // La pestana zonas pinta geocercas y riesgo.
-ok('zonas pinta geocercas y riesgo', /name === 'zonas'\)\s*\{\s*paintGeocercas\(\);\s*paintRiesgo\(\);/.test(src));
+ok('zonas pinta geocercas y riesgo', /name === 'zonas'\)\s*\{[^}]*paintGeocercas\(\);\s*paintRiesgo\(\);/.test(src));
+ok('zonas tiene segmentado', src.indexOf('id="rondo-zonas-seg"') >= 0);
+ok('zonas tiene panel geocercas', src.indexOf('id="rondo-zpane-geocercas"') >= 0);
+ok('zonas tiene panel riesgo', src.indexOf('id="rondo-zpane-riesgo"') >= 0);
 
 // Modo sidebar unico: sin boton ni selector de modo flotante.
 ok('sin boton rondo-btn-modo', src.indexOf('rondo-btn-modo') < 0);
@@ -168,6 +171,14 @@ ok('dash sin sparkline visible en HTML', src.indexOf('id="rondo-spark"') < 0);
 // Sin tarjeta de actualizaciones en el Dashboard (se quito).
 ok('dash sin tarjeta de update', src.indexOf('rondo-upd-card') < 0);
 ok('dash sin boton de update', src.indexOf('rondo-upd-btn') < 0);
+// Dashboard expandido: salud + zonas ocupadas + rutas activas + acciones
+ok('dash tiene bloque salud', src.indexOf('rondo-salud') >= 0);
+ok('dash tiene lista de zonas', src.indexOf('id="rondo-dash-zonas"') >= 0);
+ok('dash tiene lista de rutas', src.indexOf('id="rondo-dash-rutas"') >= 0);
+ok('dash tiene acciones rapidas', src.indexOf('rondo-dash-acciones') >= 0);
+ok('paintSalud existe', /function paintSalud\(/.test(src));
+ok('paintZonasDash existe', /function paintZonasDash\(/.test(src));
+ok('paintRutasDash existe', /function paintRutasDash\(/.test(src));
 
 // Anti-solapamiento en la pestana Zonas: los hijos no deben encogerse.
 ok('zonas hijos flex-shrink:0', /#rondo-wrap-zonas > \*\{flex-shrink:0/.test(src));
