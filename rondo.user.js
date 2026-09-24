@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.12.7
+// @version      5.12.8
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -289,7 +289,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.12.7';
+    const VER = '5.12.8';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -364,7 +364,7 @@
         voice: true,
         voiceLang: 'es-MX',
         voiceVoice: '',         // nombre exacto de la voz del navegador (opcional)
-        vozMotor: 'web',        // 'web' (navegador) | 'online' (StreamElements) | 'google'
+        vozMotor: 'online',     // 'web' (navegador) | 'online' (StreamElements) | 'google'. Por defecto online: la Web Speech API no suena en muchos Linux.
         vozOnline: 'Mia',       // voz online (StreamElements/Polly)
         vozVolumen: 1,          // volumen 0..1
         vozTest: 'Aviso de prueba de Rondo. Unidad 1234 sin senal hace cinco minutos.', // frase del boton Probar voz
@@ -1845,7 +1845,13 @@
     let _ttsBufSrc = null;
     let _ttsSeq = [];
     let _ttsLastErr = '';
-    let _ttsWatchdog = null;
+    // Generacion de reproduccion: cada _ttsDetener() la incrementa, y los
+    // callbacks async abortan si su generacion ya no es la actual. Evita que
+    // un audio viejo (p. ej. una descarga lenta) suene encima del nuevo.
+    let _ttsGen = 0;
+    // Cache de buffers decodificados por URL: repetir la misma frase suena
+    // al instante (sin volver a descargar ni decodificar).
+    const _ttsCache = new Map();
     // Resuelve un constructor del navegador prefiriendo el realm de la
     // pagina (necesario con el sandbox de Tampermonkey) y cayendo al global
     // del script si PAGE no lo expone.
@@ -1859,10 +1865,10 @@
         return Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
     }
     function _ttsDetener() {
+        _ttsGen++;
         _ttsSeq = [];
-        if (_ttsWatchdog) { clearTimeout(_ttsWatchdog); _ttsWatchdog = null; }
-        if (_ttsBufSrc) { try { _ttsBufSrc.stop(); } catch (_) { /* noop */ } _ttsBufSrc = null; }
-        if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch (_) { /* noop */ } _ttsAudioEl = null; }
+        if (_ttsBufSrc) { try { _ttsBufSrc.onended = null; _ttsBufSrc.stop(); } catch (_) { /* noop */ } _ttsBufSrc = null; }
+        if (_ttsAudioEl) { try { _ttsAudioEl.onended = null; _ttsAudioEl.pause(); } catch (_) { /* noop */ } _ttsAudioEl = null; }
         try { if (PAGE.speechSynthesis) PAGE.speechSynthesis.cancel(); } catch (_) { /* noop */ }
     }
     // Trae los bytes de una URL de audio por GM_xmlhttpRequest (salta CORS y
@@ -1906,34 +1912,49 @@
         if (p && p.catch) p.catch((e) => { _ttsLastErr = 'play: ' + (e && e.message || e); if (onError) onError(); });
         return true;
     }
-    // Reproduce bytes descargados. Primero Web Audio (decodeAudioData): no le
-    // afecta la CSP ni el media-src. Si no se puede, cae a <audio> con blob.
-    function _ttsPlayBytes(bytes, mime, onEnd, onError) {
+    // Reproduce un AudioBuffer por Web Audio.
+    function _ttsPlayBuffer(buf, onEnd, onError) {
+        const ctx = audioCtx();
+        if (!ctx) { _ttsLastErr = 'sin AudioContext'; if (onError) onError(); return false; }
+        if (ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (_) { /* noop */ } }
+        try {
+            const src = ctx.createBufferSource();
+            src.buffer = buf;
+            const g = ctx.createGain();
+            g.gain.value = _ttsVolumen();
+            src.connect(g); g.connect(ctx.destination);
+            _ttsBufSrc = src;
+            if (onEnd) src.onended = onEnd;
+            src.start(0);
+            return true;
+        } catch (e) { _ttsLastErr = 'buffer: ' + (e && e.message || e); if (onError) onError(); return false; }
+    }
+    // Decodifica y reproduce bytes. Web Audio primero (no le afecta la CSP);
+    // si no, <audio> con blob local.
+    function _ttsPlayBytes(url, bytes, onEnd, onError, gen) {
         const ctx = audioCtx();
         if (ctx) {
             try {
                 if (ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (_) { /* noop */ } }
-                const data = bytes && bytes.slice ? bytes.slice(0) : bytes;
+                let ya = false;
                 const done = (buf) => {
-                    try {
-                        const src = ctx.createBufferSource();
-                        src.buffer = buf;
-                        const g = ctx.createGain();
-                        g.gain.value = _ttsVolumen();
-                        src.connect(g); g.connect(ctx.destination);
-                        _ttsBufSrc = src;
-                        if (onEnd) src.onended = onEnd;
-                        src.start(0);
-                    } catch (e) { _ttsLastErr = 'buffer: ' + (e && e.message || e); if (onError) onError(); }
+                    if (ya || gen !== _ttsGen) return; ya = true;
+                    if (url) { _ttsCache.set(url, buf); if (_ttsCache.size > 40) _ttsCache.delete(_ttsCache.keys().next().value); }
+                    _ttsPlayBuffer(buf, onEnd, onError);
                 };
-                const fail = () => { _ttsLastErr = 'decode: audio no decodable'; _ttsPlayBlob(bytes, mime, onEnd, onError); };
+                const fail = () => {
+                    if (ya || gen !== _ttsGen) return; ya = true;
+                    _ttsLastErr = 'decode: audio no decodable';
+                    _ttsPlayBlob(bytes, 'audio/mpeg', onEnd, onError);
+                };
+                const data = bytes && bytes.slice ? bytes.slice(0) : bytes;
                 const p = ctx.decodeAudioData(data);
                 if (p && p.then) p.then(done).catch(fail);
                 else ctx.decodeAudioData(data, done, fail);
                 return true;
             } catch (e) { _ttsLastErr = 'decode: ' + (e && e.message || e); }
         }
-        return _ttsPlayBlob(bytes, mime, onEnd, onError);
+        return _ttsPlayBlob(bytes, 'audio/mpeg', onEnd, onError);
     }
     function _ttsPlayBlob(bytes, mime, onEnd, onError) {
         const B = pageCtor('Blob');
@@ -1944,16 +1965,18 @@
         catch (e) { _ttsLastErr = 'blob: ' + (e && e.message || e); if (onError) onError(); return false; }
         return _ttsPlayUrl(url, onEnd, onError);
     }
-    // Reproduce una URL remota: baja bytes por GM y los reproduce; si no hay
-    // GM, intenta el <audio> directo.
+    // Reproduce una URL remota: cache -> GM+Web Audio -> blob -> directo.
     function _ttsPlay(url, onEnd, onError) {
         _ttsDetener();
-        _ttsSeq = [];
+        const gen = _ttsGen;
+        const cache = _ttsCache.get(url);
+        if (cache) { _ttsPlayBuffer(cache, onEnd, onError); return true; }
         const prom = _ttsBytesViaGM(url);
         if (prom) {
             prom.then((bytes) => {
-                if (bytes) _ttsPlayBytes(bytes, 'audio/mpeg', onEnd, onError);
-                else { if (!_ttsPlayUrl(url, onEnd, onError) && onError) onError(); }
+                if (gen !== _ttsGen) return;
+                if (bytes) _ttsPlayBytes(url, bytes, onEnd, onError, gen);
+                else if (!_ttsPlayUrl(url, onEnd, onError) && onError) onError();
             });
             return true;
         }
@@ -1962,20 +1985,17 @@
     // Encadena varios audios (Google Translate parte el texto).
     function _ttsPlaySeq(urls) {
         _ttsDetener();
+        const gen = _ttsGen;
         _ttsSeq = urls.slice();
         const next = () => {
-            if (!_ttsSeq.length) return;
+            if (gen !== _ttsGen || !_ttsSeq.length) return;
             const url = _ttsSeq.shift();
-            const avanzar = () => setTimeout(next, 10);
+            const avanzar = () => { if (gen === _ttsGen) setTimeout(next, 10); };
+            const cache = _ttsCache.get(url);
+            if (cache) { _ttsPlayBuffer(cache, avanzar, avanzar); return; }
             const prom = _ttsBytesViaGM(url);
-            if (prom) {
-                prom.then((bytes) => {
-                    if (bytes) _ttsPlayBytes(bytes, 'audio/mpeg', avanzar, avanzar);
-                    else _ttsPlayUrl(url, avanzar, avanzar);
-                });
-            } else {
-                _ttsPlayUrl(url, avanzar, avanzar);
-            }
+            if (prom) prom.then((bytes) => { if (gen === _ttsGen) { if (bytes) _ttsPlayBytes(url, bytes, avanzar, avanzar, gen); else _ttsPlayUrl(url, avanzar, avanzar); } });
+            else _ttsPlayUrl(url, avanzar, avanzar);
         };
         next();
         return true;
@@ -1999,16 +2019,15 @@
         const motor = APP.config.vozMotor || 'web';
         if (motor === 'online') return speakOnline(txt);
         if (motor === 'google') return speakGoogle(txt);
-        // 'web': si el navegador/OS no tiene sintesis de voz (habitual en
-        // Linux sin speech-dispatcher), cae automaticamente a StreamElements
-        // para que el aviso SIEMPRE se oiga.
+        // 'web': si el navegador no tiene Web Speech API o no hay voces, cae a
+        // StreamElements. NO hay watchdog: esperar a ver si suena y lanzar
+        // otra voz encima causaba eco (doble) y un retardo de 1 s.
         if (speakWeb(txt)) return true;
         return speakOnline(txt);
     }
-    // Devuelve true si pudo lanzar la sintesis de voz del navegador. Si a los
-// 1 s no ha arrancado (tipico en Linux sin speech-dispatcher, donde
-// speechSynthesis existe pero no suena), cae a StreamElements para que el
-// aviso se oiga igual.
+    // Devuelve true si pudo lanzar la sintesis de voz del navegador. La
+    // decision de usar web u online es SINCRONA (voces disponibles o no),
+    // nunca "espero 1 s a ver": asi no hay solapamiento ni retardo.
     function speakWeb(text) {
         const synth = PAGE.speechSynthesis;
         const Utter = pageCtor('SpeechSynthesisUtterance');
@@ -2031,20 +2050,8 @@
                 || esVoces.find((v) => String(v.lang || '').toLowerCase().replace('_', '-') === lang.toLowerCase())
                 || esVoces[0];
             if (voz) u.voice = voz;
-            let arranco = false;
-            u.onstart = () => { arranco = true; };
             u.onerror = () => { _ttsLastErr = 'error de sintesis'; };
             synth.speak(u);
-            // Watchdog: si no arranca y no esta hablando, el sistema no tiene
-            // TTS real -> Online.
-            if (_ttsWatchdog) clearTimeout(_ttsWatchdog);
-            _ttsWatchdog = setTimeout(() => {
-                _ttsWatchdog = null;
-                if (!arranco && !synth.speaking && !synth.pending) {
-                    _ttsLastErr = 'el sistema no reprodujo la voz';
-                    speakOnline(text);
-                }
-            }, 1000);
             return true;
         } catch (e) { _ttsLastErr = 'speak: ' + (e && e.message || e); return false; }
     }
@@ -2098,16 +2105,17 @@
         APP.config.voice = prev;
         if (!ok) { setStatus('No se pudo reproducir: ' + (_ttsLastErr || 'desconocido'), false); return; }
         setStatus('Reproduciendo con ' + motor + '...', true);
-        // Al cabo de ~1.3 s comprobamos si el watchdog de 'web' cayo a Online.
+        // Compruébalo un momento despues (descarga+decode es async) para
+        // reportar si hubo que caer al motor online.
         setTimeout(() => {
             if (_ttsLastErr) {
-                setStatus('Sin TTS del sistema: reproducido con Online. (' + _ttsLastErr + ')', true);
+                setStatus('Aviso de voz: ' + _ttsLastErr + '. Si no oyes nada, usa el motor Online.', false);
             } else if (!APP.config.voice) {
                 setStatus('Suena el motor ' + motor + '. Ojo: "Voz" esta desactivada; activala para los avisos.', true);
             } else {
-                setStatus('Listo (' + motor + '). Si no lo oyes, sube el volumen del sistema.', true);
+                setStatus('Listo (' + motor + '). Si no lo oyes, usa "Online".', true);
             }
-        }, 1300);
+        }, 1600);
     }
 
     // Rellena el desplegable de voces segun el motor elegido.
@@ -9008,6 +9016,20 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             return;
         }
         APP.unlocked = true;
+        // Migracion de voz: en Linux la Web Speech API suele existir pero no
+        // sonar. Si el motor guardado es 'web' y estamos en Linux, pasamos a
+        // 'online' (StreamElements) una sola vez. El user puede volver a
+        // elegir 'Navegador' cuando quiera.
+        try {
+            if (!window.localStorage.getItem('rondo.api.vozLinux')) {
+                const ua = String(navigator.userAgent || '') + ' ' + String(navigator.platform || '');
+                if (APP.config.vozMotor === 'web' && /linux/i.test(ua) && !/android/i.test(ua)) {
+                    APP.config.vozMotor = 'online';
+                    writeJSON(LS.cfg, APP.config);
+                }
+                window.localStorage.setItem('rondo.api.vozLinux', '1');
+            }
+        } catch (_) { /* noop */ }
         applyBar();
         applyTheme();
         aplicarModoPanel();

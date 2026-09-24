@@ -178,7 +178,7 @@ ok('dash tiene lista de rutas', src.indexOf('id="rondo-dash-rutas"') >= 0);
 ok('dash sin acciones rapidas (se quitaron)', src.indexOf('rondo-dash-acciones') < 0);
 ok('dash sin botones de acciones', src.indexOf('rondo-dash-lista') < 0 && src.indexOf('rondo-dash-informe') < 0);
 // Motores de voz (TTS gratis online)
-ok('DEFAULTS.vozMotor', /vozMotor:\s*'web'/.test(src));
+ok('DEFAULTS.vozMotor (online por defecto)', /vozMotor:\s*'online'/.test(src));
 ok('DEFAULTS.vozOnline', /vozOnline:\s*'Mia'/.test(src));
 ok('lista TTS_ONLINE_VOCES', src.indexOf('TTS_ONLINE_VOCES') >= 0);
 ok('speakOnline (StreamElements)', /function speakOnline\(/.test(src));
@@ -368,11 +368,15 @@ ok('speakWeb fallback a online', /if \(speakWeb\(txt\)\) return true;[\s\S]*?ret
 ok('probarVoz existe', /function probarVoz\(/.test(src));
 ok('status de voz en la UI', /id="c-voz-status"/.test(src));
 ok('boton Probar voz llama probarVoz', /vozTestBtn\.addEventListener\('click', \(\) => probarVoz\(\)\)/.test(src));
-ok('watchdog de voz web', /_ttsWatchdog = setTimeout\(/.test(src) && /speakOnline\(text\)/.test(src));
-ok('watchdog se limpia al detener', /if \(_ttsWatchdog\) \{ clearTimeout\(_ttsWatchdog\)/.test(src));
+ok('sin watchdog de voz (evita doble/retardo)', !/_ttsWatchdog/.test(src));
 ok('probarVoz prueba aunque Voz este off', /El boton de prueba debe sonar aunque/.test(src));
 ok('StreamElements como fallback', /return speakOnline\(txt\)/.test(src));
 ok('voz reporta error de sintesis', /error de sintesis/.test(src));
+ok('guarda de generacion de voz', /gen !== _ttsGen/.test(src));
+ok('cache de buffers de voz', /const _ttsCache = new Map\(\)/.test(src) && /_ttsCache\.get\(url\)/.test(src));
+ok('voz web es sincrona (sin espera)', /if \(speakWeb\(txt\)\) return true;[\s\S]{0,120}return speakOnline\(txt\)/.test(src));
+ok('default de motor de voz = online', /vozMotor: 'online'/.test(src));
+ok('migracion de voz en Linux', /rondo\.api\.vozLinux/.test(src));
 
 // Voces: solo espanol.
 (function () {
