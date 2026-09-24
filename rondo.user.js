@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.3
+// @version      5.14.4
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -391,7 +391,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.14.3';
+    const VER = '5.14.4';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -598,6 +598,11 @@
         riesgoPredictNocturnoHasta: '05:00',
         riesgoPredictVelMin: 5,           // km/h: ignorar unidades detenidas
         riesgoPredictCooldownS: 300,      // segundos entre alertas repetidas por misma unidad+zona
+        // v5.14.4: regla "detenida en geocerca". Dispara una sola vez
+        // por episodio (cuando la unidad lleva N min parada dentro de
+        // una geocerca). Si la unidad se mueve o sale de la geocerca,
+        // rearma para volver a avisar en el siguiente episodio.
+        geocercaDetenidoMin: 5           // minutos detenido dentro de geocerca para alertar
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -617,7 +622,12 @@
             // aproxima a una zona de alto riesgo. Apagada por defecto
             // para no generar ruido; se recomienda activarla en flotas
             // con paradas recurrentes cerca de deshuesaderos/lotes.
-            riesgoPredict: false
+            riesgoPredict: false,
+            // v5.14.4: alerta "detenida en geocerca". Cuando una unidad
+            // lleva >= X min detenida DENTRO de una geocerca (no fuera,
+            // no en movimiento), avisa con el texto literal pedido:
+            // "La unidad X se encuentra detenida en la geocerca Y".
+            geocercaDetenido: true
         })
     });
 
@@ -4770,6 +4780,36 @@ Reglas:
             });
         }
     }
+    // v5.14.4: regla "detenida en geocerca". Complementa reglaGeocerca
+    // (que avisa al ENTRAR/SALIR) y reglaDetenido (que avisa al llevar
+    // parado N min en general). Esta es mas especifica: detecta el caso
+    // "unidad parada DENTRO de una geocerca" y lo comunica con el
+    // texto literal pedido: "La unidad X se encuentra detenida en la
+    // geocerca Y".
+    //
+    // Dispara una sola vez por episodio (cuando la unidad lleva
+    // geocercaDetenidoMin minutos parada dentro de una geocerca). Si la
+    // unidad se mueve o sale de la geocerca, rearma para volver a
+    // avisar en el siguiente episodio.
+    function reglaGeocercaDetenido(st, R, info, etq) {
+        if (!APP.config.reglas.geocercaDetenido) return;
+        if (!st.online) { R.geoDetenidoDesde = null; return; }
+        // Reset: si se mueve o sale de la geocerca, vuelve a contar.
+        if (st.vel > 1 || !R.zona) { R.geoDetenidoDesde = null; return; }
+        if (!R.geoDetenidoDesde) R.geoDetenidoDesde = Date.now() / 1000;
+        const minDet = Math.max(1, +APP.config.geocercaDetenidoMin || 5);
+        const m = (Date.now() / 1000 - R.geoDetenidoDesde) / 60;
+        if (m < minDet) return;
+        if (R.geoDetenidoAlerta) return;
+        R.geoDetenidoAlerta = true;
+        pushAlert({
+            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco,
+            titulo: 'DETENIDA EN GEOCERCA \u00b7 ' + etq,
+            detalle: 'La unidad ' + etq + ' se encuentra detenida en la geocerca ' + R.zona +
+                ' \u00b7 hace ' + Math.round(m) + ' min',
+            hablar: 'La unidad ' + etq + ' se encuentra detenida en la geocerca ' + R.zona
+        });
+    }
     async function reglaDestino(st, R, info, etq) {
         if (!APP.config.reglas.destino) return;
         const destino = watchDest(info);
@@ -4956,7 +4996,14 @@ Reglas:
             rumboOpDesde: prev ? prev.rumboOpDesde : null,
             demoraBaseAlerta: prev ? (prev.demoraBaseAlerta || 0) : 0,
             llego: prev ? prev.llego : false,
-            riesgoSinSenalAlerta: prev ? prev.riesgoSinSenalAlerta : false
+            riesgoSinSenalAlerta: prev ? prev.riesgoSinSenalAlerta : false,
+            // v5.14.4: estado para la regla "detenida en geocerca".
+            // geoDetenidoDesde: timestamp del inicio del episodio de
+            //   detencion dentro de geocerca (null si no esta).
+            // geoDetenidoAlerta: true si ya se emitio la alerta para
+            //   este episodio; rearma cuando sale o se mueve.
+            geoDetenidoDesde: prev ? prev.geoDetenidoDesde : null,
+            geoDetenidoAlerta: prev ? !!prev.geoDetenidoAlerta : false
         };
         try {
             await reglaOffline(st, prev, R, info, etq);
@@ -4968,6 +5015,10 @@ Reglas:
             await reglaDetenido(u, st, R, info, etq, ctx);
             reglaZona(st, R, info, etq);
             reglaGeocerca(st, prev, R, info, etq);
+            // v5.14.4: regla "detenida en geocerca" (mensaje literal
+            // "La unidad X se encuentra detenida en la geocerca Y").
+            // Una sola vez por episodio.
+            reglaGeocercaDetenido(st, R, info, etq);
             await reglaDestino(st, R, info, etq);
             await reglaDesconexion(st, R, info, etq);
             await reglaRiesgoSinSenal(st, prev, R, info, etq);
@@ -7013,6 +7064,8 @@ Reglas:
             checkRow('c-r-det', 'Detenido') +
             checkRow('c-r-zona', 'Zona') +
             checkRow('c-r-geo', 'Geocercas') +
+            checkRow('c-r-geo-det', 'Detenida en geocerca') +
+            numRow('c-geo-det-min', 'Min detenido para alertar (min)') +
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
@@ -9775,6 +9828,9 @@ Reglas:
             g('c-r-det').checked = !!APP.config.reglas.detenido;
             g('c-r-zona').checked = !!APP.config.reglas.zona;
             g('c-r-geo').checked = !!APP.config.reglas.geocerca;
+            const cRGeoDet = byId('c-r-geo-det'); if (cRGeoDet) cRGeoDet.checked = !!APP.config.reglas.geocercaDetenido;
+            const cGeoDetMin = byId('c-geo-det-min');
+            if (cGeoDetMin) cGeoDetMin.value = APP.config.geocercaDetenidoMin != null ? APP.config.geocercaDetenidoMin : DEFAULTS.geocercaDetenidoMin;
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
@@ -9993,6 +10049,9 @@ Reglas:
             cf.reglas.detenido = g('c-r-det').checked;
             cf.reglas.zona = g('c-r-zona').checked;
             cf.reglas.geocerca = g('c-r-geo').checked;
+            const geoDetEl = g('c-r-geo-det'); if (geoDetEl) cf.reglas.geocercaDetenido = !!geoDetEl.checked;
+            const geoDetMinEl = g('c-geo-det-min');
+            if (geoDetMinEl) cf.geocercaDetenidoMin = clamp(isoNum(geoDetMinEl.value, DEFAULTS.geocercaDetenidoMin), 1, 240);
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;

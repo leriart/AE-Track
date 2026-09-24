@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.3 en @UserScript', /@version\s+5\.14\.3/.test(src));
+ok('version 5.14.4 en @UserScript', /@version\s+5\.14\.4/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -485,9 +485,29 @@ ok('aiAnalizarLoteUI usa helper', /mostrarDialogoErrorIA\(r,\s*'Error al analiza
 ok('helper cambia config.iaProveedor al click', /APP\.config\.iaProveedor = nuevo/.test(src));
 ok('helper avisa al cambiar proveedor', /adviceOk\('Proveedor cambiado a/.test(src));
 
+// v5.14.4: regla "detenida en geocerca" con el texto literal
+// "La unidad X se encuentra detenida en la geocerca Y".
+ok('default reglas.geocercaDetenido = true', /geocercaDetenido:\s*true/.test(src));
+ok('default geocercaDetenidoMin = 5', /geocercaDetenidoMin:\s*5/.test(src));
+ok('funcion reglaGeocercaDetenido existe', /function reglaGeocercaDetenido\(/.test(src));
+ok('reglaGeocercaDetenido usa texto literal pedido', /se encuentra detenida en la geocerca/.test(src));
+ok('reglaGeocercaDetenido usa R.zona como nombre de geocerca', /en la geocerca ' \+ R\.zona/.test(src));
+ok('reglaGeocercaDetenido filtra por velocidad', /st\.vel > 1 \|\| !R\.zona/.test(src));
+ok('reglaGeocercaDetenido rearma al moverse/salir', /R\.geoDetenidoDesde = null/.test(src));
+ok('reglaGeocercaDetenido dispara una vez por episodio', /R\.geoDetenidoAlerta = true/.test(src));
+ok('toggle c-r-geo-det existe', /checkRow\('c-r-geo-det'/.test(src));
+ok('input c-geo-det-min existe', /numRow\('c-geo-det-min'/.test(src));
+ok('save handler recoge reglas.geocercaDetenido', /cf\.reglas\.geocercaDetenido = !!geoDetEl\.checked/.test(src));
+ok('save handler recoge geocercaDetenidoMin', /cf\.geocercaDetenidoMin = clamp\(isoNum\(geoDetMinEl\.value/.test(src));
+ok('precarga UI de c-r-geo-det', /cRGeoDet\.checked = !!APP\.config\.reglas\.geocercaDetenido/.test(src));
+ok('R inicializa geoDetenidoDesde/Alerta', /geoDetenidoDesde: prev \? prev\.geoDetenidoDesde : null/.test(src));
+ok('evaluateUnit llama reglaGeocercaDetenido', /reglaGeocerca\(st, prev, R, info, etq\)[\s\S]{0,200}reglaGeocercaDetenido\(st, R, info, etq\)/.test(src));
+ok('reglaGeocercaDetenido usa severity bajo', /regla: 'geocercaDetenido', sev: 'bajo'/.test(src));
+ok('reglaGeocercaDetenido respeta geocercaDetenidoMin >= 1', /Math\.max\(1, \+APP\.config\.geocercaDetenidoMin/.test(src));
+
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.14\.3['"]/.test(src));
-ok('@version 5.14.3 sincronizado con VER', /@version\s+5\.14\.3[\s\S]{0,50000}const VER = ['"]5\.14\.3['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.14\.4['"]/.test(src));
+ok('@version 5.14.4 sincronizado con VER', /@version\s+5\.14\.4[\s\S]{0,50000}const VER = ['"]5\.14\.4['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
