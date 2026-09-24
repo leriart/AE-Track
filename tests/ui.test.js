@@ -402,6 +402,81 @@ ok('veredicto IA en alertas', /rondo-ia-verdict/.test(src));
 ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
+// v5.14: analisis en lote + resumen narrativo del informe.
+ok('version 5.14.0 en @UserScript', /@version\s+5\.14\.0/.test(src));
+ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
+ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
+ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
+ok('prompt IA_SYSTEM_RESUMEN definido', /const IA_SYSTEM_RESUMEN = String\.raw/.test(src));
+ok('wrapper aiLlamarProveedorPrompt existe', /async function aiLlamarProveedorPrompt\(/.test(src));
+ok('cache IA: iaCacheGet/Set/Limpiar', /function iaCacheGet\(/.test(src) && /function iaCacheSet\(/.test(src) && /function iaCacheLimpiar\(/.test(src));
+ok('contador diario IA: iaContadorHoy/Sumar', /function iaContadorHoy\(/.test(src) && /function iaContadorSumar\(/.test(src));
+ok('guard iaLimiteExcedido', /function iaLimiteExcedido\(/.test(src));
+ok('default iaBatchMax = 25', /iaBatchMax:\s*25/.test(src));
+ok('default iaResumenInforme = true', /iaResumenInforme:\s*true/.test(src));
+ok('default iaLimiteDiario = 200', /iaLimiteDiario:\s*200/.test(src));
+ok('default iaCacheTTL = 21600 (6h)', /iaCacheTTL:\s*21600/.test(src));
+ok('clave sessionStorage iaCache', /iaCache:\s*'rondo\.api\.s\.iaCache'/.test(src));
+ok('boton Analizar lote en cabecera Avisos', /id="rondo-ia-batch"/.test(src));
+ok('boton Analizar lote arranca oculto', /id="rondo-ia-batch"[\s\S]{0,200}display:none/.test(src));
+ok('toggle c-ia-resumen-on existe', /checkRow\('c-ia-resumen-on'/.test(src));
+ok('input c-ia-batchmax existe', /numRow\('c-ia-batchmax'/.test(src));
+ok('input c-ia-limite existe', /numRow\('c-ia-limite'/.test(src));
+ok('status de uso IA c-ia-uso existe', /id="c-ia-uso"/.test(src));
+ok('informe inserta bloque ## Resumen IA', /## Resumen IA/.test(src));
+ok('informe genera placeholder hasta recibir IA', /_Generando resumen con IA/.test(src));
+ok('paintIABatchBtn existe', /function paintIABatchBtn\(/.test(src));
+ok('paintIAUso existe', /function paintIAUso\(/.test(src));
+ok('aiAnalizarLoteUI existe', /async function aiAnalizarLoteUI\(/.test(src));
+ok('exportInforme llama aiResumenDia cuando procede', /exportInforme\)[\s\S]{0,4000}aiResumenDia/.test(src));
+ok('save handler recoge iaBatchMax', /cf\.iaBatchMax = clamp/.test(src));
+ok('save handler recoge iaResumenInforme', /cf\.iaResumenInforme = !!iaResumenEl\.checked/.test(src));
+ok('save handler recoge iaLimiteDiario', /cf\.iaLimiteDiario = clamp/.test(src));
+
+// v5.14: deteccion de patrones en la bitacora.
+ok('prompt IA_SYSTEM_PATRONES definido', /const IA_SYSTEM_PATRONES = String\.raw/.test(src));
+ok('funcion aiPatrones existe', /async function aiPatrones\(/.test(src));
+ok('funcion aiPatronesUI existe', /async function aiPatronesUI\(/.test(src));
+ok('funcion aplicarSugerenciaIA existe', /function aplicarSugerenciaIA\(/.test(src));
+ok('boton Detectar patrones en pestana IA', /id="c-ia-patrones"/.test(src));
+ok('prompt de patrones lista parametros ajustables', /"pollMs"[\s\S]{0,80}"offlineMin"[\s\S]{0,80}"gpsMin"/.test(src));
+ok('prompt de patrones exige JSON con patrones y sugerencias', /"patrones":[\s\S]{0,200}"sugerencias":/.test(src));
+ok('aiPatrones valida minimo 10 avisos', /lista\.length < 10[\s\S]{0,80}Se necesitan al menos 10 avisos/.test(src));
+ok('aiPatrones envia parametrosActuales al prompt', /parametrosActuales[\s\S]{0,200}pollMs/.test(src));
+ok('aplicarSugerenciaIA valida parametro conocido', /if \(!['"]\(s && s\.parametro['"]\)/.test(src) || /if \(!s \|\| !s\.parametro\) return;/.test(src));
+ok('aiPatronesUI engancha handler por sugerencia', /rondo-ia-aplicar[\s\S]{0,2000}aplicarSugerenciaIA/.test(src));
+ok('abrirDialogo soporta onOpen', /if \(typeof opts\.onOpen === 'function'\)[\s\S]{0,200}opts\.onOpen\(el\)/.test(src));
+ok('save handler no requiere cambios para patrones', !/c-ia-patrones[\s\S]{0,300}cf\.ia/.test(src));
+
+// v5.14: regla predictiva de aproximacion a zona de riesgo.
+ok('default riesgoPredictMinScore = 4', /riesgoPredictMinScore:\s*4/.test(src));
+ok('default riesgoPredictBufferM = 500', /riesgoPredictBufferM:\s*500/.test(src));
+ok('default riesgoPredictNocturno = false', /riesgoPredictNocturno:\s*false/.test(src));
+ok('default riesgoPredictNocturnoDesde = 22:00', /riesgoPredictNocturnoDesde:\s*'22:00'/.test(src));
+ok('default riesgoPredictNocturnoHasta = 05:00', /riesgoPredictNocturnoHasta:\s*'05:00'/.test(src));
+ok('default reglas.riesgoPredict = false', /riesgoPredict:\s*false/.test(src));
+ok('funcion reglaRiesgoPredict existe', /async function reglaRiesgoPredict\(/.test(src));
+ok('toggle c-r-riesgo-pre existe', /checkRow\('c-r-riesgo-pre'/.test(src));
+ok('input c-riesgo-pre-min existe', /numRow\('c-riesgo-pre-min'/.test(src));
+ok('input c-riesgo-pre-buffer existe', /numRow\('c-riesgo-pre-buffer'/.test(src));
+ok('input c-riesgo-pre-vel existe', /numRow\('c-riesgo-pre-vel'/.test(src));
+ok('input c-riesgo-pre-cooldown existe', /numRow\('c-riesgo-pre-cooldown'/.test(src));
+ok('check c-riesgo-pre-noct existe', /checkRow\('c-riesgo-pre-noct'/.test(src));
+ok('input c-riesgo-pre-desde existe', /id="c-riesgo-pre-desde"/.test(src));
+ok('input c-riesgo-pre-hasta existe', /id="c-riesgo-pre-hasta"/.test(src));
+ok('save handler recoge reglas.riesgoPredict', /cf\.reglas\.riesgoPredict = !!riesgoPreEl\.checked/.test(src));
+ok('save handler recoge riesgoPredictMinScore', /cf\.riesgoPredictMinScore = clamp\(isoNum\(riesgoPreMinEl\.value/.test(src));
+ok('save handler recoge riesgoPredictBufferM', /cf\.riesgoPredictBufferM = clamp\(isoNum\(riesgoPreBufferEl\.value/.test(src));
+ok('save handler recoge riesgoPredictNocturno', /cf\.riesgoPredictNocturno = !!riesgoPreNoctEl\.checked/.test(src));
+ok('reglaRiesgoPredict valida ventana nocturna', /if \(!d \|\| !h \|\| !enVentanaHoraria\(ahora, d, h\)\) return;/.test(src));
+ok('helpers parseHora/ahoraMinutos/enVentanaHoraria', /function parseHora\(/.test(src) && /function ahoraMinutos\(/.test(src) && /function enVentanaHoraria\(/.test(src));
+ok('regla predictiva llama a haversine con prev.lat/prev.lon', /haversine\(prev\.lat, prev\.lon, zObj\.centro/.test(src));
+ok('regla predictiva usa cooldowns por unidad+zona', /info\.clave \+ '::riesgoPredict::' \+ candidata\.id/.test(src));
+ok('evaluateUnit llama reglaRiesgoPredict', /await reglaRiesgoSinSenal\(st, prev, R, info, etq\)[\s\S]{0,80}await reglaRiesgoPredict\(st, prev, R, info, etq\)/.test(src));
+ok('regla predictiva filtra por velocidad minima', /riesgoPredictVelMin \|\| 5/.test(src) && /st\.vel < velMin/.test(src));
+ok('regla predictiva exige distancia previa mayor', /distPrev > candidata\.dist \+ 5/.test(src));
+ok('prompt patrones lista parametros con cooldownMin/giroGrados', /"cooldownMin"[\s\S]{0,1000}"giroGrados"/.test(src));
+
 // Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
 ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);
 ok('riesgo tiene container de drop', src.indexOf('id="rondo-riesgo-drop"') >= 0);

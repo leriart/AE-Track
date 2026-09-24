@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.13.1
-// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
+// @version      5.14.0
+// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia y resumen narrativo del informe. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
 // @copyright    Proyecto original de Hector Ramirez (https://github.com/HectorRamirez-cpu)
@@ -403,7 +403,8 @@
         limites: 'rondo.api.s.limites',
         orden: 'rondo.api.s.orden',
         viajes: 'rondo.api.s.viajes',
-        riesgo: 'rondo.api.s.riesgo'
+        riesgo: 'rondo.api.s.riesgo',
+        iaCache: 'rondo.api.s.iaCache'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -440,6 +441,11 @@
         iaMaxTokens: '',        // opcional: '' = omitir (usa el default del modelo)
         iaRadioPoisM: 250,      // radio (m) para pedir POIs a Overpass
         iaTimeoutS: 25,         // timeout para la llamada a la IA
+        // v5.14: analisis en lote y resumen narrativo del informe.
+        iaBatchMax: 25,         // tope de avisos que envia aiAnalizarLote en una sola llamada
+        iaResumenInforme: true, // anadir bloque "## Resumen IA" al informe Markdown diario
+        iaLimiteDiario: 200,    // tope blando de llamadas IA/dia (cache + colas)
+        iaCacheTTL: 21600,      // TTL del cache de respuestas IA (s, 6h por defecto)
         beep: true,
         beepVol: 0.06,
         desktop: false,
@@ -491,6 +497,17 @@
         riesgoFormato: 'auto',   // 'csv' | 'json' | 'auto'
         riesgoMinScore: 1,
         riesgoRadioMul: 1,
+        // v5.14: regla predictiva de aproximacion a zona de riesgo. Avisa
+        // ANTES de que la unidad llegue a la zona (no despues como
+        // riesgoSinSenal). Pensado para horarios nocturnos y ventanas de
+        // alto riesgo (deshuesaderos, lotes, etc).
+        riesgoPredictMinScore: 4,         // score minimo de la zona para disparar
+        riesgoPredictBufferM: 500,        // metros extra de anticipacion mas alla del radio
+        riesgoPredictNocturno: false,     // si true, solo dispara de noche
+        riesgoPredictNocturnoDesde: '22:00',
+        riesgoPredictNocturnoHasta: '05:00',
+        riesgoPredictVelMin: 5,           // km/h: ignorar unidades detenidas
+        riesgoPredictCooldownS: 300,      // segundos entre alertas repetidas por misma unidad+zona
         horario: Object.freeze({ on: true, desde: '06:00', hasta: '23:00' }),
         reglas: Object.freeze({
             offline: true,
@@ -505,7 +522,12 @@
             retorno: false,
             giroU: false,
             demoraBase: false,
-            riesgoSinSenal: true
+            riesgoSinSenal: true,
+            // v5.14: alerta predictiva cuando una unidad en movimiento se
+            // aproxima a una zona de alto riesgo. Apagada por defecto
+            // para no generar ruido; se recomienda activarla en flotas
+            // con paradas recurrentes cerca de deshuesaderos/lotes.
+            riesgoPredict: false
         })
     });
 
@@ -2475,6 +2497,97 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
   "recomendacion": "una accion concreta (verificar con central, llamar al operador, marcar para revision, etc.)
 }`;
 
+    // v5.14: prompt para ANALISIS EN LOTE. Recibe hasta N alertas y debe
+    // devolver un ranking priorizado y un resumen ejecutivo. Util para
+    // que el operador revise un turno completo sin pulsar IA N veces.
+    const IA_SYSTEM_LOTE = String.raw`Eres un analista de seguridad de flotas de vehiculos en Mexico. Te pasan entre 5 y 50 alertas de un mismo turno (de medio dia o un dia completo) y debes priorizarlas.
+
+Para CADA alerta, decide si es un FALSO POSITIVO, NORMAL, SOSPECHOSA o CRITICA aplicando las mismas reglas de razonamiento del analista por aviso (geocercas conocidas, POIs cercanos via Overpass, hora del dia, etc.).
+
+Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma EXACTA:
+{
+  "resumen": "parrafo de 2-4 frases en espanol explicando el turno: cuantos avisos, cuantos criticos/sospechosos, patron general si lo hay, unidades o ventanas horarias problematicas",
+  "ranking": [
+    { "clave": "la clave exacta de la alerta", "ts": "ISO de la alerta", "veredicto": "falso_positivo|normal|sospechoso|critico", "confianza": 0.0-1.0, "motivo": "frase corta en espanol explicando el por que" }
+  ],
+  "recomendaciones": ["accion concreta 1", "accion concreta 2"]
+}
+
+Reglas:
+- El ranking va de MAS urgente a MENOS urgente (criticos primero, luego sospechosos, luego normales, luego falsos positivos al final).
+- Si tienes mas de 15 alertas, prioriza las 10 mas importantes en el ranking y omite el resto (no hace falta listar las 50).
+- "recomendaciones" son acciones operativas (revisar X, llamar a Y, ajustar umbral de Z).
+- NO incluyas avisos duplicados: si varias alertas son de la misma unidad en la misma ventana de 10 min, colapsalas en una sola entrada.
+- Todo en espanol, tono profesional y directo.`;
+
+    // v5.14: prompt para RESUMEN NARRATIVO del dia (encabezado del
+    // informe Markdown). Devuelve texto libre, NO JSON. Pensado para
+    // que un supervisor lea el informe y de un vistazo sepa que paso.
+    const IA_SYSTEM_RESUMEN = String.raw`Eres un analista de seguridad de flotas de vehiculos en Mexico. Te pasan el listado de alertas de un dia y debes escribir un resumen ejecutivo breve (3-6 frases) en espanol para encabezar el informe diario.
+
+El resumen debe:
+- Mencionar el total de alertas y desglose por severidad (criticas, altas, medias, bajas).
+- Destacar 1-3 unidades problematicas si las hay (eco o placa), con el motivo (perdio senal, desvio, etc.).
+- Senalar cualquier patron relevante (misma hora, misma zona, misma regla repetida).
+- Terminar con una recomendacion operativa corta si hay algo accionable.
+
+Reglas:
+- Tono profesional, espanol Mexico, sin emojis.
+- Si NO hay alertas: devuelve un parrafo breve confirmando que el dia estuvo sin incidencias y cuales unidades estuvieron sin senal.
+- NO uses markdown (sin #, sin *, sin listas). Parrafos corridos.
+- NO inventes unidades que no aparezcan en el JSON. Si no sabes un detalle, no lo menciones.`;
+
+    // v5.14: prompt para DETECCION DE PATRONES en la bitacora historica.
+    // Pide un JSON con dos listas: patrones recurrentes observados y
+    // sugerencias concretas de ajuste de umbrales.
+    const IA_SYSTEM_PATRONES = String.raw`Eres un analista senior de flotas de vehiculos en Mexico. Recibes la bitacora historica de alertas de Rondo (ultimas 50-300 alertas, con timestamp ISO, severidad, regla disparada, eco de la unidad, titulo y detalle) y debes identificar PATRONES RECURRENTES y proponer AJUSTES CONCRETOS a los umbrales del sistema.
+
+PARAMETROS QUE RONDO PERMITE AJUSTAR (los unicos que puedes sugerir):
+- "pollMs" (numero, ms entre refrescos, default 10000, rango 2000-60000)
+- "offlineMin" (minutos sin reporte para alertar, default 5, rango 1-120)
+- "gpsMin" (minutos sin GPS para alertar, default 15, rango 1-120)
+- "stopMin" (minutos detenido para alertar, default 30, rango 1-240)
+- "zonaMin" (minutos en zona no prevista para alertar, default 20, rango 1-120)
+- "descoMin" (minutos desconexion para alertar, default 25, rango 1-120)
+- "velMax" (km/h limite velocidad, default 110, rango 10-200)
+- "cooldownMin" (minutos entre avisos repetidos, default 45, rango 1-240)
+- "desvioM" (metros de desvio de ruta para alertar, default 250, rango 30-2000)
+- "desvioMin" (minutos sostenidos de desvio, default 5, rango 1-30)
+- "retornoM" (metros para detectar retorno al origen, default 400, rango 50-2000)
+- "retornoPct" (% de viaje recorrido para retorno, default 25, rango 5-90)
+- "giroGrados" (angulo minimo para giro en U, default 130, rango 90-180)
+- "giroMin" (minutos sostenidos de giro, default 3, rango 1-30)
+- "demoraBaseMin" (minutos detenido en CEDIS para alertar, default 30, rango 5-240)
+- "paradaMin" (minutos minimos para considerar una parada en el viaje, default 15, rango 1-120)
+- "partidaHoras" (horas-parada para identificar punto de partida, default 6, rango 1-24)
+
+Reglas del JSON (sin markdown, sin prosa):
+{
+  "patrones": [
+    {
+      "tipo": "unidad" | "regla" | "hora" | "zona" | "regla_unidad",
+      "descripcion": "frase explicando el patron observado, ej 'La unidad 4381 acumula 8 de 12 avisos de tipo sinSenal entre 02:00 y 04:00'",
+      "evidencia": ["clave1", "clave2", "..."] // 1-5 claves reales del JSON
+    }
+  ],
+  "sugerencias": [
+    {
+      "parametro": "nombre exacto del parametro de la lista de arriba",
+      "valor_actual": numero // valor que Rondo usa actualmente (puedes estimarlo si no lo sabes)
+      "valor_sugerido": numero,
+      "motivo": "una frase en espanol justificando el cambio con base en los patrones observados"
+    }
+  ]
+}
+
+Reglas de oro:
+- Solo sugiere ajustes cuando haya evidencia clara (>=3 ocurrencias del patron).
+- Si los parametros actuales ya parecen razonables, devuelve "sugerencias": [].
+- NO sugieras activar/desactivar reglas (eso se hace manualmente).
+- NO inventes claves: solo referencia "clave" y "ts" del JSON de entrada.
+- Si hay muy pocos datos (menos de 10 alertas), devuelve "patrones": [] y "sugerencias": [].
+- Todo en espanol, sin emojis, JSON estricto.`;
+
     // Junta el contexto para una alerta: eco, placa, estado, ultima posicion,
     // geocerca actual, POIs cercanos por Overpass y ultimas alertas.
     async function aiContexto(alert) {
@@ -2656,6 +2769,287 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         return Object.assign({ contexto: ctx }, veredicto);
     }
 
+    // ── v5.14: analisis en lote y resumen narrativo ──────────────────────
+    // Manda hasta N alertas en una sola llamada. Devuelve un ranking de las
+    // mas sospechosas/criticas con un resumen ejecutivo. Util para el
+    // cierre de turno: evita que el operador tenga que pulsar IA N veces.
+    //
+    // El prompt pide JSON {ranking:[{clave, eco, veredicto, confianza,
+    // motivo}], resumen} y se cachea en APP.iaCache para no volver a
+    // facturar al proveedor si el lote no cambia.
+    async function aiAnalizarLote(alertas) {
+        if (!APP.config.iaHabilitada) return { error: 'IA deshabilitada' };
+        if (!APP.config.iaApiKey) return { error: 'Falta API key' };
+        const max = clamp(Math.round(+APP.config.iaBatchMax || 25), 5, 50);
+        const muestra = (Array.isArray(alertas) ? alertas : []).slice(0, max);
+        if (!muestra.length) return { error: 'Sin avisos para analizar' };
+        // Cache: si ya analizamos este mismo lote hoy, devolvemos lo previo.
+        const cacheKey = 'lote:' + muestra.map((a) => a.clave + '@' + a.ts).join('|');
+        const cacheHit = iaCacheGet(cacheKey);
+        if (cacheHit) return cacheHit;
+        // Compactamos: mandamos solo lo necesario para no inflar tokens.
+        const compact = muestra.map((a) => ({
+            clave: a.clave,
+            ts: new Date(a.ts).toISOString(),
+            sev: a.sev,
+            regla: a.regla,
+            eco: a.eco || '',
+            titulo: a.titulo,
+            detalle: (a.detalle || '').slice(0, 240)
+        }));
+        const ctx = {
+            total: muestra.length,
+            fecha: new Date().toISOString().slice(0, 10),
+            alertas: compact
+        };
+        const r = await aiLlamarProveedorPrompt(IA_SYSTEM_LOTE, ctx);
+        if (r && !r.error) iaCacheSet(cacheKey, r);
+        return r;
+    }
+
+    // Resumen narrativo del dia para incluir al principio del informe
+    // Markdown (exportInforme). Llamada unica, cacheada por fecha+dia.
+    async function aiResumenDia(alertas) {
+        if (!APP.config.iaHabilitada) return { error: 'IA deshabilitada' };
+        if (!APP.config.iaApiKey) return { error: 'Falta API key' };
+        const max = clamp(Math.round(+APP.config.iaBatchMax || 25), 5, 50);
+        const muestra = (Array.isArray(alertas) ? alertas : []).slice(0, max);
+        if (!muestra.length) return { texto: 'Sin avisos en el dia. No hay actividad para resumir.', confianza: 1 };
+        const cacheKey = 'resumen:' + new Date().toISOString().slice(0, 10) + ':' + muestra.length;
+        const cacheHit = iaCacheGet(cacheKey);
+        if (cacheHit) return cacheHit;
+        const compact = muestra.map((a) => ({
+            ts: new Date(a.ts).toISOString(),
+            sev: a.sev,
+            regla: a.regla,
+            eco: a.eco || '',
+            titulo: a.titulo,
+            detalle: (a.detalle || '').slice(0, 200)
+        }));
+        const ctx = {
+            total: muestra.length,
+            fecha: new Date().toISOString().slice(0, 10),
+            unidadesVigiladas: APP.unidades.filter(shouldWatch).length,
+            alertas: compact
+        };
+        const r = await aiLlamarProveedorPrompt(IA_SYSTEM_RESUMEN, ctx);
+        // El resumen narrativo se espera como texto libre (no JSON).
+        if (r && !r.error) iaCacheSet(cacheKey, r);
+        return r;
+    }
+
+    // v5.14: deteccion de patrones recurrentes en la bitacora. Envia las
+    // ultimas N alertas al proveedor con un prompt que pide identificar
+    // patrones (por unidad, regla, hora, zona, combinaciones) y proponer
+    // sugerencias concretas de ajuste de umbrales del script.
+    async function aiPatrones(historial) {
+        if (!APP.config.iaHabilitada) return { error: 'IA deshabilitada' };
+        if (!APP.config.iaApiKey) return { error: 'Falta API key' };
+        const lista = Array.isArray(historial) ? historial : (APP.historial || []);
+        if (lista.length < 10) return { error: 'Se necesitan al menos 10 avisos en el historial para buscar patrones.' };
+        // Limite duro para no inflar tokens: max(iaBatchMax*4, 50) <= 200.
+        const max = clamp(Math.round(Math.max(50, (+APP.config.iaBatchMax || 25) * 4)), 50, 200);
+        const muestra = lista.slice(0, max);
+        const cacheKey = 'patrones:' + muestra.length + ':' + (muestra[0] ? muestra[0].ts : 0) + ':' +
+            (muestra[muestra.length - 1] ? muestra[muestra.length - 1].ts : 0);
+        const cacheHit = iaCacheGet(cacheKey);
+        if (cacheHit) return cacheHit;
+        const compact = muestra.map((a) => ({
+            clave: a.clave,
+            ts: new Date(a.ts).toISOString(),
+            sev: a.sev,
+            regla: a.regla,
+            eco: a.eco || '',
+            titulo: a.titulo,
+            detalle: (a.detalle || '').slice(0, 160)
+        }));
+        // Parametros actuales que Rondo usa, para que la IA los compare.
+        const cf = APP.config || {};
+        const parametrosActuales = {
+            pollMs: cf.pollMs, offlineMin: cf.offlineMin, gpsMin: cf.gpsMin,
+            stopMin: cf.stopMin, zonaMin: cf.zonaMin, descoMin: cf.descoMin,
+            velMax: cf.velMax, cooldownMin: cf.cooldownMin,
+            desvioM: cf.desvioM, desvioMin: cf.desvioMin,
+            retornoM: cf.retornoM, retornoPct: cf.retornoPct,
+            giroGrados: cf.giroGrados, giroMin: cf.giroMin,
+            demoraBaseMin: cf.demoraBaseMin,
+            paradaMin: cf.paradaMin, partidaHoras: cf.partidaHoras
+        };
+        const ctx = {
+            total: muestra.length,
+            ventana: { desde: compact[compact.length - 1].ts, hasta: compact[0].ts },
+            unidadesVigiladas: APP.unidades.filter(shouldWatch).length,
+            parametrosActuales,
+            alertas: compact
+        };
+        const r = await aiLlamarProveedorPrompt(IA_SYSTEM_PATRONES, ctx);
+        if (r && !r.error) iaCacheSet(cacheKey, r);
+        return r;
+    }
+
+    // v5.14: aplica una sugerencia puntual al config (con confirmacion).
+    // Se llama desde aiPatronesUI cuando el operador pulsa "Aplicar" en
+    // una sugerencia concreta del dialogo de patrones.
+    function aplicarSugerenciaIA(s) {
+        if (!s || !s.parametro) return;
+        const cf = APP.config || {};
+        if (!(s.parametro in cf)) {
+            adviceErr('Parametro desconocido', s.parametro + ' no existe en la configuracion de Rondo.');
+            return;
+        }
+        const v = Number(s.valor_sugerido);
+        if (!isFinite(v)) {
+            adviceErr('Valor invalido', 'valor_sugerido no es numerico: ' + s.valor_sugerido);
+            return;
+        }
+        const antes = cf[s.parametro];
+        cf[s.parametro] = v;
+        writeJSON(LS.cfg, cf);
+        adviceOk('Sugerencia aplicada', s.parametro + ': ' + antes + ' -> ' + v);
+        // Re-pintar contadores / lista de avisos por si cambia algo visible.
+        paintCounters();
+        if (APP.tab === 'alertas') paintAlertas();
+    }
+
+    // Wrapper de aiLlamarProveedor que permite pasar un system prompt
+    // alternativo (lote / resumen). Mantiene el resto de la logica
+    // (endpoint, key, temperature, max_tokens, 401/404/429/400) intacta.
+    async function aiLlamarProveedorPrompt(systemPrompt, contexto) {
+        const cfg = APP.config || {};
+        if (!cfg.iaHabilitada) return { error: 'IA deshabilitada. Activala en Ajustes > IA.' };
+        if (!cfg.iaApiKey) return { error: 'Falta la API key. Pegala en Ajustes > IA.' };
+        // v5.14: respeta el tope diario para no agotar la cuota del proveedor.
+        if (iaLimiteExcedido()) {
+            const hoy = iaContadorHoy();
+            return { error: 'Limite diario de IA alcanzado (' + (hoy.llamadas || 0) + '/' +
+                (+cfg.iaLimiteDiario || 200) + '). Sube "Limite diario" en Ajustes > IA o espera a manana.' };
+        }
+        const prov = IA_PROVEEDORES[cfg.iaProveedor];
+        if (!prov) return { error: 'Proveedor IA desconocido: ' + cfg.iaProveedor };
+        const endpoint = String(cfg.iaEndpoint || '').trim() || prov.endpoint;
+        if (!endpoint) return { error: 'Falta el endpoint del proveedor. Rellenalo en Ajustes > IA.' };
+        const modelo = cfg.iaModelo && String(cfg.iaModelo).trim() ? cfg.iaModelo : prov.modelo;
+        if (!modelo) return { error: 'Falta el modelo. Rellenalo en Ajustes > IA.' };
+        const body = {
+            model: modelo,
+            messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: 'Contexto (JSON):\n' + JSON.stringify(contexto, null, 0) }
+            ],
+            stream: false
+        };
+        if (cfg.iaTemperature !== '' && cfg.iaTemperature != null && isFinite(Number(cfg.iaTemperature))) {
+            body.temperature = Number(cfg.iaTemperature);
+        }
+        if (cfg.iaMaxTokens !== '' && cfg.iaMaxTokens != null && isFinite(Number(cfg.iaMaxTokens))) {
+            body.max_tokens = Math.max(64, Math.min(4000, Number(cfg.iaMaxTokens)));
+        }
+        const headers = { 'Content-Type': 'application/json' };
+        headers[prov.headerAuth || 'Authorization'] = (prov.prefijo || 'Bearer ') + cfg.iaApiKey;
+        const ms = Math.max(2000, (+cfg.iaTimeoutS || 25) * 1000);
+        const res = await httpRequest({
+            method: 'POST',
+            url: endpoint,
+            headers: headers,
+            body: JSON.stringify(body),
+            timeoutMs: ms
+        });
+        // v5.14: contabiliza la llamada (OK o error) para el tope diario.
+        const exito = res && !res.red && res.ok;
+        iaContadorSumar(exito);
+        if (res.red) {
+            const gm = !!gmXhr();
+            return {
+                error: 'No se pudo contactar ' + prov.nombre + ' (' + (res.timeout ? 'timeout' : 'fallo de red') + ')' +
+                    ' [transporte=' + (gm ? 'GM' : 'fetch') + ']' +
+                    (gm ? '. Revisa el endpoint.' : ' · CORS: activa GM_xmlhttpRequest o usa un gestor que lo soporte.')
+            };
+        }
+        if (!res.ok) {
+            let pista = '';
+            if (res.status === 401 || res.status === 403) {
+                pista = ' · Revisa que la API key corresponda a ' + prov.nombre +
+                    ' (endpoint ' + endpoint + ')' + (prov.nota ? '. ' + prov.nota : '');
+            } else if (res.status === 404) {
+                pista = ' · La RUTA del endpoint no existe. ' + (prov.nota ? prov.nota + '. ' : '') +
+                    'Endpoint actual: ' + endpoint + '.';
+            } else if (res.status === 429) {
+                pista = ' · Limite de uso alcanzado (rate limit). Espera un poco o cambia de proveedor.';
+            } else if (res.status === 400) {
+                pista = ' · El modelo rechazo un parametro (revisa Temperatura/Max tokens o el modelo elegido).';
+            }
+            return { error: prov.nombre + ' HTTP ' + res.status + pista + (res.texto ? ' · ' + res.texto : '') };
+        }
+        let data;
+        try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
+        const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
+        if (!txt) return { error: 'Sin contenido en la respuesta de ' + prov.nombre, raw: data };
+        const limpio = String(txt).replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+        // Detecta si la respuesta es JSON (lote) o texto libre (resumen).
+        if (limpio.charAt(0) === '{' || limpio.charAt(0) === '[') {
+            try {
+                return JSON.parse(limpio);
+            } catch (_) {
+                // No era JSON valido: caemos a texto crudo.
+                return { texto: String(txt).slice(0, 2000) };
+            }
+        }
+        return { texto: String(txt).slice(0, 4000) };
+    }
+
+    // Cache en memoria + sessionStorage con TTL. Clave -> {ts, valor}.
+    // El TTL viene de APP.config.iaCacheTTL (s). Para reiniciarlo basta
+    // con cambiar la version del script.
+    // Se inicializa lazy para no romper los tests que cortan el codigo
+    // entre marcadores (autoruta, etc.) y no tienen readSessionObject
+    // en su closure.
+    const IA_CACHE = (typeof readSessionObject === 'function') ? readSessionObject(SS.iaCache, {}, null) : {};
+    function iaCacheGet(clave) {
+        if (!clave) return null;
+        const it = IA_CACHE[clave];
+        if (!it) return null;
+        const ttl = Math.max(60, (+APP.config.iaCacheTTL || 21600)) * 1000;
+        if (!it.ts || (Date.now() - it.ts) > ttl) {
+            delete IA_CACHE[clave];
+            return null;
+        }
+        return it.valor;
+    }
+    function iaCacheSet(clave, valor) {
+        if (!clave) return;
+        IA_CACHE[clave] = { ts: Date.now(), valor };
+        try { writeSession(SS.iaCache, IA_CACHE); } catch (_) { /* noop */ }
+    }
+    function iaCacheLimpiar() {
+        for (const k of Object.keys(IA_CACHE)) delete IA_CACHE[k];
+        try { writeSession(SS.iaCache, IA_CACHE); } catch (_) { /* noop */ }
+    }
+
+    // Contador diario de llamadas IA para evitar pasar el limite del
+    // proveedor (gratis suelen capear 200-500/dia). Persiste en LS.
+    const LS_iaContador = 'rondo.api.iaContador';
+    function iaContadorHoy() {
+        const hoy = new Date().toISOString().slice(0, 10);
+        let c;
+        try { c = JSON.parse(localStorage.getItem(LS_iaContador) || 'null'); } catch (_) { c = null; }
+        if (!c || c.fecha !== hoy) return { fecha: hoy, llamadas: 0, errores: 0 };
+        return c;
+    }
+    function iaContadorSumar(exito) {
+        const hoy = new Date().toISOString().slice(0, 10);
+        const c = iaContadorHoy();
+        c.llamadas = (c.llamadas || 0) + 1;
+        if (!exito) c.errores = (c.errores || 0) + 1;
+        c.fecha = hoy;
+        try { localStorage.setItem(LS_iaContador, JSON.stringify(c)); } catch (_) { /* noop */ }
+        return c;
+    }
+    function iaLimiteExcedido() {
+        const limite = +APP.config.iaLimiteDiario || 0;
+        if (!limite) return false;
+        return iaContadorHoy().llamadas >= limite;
+    }
+
     // Mini-probe de conexion (la pestana IA). Manda un ping corto y
     // devuelve texto listo para pintar en #c-ia-status.
     async function aiProbar() {
@@ -2699,6 +3093,183 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             ? 'IA activa (' + prov + ') · analiza los avisos · clic para desactivar'
             : 'IA disponible pero desactivada (' + prov + ') · clic para activar';
     }
+    // v5.14: muestra/oculta el boton "Analizar lote" segun si la IA esta
+    // activa y hay avisos. Se llama desde paintAlertas y tras cambios de
+    // config (paintIASwitch, borrar key, etc).
+    function paintIABatchBtn() {
+        const b = byId('rondo-ia-batch');
+        if (!b) return;
+        const cfg = APP.config || {};
+        const ok = !!(cfg.iaHabilitada && cfg.iaApiKey);
+        const hay = (APP.historial || []).length > 0;
+        b.style.display = (ok && hay) ? '' : 'none';
+    }
+    // v5.14: pinta el contador de uso diario en la pestana IA.
+    function paintIAUso() {
+        const el = byId('c-ia-uso');
+        if (!el) return;
+        const cfg = APP.config || {};
+        const c = iaContadorHoy();
+        const lim = +cfg.iaLimiteDiario || 0;
+        const txt = 'Hoy: ' + (c.llamadas || 0) + ' llamada(s)' + (lim ? ' / ' + lim + ' (limite diario)' : ' (sin limite)') +
+            (c.errores ? ' · ' + c.errores + ' con error' : '');
+        el.textContent = txt;
+        el.style.color = (lim && (c.llamadas || 0) >= lim) ? 'var(--rondo-bad-fg)' : 'var(--rondo-fg-dim)';
+    }
+    // v5.14: dispara el analisis en lote desde la UI y muestra el
+    // resultado (resumen + ranking) en un dialogo. Manda hasta
+    // APP.config.iaBatchMax avisos actuales.
+    async function aiAnalizarLoteUI() {
+        const cfg = APP.config || {};
+        if (!cfg.iaHabilitada || !cfg.iaApiKey) {
+            adviceWarn('IA deshabilitada', 'Activala y mete tu API key en Ajustes > IA.');
+            abrirCfg();
+            const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="ia"]');
+            if (tab) tab.click();
+            return;
+        }
+        const btn = byId('rondo-ia-batch');
+        setBusy(btn, true);
+        try {
+            // Mezcla las alertas del dia con las ultimas del historial para
+            // llegar al menos a iaBatchMax aunque el dia este tranquilo.
+            const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
+            const hoy = APP.historial.filter((a) => a.ts >= inicio.getTime());
+            const muestra = hoy.length >= cfg.iaBatchMax ? hoy : APP.historial.slice(0, cfg.iaBatchMax);
+            const r = await aiAnalizarLote(muestra);
+            paintIAUso();
+            if (r.error) {
+                adviceErr('Error IA', r.error);
+                return;
+            }
+            // Construye el HTML del resultado: resumen ejecutivo + ranking.
+            const colores = { falso_positivo: '#2e7d32', normal: '#1565c0', sospechoso: '#e65100', critico: '#b71c1c' };
+            const ranking = Array.isArray(r.ranking) ? r.ranking : [];
+            const recos = Array.isArray(r.recomendaciones) ? r.recomendaciones : [];
+            const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+            const html =
+                '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
+                '<div style="color:var(--rondo-fg-dim);margin-bottom:6px">Proveedor: <b>' + esc(provNombre) + '</b>' +
+                (ranking.length ? ' · ' + ranking.length + ' avisos priorizados' : '') + '</div>' +
+                (r.resumen ? '<div style="margin:0 0 10px"><b>Resumen:</b> ' + esc(r.resumen) + '</div>' : '') +
+                (ranking.length ? '<div style="margin:0 0 10px"><b>Ranking:</b><ol style="margin:4px 0 0 18px;padding:0">' +
+                    ranking.map((it) => {
+                        const c = colores[String(it.veredicto || '')] || '#555';
+                        return '<li style="margin-bottom:4px"><b style="color:' + c + '">' + esc(String(it.veredicto || '?').toUpperCase().replace('_', ' ')) + '</b>' +
+                            ' · ' + esc(it.motivo || '') +
+                            ' <span style="color:var(--rondo-fg-dim);font-size:11px">(' + esc(it.clave || '?') + ' · conf ' + (it.confianza != null ? it.confianza : '?') + ')</span></li>';
+                    }).join('') + '</ol></div>' : '') +
+                (recos.length ? '<div><b>Recomendaciones:</b><ul style="margin:4px 0 0 18px;padding:0">' +
+                    recos.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') +
+                '</div>';
+            abrirDialogo({
+                titulo: 'Analisis en lote · ' + muestra.length + ' avisos',
+                html: html,
+                cancelText: 'Cerrar',
+                okText: 'Cerrar',
+                onOk: () => {},
+                ancho: 520
+            });
+        } finally {
+            setBusy(btn, false);
+        }
+    }
+
+    // v5.14: deteccion de patrones en la bitacora. Envia las ultimas
+    // N alertas (50..200) al proveedor con un prompt que pide patrones
+    // recurrentes y sugerencias de ajuste de parametros. Las sugerencias
+    // se pueden aplicar con un click (con confirmacion previa).
+    async function aiPatronesUI() {
+        const cfg = APP.config || {};
+        if (!cfg.iaHabilitada || !cfg.iaApiKey) {
+            adviceWarn('IA deshabilitada', 'Activala y mete tu API key en Ajustes > IA.');
+            abrirCfg();
+            const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="ia"]');
+            if (tab) tab.click();
+            return;
+        }
+        const btn = byId('c-ia-patrones');
+        setBusy(btn, true);
+        try {
+            const r = await aiPatrones(APP.historial || []);
+            paintIAUso();
+            if (r.error) {
+                adviceErr('Patrones IA', r.error);
+                return;
+            }
+            const patrones = Array.isArray(r.patrones) ? r.patrones : [];
+            const sugerencias = Array.isArray(r.sugerencias) ? r.sugerencias : [];
+            const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+            if (!patrones.length && !sugerencias.length) {
+                abrirDialogo({
+                    titulo: 'Patrones en la bitacora',
+                    html: '<div style="font-size:12.5px">La IA no encontro patrones ni sugerencias con los datos actuales. ' +
+                        'Esto suele pasar cuando hay pocos avisos o cuando los parametros ya son razonables.</div>',
+                    cancelText: 'Cerrar',
+                    okText: 'Cerrar',
+                    onOk: () => {},
+                    ancho: 480
+                });
+                return;
+            }
+            // Indice estable para poder identificar cada sugerencia al aplicar.
+            const html =
+                '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
+                '<div style="color:var(--rondo-fg-dim);margin-bottom:6px">Proveedor: <b>' + esc(provNombre) + '</b>' +
+                ' · ' + APP.historial.length + ' avisos en bitacora</div>' +
+                (patrones.length ? '<div style="margin:0 0 10px"><b>Patrones observados:</b><ol style="margin:4px 0 0 18px;padding:0">' +
+                    patrones.map((p) => '<li style="margin-bottom:5px"><b>[' + esc(String(p.tipo || '?')) + ']</b> ' +
+                        esc(p.descripcion || '') +
+                        (p.evidencia && p.evidencia.length ? '<div style="color:var(--rondo-fg-dim);font-size:11px;margin-top:2px">Evidencia: ' +
+                            p.evidencia.slice(0, 5).map((e) => '<code>' + esc(String(e).slice(0, 40)) + '</code>').join(', ') + '</div>' : '') +
+                        '</li>').join('') + '</ol></div>' : '') +
+                (sugerencias.length ? '<div style="margin:0 0 6px"><b>Sugerencias de ajuste:</b><ul style="margin:4px 0 0 0;padding:0;list-style:none">' +
+                    sugerencias.map((s, idx) => {
+                        const aplicable = s.parametro && (s.parametro in (APP.config || {}));
+                        return '<li style="margin-bottom:8px;padding:6px 8px;border:1px solid var(--rondo-border-soft);border-radius:6px;background:var(--rondo-bg-soft)">' +
+                            '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
+                            '<div><b>' + esc(s.parametro || '?') + '</b>: ' +
+                            '<span style="color:var(--rondo-fg-dim);text-decoration:line-through">' + esc(String(s.valor_actual != null ? s.valor_actual : '?')) + '</span>' +
+                            ' &rarr; <b>' + esc(String(s.valor_sugerido != null ? s.valor_sugerido : '?')) + '</b></div>' +
+                            (aplicable ? '<button type="button" class="mini rondo-ia-aplicar" data-idx="' + idx + '" style="font-size:11px">Aplicar</button>' : '<span style="font-size:11px;color:var(--rondo-fg-dim)">N/A</span>') +
+                            '</div>' +
+                            '<div style="margin-top:3px;color:var(--rondo-fg-dim);font-size:11.5px">' + esc(s.motivo || '') + '</div>' +
+                            '</li>';
+                    }).join('') + '</ul></div>' : '') +
+                '<div style="margin-top:6px;color:var(--rondo-fg-dim);font-size:11px">Las sugerencias solo modifican el parametro en la configuracion. Si quieres revertirlo, vuelve a abrir Ajustes.</div>' +
+                '</div>';
+            // Guardamos las sugerencias en el dataset del dialogo para
+            // que el handler de aplicar las recupere por indice.
+            abrirDialogo({
+                titulo: 'Patrones en la bitacora · ' + patrones.length + ' patrones, ' + sugerencias.length + ' sugerencias',
+                html: html,
+                cancelText: 'Cerrar',
+                okText: 'Cerrar',
+                onOk: () => {},
+                ancho: 560,
+                onOpen: (el) => {
+                    el._sugerencias = sugerencias;
+                    el.querySelectorAll('.rondo-ia-aplicar').forEach((b) => {
+                        b.addEventListener('click', () => {
+                            const idx = +b.dataset.idx;
+                            const s = (el._sugerencias || [])[idx];
+                            if (!s) return;
+                            const antes = APP.config[s.parametro];
+                            rondoConfirm(
+                                'Aplicar sugerencia',
+                                'Cambiar ' + s.parametro + ' de <b>' + antes + '</b> a <b>' + s.valor_sugerido + '</b>?<br><br>' +
+                                '<span style="color:var(--rondo-fg-dim);font-size:11.5px">' + esc(s.motivo || '') + '</span>',
+                                () => aplicarSugerenciaIA(s),
+                                { okText: 'Aplicar', icon: UIS.check }
+                            );
+                        });
+                    });
+                }
+            });
+        } finally {
+            setBusy(btn, false);
+        }
+    }
     // Alterna la IA desde la cabecera. Si no hay API key, lleva a Ajustes > IA.
     function toggleIA() {
         const cfg = APP.config || {};
@@ -2713,6 +3284,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         cfg.iaHabilitada = !cfg.iaHabilitada;
         writeJSON(LS.cfg, cfg);
         paintIASwitch();
+        paintIABatchBtn();
         if (APP.tab === 'alertas') paintAlertas();
         advice(cfg.iaHabilitada ? 'IA activada' : 'IA desactivada',
             cfg.iaHabilitada
@@ -2925,6 +3497,12 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         if (inpEl) inpEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }
         });
+        // v5.14: hook para que callers externos enganchen handlers
+        // sobre los botones del cuerpo del dialogo. Se llama DESPUES
+        // de montar el HTML y antes de devolver el elemento.
+        if (typeof opts.onOpen === 'function') {
+            try { opts.onOpen(el); } catch (e) { try { console.log('[Rondo] onOpen dialogo: ' + e); } catch (_) { /* noop */ } }
+        }
         return el;
     }
     function rondoConfirm(titulo, mensaje, onOk, opts) {
@@ -3775,6 +4353,102 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         });
     }
 
+    // v5.14: regla predictiva. Dispara cuando una unidad EN MOVIMIENTO se
+    // esta ACERCANDO a una zona de riesgo de alto score, ANTES de que
+    // entre o pierda senal. Pensado para horarios nocturnos donde el
+    // riesgo de detenerse en un deshuesadero/lote aislado es alto.
+    //
+    // Condiciones:
+    //  - regla activa en config.reglas.riesgoPredict
+    //  - APP.riesgo cargado y con score >= riesgoPredictMinScore
+    //  - unidad no offline, velocidad >= riesgoPredictVelMin km/h
+    //  - (opcional) hora actual dentro de la ventana nocturna
+    //  - distancia ACTUAL a la zona <= (radio*mul + buffer)
+    //  - distancia PREVIA estrictamente MAYOR que la actual (se acerca)
+    //  - sin alerta reciente para esta misma unidad+zona (cooldown)
+    async function reglaRiesgoPredict(st, prev, R, info, etq) {
+        if (!APP.config.reglas.riesgoPredict) return;
+        if (!APP.riesgo || !APP.riesgo.length) return;
+        if (!prev) return;
+        if (st.estado === 'offline') return;
+        if (st.lat == null || st.lon == null) return;
+        if (prev.lat == null || prev.lon == null) return;
+        const velMin = +APP.config.riesgoPredictVelMin || 5;
+        if (!isFinite(st.vel) || st.vel < velMin) return;
+        // v5.14: ventana nocturna opcional.
+        if (APP.config.riesgoPredictNocturno) {
+            const d = parseHora('c-riesgo-pre-desde', APP.config.riesgoPredictNocturnoDesde || '22:00');
+            const h = parseHora('c-riesgo-pre-hasta', APP.config.riesgoPredictNocturnoHasta || '05:00');
+            const ahora = ahoraMinutos();
+            if (!d || !h || !enVentanaHoraria(ahora, d, h)) return;
+        }
+        const minScore = Math.max(0, +APP.config.riesgoPredictMinScore || 4);
+        const mul = +APP.config.riesgoRadioMul || 1;
+        const bufferM = Math.max(0, +APP.config.riesgoPredictBufferM || 500);
+        // Busca la zona mas cercana que cumpla el umbral.
+        let candidata = null;
+        for (let i = 0; i < APP.riesgo.length; i++) {
+            const z = APP.riesgo[i];
+            if (!z || !z.centro || !Array.isArray(z.centro)) continue;
+            if (!(z.radio_m > 0)) continue;
+            if (typeof z.score !== 'number' || z.score < minScore) continue;
+            const dKm = haversine(st.lat, st.lon, z.centro[0], z.centro[1]);
+            const dM = dKm * 1000;
+            const radioM = z.radio_m * mul;
+            // La zona "cuenta" para esta regla si estamos a menos de radio+buffer.
+            if (dM > radioM + bufferM) continue;
+            if (!candidata || dM < candidata.dist) {
+                candidata = { id: z.id, estado: z.estado, municipio: z.municipio,
+                    score: z.score, fuente: z.fuente, dist: dM, radio: radioM };
+            }
+        }
+        if (!candidata) return;
+        // Distancia previa: usamos el mismo prev.lat/prev.lon del tick anterior.
+        const distPrevKm = haversine(prev.lat, prev.lon, candidata.centro ? candidata.centro[0] : candidata.estado, candidata.centro ? candidata.centro[1] : 0);
+        // Mejor: recalcular con la zona completa para no perder precision.
+        const zObj = APP.riesgo.find((z) => z && z.id === candidata.id);
+        let distPrev = Infinity;
+        if (zObj && zObj.centro) {
+            const prevKm = haversine(prev.lat, prev.lon, zObj.centro[0], zObj.centro[1]);
+            distPrev = prevKm * 1000;
+        }
+        // Si no se acerca (distPrev no es estrictamente mayor), descartar.
+        // Caso limite: misma posicion -> no alertar.
+        if (!(distPrev > candidata.dist + 5)) return;
+        // Cooldown por unidad+zona (mas corto que el global).
+        const ck = info.clave + '::riesgoPredict::' + candidata.id;
+        const cd = Math.max(60, (+APP.config.riesgoPredictCooldownS || 300)) * 1000;
+        if (APP.cooldowns[ck] && Date.now() - APP.cooldowns[ck] < cd) return;
+        APP.cooldowns[ck] = Date.now();
+        const etqTxt = candidata.municipio ? (candidata.municipio + ', ' + (candidata.estado || '')) : (candidata.estado || 'zona desconocida');
+        const acercarse = Math.max(0, Math.round(distPrev - candidata.dist));
+        pushAlert({
+            regla: 'riesgoPredict', sev: 'medio', clave: info.clave, eco: info.eco, icono: 'riesgo',
+            titulo: 'ACERCANDOSE A ZONA DE RIESGO \u00b7 ' + etq,
+            detalle: 'A ' + Math.round(candidata.dist) + ' m de zona en ' + etqTxt +
+                ' (score ' + candidata.score + '/100, radio ' + Math.round(candidata.radio) + ' m). ' +
+                'Se acerco ' + acercarse + ' m desde la ultima posicion. Velocidad: ' + Math.round(st.vel) + ' km/h.',
+            hablar: 'Atencion. La unidad ' + etq + ' se aproxima a una zona de riesgo'
+        });
+    }
+    // Helpers para la ventana nocturna de la regla predictiva.
+    function parseHora(id, fallback) {
+        const m = String(fallback || '').match(/^(\d{1,2}):(\d{2})$/);
+        if (m) return (+m[1]) * 60 + (+m[2]);
+        return null;
+    }
+    function ahoraMinutos() {
+        const d = new Date();
+        return d.getHours() * 60 + d.getMinutes();
+    }
+    function enVentanaHoraria(ahora, desdeMin, hastaMin) {
+        if (desdeMin == null || hastaMin == null) return false;
+        if (desdeMin === hastaMin) return true;
+        // Ventana que cruza medianoche (ej 22:00 -> 05:00).
+        if (desdeMin < hastaMin) return ahora >= desdeMin && ahora < hastaMin;
+        return ahora >= desdeMin || ahora < hastaMin;
+    }
+
     async function reglaOffline(st, prev, R, info, etq) {
         if (!APP.config.reglas.offline) return;
         if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
@@ -4077,6 +4751,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             await reglaDestino(st, R, info, etq);
             await reglaDesconexion(st, R, info, etq);
             await reglaRiesgoSinSenal(st, prev, R, info, etq);
+            await reglaRiesgoPredict(st, prev, R, info, etq);
             reglaVelocidad(st, R, info, etq);
             reglaDemoraBase(st, R, info, etq);
             reglaRuta(st, R, info, etq);
@@ -5898,16 +6573,18 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '<div id="rondo-body" class="rondo-uni-list"></div>' +
             '<div id="rondo-sel-vacio" style="display:none;padding:18px;text-align:center;color:var(--rondo-fg-dim);font-size:12px">No has seleccionado ninguna unidad. Activa <b>Monitorear todas</b> en Configuración o marca los vehículos que quieres monitorear con la casilla de cada tarjeta.</div>' +
             '</div>' +
-            '<div class="tabla" id="rondo-wrap-alertas" style="display:none">' +
-            '<div class="severidad-pick" id="rondo-filtroseveridad">' +
-            '<span data-sev="todas" class="activo">Todas</span>' +
-            '<span data-sev="critico">Criticas</span>' +
-            '<span data-sev="alto">Altas</span>' +
-            '<span data-sev="medio">Medias</span>' +
-            '<span data-sev="bajo">Bajas</span>' +
-            '</div>' +
-            '<div id="rondo-lista-alertas"></div>' +
-            '</div>' +
+'<div class="tabla" id="rondo-wrap-alertas" style="display:none">' +
+             '<div class="severidad-pick" id="rondo-filtroseveridad">' +
+             '<span data-sev="todas" class="activo">Todas</span>' +
+             '<span data-sev="critico">Criticas</span>' +
+             '<span data-sev="alto">Altas</span>' +
+             '<span data-sev="medio">Medias</span>' +
+             '<span data-sev="bajo">Bajas</span>' +
+             '<span style="flex:1"></span>' +
+             '<button type="button" class="accbtn rondo-ia-batch-btn" id="rondo-ia-batch" title="Analizar todos los avisos visibles con la IA y obtener un ranking de los mas urgentes" style="font-size:11px;padding:2px 8px;display:none"><span class="rondo-usym sm">' + UIS.robot + '</span> Analizar lote</button>' +
+             '</div>' +
+             '<div id="rondo-lista-alertas"></div>' +
+             '</div>' +
             '<div class="tabla" id="rondo-wrap-rutas" style="display:none">' +
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
@@ -6100,6 +6777,7 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
             checkRow('c-r-riesgo', 'Perdi\u00f3 se\u00f1al en zona de riesgo') +
+            checkRow('c-r-riesgo-pre', 'Aproximaci\u00f3n a zona de riesgo (predictiva)') +
             '</div>' +
             '<h4>Zonas de riesgo</h4>' +
             '<label>URL del CSV / JSON <span style="color:var(--rondo-fg-dim);font-size:11px">(opcional; se consulta en cada arranque; el repo no incluye datos)</span>' +
@@ -6114,6 +6792,15 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '</label>' +
             numRow('c-riesgo-min', 'Score m\u00ednimo (0-100)') +
             numRow('c-riesgo-mul', 'Multiplicador de radio (x)') +
+            '<h4>Alerta predictiva (aproximaci\u00f3n)</h4>' +
+            '<p style="font-size:11.5px;color:var(--rondo-fg-dim);margin:0 0 6px">Dispara cuando una unidad <b>en movimiento</b> se est\u00e1 acercando a una zona de riesgo, ANTES de que llegue o pierda se\u00f1al. Por defecto apagada.</p>' +
+            numRow('c-riesgo-pre-min', 'Score m\u00ednimo para anticipar (0-100)') +
+            numRow('c-riesgo-pre-buffer', 'Buffer de anticipaci\u00f3n (m)') +
+            numRow('c-riesgo-pre-vel', 'Velocidad m\u00ednima para alertar (km/h)') +
+            numRow('c-riesgo-pre-cooldown', 'Cooldown por unidad+zona (s)') +
+            checkRow('c-riesgo-pre-noct', 'S\u00f3lo de noche') +
+            '<label>Ventana nocturna desde <input type="time" id="c-riesgo-pre-desde" value="22:00"></label>' +
+            '<label>Ventana nocturna hasta <input type="time" id="c-riesgo-pre-hasta" value="05:00"></label>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="avisos" style="display:none">' +
             '<h4>Avisos</h4>' +
@@ -6265,8 +6952,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             '<label>Max tokens (opcional, vacio = el del modelo) <input type="text" id="c-ia-maxtok" autocomplete="off" placeholder="(omitir)" spellcheck="false" title="Vacio = se omite. Algunos modelos rechazan max_tokens bajo."></label>' +
             numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
             numRow('c-ia-timeout', 'Timeout (s)') +
+            '<h4>Analisis en lote y resumen</h4>' +
+            checkRow('c-ia-resumen-on', 'Incluir resumen IA en el informe diario') +
+            numRow('c-ia-batchmax', 'Max avisos por analisis en lote (5-50)') +
+            numRow('c-ia-limite', 'Limite diario de llamadas IA (0 = sin limite)') +
+            '<div id="c-ia-uso" style="font-size:11.5px;color:var(--rondo-fg-dim);margin:4px 0 6px"></div>' +
             '<div class="rondo-acciones" style="margin-top:6px">' +
                 '<button type="button" class="accbtn" id="c-ia-test"><span class="rondo-usym">' + UIS.robot + '</span> Probar conexion</button>' +
+                '<button type="button" class="accbtn" id="c-ia-patrones"><span class="rondo-usym">' + UIS.filter + '</span> Detectar patrones</button>' +
                 '<button type="button" class="accbtn" id="c-ia-clear"><span class="rondo-usym">' + UIS.clear + '</span> Borrar API key</button>' +
             '</div>' +
             '<div id="c-ia-status" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px"></div>' +
@@ -7042,6 +7735,9 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         // Estructura por alerta para poder actualizar la IA sin re-pintar
         // toda la lista (delegamos el click abajo).
         const iah = !!(APP.config && APP.config.iaHabilitada && APP.config.iaApiKey);
+        // v5.14: muestra/oculta el boton "Analizar lote" segun si la IA
+        // esta activa y hay avisos en el historial.
+        paintIABatchBtn();
         setHtml(cont, lista.length
             ? lista.map((a) => (
                 '<div class="alerta" data-clave="' + esc(a.clave) + '" data-ts="' + a.ts + '" style="border-left:4px solid ' + (COL[a.sev] || '#555') + '">' +
@@ -7765,6 +8461,11 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         lineas.push('Unidades vigiladas: ' + watched.length);
         lineas.push('En línea: ' + (watched.length - off.length) + ' · Off: ' + off.length);
         lineas.push('');
+        // v5.14: bloque de resumen IA (placeholder; se rellena async abajo).
+        const resumenIdx = lineas.length;
+        lineas.push('## Resumen IA');
+        lineas.push('_Generando resumen con IA..._');
+        lineas.push('');
         lineas.push('## Alertas de hoy (' + hoy.length + ')');
         const sevs = Object.keys(porSev).sort((a, b) => pickSeverity(b) - pickSeverity(a));
         if (sevs.length) sevs.forEach((s) => lineas.push('- ' + s + ': ' + porSev[s]));
@@ -7792,11 +8493,40 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
         } else {
             lineas.push('- Sin avisos.');
         }
-        const a = makeEl('a', { href: URL.createObjectURL(new Blob([lineas.join('\n')], { type: 'text/markdown;charset=utf-8;' })) });
-        a.download = 'rondo_informe_' + new Date().toISOString().slice(0, 10) + '.md';
-        document.body.appendChild(a); a.click(); document.body.removeChild(a);
-        URL.revokeObjectURL(a.href);
+        const nombre = 'rondo_informe_' + new Date().toISOString().slice(0, 10) + '.md';
+        // v5.14: si la IA esta habilitada y el usuario quiere resumen, lo
+        // pedimos DESPUES de generar el .md para que el placeholder viaje
+        // siempre en el archivo y, cuando llegue el texto, lo sustituimos
+        // y volvemos a descargar el .md con el resumen rellenado.
+        const quiereResumen = !!(APP.config && APP.config.iaHabilitada && APP.config.iaApiKey && APP.config.iaResumenInforme);
+        const descarga = (lineasFinal) => {
+            const a = makeEl('a', { href: URL.createObjectURL(new Blob([lineasFinal.join('\n')], { type: 'text/markdown;charset=utf-8;' })) });
+            a.download = nombre;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+        };
+        descarga(lineas);
         advice('Informe generado', hoy.length + ' alertas hoy');
+        if (!quiereResumen) return;
+        // Llamada async a la IA para rellenar el bloque de resumen. Si falla,
+        // dejamos el placeholder y avisamos al operador.
+        aiResumenDia(hoy).then((r) => {
+            if (r && r.error) {
+                lineas[resumenIdx + 1] = '_' + r.error + '_';
+            } else if (r && r.texto) {
+                // Metemos el texto tal cual en una sola linea (es texto
+                // libre, no markdown); lo partimos en lineas de ~120 chars.
+                const txt = String(r.texto).replace(/\s*\n\s*/g, ' ').trim();
+                lineas[resumenIdx + 1] = txt;
+            } else {
+                lineas[resumenIdx + 1] = '_La IA no devolvio resumen._';
+            }
+            descarga(lineas);
+            adviceOk('Resumen IA anadido', 'El informe se volvio a descargar con el resumen.');
+        }).catch((e) => {
+            lineas[resumenIdx + 1] = '_Error al generar resumen IA: ' + (e && e.message ? e.message : e) + '_';
+            descarga(lineas);
+        });
     }
 
     /* ====================== ACTUALIZACIONES ====================== */
@@ -8580,6 +9310,14 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             if (iaRadioEl) iaRadioEl.value = APP.config.iaRadioPoisM != null ? APP.config.iaRadioPoisM : 250;
             const iaTimeoutEl = byId('c-ia-timeout');
             if (iaTimeoutEl) iaTimeoutEl.value = APP.config.iaTimeoutS != null ? APP.config.iaTimeoutS : 25;
+            // v5.14: analisis en lote + resumen + limite diario.
+            const iaResumenEl = byId('c-ia-resumen-on');
+            if (iaResumenEl) iaResumenEl.checked = !!APP.config.iaResumenInforme;
+            const iaBatchmaxEl = byId('c-ia-batchmax');
+            if (iaBatchmaxEl) iaBatchmaxEl.value = APP.config.iaBatchMax != null ? APP.config.iaBatchMax : DEFAULTS.iaBatchMax;
+            const iaLimiteEl = byId('c-ia-limite');
+            if (iaLimiteEl) iaLimiteEl.value = APP.config.iaLimiteDiario != null ? APP.config.iaLimiteDiario : DEFAULTS.iaLimiteDiario;
+            paintIAUso();
             const iaStatusEl = byId('c-ia-status');
             if (iaStatusEl) iaStatusEl.textContent = '';
             actualizarNotaProveedorIA();
@@ -8619,10 +9357,26 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
             g('c-r-riesgo').checked = !!APP.config.reglas.riesgoSinSenal;
+            const cRRiesgoPre = g('c-r-riesgo-pre'); if (cRRiesgoPre) cRRiesgoPre.checked = !!APP.config.reglas.riesgoPredict;
             g('c-riesgo-url').value = APP.config.riesgoUrl || '';
             g('c-riesgo-formato').value = APP.config.riesgoFormato || 'auto';
             g('c-riesgo-min').value = APP.config.riesgoMinScore;
             g('c-riesgo-mul').value = APP.config.riesgoRadioMul;
+            // v5.14: regla predictiva.
+            const cRiesgoPreMin = g('c-riesgo-pre-min');
+            if (cRiesgoPreMin) cRiesgoPreMin.value = APP.config.riesgoPredictMinScore != null ? APP.config.riesgoPredictMinScore : DEFAULTS.riesgoPredictMinScore;
+            const cRiesgoPreBuffer = g('c-riesgo-pre-buffer');
+            if (cRiesgoPreBuffer) cRiesgoPreBuffer.value = APP.config.riesgoPredictBufferM != null ? APP.config.riesgoPredictBufferM : DEFAULTS.riesgoPredictBufferM;
+            const cRiesgoPreVel = g('c-riesgo-pre-vel');
+            if (cRiesgoPreVel) cRiesgoPreVel.value = APP.config.riesgoPredictVelMin != null ? APP.config.riesgoPredictVelMin : DEFAULTS.riesgoPredictVelMin;
+            const cRiesgoPreCd = g('c-riesgo-pre-cooldown');
+            if (cRiesgoPreCd) cRiesgoPreCd.value = APP.config.riesgoPredictCooldownS != null ? APP.config.riesgoPredictCooldownS : DEFAULTS.riesgoPredictCooldownS;
+            const cRiesgoPreNoct = g('c-riesgo-pre-noct');
+            if (cRiesgoPreNoct) cRiesgoPreNoct.checked = !!APP.config.riesgoPredictNocturno;
+            const cRiesgoPreDesde = g('c-riesgo-pre-desde');
+            if (cRiesgoPreDesde) cRiesgoPreDesde.value = APP.config.riesgoPredictNocturnoDesde || DEFAULTS.riesgoPredictNocturnoDesde;
+            const cRiesgoPreHasta = g('c-riesgo-pre-hasta');
+            if (cRiesgoPreHasta) cRiesgoPreHasta.value = APP.config.riesgoPredictNocturnoHasta || DEFAULTS.riesgoPredictNocturnoHasta;
             g('c-r-desvio').checked = !!APP.config.reglas.desvio;
             g('c-desvio-m').value = APP.config.desvioM;
             g('c-desvio-min').value = APP.config.desvioMin;
@@ -8683,7 +9437,20 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             const s = byId('c-ia-status');
             if (s) { s.textContent = 'API key borrada.'; s.style.color = 'var(--rondo-fg-dim)'; }
             paintIASwitch();
+            paintIABatchBtn();
+            paintIAUso();
             if (APP.tab === 'alertas') paintAlertas();
+        });
+        // v5.14: analisis en lote desde la cabecera de Avisos.
+        const iaBatchBtn = byId('rondo-ia-batch');
+        if (iaBatchBtn) iaBatchBtn.addEventListener('click', () => aiAnalizarLoteUI());
+        // v5.14: deteccion de patrones desde la pestana IA.
+        const iaPatronesBtn = byId('c-ia-patrones');
+        if (iaPatronesBtn) iaPatronesBtn.addEventListener('click', () => aiPatronesUI());
+        // Al cambiar cualquier toggle/input de IA, refresca el contador de uso.
+        ['c-ia-batchmax', 'c-ia-limite'].forEach((id) => {
+            const el = byId(id);
+            if (el) el.addEventListener('input', () => paintIAUso());
         });
         // Al cambiar de proveedor, actualizamos la nota (keys esperadas) y
         // los placeholders de endpoint/modelo. No borramos lo que el user
@@ -8769,6 +9536,10 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             }
             const iaRadioEl = byId('c-ia-radio'); if (iaRadioEl) cf.iaRadioPoisM = clamp(isoNum(iaRadioEl.value, 250), 50, 2000);
             const iaTimeoutEl = byId('c-ia-timeout'); if (iaTimeoutEl) cf.iaTimeoutS = clamp(isoNum(iaTimeoutEl.value, 25), 5, 120);
+            // v5.14: analisis en lote + resumen narrativo.
+            const iaResumenEl = byId('c-ia-resumen-on'); if (iaResumenEl) cf.iaResumenInforme = !!iaResumenEl.checked;
+            const iaBatchmaxEl = byId('c-ia-batchmax'); if (iaBatchmaxEl) cf.iaBatchMax = clamp(isoNum(iaBatchmaxEl.value, DEFAULTS.iaBatchMax), 5, 50);
+            const iaLimiteEl = byId('c-ia-limite'); if (iaLimiteEl) cf.iaLimiteDiario = clamp(isoNum(iaLimiteEl.value, DEFAULTS.iaLimiteDiario), 0, 10000);
             cf.voice = g('c-voz').checked;
             cf.voiceLang = g('c-voz-lang').value || DEFAULTS.voiceLang;
             cf.vozMotor = g('c-voz-motor').value || 'web';
@@ -8804,10 +9575,26 @@ Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma 
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
             cf.reglas.riesgoSinSenal = g('c-r-riesgo').checked;
+            const riesgoPreEl = g('c-r-riesgo-pre'); if (riesgoPreEl) cf.reglas.riesgoPredict = !!riesgoPreEl.checked;
             cf.riesgoUrl = (g('c-riesgo-url').value || '').trim();
             cf.riesgoFormato = g('c-riesgo-formato').value || 'auto';
             cf.riesgoMinScore = clamp(isoNum(g('c-riesgo-min').value, DEFAULTS.riesgoMinScore), 0, 100);
             cf.riesgoRadioMul = clamp(parseFloat(g('c-riesgo-mul').value) || DEFAULTS.riesgoRadioMul, 0.1, 5);
+            // v5.14: regla predictiva.
+            const riesgoPreMinEl = g('c-riesgo-pre-min');
+            if (riesgoPreMinEl) cf.riesgoPredictMinScore = clamp(isoNum(riesgoPreMinEl.value, DEFAULTS.riesgoPredictMinScore), 0, 100);
+            const riesgoPreBufferEl = g('c-riesgo-pre-buffer');
+            if (riesgoPreBufferEl) cf.riesgoPredictBufferM = clamp(isoNum(riesgoPreBufferEl.value, DEFAULTS.riesgoPredictBufferM), 0, 5000);
+            const riesgoPreVelEl = g('c-riesgo-pre-vel');
+            if (riesgoPreVelEl) cf.riesgoPredictVelMin = clamp(isoNum(riesgoPreVelEl.value, DEFAULTS.riesgoPredictVelMin), 0, 200);
+            const riesgoPreCdEl = g('c-riesgo-pre-cooldown');
+            if (riesgoPreCdEl) cf.riesgoPredictCooldownS = clamp(isoNum(riesgoPreCdEl.value, DEFAULTS.riesgoPredictCooldownS), 60, 3600);
+            const riesgoPreNoctEl = g('c-riesgo-pre-noct');
+            if (riesgoPreNoctEl) cf.riesgoPredictNocturno = !!riesgoPreNoctEl.checked;
+            const riesgoPreDesdeEl = g('c-riesgo-pre-desde');
+            if (riesgoPreDesdeEl) cf.riesgoPredictNocturnoDesde = riesgoPreDesdeEl.value || DEFAULTS.riesgoPredictNocturnoDesde;
+            const riesgoPreHastaEl = g('c-riesgo-pre-hasta');
+            if (riesgoPreHastaEl) cf.riesgoPredictNocturnoHasta = riesgoPreHastaEl.value || DEFAULTS.riesgoPredictNocturnoHasta;
             // Si la URL cambi\u00f3 (o se activ\u00f3), recarga de inmediato.
             if (cf.riesgoUrl !== APP._riesgoFetched || APP.riesgoEstado === 'error') {
                 APP._riesgoFetched = cf.riesgoUrl;
