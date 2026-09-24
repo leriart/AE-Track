@@ -175,7 +175,16 @@ ok('dash sin boton de update', src.indexOf('rondo-upd-btn') < 0);
 ok('dash tiene bloque salud', src.indexOf('rondo-salud') >= 0);
 ok('dash tiene lista de zonas', src.indexOf('id="rondo-dash-zonas"') >= 0);
 ok('dash tiene lista de rutas', src.indexOf('id="rondo-dash-rutas"') >= 0);
-ok('dash tiene acciones rapidas', src.indexOf('rondo-dash-acciones') >= 0);
+ok('dash sin acciones rapidas (se quitaron)', src.indexOf('rondo-dash-acciones') < 0);
+ok('dash sin botones de acciones', src.indexOf('rondo-dash-lista') < 0 && src.indexOf('rondo-dash-informe') < 0);
+// Motores de voz (TTS gratis online)
+ok('DEFAULTS.vozMotor', /vozMotor:\s*'web'/.test(src));
+ok('DEFAULTS.vozOnline', /vozOnline:\s*'Mia'/.test(src));
+ok('lista TTS_ONLINE_VOCES', src.indexOf('TTS_ONLINE_VOCES') >= 0);
+ok('speakOnline (StreamElements)', /function speakOnline\(/.test(src));
+ok('speakGoogle (Google TTS)', /function speakGoogle\(/.test(src));
+ok('poblarVozSelect', /function poblarVozSelect\(/.test(src));
+ok('config c-voz-motor', src.indexOf('id="c-voz-motor"') >= 0);
 ok('paintSalud existe', /function paintSalud\(/.test(src));
 ok('paintZonasDash existe', /function paintZonasDash\(/.test(src));
 ok('paintRutasDash existe', /function paintRutasDash\(/.test(src));

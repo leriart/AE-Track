@@ -314,7 +314,11 @@ y queda registrada en la pestana Avisos como cualquier otra alerta.
 ## Notificaciones
 
 - **Tarjetas (toasts)**: aparecen arriba a la derecha. Cada una se puede cerrar.
-- **Voz**: lee el aviso en voz alta. Puedes elegir el idioma de voz en Ajustes.
+- **Voz**: lee el aviso en voz alta. En Ajustes puedes elegir el **motor**
+  (Navegador sin internet, **StreamElements** online, o **Google** online),
+  el **idioma** y la **voz** concreta entre las disponibles. Las voces online
+  (StreamElements) son gratis, no requieren clave y ofrecen decenas de voces
+  en varios idiomas.
 - **Pitido**: sonido para alertas altas y criticas. Su volumen es configurable.
 - **Notificacion del navegador**: aviso del sistema. La primera vez el
   navegador pide permiso.
@@ -583,8 +587,9 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 - **General**: frecuencia de refresco, umbral de sin senal, cooldown, monitorear
   todas, abrir al caer, cargar geocercas, geocodificacion y historico.
 - **Reglas**: umbrales y activacion de cada regla.
-- **Avisos**: voz e idioma, pitido y volumen, notificacion del navegador,
-  duracion de tarjetas, severidad minima, horario y editor de la lista.
+- **Avisos**: motor de voz (Navegador / StreamElements / Google), idioma y
+  voz, pitido y volumen, notificacion del navegador, duracion de tarjetas,
+  severidad minima, horario y editor de la lista.
 - **Visual**: tema (oscuro, claro, automatico), densidad, **tamaño de la
   interfaz** (Normal, Grande, Muy grande, Enorme), color de acento y
   mostrar coordenadas. El tamaño de la interfaz agranda el texto y los

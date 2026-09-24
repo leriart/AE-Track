@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.9.1
+// @version      5.10.0
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -134,8 +134,8 @@
      * muchas fuentes no los traen y el navegador cae a una fuente rara que
      * muestra glifos incorrectos (p.ej. una "G" en vez del icono). */
     const UIS = Object.freeze({
-        dashboard: '\u25A4',   // ▤ resumen (lista)
-        panel:     '\u25A4',   // ▤
+        dashboard: '\u25A6',   // ▦ panel (cuadricula)
+        panel:     '\u25A4',   // ▤ lista
         online:    '\u25CF',   // ● en linea
         offline:   '\u25CB',   // ○ sin senal
         moving:    '\u25B6',   // ▶ en movimiento
@@ -143,23 +143,23 @@
         zone:      '\u25A1',   // □ zona / geocerca
         map:       '\u25A3',   // ▣ zonas ocupadas
         riesgo:    '\u25B2',   // ▲ zona de riesgo / alerta
-        alertas:   '\u25B2',   // ▲ avisos
-        info:      '\u25CF',   // ● informacion
+        alertas:   '\u25B3',   // △ avisos
+        info:      '\u25CE',   // ◎ informacion
         warn:      '\u25B2',   // ▲ advertencia
         ok:        '\u221A',   // √ correcto
         error:     '\u00D7',   // × error
         refresh:   '\u21BB',   // ↻ recargar
         load:      '\u25CC',   // ◌ cargando (gira)
         clear:     '\u00D7',   // × limpiar
-        gear:      '\u25A4',   // ▤ ajustes
+        gear:      '\u2261',   // ≡ ajustes
         filter:    '\u25BD',   // ▽ filtrar
         search:    '\u25CB',   // ○ buscar
         drop:      '\u2193',   // ↓ soltar archivo
         csv:       '\u2193',   // ↓ descargar
         export:    '\u2191',   // ↑ exportar
         copy:      '\u25A4',   // ▤ copiar
-        expand:    '\u25B2',   // ▲ expandir
-        collapse:  '\u25BC',   // ▼ colapsar
+        expand:    '\u229E',   // ⊞ expandir
+        collapse:  '\u229F',   // ⊟ colapsar
         down:      '\u25BE',   // ▾ abajo
         up:        '\u25B4',   // ▴ arriba
         smallDown: '\u25BE',   // ▾
@@ -167,14 +167,48 @@
         bullet:    '\u2022',   // • punto
         pin:       '\u25C9',   // ◉ ubicacion
         route:     '\u2192',   // → ruta
-        clock:     '\u25CB',   // ○ tiempo
+        clock:     '\u25D4',   // ◔ tiempo
         speed:     '\u25B6',   // ▶ velocidad
         trash:     '\u00D7',   // × borrar
         check:     '\u221A',   // √
         x:         '\u00D7',   // ×
         right:     '\u2192',   // →
-        left:      '\u2190'    // ←
+        left:      '\u2190',   // ←
+        theme:     '\u25D0',   // ◐ tema
+        mute:      '\u2298',   // ⊘ no molestar
+        close:     '\u00D7',   // × cerrar
+        help:      '?',        // ayuda
+        caravana:  '\u21C9'    // ⇉ caravana
     });
+    /* Voces online gratis (StreamElements / AWS Polly). El endpoint es
+     * CORS-enabled y no requiere API key. Se usa como alternativa a las
+     * voces del sistema (Web Speech API). */
+    const TTS_ONLINE_VOCES = Object.freeze([
+        { v: 'Mia', l: 'es-MX', n: 'Mia \u00b7 espa\u00f1ol (M\u00e9xico)' },
+        { v: 'Miguel', l: 'es-US', n: 'Miguel \u00b7 espa\u00f1ol (EE. UU.)' },
+        { v: 'Penelope', l: 'es-US', n: 'Penelope \u00b7 espa\u00f1ol (EE. UU.)' },
+        { v: 'Lucia', l: 'es-ES', n: 'Lucia \u00b7 espa\u00f1ol (Espa\u00f1a)' },
+        { v: 'Enrique', l: 'es-ES', n: 'Enrique \u00b7 espa\u00f1ol (Espa\u00f1a)' },
+        { v: 'Conchita', l: 'es-ES', n: 'Conchita \u00b7 espa\u00f1ol (Espa\u00f1a)' },
+        { v: 'Brian', l: 'en-GB', n: 'Brian \u00b7 ingl\u00e9s (Reino Unido)' },
+        { v: 'Amy', l: 'en-GB', n: 'Amy \u00b7 ingl\u00e9s (Reino Unido)' },
+        { v: 'Joanna', l: 'en-US', n: 'Joanna \u00b7 ingl\u00e9s (EE. UU.)' },
+        { v: 'Matthew', l: 'en-US', n: 'Matthew \u00b7 ingl\u00e9s (EE. UU.)' },
+        { v: 'Salli', l: 'en-US', n: 'Salli \u00b7 ingl\u00e9s (EE. UU.)' },
+        { v: 'Joey', l: 'en-US', n: 'Joey \u00b7 ingl\u00e9s (EE. UU.)' },
+        { v: 'Celine', l: 'fr-FR', n: 'Celine \u00b7 franc\u00e9s (Francia)' },
+        { v: 'Mathieu', l: 'fr-FR', n: 'Mathieu \u00b7 franc\u00e9s (Francia)' },
+        { v: 'Hans', l: 'de-DE', n: 'Hans \u00b7 alem\u00e1n' },
+        { v: 'Marlene', l: 'de-DE', n: 'Marlene \u00b7 alem\u00e1n' },
+        { v: 'Carla', l: 'it-IT', n: 'Carla \u00b7 italiano' },
+        { v: 'Giorgio', l: 'it-IT', n: 'Giorgio \u00b7 italiano' },
+        { v: 'Vitoria', l: 'pt-BR', n: 'Vitoria \u00b7 portugu\u00e9s (Brasil)' },
+        { v: 'Ricardo', l: 'pt-BR', n: 'Ricardo \u00b7 portugu\u00e9s (Brasil)' },
+        { v: 'Mizuki', l: 'ja-JP', n: 'Mizuki \u00b7 japon\u00e9s' },
+        { v: 'Zhiyu', l: 'zh-CN', n: 'Zhiyu \u00b7 chino (mandar\u00edn)' },
+        { v: 'Seoyeon', l: 'ko-KR', n: 'Seoyeon \u00b7 coreano' },
+        { v: 'Zeina', l: 'ar', n: 'Zeina \u00b7 \u00e1rabe' }
+    ]);
     // Simbolo Unicode por severidad (para listas que NO usan Material Icons).
     const SEV_UIS = Object.freeze({
         critico: '\u00D7',     // ×
@@ -206,7 +240,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.9.1';
+    const VER = '5.10.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -281,6 +315,9 @@
         voice: true,
         voiceLang: 'es-MX',
         voiceVoice: '',         // nombre exacto de la voz del navegador (opcional)
+        vozMotor: 'web',        // 'web' (navegador) | 'online' (StreamElements) | 'google'
+        vozOnline: 'Mia',       // voz online (StreamElements/Polly)
+        vozVolumen: 1,          // volumen 0..1
         beep: true,
         beepVol: 0.06,
         desktop: false,
@@ -1730,14 +1767,68 @@
     function normEco(s) { return String(s || '').replace(/^0+/, '') || String(s || ''); }
 
     /* ====================== NOTIFICACIONES ====================== */
+    // ── Voz / TTS ───────────────────────────────────────────────────
+    // Motores: 'web' (Web Speech API del navegador), 'online'
+    // (StreamElements, gratis y con CORS) y 'google' (Google Translate TTS
+    // via <audio>). Los dos ultimos necesitan internet.
+    let _ttsAudioEl = null;
+    let _ttsSeq = [];
+    function _ttsDetener() {
+        _ttsSeq = [];
+        if (_ttsAudioEl) { try { _ttsAudioEl.pause(); } catch (_) { /* noop */ } _ttsAudioEl = null; }
+        try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (_) { /* noop */ }
+    }
+    function _ttsPlay(url) {
+        _ttsDetener();
+        const a = new Audio(url);
+        a.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
+        _ttsAudioEl = a;
+        a.play().catch(() => { /* autoplay bloqueado o error de red */ });
+    }
+    function _ttsPlaySeq(urls) {
+        _ttsDetener();
+        _ttsSeq = urls.slice();
+        const next = () => {
+            if (!_ttsSeq.length) return;
+            const url = _ttsSeq.shift();
+            const a = new Audio(url);
+            a.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
+            _ttsAudioEl = a;
+            a.onended = next;
+            a.onerror = next;
+            a.play().catch(() => { setTimeout(next, 10); });
+        };
+        next();
+    }
+    // Parte un texto en trozos <= n (Google Translate tiene limite ~200).
+    function _partirTexto(text, n) {
+        const out = [];
+        const palabras = String(text || '').split(/\s+/);
+        let cur = '';
+        palabras.forEach((p) => {
+            if ((cur + ' ' + p).trim().length > n && cur) { out.push(cur.trim()); cur = p; }
+            else cur = (cur ? cur + ' ' : '') + p;
+        });
+        if (cur.trim()) out.push(cur.trim());
+        return out.length ? out : [String(text || '').slice(0, n)];
+    }
     function speak(text) {
-        if (!APP.config.voice || !('speechSynthesis' in window)) return;
+        const txt = String(text || '').trim();
+        if (!APP.config.voice || !txt) return;
+        const motor = APP.config.vozMotor || 'web';
+        if (motor === 'online') return speakOnline(txt);
+        if (motor === 'google') return speakGoogle(txt);
+        return speakWeb(txt);
+    }
+    function speakWeb(text) {
+        if (!('speechSynthesis' in window)) return;
         try {
-            window.speechSynthesis.cancel();
+            _ttsDetener();
             const u = new SpeechSynthesisUtterance(text);
             const lang = APP.config.voiceLang || 'es-MX';
             u.lang = lang;
             u.rate = 1.05; u.pitch = 1.0;
+            u.volume = Math.min(1, Math.max(0, Number(APP.config.vozVolumen == null ? 1 : APP.config.vozVolumen)));
             const pref = lang.slice(0, 2).toLowerCase();
             const voces = window.speechSynthesis.getVoices() || [];
             const vozPorNombre = APP.config.voiceVoice && voces.find((v) => v.name === APP.config.voiceVoice);
@@ -1747,6 +1838,59 @@
             if (voz) u.voice = voz;
             window.speechSynthesis.speak(u);
         } catch (_) { /* noop */ }
+    }
+    // StreamElements (Polly). Endpoint publico, gratis, con CORS.
+    function speakOnline(text) {
+        try {
+            const voz = APP.config.vozOnline || 'Mia';
+            const url = 'https://api.streamelements.com/kappa/v2/speech?voice='
+                + encodeURIComponent(voz) + '&text=' + encodeURIComponent(text);
+            _ttsPlay(url);
+        } catch (_) { /* noop */ }
+    }
+    // Google Translate TTS. Se reproduce via <audio> (no requiere CORS).
+    function speakGoogle(text) {
+        try {
+            const lang = APP.config.voiceLang || 'es-MX';
+            const tl = String(lang).split('-')[0].toLowerCase();
+            const partes = _partirTexto(text, 190);
+            const urls = partes.map((p, i) =>
+                'https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob'
+                + '&tl=' + encodeURIComponent(tl)
+                + '&q=' + encodeURIComponent(p)
+                + '&total=' + partes.length + '&idx=' + i + '&textlen=' + p.length);
+            _ttsPlaySeq(urls);
+        } catch (_) { /* noop */ }
+    }
+    // Rellena el desplegable de voces segun el motor elegido.
+    function poblarVozSelect() {
+        const sel = byId('c-voz-voice');
+        if (!sel) return;
+        const motorEl = byId('c-voz-motor');
+        const motor = (motorEl && motorEl.value) || (APP.config.vozMotor || 'web');
+        const langEl = byId('c-voz-lang');
+        const lang = (langEl && langEl.value) || APP.config.voiceLang || 'es-MX';
+        if (motor === 'online') {
+            const pref = lang.slice(0, 2).toLowerCase();
+            const orden = TTS_ONLINE_VOCES.slice().sort((a, b) => {
+                const pa = a.l.toLowerCase().indexOf(pref) === 0 ? 0 : 1;
+                const pb = b.l.toLowerCase().indexOf(pref) === 0 ? 0 : 1;
+                return pa - pb;
+            });
+            sel.disabled = false;
+            sel.innerHTML = orden.map((v) => '<option value="' + esc(v.v) + '">' + esc(v.n) + '</option>').join('');
+            const actual = APP.config.vozOnline || DEFAULTS.vozOnline;
+            if (orden.some((v) => v.v === actual)) sel.value = actual;
+        } else if (motor === 'google') {
+            sel.disabled = true;
+            sel.innerHTML = '<option value="">(usa el idioma de arriba)</option>';
+        } else {
+            sel.disabled = false;
+            const voces = (window.speechSynthesis ? window.speechSynthesis.getVoices() : []) || [];
+            sel.innerHTML = '<option value="">Predeterminada</option>' +
+                voces.map((v) => '<option value="' + esc(v.name) + '">' + esc(v.name) + ' (' + esc(v.lang) + ')</option>').join('');
+            if (APP.config.voiceVoice) sel.value = APP.config.voiceVoice;
+        }
     }
     function audioCtx() {
         try {
@@ -3961,6 +4105,7 @@
             "#rondo-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--rondo-bg-strong),var(--rondo-bg-soft));cursor:move;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
             "#rondo-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
+            "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
             "#rondo-panel .rondo-iconbtn:hover{background:var(--rondo-bg);border-color:var(--rondo-border);color:var(--rondo-fg);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
             "#rondo-panel .rondo-iconbtn:active{transform:translateY(0)}\n" +
             "#rondo-panel .rondo-iconbtn.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.4)}\n" +
@@ -4053,10 +4198,6 @@
             "#rondo-dash-list .rondo-geo-dash .pct, #rondo-dash-list .rondo-ruta-dash .pct{flex-shrink:0;font:700 11px var(--rondo-font);color:var(--rondo-accent-2)}\n" +
             "#rondo-dash-list .rondo-ruta-dash .ruta-bar{flex:1;min-width:0;height:4px;background:var(--rondo-bg);border-radius:2px;margin-top:3px;overflow:hidden}\n" +
             "#rondo-dash-list .rondo-ruta-dash .ruta-bar-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
-            "#rondo-dash .rondo-dash-acciones{display:grid;grid-template-columns:repeat(2,1fr);gap:5px;padding:8px 0 2px;border-top:1px dashed var(--rondo-border-soft);margin-top:2px}\n" +
-            "#rondo-dash .rondo-dash-acciones .mini{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:5px 7px;font:600 11px var(--rondo-font)}\n" +
-            "#rondo-dash .rondo-dash-acciones .mini .rondo-usym{font-size:12px}\n" +
-            "#rondo-dash .rondo-dash-acciones .mini:hover{background:var(--rondo-bg-strong)}\n" +
             "#rondo-dash .rondo-dash-empty{padding:8px;color:var(--rondo-fg-mute);font-size:11px;text-align:center}\n" +
             "#rondo-dash .kpi[data-kpi]::after{content:'';position:absolute;right:6px;top:6px;color:var(--rondo-fg-mute);font-size:11px;opacity:.5}\n" +
             "#rondo-dash .rondo-dash-block{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:7px 9px;display:flex;flex-direction:column;gap:5px}\n" +
@@ -4357,7 +4498,9 @@
             /* Pestanas solo icono (sin etiqueta de texto), con badge contador. */
             "#rondo-panel .tab .etqt{display:none}\n" +
             "#rondo-panel .tab{padding:9px 2px;gap:4px}\n" +
-            "#rondo-panel .tab .rondo-mi{font-size:19px;line-height:1}\n" +
+            "#rondo-panel .tab .rondo-usym{font-size:19px;font-weight:700;line-height:1;opacity:.8;transition:transform .14s var(--rondo-easing),opacity .15s}\n" +
+            "#rondo-panel .tab:hover .rondo-usym{opacity:1}\n" +
+            "#rondo-panel .tab.activo .rondo-usym{opacity:1;transform:scale(1.08)}\n" +
             "#rondo-panel .tab .contador{font-size:9.5px;padding:1px 5px;margin-left:0}\n" +
             +
             +
@@ -4631,7 +4774,8 @@
             "#rondo-panel .rondo-iconbtn{width:calc(30px * var(--rondo-esc));height:calc(30px * var(--rondo-esc));font-size:calc(13px * var(--rondo-esc))}\n" +
             "#rondo-panel .tab{padding:calc(8px * var(--rondo-esc)) calc(4px * var(--rondo-esc));font-size:calc(11.5px * var(--rondo-esc))}\n" +
             "#rondo-panel .tab{padding:calc(9px * var(--rondo-esc)) calc(2px * var(--rondo-esc));gap:calc(4px * var(--rondo-esc))}\n" +
-            "#rondo-panel .tab .rondo-mi{font-size:calc(19px * var(--rondo-esc))}\n" +
+            "#rondo-panel .tab .rondo-usym{font-size:calc(19px * var(--rondo-esc))}\n" +
+            "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:calc(16px * var(--rondo-esc))}\n" +
             "#rondo-panel .tab .contador{font-size:calc(9.5px * var(--rondo-esc))}\n" +
             "#rondo-panel .tab .contador{font-size:calc(10px * var(--rondo-esc));padding:calc(1px * var(--rondo-esc)) calc(5px * var(--rondo-esc))}\n" +
             "#rondo-panel .tools button{padding:calc(5px * var(--rondo-esc)) calc(9px * var(--rondo-esc));font-size:calc(11px * var(--rondo-esc))}\n" +
@@ -4777,22 +4921,22 @@
             '<header id="rondo-drag">' +
             '<span id="rondo-estado-barra" class="rondo-badge-estado"></span>' +
             '<h3>' + esc(LANG.titlePanel) + '</h3>' +
-            '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-mi">' + ICO.actualizar + '</span></button>' +
-            '<button class="rondo-iconbtn" id="rondo-tema" title="Tema"><span class="rondo-mi">' + ICO.luna + '</span></button>' +
-            '<button class="rondo-iconbtn" id="rondo-nmolestar" title="No molestar"><span class="rondo-mi">' + ICO.silencioTotal + '</span></button>' +
-            '<button class="rondo-iconbtn" id="rondo-refresh" title="Refrescar datos"><span class="rondo-mi">' + ICO.refrescar + '</span></button>' +
-            '<button class="rondo-iconbtn" id="rondo-cfg-btn" title="Ajustes"><span class="rondo-mi">' + ICO.ajustes + '</span></button>' +
-            '<button class="rondo-iconbtn" id="rondo-collapse" title="Colapsar/expandir barra lateral"><span class="rondo-mi">' + ICO.colapsar + '</span></button>' +
-            '<button class="rondo-iconbtn" id="rondo-ayuda-btn" title="Ayuda rápida"><span class="rondo-mi">' + ICO.ayuda + '</span></button>' +
-            '<button class="rondo-iconbtn" id="rondo-cerrar-panel" title="Cerrar panel"><span class="rondo-mi">' + ICO.cerrar + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-actualizar" title="Buscar actualizaciones" style="display:none;color:var(--rondo-accent-2)"><span class="rondo-usym md">' + UIS.refresh + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-tema" title="Tema"><span class="rondo-usym md">' + UIS.theme + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-nmolestar" title="No molestar"><span class="rondo-usym md">' + UIS.mute + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-refresh" title="Refrescar datos"><span class="rondo-usym md">' + UIS.refresh + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-cfg-btn" title="Ajustes"><span class="rondo-usym md">' + UIS.gear + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-collapse" title="Colapsar/expandir barra lateral"><span class="rondo-usym md">' + UIS.collapse + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-ayuda-btn" title="Ayuda rápida"><span class="rondo-usym md">' + UIS.help + '</span></button>' +
+            '<button class="rondo-iconbtn" id="rondo-cerrar-panel" title="Cerrar panel"><span class="rondo-usym md">' + UIS.close + '</span></button>' +
             '</header>' +
             '<div class="tabs" id="rondo-tabs">' +
-            '<button class="tab activo" data-tab="dash" title="Resumen general de la flota"><span class="rondo-mi">' + ICO.dashboard + '</span><span class="etqt">Dashboard</span><span class="contador" id="rondo-c-on">0</span></button>' +
-            '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones"><span class="rondo-mi">' + ICO.panel + '</span><span class="etqt">Unidades</span><span class="contador" id="rondo-c-tot">0</span></button>' +
-            '<button class="tab" data-tab="alertas" title="Historial de avisos"><span class="rondo-mi">' + ICO.alertas + '</span><span class="etqt">Avisos</span><span class="contador" id="rondo-c-al">0</span></button>' +
-            '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-mi">' + ICO.destino + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
+            '<button class="tab activo" data-tab="dash" title="Resumen general de la flota"><span class="rondo-usym md">' + UIS.dashboard + '</span><span class="etqt">Dashboard</span><span class="contador" id="rondo-c-on">0</span></button>' +
+            '<button class="tab" data-tab="unidades" title="Lista de unidades y acciones"><span class="rondo-usym md">' + UIS.panel + '</span><span class="etqt">Unidades</span><span class="contador" id="rondo-c-tot">0</span></button>' +
+            '<button class="tab" data-tab="alertas" title="Historial de avisos"><span class="rondo-usym md">' + UIS.alertas + '</span><span class="etqt">Avisos</span><span class="contador" id="rondo-c-al">0</span></button>' +
+            '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-usym md">' + UIS.route + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="zonas" title="Geocercas de la plataforma y zonas de riesgo"><span class="rondo-usym md">' + UIS.map + '</span><span class="contador" id="rondo-c-zn">0</span></button>' +
-            '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-mi">' + ICO.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
+            '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-usym md">' + UIS.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
             
             '</div>' +
             '<div class="tools" id="rondo-tools">' +
@@ -4867,12 +5011,6 @@
             '<div class="rondo-dash-block">' +
             '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.alertas + '</span> Avisos recientes</div>' +
             '<div id="rondo-kpi-recientes" class="rondo-dash-list"></div>' +
-            '</div>' +
-            '<div class="rondo-dash-acciones">' +
-            '<button class="mini" id="rondo-dash-lista" title="Abrir la lista de unidades para abrir y acomodar ventanas"><span class="rondo-usym">' + UIS.panel + '</span> Lista</button>' +
-            '<button class="mini" id="rondo-dash-verificar" title="Verificar y acomodar las ventanas abiertas"><span class="rondo-usym">' + UIS.check + '</span> Verificar</button>' +
-            '<button class="mini" id="rondo-dash-capturar" title="Capturar las ventanas abiertas"><span class="rondo-usym">' + UIS.map + '</span> Capturar</button>' +
-            '<button class="mini" id="rondo-dash-informe" title="Generar el informe del dia (Markdown)"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
             '</div>' +
             '</div>' +
             '</div>' +
@@ -5114,11 +5252,25 @@
             '<div class="cfg-pane" data-cfg="avisos" style="display:none">' +
             '<h4>Avisos</h4>' +
             checkRow('c-voz', 'Voz') +
+            '<label>Motor de voz <select id="c-voz-motor">' +
+            '<option value="web">Navegador (sin internet)</option>' +
+            '<option value="online">Online \u00b7 StreamElements</option>' +
+            '<option value="google">Online \u00b7 Google</option>' +
+            '</select></label>' +
             '<label>Idioma de voz <select id="c-voz-lang">' +
             '<option value="es-MX">Español (México)</option>' +
             '<option value="es-ES">Español (España)</option>' +
             '<option value="es-US">Español (EE. UU.)</option>' +
+            '<option value="en-GB">Inglés (Reino Unido)</option>' +
             '<option value="en-US">Inglés (EE. UU.)</option>' +
+            '<option value="fr-FR">Francés</option>' +
+            '<option value="de-DE">Alemán</option>' +
+            '<option value="it-IT">Italiano</option>' +
+            '<option value="pt-BR">Portugués (Brasil)</option>' +
+            '<option value="ja-JP">Japonés</option>' +
+            '<option value="zh-CN">Chino (mandarín)</option>' +
+            '<option value="ko-KR">Coreano</option>' +
+            '<option value="ar">Árabe</option>' +
             '</select></label>' +
             '<label>Voz <select id="c-voz-voice"><option value="">Predeterminada</option></select></label>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
@@ -5713,7 +5865,6 @@
         paintAtencion(watched);
         paintZonasDash();
         paintRutasDash();
-        paintDashAcciones();
 
         const recientes = byId('rondo-kpi-recientes');
         if (recientes) {
@@ -5823,25 +5974,6 @@
                     '</div>';
               }).join('')
             : '<div class="rondo-dash-empty">Sin rutas activas (define destinos desde la lista vigilada).</div>');
-    }
-    function paintDashAcciones() {
-        const bLista = byId('rondo-dash-lista');
-        if (bLista) bLista.onclick = () => mainBtn && mainBtn.click();
-        const bVer = byId('rondo-dash-verificar');
-        if (bVer) bVer.onclick = () => verifyWindows && verifyWindows(true);
-        const bCap = byId('rondo-dash-capturar');
-        if (bCap) bCap.onclick = () => capturarYmostrar();
-        const bInf = byId('rondo-dash-informe');
-        if (bInf) bInf.onclick = () => exportInforme();
-    }
-    function capturarYmostrar() {
-        if (typeof capturarVentanas !== 'undefined') capturarVentanas();
-        else if (typeof capturarTodas !== 'undefined') capturarTodas();
-        else adviceOk('Capturar', 'inicia la captura desde la lista de unidades');
-    }
-    function exportInforme() {
-        if (typeof generarInforme !== 'undefined') generarInforme();
-        else adviceOk('Informe', 'la funcion de informe no esta disponible');
     }
         function paintSparkline() {
         const svg = byId('rondo-spark');
@@ -7471,13 +7603,8 @@
             g('c-sevmin').value = APP.config.severidadMin;
             g('c-voz').checked = !!APP.config.voice;
             g('c-voz-lang').value = APP.config.voiceLang || 'es-MX';
-            const vozSel = g('c-voz-voice');
-            if (vozSel) {
-                vozSel.innerHTML = '<option value="">Predeterminada</option>' +
-                    (window.speechSynthesis ? window.speechSynthesis.getVoices() : [])
-                        .map((v) => '<option value="' + esc(v.name) + '">' + esc(v.name) + ' (' + esc(v.lang) + ')</option>').join('');
-                if (APP.config.voiceVoice) vozSel.value = APP.config.voiceVoice;
-            }
+            g('c-voz-motor').value = APP.config.vozMotor || 'web';
+            poblarVozSelect();
             g('c-beep').checked = !!APP.config.beep;
             g('c-beep-vol').value = APP.config.beepVol;
             g('c-beep-vol').step = '0.01';
@@ -7552,6 +7679,18 @@
             cfgWinEl.style.display = 'flex';
         }
         byId('rondo-cfg-btn').addEventListener('click', abrirCfg);
+        const vozMotorEl = byId('c-voz-motor');
+        if (vozMotorEl) vozMotorEl.addEventListener('change', () => poblarVozSelect());
+        const vozLangEl = byId('c-voz-lang');
+        if (vozLangEl) vozLangEl.addEventListener('change', () => {
+            if ((byId('c-voz-motor') || {}).value === 'online') poblarVozSelect();
+        });
+        // Las voces del navegador cargan de forma asincrona.
+        if ('speechSynthesis' in window && window.speechSynthesis.onvoiceschanged !== undefined) {
+            window.speechSynthesis.onvoiceschanged = () => {
+                if (cfgWinEl && cfgWinEl.style.display !== 'none' && (byId('c-voz-motor') || {}).value === 'web') poblarVozSelect();
+            };
+        }
         byId('c-lista-editar').addEventListener('click', () => {
             cfgWinEl.style.display = 'none';
             const prefill = Object.keys(APP.watchMap).map((k) =>
@@ -7599,8 +7738,13 @@
             cf.severidadMin = g('c-sevmin').value;
             cf.voice = g('c-voz').checked;
             cf.voiceLang = g('c-voz-lang').value || DEFAULTS.voiceLang;
+            cf.vozMotor = g('c-voz-motor').value || 'web';
             const vozSel = g('c-voz-voice');
-            if (vozSel) cf.voiceVoice = vozSel.value || '';
+            if (vozSel) {
+                if (cf.vozMotor === 'online') cf.vozOnline = vozSel.value || DEFAULTS.vozOnline;
+                else cf.voiceVoice = vozSel.value || '';
+            }
+            cf.vozVolumen = 1;
             cf.beep = g('c-beep').checked;
             cf.beepVol = clamp(parseFloat(g('c-beep-vol').value) || cf.beepVol || DEFAULTS.beepVol, 0, 1);
             cf.desktop = g('c-desktop').checked;
