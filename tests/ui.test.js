@@ -206,27 +206,24 @@ ok('filtros de riesgo sin sticky', src.indexOf('.rondo-riesgo-filters{position:s
 ok('hero de riesgo sin animacion', !/\.rondo-riesgo-hero\{[^}]*animation:/.test(src));
 ok('seccion sin animacion (anti-parpadeo)', !/\.rondo-seccion\{[^}]*animation: rondoFadeUp/.test(src));
 
-// Los simbolos UIS deben estar solo en bloques seguros:
-// ASCII, Latin-1, bullet, flechas (U+2190-21FF), geometricos (U+25A0-25FF).
+// Iconos: deben ser los MISMOS que la plataforma (Ant Design, SVG inline).
+// UIS es un Proxy que devuelve el SVG del icono; NA_ICONS tiene los paths.
+ok('NA_ICONS localizado', /const NA_ICONS = Object\.freeze\(\{/.test(src));
+ok('naSvg helper', /function naSvg\(/.test(src));
+ok('UIS es Proxy con naSvg', /const UIS = new Proxy\(\{\}, \{[\s\S]*?naSvg\(NA_ICONS/.test(src));
+ok('viewBox de Ant Design', src.indexOf("viewBox=\"64 64 896 896\"") >= 0);
+ok('SVG con class rondo-na', src.indexOf("class=\"rondo-na\"") >= 0);
 (function () {
-    const m = src.match(/const UIS = Object\.freeze\(\{([\s\S]*?)\n    \}\);/);
-    ok('UIS localizado', !!m);
-    if (!m) return;
-    const codepoints = [];
-    const re = /'\\u([0-9A-Fa-f]{4})'/g;
-    let mm;
-    while ((mm = re.exec(m[1]))) codepoints.push(parseInt(mm[1], 16));
-    // Bloques seguros: ASCII, Latin-1, bullet, flechas, matematicos y
-    // geometricos. Fuera de aqui (Misc Symbols, Technical, Dingbats...) el
-    // glyph puede faltar y el navegador muestra basura (p.ej. una "G").
-    const inseguros = codepoints.filter((c) => !(
-        (c >= 0x20 && c <= 0x7E) || (c >= 0xA0 && c <= 0xFF) ||
-        c === 0x2022 || (c >= 0x2190 && c <= 0x21FF) ||
-        (c >= 0x2200 && c <= 0x22FF) || (c >= 0x25A0 && c <= 0x25FF)
-    ));
-    ok('UIS solo usa bloques seguros', inseguros.length === 0,
-        inseguros.map((c) => 'U+' + c.toString(16)).join(','));
+    const m = src.match(/const NA_ICONS = Object\.freeze\(\{([\s\S]*?)\n    \}\);/);
+    if (!m) { ok('NA_ICONS parseable', false); return; }
+    const keys = (m[1].match(/^\s{8}([a-zA-Z0-9_]+):/gm) || []).length;
+    ok('NA_ICONS tiene suficientes iconos', keys >= 30, 'keys=' + keys);
+    // Los paths son SVG (empiezan por comando de path, sin comillas raras).
+    ok('NA_ICONS con paths SVG', m[1].indexOf("['M") >= 0 || m[1].indexOf("['m") >= 0);
 })();
+// Ya no se usan los simbolos Unicode crudos del set anterior.
+ok('sin UIS Unicode crudo', !/const UIS = Object\.freeze\(\{/.test(src));
+ok('CSS de .rondo-na', src.indexOf('.rondo-na{width:1em') >= 0);
 
 // Riesgo: superficie movida a Ajustes, con boton Configurar y status compacto.
 ok('riesgo tiene boton Configurar', src.indexOf('id="rondo-riesgo-configurar"') >= 0);
