@@ -5,6 +5,7 @@ este proyecto se llamaba **HJP Wialon** y el archivo era `HJP-Wialon.user.js`;
 el contenido es compatible y la primera vez Rondo migra automaticamente la
 configuracion, la lista vigilada, las rutas, el odometro y los perfiles.
 
+- [5.9.1](./5.9.1.md) - Ayuda rapida ampliada, seleccion de voz por modelo, y pulido visual de la barra lateral (cabecera sin icono, salud de flota mas prominente).
 - [5.9.0](./5.9.0.md) - Dashboard expandido para monitoristas, pestana Zonas con segmentado y tarjetas, fix del bug de extraccion de geocercas (campo crudo `zl`) y limpieza del icono "G".
 - [5.8.1](./5.8.1.md) - Arreglo del solapamiento en Zonas (flex-shrink), simbolos Unicode garantizados y retiro de la tarjeta de actualizaciones del Dashboard.
 - [5.8.0](./5.8.0.md) - Arreglo critico del bucle infinito de geocercas, fusion Geocercas+Zonas de riesgo en la pestana Zonas, y sistema de actualizaciones rehecho con tarjeta en el Dashboard.

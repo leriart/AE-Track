@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.9.0
+// @version      5.9.1
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -206,7 +206,7 @@
     });
 
     /* ====================== VERSION Y ACTUALIZACIONES ====================== */
-    const VER = '5.9.0';
+    const VER = '5.9.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     function parseVersionHeader(text) {
@@ -280,6 +280,7 @@
         cooldownMin: 45,
         voice: true,
         voiceLang: 'es-MX',
+        voiceVoice: '',         // nombre exacto de la voz del navegador (opcional)
         beep: true,
         beepVol: 0.06,
         desktop: false,
@@ -1739,7 +1740,9 @@
             u.rate = 1.05; u.pitch = 1.0;
             const pref = lang.slice(0, 2).toLowerCase();
             const voces = window.speechSynthesis.getVoices() || [];
-            const voz = voces.find((v) => String(v.lang || '').toLowerCase().replace('_', '-') === lang.toLowerCase())
+            const vozPorNombre = APP.config.voiceVoice && voces.find((v) => v.name === APP.config.voiceVoice);
+            const voz = vozPorNombre
+                || voces.find((v) => String(v.lang || '').toLowerCase().replace('_', '-') === lang.toLowerCase())
                 || voces.find((v) => String(v.lang || '').toLowerCase().indexOf(pref) === 0);
             if (voz) u.voice = voz;
             window.speechSynthesis.speak(u);
@@ -4010,16 +4013,15 @@
             "#rondo-panel .alerta .meta .regla{background:var(--rondo-bg-strong);padding:1px 5px;border-radius:4px}\n" +
             /* ── Dashboard compacto (sidebar 460 px) ────────────────────── */
             "#rondo-dash{display:flex;flex-direction:column;padding:8px 10px;gap:8px;overflow:auto;flex:1;box-sizing:border-box}\n" +
-            "#rondo-dash .rondo-dash-head{display:flex;align-items:center;gap:6px;padding:2px 2px 4px;font:700 11.5px var(--rondo-font);color:var(--rondo-fg);border-bottom:1px solid var(--rondo-border-soft);margin-bottom:2px}\n" +
-            "#rondo-dash .rondo-dash-head .rondo-usym{font-size:15px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-dash .rondo-dash-head{display:flex;align-items:baseline;gap:6px;padding:2px 2px 6px;font:700 13px var(--rondo-font);color:var(--rondo-fg);border-bottom:1px solid var(--rondo-border-soft);margin-bottom:2px}\n" +
             "#rondo-dash .rondo-dash-head b{letter-spacing:.2px}\n" +
             "#rondo-dash .rondo-dash-vel{margin-left:auto;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
             "#rondo-dash .rondo-dash-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}\n" +
             "#rondo-dash .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:6px 8px;display:flex;flex-direction:column;gap:1px;min-width:0;position:relative;overflow:hidden;transition:border-color .15s,transform .12s,box-shadow .15s;cursor:pointer}\n" +
             "#rondo-dash .kpi:hover{border-color:var(--rondo-border);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
             "#rondo-dash .kpi:active{transform:translateY(0)}\n" +
-            "#rondo-dash .kpi .kpi-etq{font:600 9px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
-            "#rondo-dash .kpi .kpi-val{font:700 17px/1.1 var(--rondo-font);color:var(--rondo-fg);white-space:nowrap}\n" +
+            "#rondo-dash .kpi .kpi-etq{font:600 9.5px var(--rondo-font);color:var(--rondo-fg-mute);text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash .kpi .kpi-val{font:700 19px/1.1 var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;letter-spacing:-.3px}\n" +
             "#rondo-dash .kpi .kpi-pct{font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
             "#rondo-dash .kpi .kpi-pct:empty{display:none}\n" +
             "#rondo-dash .kpi.ok{border-left:3px solid var(--rondo-ok)}\n" +
@@ -4027,14 +4029,14 @@
             "#rondo-dash .kpi.warn{border-left:3px solid var(--rondo-warn)}\n" +
             "#rondo-dash .kpi.sub{border-left:3px solid var(--rondo-fg-mute)}\n" +
             /* Salud de flota */
-            "#rondo-dash .rondo-salud{display:flex;flex-direction:column;gap:6px;padding:9px 10px}\n" +
-            "#rondo-dash .rondo-salud-top{display:flex;align-items:center;gap:8px}\n" +
-            "#rondo-dash .rondo-salud-pct{font:700 22px/1 var(--rondo-font);color:var(--rondo-ok-fg);min-width:64px;text-align:right}\n" +
+            "#rondo-dash .rondo-salud{display:flex;flex-direction:column;gap:8px;padding:11px 12px;background:linear-gradient(135deg,var(--rondo-bg-soft),var(--rondo-bg));position:relative;overflow:hidden}\n" +
+            "#rondo-dash .rondo-salud::before{content:'';position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--rondo-ok)}\n" +
+            "#rondo-dash .rondo-salud.warn::before{background:var(--rondo-warn)}\n" +
             "#rondo-dash .rondo-salud-pct.warn{color:var(--rondo-warn-fg)}\n" +
             "#rondo-dash .rondo-salud-pct.bad{color:var(--rondo-bad-fg)}\n" +
             "#rondo-dash .rondo-salud-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}\n" +
-            "#rondo-dash .rondo-salud-txt b{font:700 11px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
-            "#rondo-dash .rondo-salud-txt span{font:500 11px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dash .rondo-salud.bad::before{background:var(--rondo-bad)}\n" +
+            "#rondo-dash .rondo-salud-top{display:flex;align-items:center;gap:10px}\n" +
             "#rondo-dash .rondo-salud-tag{flex-shrink:0;background:var(--rondo-bg);color:var(--rondo-fg-dim);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 7px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px}\n" +
             "#rondo-dash .rondo-salud-tag.ok{background:var(--rondo-ok-bg);color:var(--rondo-ok-fg);border-color:transparent}\n" +
             "#rondo-dash .rondo-salud-tag.warn{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg);border-color:transparent}\n" +
@@ -4823,7 +4825,6 @@
             '<div class="tabla" id="rondo-wrap-dash">' +
             '<div id="rondo-dash">' +
             '<div class="rondo-dash-head">' +
-            '<span class="rondo-usym md">' + UIS.dashboard + '</span> ' +
             '<b>Centro de monitoreo</b>' +
             '<span class="rondo-dash-vel" id="rondo-dash-vel"></span>' +
             '</div>' +
@@ -5119,6 +5120,7 @@
             '<option value="es-US">Español (EE. UU.)</option>' +
             '<option value="en-US">Inglés (EE. UU.)</option>' +
             '</select></label>' +
+            '<label>Voz <select id="c-voz-voice"><option value="">Predeterminada</option></select></label>' +
             checkRow('c-beep', 'Pitido en alertas graves') +
             numRow('c-beep-vol', 'Volumen del pitido (0-1)') +
             checkRow('c-desktop', 'Notificación del navegador') +
@@ -5265,43 +5267,53 @@
 
         ayudaEl = makeEl('div', { id: 'rondo-ayuda' });
         ayudaEl.innerHTML = (
-            '<div class="cfg-head"><h3>? Ayuda rapida</h3>' +
+'<div class="cfg-head"><h3>? Ayuda rapida</h3>' +
             '<button class="rondo-iconbtn" id="rondo-ayuda-x" title="Cerrar">×</button></div>' +
             '<div class="ayuda-body">' +
             '<h4>En 3 pasos</h4>' +
             '<div class="pasos">' +
-            '<div class="paso"><b>1. Elige unidades</b>Abre <i>Unidades</i> y marca con la casilla las que quieras vigilar, o activa <i>Monitorear todas</i> en Ajustes.</div>' +
-            '<div class="paso"><b>2. Abre sus ventanas</b>Pulsa <i>Automatizar Unidades</i> (arriba a la derecha) para abrirlas y acomodarlas solas.</div>' +
-            '<div class="paso"><b>3. Vigila los avisos</b>Las alertas aparecen como tarjetas, voz y pitido. Revisalas en <i>Avisos</i>.</div>' +
+            '<div class="paso"><b>1. Configura la flota</b>En <i>Ajustes > Reglas</i> define la lista vigilada, las reglas y las notificaciones (voz, pitido, toasts).</div>' +
+            '<div class="paso"><b>2. Abre las ventanas</b>En el Dashboard, abre la lista de unidades con el boton <i>Lista</i> o pulsa <i>Automatizar Unidades</i> en la barra superior para abrirlas y acomodarlas solas.</div>' +
+            '<div class="paso"><b>3. Vigila los avisos</b>Las alertas se ven como tarjetas en la pestana <i>Avisos</i> y, si estan activadas, se anuncian con voz y pitido. Las criticas saltan un toast y (opcional) una notificacion del navegador.</div>' +
             '</div>' +
-            '<h4>Qué hace cada pestaña</h4>' +
+            '<h4>Que hace cada pestana</h4>' +
             '<ul>' +
-            '<li><b>Dashboard</b>: cuántas en línea, sin señal, detenidas y alertas del dia.</li>' +
-            '<li><b>Unidades</b>: lista con estado, velocidad, zona y acciones. Clic para abrir su ventana; clic derecho para mas opciones.</li>' +
-            '<li><b>Avisos</b>: historial filtrable por severidad. Exportable a CSV.</li>' +
-            '<li><b>Rutas</b>: progreso de cada ruta y desvíos. Se planea desde el clic derecho de una unidad.</li>' +
-            '<li><b>Geocercas</b>: unidades dentro de cada geocerca.</li>' +
+            '<li><b>Dashboard</b>: salud de la flota, 6 KPIs (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy), unidades que requieren atencion, zonas con unidades, rutas activas y avisos recientes. Todo en una sola pantalla.</li>' +
+            '<li><b>Unidades</b>: lista de tarjetas con estado, velocidad, zona y acciones. Clic para abrir su ventana; clic derecho para mas opciones (ruta, geocerca, odometro, etc.).</li>' +
+            '<li><b>Avisos</b>: historial filtrable por severidad (criticas, altas, medias, bajas). Exportable a CSV.</li>' +
+            '<li><b>Rutas</b>: progreso de cada ruta trazada (OSRM o A*) con ETA. Se planea desde el clic derecho de una unidad.</li>' +
+            '<li><b>Zonas</b>: segmentado con dos vistas: <b>Geocercas</b> de la plataforma (unidades dentro) y <b>Zonas de riesgo</b> (dona, histograma, KPIs, filtros, export). Las alertas por zonas de riesgo se ven como la regla <i>riesgoSinSenal</i>.</li>' +
             '<li><b>Caravana</b>: unidades (vigiladas o no) cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +
-            '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes &gt; Rutas.</p>' +
+            '<p>Con una ruta planeada, el script avisa si la unidad se <b>desvia</b> del trazado, hace un <b>giro en U</b> o <b>regresa al origen</b> (posible viaje cancelado). Activadas en Ajustes > Rutas.</p>' +
+            '<h4>Voz y notificaciones</h4>' +
+            '<p>En <i>Ajustes > Avisos</i> puedes:</p>' +
+            '<ul>' +
+            '<li><b>Voz</b>: activar/desactivar la lectura de alertas.</li>' +
+            '<li><b>Idioma de voz</b>: elige el idioma del TTS del navegador.</li>' +
+            '<li><b>Voz</b>: elige una voz concreta de entre las disponibles (se actualiza al abrir el desplegable).</li>' +
+            '<li><b>Pitido</b>: volumen en alertas graves.</li>' +
+            '<li><b>Notificacion del navegador</b>: aviso del sistema aunque Rondo este minimizado.</li>' +
+            '</ul>' +
             '<h4>Atajos de teclado</h4>' +
             '<ul>' +
-            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>7</kbd>: cambiar de pestaña.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>1</kbd>..<kbd>6</kbd>: cambiar de pestana (Dashboard, Unidades, Avisos, Rutas, Zonas, Caravana).</li>' +
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar la barra lateral.</li>' +
-            '<li><kbd>Alt</kbd>+<kbd>L</kbd>: mostrar u ocultar la barra lateral.</li>' +
+            '<li><kbd>Alt</kbd>+<kbd>L</kbd>: mostrar u ocultar la barra lateral (atajo alternativo).</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
             '<li><kbd>Esc</kbd>: cerrar ventanas emergentes.</li>' +
             '</ul>' +
-            '<h4>Actualizaciones</h4>' +
-            '<p>El script revisa si hay una version nueva al iniciar y cada 30 minutos. Si la hay, aparece un indicador en la cabecera del panel; al pulsarlo se abre la URL para que Tampermonkey actualice el script.</p>' +
+            '<h4>Datos y privacidad</h4>' +
+            '<p>Rondo no envia datos a servidores propios. Solo usa los servicios de Wialon (geocercas, unidades, rutas) y la API publica de OpenStreetMap (OSRM/A*) para el trazo de rutas. La configuracion se guarda en tu navegador (<i>localStorage</i>, prefijo <code>rondo.api.*</code>).</p>' +
             '<h4>Consejo</h4>' +
-            '<p>Rondo vive como <b>barra lateral</b> a pantalla completa. Al ocultarla queda una pestaña en el borde (rail) que la trae de vuelta con un clic; tambien puedes ajustar el lado y el ancho en Ajustes &gt; Ventanas.</p>' +
+            '<p>Rondo vive como <b>barra lateral</b> a pantalla completa. Al ocultarla queda una pestana en el borde (rail) que la trae de vuelta con un clic. Tambien puedes ajustar el lado (izquierda/derecha) y el ancho en <i>Ajustes > Ventanas</i>.</p>' +
             '</div>' +
             '<div class="cfg-foot">' +
             '<button class="cancel" id="rondo-ayuda-cerrar">Cerrar</button>' +
             '<button class="accbtn" id="rondo-ayuda-config">Abrir ajustes</button>' +
             '</div>'
+
         );
 
         ctxEl = makeEl('div', { id: 'rondo-contexto' });
@@ -5732,6 +5744,8 @@
         else if (pct < 85) { cls = 'warn'; tag = 'ATENCION'; }
         pctEl.className = 'rondo-salud-pct ' + cls;
         if (tagEl) { tagEl.className = 'rondo-salud-tag ' + cls; tagEl.textContent = tag; }
+        const card = byId('rondo-salud');
+        if (card) { card.classList.toggle('warn', cls === 'warn'); card.classList.toggle('bad', cls === 'bad'); }
         if (subEl) {
             const resumen = total
                 ? '<b>' + on + '</b> en linea \u00b7 <b>' + off + '</b> sin senal \u00b7 <b>' + det + '</b> detenidas \u00b7 <b>' + mov + '</b> en mov.'
@@ -7457,6 +7471,13 @@
             g('c-sevmin').value = APP.config.severidadMin;
             g('c-voz').checked = !!APP.config.voice;
             g('c-voz-lang').value = APP.config.voiceLang || 'es-MX';
+            const vozSel = g('c-voz-voice');
+            if (vozSel) {
+                vozSel.innerHTML = '<option value="">Predeterminada</option>' +
+                    (window.speechSynthesis ? window.speechSynthesis.getVoices() : [])
+                        .map((v) => '<option value="' + esc(v.name) + '">' + esc(v.name) + ' (' + esc(v.lang) + ')</option>').join('');
+                if (APP.config.voiceVoice) vozSel.value = APP.config.voiceVoice;
+            }
             g('c-beep').checked = !!APP.config.beep;
             g('c-beep-vol').value = APP.config.beepVol;
             g('c-beep-vol').step = '0.01';
@@ -7578,6 +7599,8 @@
             cf.severidadMin = g('c-sevmin').value;
             cf.voice = g('c-voz').checked;
             cf.voiceLang = g('c-voz-lang').value || DEFAULTS.voiceLang;
+            const vozSel = g('c-voz-voice');
+            if (vozSel) cf.voiceVoice = vozSel.value || '';
             cf.beep = g('c-beep').checked;
             cf.beepVol = clamp(parseFloat(g('c-beep-vol').value) || cf.beepVol || DEFAULTS.beepVol, 0, 1);
             cf.desktop = g('c-desktop').checked;

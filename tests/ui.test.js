@@ -179,6 +179,16 @@ ok('dash tiene acciones rapidas', src.indexOf('rondo-dash-acciones') >= 0);
 ok('paintSalud existe', /function paintSalud\(/.test(src));
 ok('paintZonasDash existe', /function paintZonasDash\(/.test(src));
 ok('paintRutasDash existe', /function paintRutasDash\(/.test(src));
+// Dashboard: la cabecera ya no lleva el icono (imagen rota)
+ok('dash-head sin icono', !/rondo-dash-head">'\s*\+\s*'<span class="rondo-usym/.test(src));
+// Ayuda rapida mejorada
+ok('ayuda menciona Voz y notificaciones', src.indexOf('Voz y notificaciones') >= 0);
+ok('ayuda menciona Datos y privacidad', src.indexOf('Datos y privacidad') >= 0);
+// Selector de voz por modelo
+ok('config tiene c-voz-voice', src.indexOf('id="c-voz-voice"') >= 0);
+ok('DEFAULTS.voiceVoice', /voiceVoice:\s*''/.test(src));
+ok('speak usa voiceVoice', src.indexOf('APP.config.voiceVoice') >= 0);
+ok('pobla voces con getVoices', src.indexOf('getVoices()') >= 0);
 
 // Anti-solapamiento en la pestana Zonas: los hijos no deben encogerse.
 ok('zonas hijos flex-shrink:0', /#rondo-wrap-zonas > \*\{flex-shrink:0/.test(src));
