@@ -580,7 +580,9 @@ ver la ruta:
 - **Mini-mapa**: abre una ventana con un **mini-mapa propio de Rondo** (tiles
   de OpenStreetMap) con el trazo y los marcadores (origen, paradas y destino).
   Arrastra para moverlo y usa la rueda para acercar. No depende del mapa de la
-  plataforma, por lo que funciona siempre.
+  plataforma, por lo que funciona siempre. Ademas, cada tarjeta de la pestana
+  **Rutas** incluye su propio **mini-mapa del trazo** (resaltado) con la posicion
+  actual y el tramo ya recorrido.
 - **Google Maps**: abre la ruta en Google Maps con las paradas como *waypoints*
   (alternativa garantizada).
 - **OpenStreetMap**: abre el trayecto origen-destino en OSM.
@@ -605,9 +607,13 @@ La pestana **Replay** reproduce el recorrido de una unidad en un dia:
 3. El **mini-mapa** (tiles de OpenStreetMap) muestra el trazo completo, el tramo
    ya recorrido y la posicion actual. Arrastra para moverlo, rueda para acercar
    y **Centrar** para volver a encuadrarlo.
-4. La **lista de eventos** marca **paradas largas**, **entradas/salidas de
-   geocerca**, **excesos de velocidad** y **desvios** respecto a la ruta
-   planificada. Haz clic en un evento para saltar a ese momento.
+4. La **lista de eventos** marca **entradas/salidas de geocerca**,
+   **excesos de velocidad** y **desvios** respecto a la ruta planificada, y hay
+   una lista aparte de **Paradas** (hora, duracion y zona o municipio). Haz clic
+   en una parada o en un evento para saltar a ese momento.
+5. Arriba veras un **resumen del dia** (distancia, duracion, paradas, tiempo
+   detenido, velocidad maxima y excesos) y puedes **exportar** el recorrido a
+   **GeoJSON** o las paradas a **CSV**.
 
 Es solo lectura (historial de la plataforma). Atajo: **Alt + 8**. Tambien puedes
 abrirla desde el **clic derecho** sobre una unidad, en **Reproducir el dia

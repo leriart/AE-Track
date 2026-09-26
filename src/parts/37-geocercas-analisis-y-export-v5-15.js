@@ -407,6 +407,7 @@
                 '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
                 (totalP > 1 || s ? '<div class="rr-progress"><div class="rr-progress-fill" style="width:' + pct + '%"></div></div>' : '') +
                 '<div class="rr-meta">' + chips.map((c) => '<span class="rr-chip">' + c + '</span>').join('') + '</div>' +
+                '<div class="rr-mini" id="rondo-ru-mini-' + esc(eco) + '"></div>' +
                 '</div>';
         };
         let html = pendientes.map((x) => {
@@ -445,6 +446,7 @@
                 '</div>';
         });
         setHtml(cont, html);
+        try { rxRutasMiniSync(filas); } catch (_) { /* noop */ }
     }
     function paintPanel() { setTab(APP.tab); }
 

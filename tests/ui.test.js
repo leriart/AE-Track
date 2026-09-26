@@ -800,7 +800,9 @@ ok('tarjeta de rutas rediseñada', /class="rondo-ruta-card/.test(src) && /rr-hea
 ok('se elimino el overlay del mapa de la plataforma', !/function rxMapaDibujarRuta\(/.test(src) && !/function rxMapaCandidatos\(/.test(src) && !/function rxMapaVentanasToggle\(/.test(src) && !/rondo-rutas-ventanas/.test(src) && !/rxMapaDiagnostico/.test(src));
 
 // v6.0.11: replay del dia.
-ok('replay del dia con mini-mapa propio', /function rxReplayMapaCrear\(/.test(src) && /function rxReplayMarcas\(/.test(src) && /function rxReplayTick\(/.test(src) && /rondo-replay-eco/.test(src) && /rondo-replay-centrar/.test(src));
+ok('replay del dia con mini-mapa propio', /function rxReplayMapaCrear\(/.test(src) && /function rxReplayAnalizar\(/.test(src) && /function rxReplayTick\(/.test(src) && /rondo-replay-eco/.test(src) && /rondo-replay-centrar/.test(src));
+ok('replay: paradas, resumen y exportacion', /function rxReplayParadasHTML\(/.test(src) && /function rxReplayResumenHTML\(/.test(src) && /rondo-replay-paradas/.test(src) && /function rxReplayExportarGeoJSON\(/.test(src) && /function rxReplayExportarParadasCSV\(/.test(src));
+ok('mini-mapa por tarjeta de ruta (resaltado)', /function rxRutasMiniSync\(/.test(src) && /rondo-ru-mini-/.test(src) && /function rxRutaLineasMarcas\(/.test(src) && /glow: true/.test(src));
 
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
 

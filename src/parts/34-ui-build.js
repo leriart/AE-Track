@@ -206,6 +206,7 @@
              '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido del dia"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
              '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
              '</div>' +
+             '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
              '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
              '<div class="rondo-replay-ctrl">' +
              '<button class="mini" id="rondo-replay-play" title="Reproducir o pausar">Play</button>' +
@@ -218,7 +219,12 @@
              '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
              '</div>' +
              '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
-             '<div id="rondo-replay-eventos" class="rondo-replay-eventos"></div>' +
+             '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-acciones">' +
+             '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
+             '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
+             '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
              // habilitada y con API key (ver paintTabsChat()).

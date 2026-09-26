@@ -90,8 +90,15 @@
             const q = rxMMPt(inst, pts[i].lat, pts[i].lon);
             d += (d ? ' ' : '') + q[0].toFixed(1) + ',' + q[1].toFixed(1);
         }
-        return '<polyline fill="none" stroke="' + (ln.color || '#850D22') + '" stroke-width="' + (ln.width || 3) +
+        const color = ln.color || '#850D22';
+        let out = '';
+        if (ln.glow) {
+            out += '<polyline fill="none" stroke="' + color + '" stroke-width="' + ((ln.width || 3) + 7) +
+                '" stroke-opacity="0.22" stroke-linejoin="round" stroke-linecap="round" points="' + d + '"/>';
+        }
+        out += '<polyline fill="none" stroke="' + color + '" stroke-width="' + (ln.width || 3) +
             '" stroke-opacity="' + (ln.opacity == null ? 1 : ln.opacity) + '" stroke-linejoin="round" stroke-linecap="round" points="' + d + '"/>';
+        return out;
     }
     function rxMMMarcasHTML(inst) {
         let html = '';
@@ -155,7 +162,10 @@
             inst.pos = d.pos || null;
             inst.encuadrar();
         };
-        inst.setPos = (lat, lon) => { inst.pos = { lat: lat, lon: lon }; if (inst.svg) rxMMDibujar(inst, true); };
+        inst.setPos = (lat, lon) => {
+            inst.pos = (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) ? null : { lat: lat, lon: lon };
+            if (inst.svg) rxMMDibujar(inst, true);
+        };
         inst.setLinea = (i, pts, color, width, opacity) => {
             inst.lineas[i] = { pts: pts, color: color, width: width, opacity: opacity, dyn: true };
             if (inst.svg) rxMMDibujar(inst, true);
@@ -194,18 +204,73 @@
         inst.encuadrar();
         return inst;
     }
+    // Lineas y marcadores de una ruta (trazo resaltado con halo).
+    function rxRutaLineasMarcas(r) {
+        const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95, glow: true }];
+        const marcas = [];
+        if (r.origen) marcas.push({ lat: r.origen.lat, lon: r.origen.lon, color: '#2e7d32', radio: 6, txt: 'Origen' });
+        (r.paradas || []).forEach((p, i) => {
+            if (p.coords) marcas.push({ lat: p.coords.lat, lon: p.coords.lon, color: '#1565c0', radio: 5, txt: (i + 1) + '. ' + (p.texto || '') });
+        });
+        if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 6, txt: 'Destino' });
+        return { lineas: lineas, marcas: marcas };
+    }
+    // Mini-mapas embebidos en las tarjetas de la pestana Rutas. Se conservan
+    // entre repintados (el panel se repinta cada segundo): el nodo del mapa se
+    // re-anexa al nuevo placeholder en vez de recrearlo.
+    const _rxRutaMini = new Map(); // eco -> { inst, key }
+    function rxRutasMiniSync(filas) {
+        const vistos = new Set();
+        (filas || []).forEach((x) => {
+            const info = x && x.info ? x.info : x;
+            if (!info || !info.clave) return;
+            const eco = info.clave;
+            const r = rutaDe(info);
+            if (!r || !r.coords || r.coords.length < 2) return;
+            const ph = byId('rondo-ru-mini-' + eco);
+            if (!ph) return;
+            vistos.add(eco);
+            const st = x && x.st ? x.st : null;
+            const er = (typeof estadoRuta === 'function') ? estadoRuta(info, st) : { snap: null };
+            const s = er.snap || null;
+            const key = (r.creada || 0) + ':' + eco + ':' + r.coords.length;
+            let ent = _rxRutaMini.get(eco);
+            if (!ent || ent.key !== key) {
+                if (ent) { try { ent.inst.destruir(); } catch (_) { /* noop */ } }
+                const lm = rxRutaLineasMarcas(r);
+                lm.lineas.push({ pts: [], dyn: true });
+                const pos = (st && st.lat != null) ? { lat: st.lat, lon: st.lon } : null;
+                ent = { inst: rxMiniMapa(ph, { lineas: lm.lineas, marcas: lm.marcas, pos: pos }), key: key };
+                _rxRutaMini.set(eco, ent);
+            } else if (ent.inst.cont.parentNode !== ph) {
+                // El repintado recreo la tarjeta: re-anexa el mini-mapa (conserva tiles).
+                try { ph.appendChild(ent.inst.cont); ent.inst.medir(); ent.inst.render(); } catch (_) { /* noop */ }
+            }
+            if (s && st && st.lat != null) {
+                const idx = clamp((s.idx || 0) + 1, 0, r.coords.length - 1);
+                const paso = Math.max(1, Math.ceil((idx + 1) / 200));
+                const pts = [];
+                for (let i = 0; i <= idx; i += paso) { const c = r.coords[i]; pts.push({ lat: c[1], lon: c[0] }); }
+                pts.push({ lat: st.lat, lon: st.lon });
+                ent.inst.setLinea(1, pts, '#1565c0', 4, 0.95);
+                ent.inst.setPos(st.lat, st.lon);
+            } else {
+                ent.inst.setLinea(1, [], '#1565c0', 4, 0.95);
+                ent.inst.setPos(null, null);
+            }
+        });
+        _rxRutaMini.forEach((ent, eco) => {
+            if (vistos.has(eco)) return;
+            try { ent.inst.destruir(); } catch (_) { /* noop */ }
+            _rxRutaMini.delete(eco);
+        });
+    }
     // Abre una ventana con el mini-mapa de la ruta planificada de una unidad.
     function rxRutaMiniMapa(eco) {
         const it = unitByEco(eco);
         const r = it ? rutaDe(it.info) : (APP.rutas[eco] || null);
         if (!r || !r.coords || r.coords.length < 2) { adviceWarn('Sin ruta', 'No hay una ruta trazada para ' + eco + '.'); return; }
-        const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95 }];
-        const marcas = [];
-        if (r.origen) marcas.push({ lat: r.origen.lat, lon: r.origen.lon, color: '#2e7d32', radio: 7, txt: 'Origen' });
-        (r.paradas || []).forEach((p, i) => {
-            if (p.coords) marcas.push({ lat: p.coords.lat, lon: p.coords.lon, color: '#1565c0', radio: 6, txt: (i + 1) + '. ' + (p.texto || '') });
-        });
-        if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 7, txt: 'Destino' });
+        const lm = rxRutaLineasMarcas(r);
         const resumen = Math.round((r.total || 0) / 1000) + ' km' +
             (r.modo ? ' \u00b7 ' + r.modo : '') + ' \u00b7 ' + ((r.paradas || []).length) + ' parada(s)';
         abrirDialogo({
@@ -220,7 +285,7 @@
             ancho: 860,
             onOpen: (el) => {
                 const cont = el.querySelector('#rondo-ruta-minimapa');
-                if (cont) rxMiniMapa(cont, { lineas: lineas, marcas: marcas });
+                if (cont) rxMiniMapa(cont, { lineas: lm.lineas, marcas: lm.marcas });
             }
         });
     }

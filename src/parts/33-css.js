@@ -122,6 +122,7 @@
             "#rondo-panel .rondo-ruta-card .rr-progress-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-ruta-card .rr-meta{display:flex;flex-wrap:wrap;gap:5px}\n" +
             "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-mini{height:150px;margin-top:2px}\n" +
             // v6.0.11: replay del dia.
             "#rondo-panel .rondo-replay-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
             "#rondo-panel .rondo-replay-bar .filtro{min-width:0}\n" +
@@ -143,6 +144,17 @@
             "#rondo-panel .rondo-replay-ev .ev-desvio{color:#e65100}\n" +
             "#rondo-panel .rondo-replay-ev .ev-zona{color:var(--rondo-accent-2)}\n" +
             "#rondo-panel .rondo-replay-ev .ev-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-sec{margin-top:8px}\n" +
+            "#rondo-panel .rondo-replay-sec h5{margin:0 0 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-lista{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}\n" +
+            "#rondo-panel .rondo-replay-par{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
+            "#rondo-panel .rondo-replay-par:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-replay-par.activo{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-par .par-idx{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--rondo-bg-strong);display:inline-flex;align-items:center;justify-content:center;font:700 10px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-replay-par .par-hora{color:var(--rondo-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
+            "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
             "#rondo-panel .rondo-replay-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
             // v6.0.11: mini-mapa propio (global: se usa en el panel y en el dialogo de ruta).
             ".rondo-minimapa{height:min(64vh,560px);border-radius:10px;overflow:hidden}\n" +
