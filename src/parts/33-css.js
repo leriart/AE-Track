@@ -142,6 +142,38 @@
             "#rondo-panel .rondo-ia-action-txt b{font:700 12px var(--rondo-font)}\n" +
             "#rondo-panel .rondo-ia-action-txt small{font-size:10px;color:var(--rondo-fg-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
             "#rondo-panel .rondo-ia-action.busy{opacity:.7;pointer-events:none}\n" +
+            // v6.0.3: modal de Carga rapida de rutas (embarque).
+            "#rondo-carga-modal{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:14px}\n" +
+            "#rondo-carga-modal.abierto{display:flex}\n" +
+            "#rondo-carga-modal .carga-card{width:min(680px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font)}\n" +
+            "#rondo-carga-modal .carga-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700}\n" +
+            "#rondo-carga-modal .carga-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:9px}\n" +
+            "#rondo-carga-modal .carga-rowline{display:flex;gap:10px;flex-wrap:wrap;align-items:center}\n" +
+            "#rondo-carga-modal .carga-rowline label{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--rondo-fg-dim);font-weight:600}\n" +
+            "#rondo-carga-modal select,#rondo-carga-modal textarea{background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--rondo-font)}\n" +
+            "#rondo-carga-modal #carga-texto{width:100%;height:110px;resize:vertical;box-sizing:border-box}\n" +
+            "#rondo-carga-modal .carga-drop{display:flex;align-items:center;gap:7px;justify-content:center;padding:10px;border:1.5px dashed var(--rondo-border);border-radius:8px;color:var(--rondo-fg-dim);font-size:12px;cursor:pointer;text-align:center}\n" +
+            "#rondo-carga-modal .carga-drop.over{border-color:var(--rondo-accent-2);color:var(--rondo-fg);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-carga-modal .carga-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}\n" +
+            "#rondo-carga-modal .carga-resumen{font-size:11px;color:var(--rondo-fg-dim);margin-left:auto}\n" +
+            "#rondo-carga-modal .carga-btn{display:inline-flex;align-items:center;gap:5px;background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:8px;padding:7px 12px;cursor:pointer;font:600 12px var(--rondo-font)}\n" +
+            "#rondo-carga-modal .carga-btn:hover{background:var(--rondo-bg-strong);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-carga-modal .carga-btn.primary{background:var(--rondo-accent);color:#fff;border-color:transparent}\n" +
+            "#rondo-carga-modal .carga-mini{background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:6px;cursor:pointer;padding:3px 7px}\n" +
+            "#rondo-carga-modal .carga-list{display:flex;flex-direction:column;gap:5px}\n" +
+            "#rondo-carga-modal .carga-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
+            "#rondo-carga-modal .carga-row.off{opacity:.5}\n" +
+            "#rondo-carga-modal .carga-check{display:flex;align-items:center}\n" +
+            "#rondo-carga-modal .carga-cliente{flex:1;min-width:0;display:flex;align-items:center;gap:6px}\n" +
+            "#rondo-carga-modal .carga-cliente b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-carga-modal .carga-conf{font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;border-radius:8px;padding:1px 6px;border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-carga-modal .carga-conf-ok{color:var(--rondo-ok-fg);border-color:rgba(67,160,71,.5)}\n" +
+            "#rondo-carga-modal .carga-conf-warn{color:var(--rondo-warn-fg);border-color:rgba(249,168,37,.5)}\n" +
+            "#rondo-carga-modal .carga-conf-dim{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-carga-modal .carga-conf-no{color:var(--rondo-bad-fg);border-color:rgba(183,28,28,.5)}\n" +
+            "#rondo-carga-modal select.carga-zona{flex:0 0 46%;max-width:46%}\n" +
+            "#rondo-carga-modal .carga-vacio{padding:16px;text-align:center;color:var(--rondo-fg-mute);font-size:12px}\n" +
+            "#rondo-carga-modal .carga-foot{display:flex;gap:8px;justify-content:flex-end;padding:11px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
             "#rondo-panel .tabla{overflow:auto;flex:1}\n" +
             "#rondo-panel table{width:100%;border-collapse:collapse}\n" +
             "#rondo-panel th{position:sticky;top:0;background:var(--rondo-bg-soft);text-align:left;padding:6px 9px;font-size:11px;color:var(--rondo-fg-dim);border-bottom:1px solid var(--rondo-border-soft);z-index:1;letter-spacing:.3px;text-transform:uppercase}\n" +

@@ -541,6 +541,32 @@ y `coord:` (coordenadas). Por ejemplo:
 eco=Monterrey | geo:CEDIS Norte | mun:Saltillo
 ```
 
+### Carga rapida de rutas (embarque)
+
+Para asignar de golpe la ruta de un embarque a una unidad:
+
+1. En la pestana **Unidades**, pulsa **Carga rapida** (barra de herramientas).
+2. Elige la **unidad** y el **modo** (mejor ruta / secuencial) y el **motor**.
+3. Pega la lista de **clientes** (una por linea o la tabla completa copiada de
+   Excel: detecta la columna **Cliente**), o **arrastra el archivo**
+   `.xlsx` / `.csv` / `.tsv` / `.txt`.
+4. Pulsa **Emparejar clientes**: Rondo compara cada cliente con tus
+   **geocercas** usando **busqueda difusa** (tolera acentos y errores de
+   escritura) y propone la mejor coincidencia con su nivel de confianza
+   (alta / media / baja / sin).
+5. Revisa: puedes **desmarcar** clientes o **cambiar** la geocerca con el
+   desplegable.
+6. **Asignar y trazar** crea la ruta multipunto de esa unidad y la calcula; o
+   **Solo asignar** si la trazas despues.
+
+Notas:
+
+- Es **solo lectura**: no crea ni modifica nada en Wialon; unicamente arma el
+  plan de ruta local de Rondo.
+- Si un cliente no tiene geocerca, puedes dejar la parada sin asignar (se
+  omite) o elegir otra a mano.
+- El `.xlsx` se lee en el navegador sin subirlo a ningun servidor.
+
 ### Municipios y tolerancia de desvio
 
 Rondo consulta los municipios en **OpenStreetMap** (Nominatim) y guarda su

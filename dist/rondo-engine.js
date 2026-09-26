@@ -3460,7 +3460,7 @@ ta.value = '';
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
     function esUIPropia(el) {
         try {
-            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog,#rondo-plan-modal'));
+            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog,#rondo-plan-modal,#rondo-carga-modal'));
         } catch (_) { return false; }
     }
     function findSearchInput() {

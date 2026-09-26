@@ -766,5 +766,12 @@ ok('Ajustes Ventanas ya no configura la barra de botones', src.indexOf("c-b-main
 ok('sin ocultar botones por clic derecho', src.indexOf("APP.barra.botones[key] = false") < 0);
 ok('CSS de la barra de IA', /\.rondo-ia-bar\{/.test(src) && /\.rondo-ia-action\{/.test(src));
 
+// v6.0.3: carga rapida de rutas (embarque) por busqueda difusa.
+ok('boton Carga rapida en herramientas', /id="rondo-carga-btn"/.test(src));
+ok('modal de carga rapida', /rondo-carga-modal/.test(src) && /function abrirCarga\(/.test(src));
+ok('parser de clientes y emparejamiento', /function rxCargaParsearFilas\(/.test(src) && /function rxCargaEmparejarCliente\(/.test(src));
+ok('lector xlsx solo lectura', /function rxCargaLeerXlsx\(/.test(src) && /DecompressionStream/.test(src));
+ok('CSS del modal de carga', /#rondo-carga-modal \.carga-card\{/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
