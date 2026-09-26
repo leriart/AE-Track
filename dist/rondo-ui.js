@@ -807,6 +807,9 @@
             "#rondo-panel .rondo-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
             "#rondo-panel .rondo-tile.primary{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .rondo-tile.primary .rondo-usym{color:#fff}\n" +
+            "#rondo-panel .rondo-tile-escala{display:flex;flex-direction:column;gap:3px;justify-content:center;align-items:stretch;min-width:0}\n" +
+            "#rondo-panel .rondo-tile.mini{flex:1 1 0;min-height:0;padding:1px 0;gap:0;border-radius:8px}\n" +
+            "#rondo-panel .rondo-tile.mini .rondo-usym{font-size:12px}\n" +
             "#rondo-barra .rondo-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#rondo-barra .rondo-badge-estado.ok{background:var(--rondo-ok)}\n" +
             "#rondo-barra .rondo-badge-estado.warn{background:var(--rondo-warn)}\n" +
@@ -1113,8 +1116,10 @@
             '<div class="rondo-sidebar-tools" id="rondo-sidebar-tools">' +
             '<button class="rondo-tile primary" id="rondo-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="rondo-usym">' + UIS.gear + '</span><span class="tile-lbl">Automatizar</span></button>' +
             '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar o mostrar las ventanas de unidades abiertas (sin cerrarlas)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
-            '<button class="rondo-tile" id="rondo-sb-mas" title="Aumentar el tamano de las ventanas de unidades abiertas"><span class="rondo-usym">' + UIS.mas + '</span><span class="tile-lbl">+</span></button>' +
-            '<button class="rondo-tile" id="rondo-sb-menos" title="Disminuir el tamano de las ventanas de unidades abiertas"><span class="rondo-usym">' + UIS.menos + '</span><span class="tile-lbl">-</span></button>' +
+            '<div class="rondo-tile-escala" role="group" aria-label="Tamano de las ventanas de unidades">' +
+            '<button class="rondo-tile mini" id="rondo-sb-mas" title="Aumentar el tamano de las ventanas abiertas" aria-label="Aumentar el tamano de las ventanas"><span class="rondo-usym">' + UIS.mas + '</span></button>' +
+            '<button class="rondo-tile mini" id="rondo-sb-menos" title="Disminuir el tamano de las ventanas abiertas" aria-label="Disminuir el tamano de las ventanas"><span class="rondo-usym">' + UIS.menos + '</span></button>' +
+            '</div>' +
             '<button class="rondo-tile" id="rondo-sb-close" title="Cerrar todas las ventanas de unidades"><span class="rondo-usym">' + UIS.close + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
 '<header id="rondo-drag">' +
