@@ -1,0 +1,192 @@
+{
+  "parts": [
+    {
+      "file": "00-bloque.js",
+      "chunk": "core"
+    },
+    {
+      "file": "01-contexto-y-peticiones.js",
+      "chunk": "core"
+    },
+    {
+      "file": "02-migracion-desde-hjp-wialon.js",
+      "chunk": "core"
+    },
+    {
+      "file": "03-iconos.js",
+      "chunk": "core"
+    },
+    {
+      "file": "04-idioma.js",
+      "chunk": "core"
+    },
+    {
+      "file": "05-version-y-actualizaciones.js",
+      "chunk": "core"
+    },
+    {
+      "file": "06-localstorage.js",
+      "chunk": "core"
+    },
+    {
+      "file": "07-valores-por-defecto.js",
+      "chunk": "core"
+    },
+    {
+      "file": "08-utilidades.js",
+      "chunk": "core"
+    },
+    {
+      "file": "09-estado.js",
+      "chunk": "core"
+    },
+    {
+      "file": "10-dom-helpers.js",
+      "chunk": "core"
+    },
+    {
+      "file": "11-api-wialon.js",
+      "chunk": "core"
+    },
+    {
+      "file": "12-geo.js",
+      "chunk": "core"
+    },
+    {
+      "file": "13-algoritmos-geo-rutas-osm-a.js",
+      "chunk": "core"
+    },
+    {
+      "file": "14-municipios-openstreetmap.js",
+      "chunk": "core"
+    },
+    {
+      "file": "15-busqueda-difusa.js",
+      "chunk": "core"
+    },
+    {
+      "file": "16-paradas-multipunto.js",
+      "chunk": "core"
+    },
+    {
+      "file": "17-rutas-almacenamiento-y-planificacion.js",
+      "chunk": "core"
+    },
+    {
+      "file": "18-begin-unidadesencaravana.js",
+      "chunk": "core"
+    },
+    {
+      "file": "19-end-unidadesencaravana.js",
+      "chunk": "core"
+    },
+    {
+      "file": "20-analisis-de-viaje-historial.js",
+      "chunk": "core"
+    },
+    {
+      "file": "21-nombre-estado.js",
+      "chunk": "core"
+    },
+    {
+      "file": "22-notificaciones.js",
+      "chunk": "core"
+    },
+    {
+      "file": "23-ia-de-razonamiento.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "24-dialogo-propio.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "25-motor-de-reglas.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "26-riesgo.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "27-refresh.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "28-ventanas-de-la-app-abrirvehiculos.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "29-lista-unificada-eco-destino.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "30-editor-de-paradas-v5-15.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "31-verificacion.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "32-tema-no-molestar.js",
+      "chunk": "engine"
+    },
+    {
+      "file": "33-css.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "34-ui-build.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "35-place-drag.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "36-paint.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "37-geocercas-analisis-y-export-v5-15.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "38-begin-paintcaravana.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "39-end-paintcaravana.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "40-csv-backup.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "41-actualizaciones.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "42-menu-contextual.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "43-teclas.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "44-eventos.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "45-riesgo-bindings.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "46-init.js",
+      "chunk": "ui"
+    }
+  ]
+}

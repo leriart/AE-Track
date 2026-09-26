@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Construir bundle
+        run: node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
+      - name: Pruebas (12 suites)
+        run: |
+          fallo=0
+          for t in tests/*.test.js; do
+            echo "== $t =="
+            node "$t" || fallo=1
+          done
+          exit $fallo
+
+  sincronizado:
+    # Solo en main: comprueba que el bootstrap y dist/ commiteados coinciden
+    # con lo que produce src/. En dev la version lleva sufijo -dev.N.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generar artefactos en un directorio temporal
+        run: |
+          rm -rf /tmp/dist-check
+          node scripts/build.mjs --mode=require --channel=release --dist /tmp/dist-check --out /tmp/bootstrap-check.js
+      - name: Comparar con lo commiteado
+        run: |
+          diff -u dist/rondo-core.js /tmp/dist-check/rondo-core.js
+          diff -u dist/rondo-engine.js /tmp/dist-check/rondo-engine.js
+          diff -u dist/rondo-ui.js /tmp/dist-check/rondo-ui.js
+          diff -u rondo.user.js /tmp/bootstrap-check.js
+          echo "Artefactos sincronizados con src/."

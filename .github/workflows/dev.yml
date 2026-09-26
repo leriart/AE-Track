@@ -1,0 +1,46 @@
+name: Dev
+
+# Canal de desarrollo (hibrido). Construye con version X.Y.Z-dev.N y deja
+# dist/ + rondo.user.js en la rama dev para que @require los tome de raw.
+on:
+  push:
+    branches: [dev]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  dev:
+    runs-on: ubuntu-latest
+    # Evita el bucle: el commit del propio workflow lleva [skip ci].
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: dev
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Construir canal dev
+        run: |
+          base="$(cat VERSION)"
+          ver="${base}-dev.${{ github.run_number }}"
+          node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
+          node scripts/build.mjs --mode=require --channel=dev --version "$ver" --out rondo.user.js
+
+      - name: Pruebas
+        run: |
+          fallo=0
+          for t in tests/*.test.js; do node "$t" || fallo=1; done
+          exit $fallo
+
+      - name: Commit artefactos dev
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist rondo.user.js
+          if git diff --cached --quiet; then echo "sin cambios"; exit 0; fi
+          git commit -m "chore(dev): artefactos ${{ github.run_number }} [skip ci]"
+          git push origin dev

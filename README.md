@@ -14,7 +14,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.15.2-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.15.2.md)
+[![version](https://img.shields.io/badge/version-6.0.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.0.0.md)
 [![tests](https://img.shields.io/badge/tests-971%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
@@ -307,18 +307,37 @@ traza a GeoJSON.
 
 ## Estructura del proyecto
 
+Desde la **6.0.0** el codigo vive en `src/` (fragmentos organizados por dominio)
+y el userscript se **construye** con un script de Node sin dependencias. El
+archivo que se instala (`rondo.user.js`) es un **bootstrap** que carga tres
+modulos con `@require` desde los assets del release; en el repositorio tambien
+se guarda el bundle completo para auditar y para las pruebas.
+
 ```
-rondo.user.js          Userscript completo (un solo archivo, IIFE en modo estricto)
+src/                   Codigo fuente (header, prelude y parts/ ordenados)
+scripts/build.mjs      Build (--mode=bundle | --mode=require), sin dependencias
+scripts/bump-readme.mjs  Actualiza el badge de version (lo usa el release)
+dist/                  Modulos generados (rondo-core/engine/ui.js)
+rondo.user.js          Bootstrap instalable (o bundle, en modo bundle)
 MANUAL.md              Manual de usuario completo
-LICENSE                Licencia MIT
-README.md              Este documento
+ARCHITECTURE.md        Mapa de modulos y flujo de datos
+CONTRIBUTING.md        Como construir, probar y contribuir
 changelogs/            Historial de cambios, un archivo por version
-tests/                 Pruebas de algoritmos, version, viaje y UI
+tests/                 Pruebas que leen el bundle construido
+.github/workflows/     CI, release y canal dev
+```
+
+Comandos:
+
+```bash
+node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js   # un archivo
+node scripts/build.mjs --mode=require --out rondo.user.js          # hibrido + dist/
 ```
 
 ## Pruebas
 
-Los algoritmos y utilidades se prueban sin navegador ni red:
+El cargador de pruebas (`tests/_source.js`) construye el bundle si hace falta y
+las suites lo leen. Los algoritmos y utilidades se prueban sin navegador ni red:
 
 ```bash
 node tests/algorithms.test.js

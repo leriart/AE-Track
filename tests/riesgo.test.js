@@ -10,8 +10,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ARCHIVO = path.join(__dirname, '..', 'rondo.user.js');
-const src = fs.readFileSync(ARCHIVO, 'utf8');
+const { ARCHIVO, src } = require('./_source.js');
 
 // Toma el bloque que va desde el comentario "Algoritmos UI" hasta el fin
 // de la funcion topDelitos (la ultima auxiliar agregada en la pestana Riesgo).

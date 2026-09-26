@@ -1,0 +1,81 @@
+name: Release
+
+# Release semi-automatico: valida, construye, prueba, etiqueta y publica.
+# Orden importante (modo hibrido): el release con sus assets se crea ANTES de
+# actualizar la rama main, para que ningun usuario reciba un bootstrap cuyos
+# @require todavia no existan.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version a publicar (X.Y.Z). Debe existir changelogs/X.Y.Z.md"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validar version
+        run: |
+          new="${{ inputs.version }}"
+          cur="$(cat VERSION)"
+          echo "actual=$cur nueva=$new"
+          echo "$new" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Formato invalido"; exit 1; }
+          node -e 'const a=process.argv[1].split(".").map(Number),b=process.argv[2].split(".").map(Number);for(let i=0;i<3;i++){if(b[i]>a[i])process.exit(0);if(b[i]<a[i])process.exit(1);}process.exit(1);' "$cur" "$new" || { echo "La version debe ser mayor que $cur"; exit 1; }
+          test -f "changelogs/$new.md" || { echo "Falta changelogs/$new.md"; exit 1; }
+
+      - name: Fijar VERSION y construir
+        run: |
+          echo "${{ inputs.version }}" > VERSION
+          node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
+          node scripts/build.mjs --mode=require --channel=release --out rondo.user.js
+          node scripts/bump-readme.mjs "${{ inputs.version }}"
+
+      - name: Pruebas
+        run: |
+          fallo=0
+          for t in tests/*.test.js; do node "$t" || fallo=1; done
+          exit $fallo
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add VERSION rondo.user.js dist README.md
+          git commit -m "release: v${{ inputs.version }} [skip ci]"
+
+      - name: Etiqueta y release con assets (antes de tocar main)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git tag "v${{ inputs.version }}"
+          git push origin "v${{ inputs.version }}"
+          gh release create "v${{ inputs.version }}" \
+            rondo.user.js dist/rondo-core.js dist/rondo-engine.js dist/rondo-ui.js \
+            --title "v${{ inputs.version }}" \
+            --notes-file "changelogs/${{ inputs.version }}.md"
+
+      - name: Publicar main
+        run: git push origin HEAD:main
+
+      - name: Smoke test de los assets
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          base="https://github.com/${{ github.repository }}/releases/download/v${{ inputs.version }}"
+          for f in rondo.user.js rondo-core.js rondo-engine.js rondo-ui.js; do
+            code=$(curl -s -o "/tmp/$f" -w '%{http_code}' -L "$base/$f")
+            echo "$f -> $code"
+            test "$code" = "200" || { echo "Asset no accesible: $f"; exit 1; }
+          done
+          grep -q "@require" /tmp/rondo.user.js

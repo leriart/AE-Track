@@ -7,8 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ARCHIVO = path.join(__dirname, '..', 'rondo.user.js');
-const src = fs.readFileSync(ARCHIVO, 'utf8');
+const { ARCHIVO, src } = require('./_source.js');
 
 const ini = src.indexOf('const ODOMETRO_MAX_SALTO_M');
 const fin = src.indexOf('function isBase(', ini);

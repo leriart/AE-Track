@@ -6,8 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const ARCHIVO = path.join(__dirname, '..', 'rondo.user.js');
-const src = fs.readFileSync(ARCHIVO, 'utf8');
+const { ARCHIVO, src } = require('./_source.js');
 
 function bloque(inicio, fin) {
     const i = src.indexOf(inicio);
@@ -403,7 +402,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.15.2 en @UserScript', /@version\s+5\.15\.2/.test(src));
+ok('version 6.0.0 en @UserScript', /@version\s+6\.0\.0/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -616,8 +615,8 @@ ok('MANUAL.md lista regla Aproximacion a zona de riesgo', /Aproximacion a zona d
 ok('MANUAL.md atajo Alt+7', /Alt.*\+.*7.*Chat IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.15\.2['"]/.test(src));
-ok('@version 5.15.2 sincronizado con VER', /@version\s+5\.15\.2[\s\S]{0,50000}const VER = ['"]5\.15\.2['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]6\.0\.0['"]/.test(src));
+ok('@version 6.0.0 sincronizado con VER', /@version\s+6\.0\.0[\s\S]{0,50000}const VER = ['"]6\.0\.0['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
@@ -723,7 +722,7 @@ ok('ajustes: desvio municipio', /checkRow\('c-desvio-municipio'/.test(src) && /n
 ok('sin codigo de modo flotante', src.indexOf('placePanel') < 0 && src.indexOf('savePanelPos') < 0 && src.indexOf('panelMode') < 0);
 ok('sin CSS .dragging del panel', src.indexOf('#rondo-panel.dragging') < 0);
 
-// v5.15.2: lista de unidades sin parpadeo, menu contextual anclado y botones rapidos.
+// v6.0.0: lista de unidades sin parpadeo, menu contextual anclado y botones rapidos.
 ok('render incremental de tarjetas', /function renderLista\(/.test(src) && /function unidCardNode\(/.test(src) && /function unidCardUpdate\(/.test(src) && /_rondoItems/.test(src));
 ok('paintTabla usa renderLista', /renderLista\(body, lista,/.test(src));
 ok('estado vacio memoizado (no parpadea)', /body\._rondoVacio/.test(src));
@@ -739,7 +738,7 @@ ok('velocidad suavizada (EMA)', /velSuave: \{\}/.test(src) && /function velSuavi
 ok('area de geocerca: detecta poligono antes que circulo', /function _zonaEsCirculo\(/.test(src) && src.indexOf('if (z.t === 3 || (z.b && z.b.cen_x != null))') < 0);
 ok('area de geocerca: shoelace y linea', /formula del area \(shoelace\)/.test(src) && /longitud x ancho/.test(src));
 
-// v5.15.2: menus unificados de unidades/destinos/multipuntos y lista sin parpadeo.
+// v6.0.0: menus unificados de unidades/destinos/multipuntos y lista sin parpadeo.
 ok('modal de unidades unificado', /Unidades y rutas/.test(src) && /id="rondo-modal-add-plan"/.test(src) && /id="rondo-modal-count"/.test(src));
 ok('sintaxis de multipunto en el modal', /rondo-modal-sintaxis/.test(src) && /Tipos: <code>geo:<\/code>/.test(src));
 ok('resumen de paradas por fila (chips)', /function resumenPlanHTML\(/.test(src) && /rondo-dest-chip/.test(src) && /rondo-dest-modo/.test(src));
