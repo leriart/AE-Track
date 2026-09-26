@@ -428,7 +428,7 @@
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(q), {}, 15000);
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es' + rxGeoParams() + '&q=' + encodeURIComponent(q), {}, 15000);
             let out = null;
             if (Array.isArray(d) && d.length) {
                 const lat = parseFloat(d[0].lat), lon = parseFloat(d[0].lon);

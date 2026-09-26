@@ -792,5 +792,10 @@ ok('resolucion municipio -> geocerca -> lugar', /_rxCacheResolucion/.test(src) &
 ok('trazado: 2 intentos automaticos + manual', /rutaIntentos/.test(src) && /intentos >= 2/.test(src) && /function trazarRutasAhora\(/.test(src));
 ok('rutas pendientes visibles y boton', /rondo-rutas-trazar/.test(src) && /rondo-ruta-trazar/.test(src) && /SIN TRAZAR/.test(src));
 
+// v6.0.7: pais/cercania en OSM y tarjeta de rutas rediseñada.
+ok('busqueda OSM restringida por pais', /function rxGeoParams\(/.test(src) && /countrycodes=/.test(src) && /geoPais:\s*'mx'/.test(src));
+ok('sesgo por cercania a la unidad', /geoBiasKm/.test(src) && /viewbox=/.test(src) && /APP\.geoRef/.test(src));
+ok('tarjeta de rutas rediseñada', /class="rondo-ruta-card/.test(src) && /rr-head/.test(src) && /rr-chip/.test(src) && /rr-progress/.test(src) && /function rxFmtDist\(/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

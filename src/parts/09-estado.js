@@ -62,6 +62,7 @@
         rutaIntentos: {},
         rutaTrazando: false,
         rutaRetryTimer: null,
+        geoRef: null,        // punto de referencia para sesgar busquedas OSM (v6.0.7)
         caravanaEco: '',
 
         // Riesgo: zonas de alto riesgo para flota, consultadas en cada arranque

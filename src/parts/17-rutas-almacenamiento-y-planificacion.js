@@ -66,13 +66,19 @@
         // Resuelve cada parada (geocerca, municipio, coord o lugar).
         advice('Resolviendo paradas', plan.paradas.length + ' parada(s)...');
         const resueltas = [];
-        for (let i = 0; i < plan.paradas.length; i++) {
-            const p = await resolverParada(plan.paradas[i]);
-            if (!p) {
-                adviceErr('Parada no resuelta', 'No se pudo ubicar "' + plan.paradas[i].texto + '"');
-                return null;
+        // v6.0.7: sesga las busquedas OSM hacia el origen de la ruta (unidad).
+        APP.geoRef = origen;
+        try {
+            for (let i = 0; i < plan.paradas.length; i++) {
+                const p = await resolverParada(plan.paradas[i]);
+                if (!p) {
+                    adviceErr('Parada no resuelta', 'No se pudo ubicar "' + plan.paradas[i].texto + '"');
+                    return null;
+                }
+                resueltas.push(p);
             }
-            resueltas.push(p);
+        } finally {
+            APP.geoRef = null;
         }
         // Optimiza el orden si el plan es "mejor ruta".
         let paradas = resueltas;
