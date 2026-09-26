@@ -131,6 +131,18 @@
             "#rondo-panel .severidad-pick{display:flex;gap:3px;align-items:center;padding:6px 9px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-panel .severidad-pick span{cursor:pointer;padding:2px 6px;border-radius:5px;font:600 11px var(--rondo-font);border:1px solid var(--rondo-border);color:var(--rondo-fg-dim)}\n" +
             "#rondo-panel .severidad-pick span.activo{border-color:var(--rondo-accent-2);color:var(--rondo-fg)}\n" +
+            // v6.0.x: barra de analisis con IA en Avisos.
+            "#rondo-panel .rondo-ia-bar{display:flex;gap:8px;align-items:stretch;padding:8px 9px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-ia-bar-title{display:inline-flex;align-items:center;gap:5px;font:700 11px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ia-bar-title .rondo-usym{color:var(--rondo-accent-2);font-size:15px}\n" +
+            "#rondo-panel .rondo-ia-action{flex:1;min-width:150px;display:flex;align-items:center;gap:9px;text-align:left;background:var(--rondo-bg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:7px 10px;cursor:pointer;color:var(--rondo-fg);transition:background .15s,border-color .15s,transform .1s,box-shadow .15s}\n" +
+            "#rondo-panel .rondo-ia-action:hover:not(:disabled){background:var(--rondo-bg-strong);border-color:var(--rondo-accent-2);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .rondo-ia-action:disabled{cursor:default}\n" +
+            "#rondo-panel .rondo-ia-action .rondo-usym.lg{color:var(--rondo-accent-2);font-size:20px;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-ia-action-txt{display:flex;flex-direction:column;gap:1px;min-width:0}\n" +
+            "#rondo-panel .rondo-ia-action-txt b{font:700 12px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-ia-action-txt small{font-size:10px;color:var(--rondo-fg-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-ia-action.busy{opacity:.7;pointer-events:none}\n" +
             "#rondo-panel .tabla{overflow:auto;flex:1}\n" +
             "#rondo-panel table{width:100%;border-collapse:collapse}\n" +
             "#rondo-panel th{position:sticky;top:0;background:var(--rondo-bg-soft);text-align:left;padding:6px 9px;font-size:11px;color:var(--rondo-fg-dim);border-bottom:1px solid var(--rondo-border-soft);z-index:1;letter-spacing:.3px;text-transform:uppercase}\n" +
@@ -1172,9 +1184,13 @@
              '<span data-sev="alto">Altas</span>' +
              '<span data-sev="medio">Medias</span>' +
              '<span data-sev="bajo">Bajas</span>' +
-             '<span style="flex:1"></span>' +
-             '<button type="button" class="accbtn rondo-ia-batch-btn" id="rondo-ia-batch" title="Analizar todos los avisos visibles con la IA y obtener un ranking de los mas urgentes" style="font-size:11px;padding:2px 8px;display:none"><span class="rondo-usym sm">' + UIS.robot + '</span> Analizar lote</button>' +
-             '<button type="button" class="accbtn rondo-ia-batch-btn" id="rondo-ia-flota" title="Revision proactiva de toda la flota con la IA: unidades que requieren atencion, riesgos y recomendaciones" style="font-size:11px;padding:2px 8px;display:none"><span class="rondo-usym sm">' + UIS.robot + '</span> Analizar flota</button>' +
+             '</div>' +
+             '<div class="rondo-ia-bar" id="rondo-ia-bar" style="display:none">' +
+             '<span class="rondo-ia-bar-title"><span class="rondo-usym">' + UIS.robot + '</span> Analisis con IA</span>' +
+             '<button type="button" class="rondo-ia-action" id="rondo-ia-batch" title="Analiza los avisos del dia (o los ultimos) y devuelve un ranking de los mas urgentes"><span class="rondo-usym lg">' + UIS.robot + '</span>' +
+             '<span class="rondo-ia-action-txt"><b>Analizar lote</b><small>Prioriza los avisos mas urgentes</small></span></button>' +
+             '<button type="button" class="rondo-ia-action" id="rondo-ia-flota" title="Revision proactiva de toda la flota: unidades que requieren atencion, riesgos y recomendaciones"><span class="rondo-usym lg">' + UIS.robot + '</span>' +
+             '<span class="rondo-ia-action-txt"><b>Analizar flota</b><small>Unidades por atender, riesgos y consejos</small></span></button>' +
              '</div>' +
              '<div id="rondo-lista-alertas"></div>' +
              '</div>' +
@@ -1408,6 +1424,7 @@
             checkRow('c-r-geo', 'Geocercas') +
             checkRow('c-r-geo-det', 'Detenida en geocerca') +
             numRow('c-geo-det-min', 'Min detenido para alertar (min)') +
+            numRow('c-geo-estable', 'Confirmar cambio de geocerca (s)') +
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
@@ -1512,15 +1529,6 @@
             checkRow('c-panel-clicfuera', 'Ocultar la barra lateral al hacer clic fuera') +
             checkRow('c-confirmar-cierre', 'Pedir confirmación al cerrar todas las ventanas') +
             '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:2px 0 0">Rondo vive como barra lateral redimensionable. La barra recuerda su lado y si estaba abierta.</p>' +
-            '<h4>Barra de botones</h4>' +
-            '<div class="row-grid">' +
-            checkRow('c-b-main', 'Automatizar') +
-            checkRow('c-b-panel', 'Panel') +
-            checkRow('c-b-close', 'Cerrar') +
-            '</div>' +
-            checkRow('c-b-plegada', 'Barra plegada') +
-            checkRow('c-b-vertical', 'Orientacion vertical') +
-            '<div style="margin-top:6px"><button class="accbtn" id="rondo-b-reset" style="width:100%"><span class="rondo-usym">' + UIS.expand + '</span> Recentrar barra</button></div>' +
             '<h4>Verificacion</h4>' +
             checkRow('c-verif', 'Verificación automática') +
             numRow('c-verif-seg', 'Revisar cada (seg)') +
@@ -4382,15 +4390,6 @@
             applyBar();
             advice('Barra', APP.barra.vertical ? 'orientacion vertical' : 'orientacion horizontal');
         });
-        [[mainBtn, 'main', 'Automatizar'], [panelBtn, 'panel', 'Panel'], [closeBtn, 'close', 'Cerrar']]
-            .forEach(([btn, key, name]) => {
-                btn.addEventListener('contextmenu', (ev) => {
-                    ev.preventDefault();
-                    APP.barra.botones[key] = false;
-                    applyBar();
-                    advice('Botón oculto: ' + name, 'Reactívalo en Ajustes · Barra de botones');
-                });
-            });
 
         document.getElementById('rondo-body').addEventListener('change', (e) => {
             if (!e.target.classList.contains('rondo-sel')) return;
@@ -4597,11 +4596,6 @@
             g('c-confirmar-cierre').checked = !!APP.config.confirmarCierre;
             g('c-panel-lado').value = APP.config.panelLado || 'derecha';
             g('c-panel-ancho').value = APP.config.panelAncho || 460;
-            g('c-b-main').checked = !!APP.barra.botones.main;
-            g('c-b-panel').checked = !!APP.barra.botones.panel;
-            g('c-b-close').checked = !!APP.barra.botones.close;
-            g('c-b-plegada').checked = !!APP.barra.plegada;
-            g('c-b-vertical').checked = !!APP.barra.vertical;
             g('c-r-off').checked = !!APP.config.reglas.offline;
             g('c-r-gps').checked = !!APP.config.reglas.gpsPerdido;
             g('c-r-det').checked = !!APP.config.reglas.detenido;
@@ -4610,6 +4604,8 @@
             const cRGeoDet = byId('c-r-geo-det'); if (cRGeoDet) cRGeoDet.checked = !!APP.config.reglas.geocercaDetenido;
             const cGeoDetMin = byId('c-geo-det-min');
             if (cGeoDetMin) cGeoDetMin.value = APP.config.geocercaDetenidoMin != null ? APP.config.geocercaDetenidoMin : DEFAULTS.geocercaDetenidoMin;
+            const cGeoEst = byId('c-geo-estable');
+            if (cGeoEst) cGeoEst.value = APP.config.geocercaEstableSeg != null ? APP.config.geocercaEstableSeg : DEFAULTS.geocercaEstableSeg;
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
@@ -4868,6 +4864,8 @@
             const geoDetEl = g('c-r-geo-det'); if (geoDetEl) cf.reglas.geocercaDetenido = !!geoDetEl.checked;
             const geoDetMinEl = g('c-geo-det-min');
             if (geoDetMinEl) cf.geocercaDetenidoMin = clamp(isoNum(geoDetMinEl.value, DEFAULTS.geocercaDetenidoMin), 1, 240);
+            const geoEstEl = g('c-geo-estable');
+            if (geoEstEl) cf.geocercaEstableSeg = clamp(isoNum(geoEstEl.value, DEFAULTS.geocercaEstableSeg), 2, 300);
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
@@ -4937,11 +4935,6 @@
             cf.panelAncho = clamp(isoNum(g('c-panel-ancho').value, cf.panelAncho), 360, 900);
             cf.ocultarAlClicFuera = g('c-panel-clicfuera').checked;
             cf.confirmarCierre = g('c-confirmar-cierre').checked;
-            APP.barra.botones.main = g('c-b-main').checked;
-            APP.barra.botones.panel = g('c-b-panel').checked;
-            APP.barra.botones.close = g('c-b-close').checked;
-            APP.barra.plegada = g('c-b-plegada').checked;
-            APP.barra.vertical = g('c-b-vertical').checked;
             applyBar();
             paintVerifyButton();
             if (!cf.loadZones) APP.zonas = [];
@@ -4961,12 +4954,6 @@
             adviceOk(LANG.guardado);
         });
 
-        byId('rondo-b-reset').addEventListener('click', () => {
-            APP.barra.x = Math.max(4, window.innerWidth - barraEl.offsetWidth - 15);
-            APP.barra.y = 80;
-            applyBar();
-            adviceOk('Barra recentrada');
-        });
         byId('rondo-reset-panel').addEventListener('click', () => {
             APP.config.panelAncho = 460;
             writeJSON(LS.cfg, APP.config);
