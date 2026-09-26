@@ -38,17 +38,24 @@ suites no usan red ni navegador.
   la IA es `core`; entre IA y CSS, `engine`; despues de CSS, `ui`.
 - Si anades un banner de seccion, manten el estilo `/* ====== NOMBRE ====== */`.
 
-## Versionado y releases
+## Versionado y releases (automatico)
 - La version vive en `VERSION`. El build inyecta `@version` y `VER`.
-- Escribe `changelogs/X.Y.Z.md` antes de publicar.
-- Un responsable lanza el workflow **Release** (manual) con la version; el
-  workflow valida, construye, prueba, etiqueta y publica el release con assets,
-  y actualiza `main`.
-- Promueve `dev` → `main` **mediante el release** (no con un merge directo): el
-  release regenera `dist/` y el bootstrap en canal estable. Si mergeas a `main`
-  sin release, el job `sincronizado` de CI quedara en rojo hasta el proximo
-  release (los artefactos de `dev` usan el canal dev).
+- Al hacer **push a `main`**, el workflow `release.yml` hace todo solo:
+  1. calcula la siguiente version segun los commits convencionales
+     (`feat` → minor, `BREAKING CHANGE`/`!` → major, resto → patch);
+  2. genera `changelogs/X.Y.Z.md` (si no existe uno escrito a mano);
+  3. construye (`--channel=main`), corre las 12 suites y actualiza el badge del
+     README;
+  4. commitea `VERSION`, `rondo.user.js`, `dist/`, `changelogs/` y `README.md`
+     (`[skip ci]`), crea el tag `vX.Y.Z`, publica el release con assets y sube
+     `main`.
+- Tambien se puede lanzar a mano desde **Actions → Release** con una version
+  exacta (input opcional).
+- Escribe `feat:` / `fix:` / `BREAKING CHANGE` en tus mensajes de commit: de eso
+  depende el salto de version.
 - El canal `dev` se regenera solo en cada push a `dev`.
+- El bootstrap de `main` usa raw `main/dist?=vX.Y.Z`, asi que **cada push a main
+  ya funciona** sin depender de que exista el release.
 
 ## Estilo
 - Sin emojis en el codigo/UI (solo Unicode).

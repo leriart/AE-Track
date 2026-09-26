@@ -60,8 +60,10 @@ Lee `ARCHITECTURE.md` para el mapa completo y `CONTRIBUTING.md` para el flujo.
   ```
   Las 12 suites (~971 checks) deben quedar en verde. Si añades logica nueva,
   añade o amplia una suite.
-- Versiona solo en un release: escribe `changelogs/X.Y.Z.md` y usa el workflow
-  **Release**; no cambies `@version` a mano.
+- La version se calcula **automaticamente** al hacer push a `main` (workflow
+  Release, segun commits convencionales). No cambies `@version` a mano: usa
+  `feat:` / `fix:` / `BREAKING CHANGE` en los mensajes y deja que el workflow
+  genere el changelog, el tag y el release.
 
 ## Mapa de sectores
 
