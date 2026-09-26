@@ -167,11 +167,24 @@
             id: 'osm:' + norm(nombre) + ':' + norm(estado),
             nombre: String(nombre),
             estado: String(estado || ''),
+            // v6.0.6: tipo/clase de OSM para distinguir un municipio/ciudad de
+            // una direccion cualquiera.
+            tipoOSM: String(r.addresstype || r.type || ''),
+            claseOSM: String(r.class || ''),
             centro,
             poligono,                                   // [[lon,lat],...] o null
             bbox: bb ? { minLat: bb[0], maxLat: bb[1], minLon: bb[2], maxLon: bb[3] } : null,
             fuente: 'osm'
         };
+    }
+    // v6.0.6: ¿el resultado parece un municipio/ciudad/entidad administrativa?
+    function esMunicipioOSM(m) {
+        if (!m) return false;
+        const t = String(m.tipoOSM || '').toLowerCase();
+        const c = String(m.claseOSM || '').toLowerCase();
+        if (c === 'boundary') return true;
+        return ['administrative', 'municipality', 'city', 'town', 'village',
+            'county', 'state_district', 'region', 'province', 'district'].indexOf(t) >= 0;
     }
     function buscarMunicipioLocal(texto) {
         const q = norm(texto || '');
@@ -195,21 +208,24 @@
     }
     // Consulta (o recupera de cache) un municipio de OSM. Devuelve el objeto
     // normalizado con centro/poligono/bbox, o null si no se pudo resolver.
-    async function municipioOSM(texto, recargar) {
+    async function municipioOSM(texto, recargar, soloMunicipio) {
         const q = String(texto || '').trim();
         if (!q) return null;
         if (!recargar) {
             const local = buscarMunicipioLocal(q);
-            if (local && (local.poligono || local.bbox)) return local;
+            if (local && (local.poligono || local.bbox) && (!soloMunicipio || esMunicipioOSM(local))) return local;
         }
         const espera = 1100 - (Date.now() - APP.geoLast);
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=3&accept-language=es&q=' + encodeURIComponent(q);
+            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=5&accept-language=es&q=' + encodeURIComponent(q);
             const d = await _rxFetchJson(url, {}, 15000);
             if (!Array.isArray(d) || !d.length) return null;
-            const cand = d.map(municipioDesdeNominatim).filter(Boolean);
+            let cand = d.map(municipioDesdeNominatim).filter(Boolean);
+            // Cuando se busca "deteccion automatica" solo aceptamos resultados
+            // que parezcan municipio/ciudad (no una calle/negocio cualquiera).
+            if (soloMunicipio) cand = cand.filter(esMunicipioOSM);
             if (!cand.length) return null;
             cand.sort((a, b) => (b.poligono ? 1 : 0) - (a.poligono ? 1 : 0));
             const m = cand[0];
