@@ -557,8 +557,20 @@ ver la ruta:
 - **OpenStreetMap**: abre el trayecto origen-destino en OSM.
 - **Diagnosticar mapa**: si el boton de dibujar no funciona, esto imprime en la
   consola (F12) que motor de mapa detecto, para poder ajustarlo.
+- **Ventanas**: dibuja la ruta **en el mapa de cada ventana de unidad abierta**
+  (si el mapa de la plataforma es Leaflet). Pulsar de nuevo lo detiene. Se
+  mantiene actualizado mientras haya ventanas abiertas, aunque el panel este
+  oculto.
 
 El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
+
+> **Como se decide que una unidad esta "desviada":** se mide la **distancia
+> perpendicular** de la unidad al trazado planificado (proyeccion sobre la
+> polilinea). La tarjeta marca **DESVIADO** cuando esa distancia supera
+> `desvioM` (250 m por defecto). La **alerta** de desvio requiere que se
+> mantenga `desvioMin` (5 min). Si la unidad sigue dentro de un municipio por el
+> que pasa la ruta, se tolera hasta `desvioMunicipioM` (3000 m). Ajustable en
+> Ajustes &gt; Rutas.
 
 ### Carga rapida de rutas (embarque)
 

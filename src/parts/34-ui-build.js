@@ -181,6 +181,7 @@
             '<div class="rondo-rutas-bar">' +
             '<span class="rondo-rutas-pend" id="rondo-rutas-pend"></span>' +
             '<button class="mini" id="rondo-rutas-trazar" title="Reintentar el trazado de todas las rutas pendientes (sin limite de intentos)"><span class="rondo-usym">' + UIS.refresh + '</span> Trazar pendientes</button>' +
+            '<button class="mini" id="rondo-rutas-ventanas" title="Dibujar la ruta en el mapa de cada ventana de unidad abierta (si el mapa es Leaflet)"><span class="rondo-usym">' + UIS.map + '</span> Ventanas</button>' +
             '</div>' +
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
