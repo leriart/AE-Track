@@ -340,6 +340,18 @@
                 '</div>';
         }).join(''));
     }
+    // v6.0.7: formato legible de distancias y duraciones para la tarjeta de rutas.
+    function rxFmtDist(m) {
+        if (!isFinite(m)) return '-';
+        if (m < 1000) return Math.round(m) + ' m';
+        const km = m / 1000;
+        return (km >= 100 ? Math.round(km) : Math.round(km * 10) / 10).toLocaleString('es-MX') + ' km';
+    }
+    function rxFmtDur(seg) {
+        const min = Math.round((seg || 0) / 60);
+        if (min < 60) return min + ' min';
+        return Math.floor(min / 60) + ' h ' + (min % 60) + ' min';
+    }
     function paintRutas() {
         paintViajes();
         const cont = byId('rondo-lista-rutas');
@@ -361,32 +373,28 @@
             const r = rutaDe(info);
             const er = estadoRuta(info, st);
             const s = er.snap || null;
-            const desviado = !!er.desviado;
-            const llego = !!er.llego;
+            const llego = !!er.llego, desviado = !!er.desviado;
             const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
-            const color = llego ? 'var(--rondo-ok-fg)' : (desviado ? 'var(--rondo-bad-fg)' : 'var(--rondo-accent-2)');
+            const estClase = llego ? 'ok' : (desviado ? 'desv' : (s ? 'ruta' : 'sin'));
             const dest = r.destinoTexto || (r.destino.lat.toFixed(4) + ',' + r.destino.lon.toFixed(4));
             const etaSeg = s ? calcularETA(s, r, st.vel) : null;
-            const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min ETA' : '';
+            const pct = s ? Math.round(s.progreso * 100) : 0;
             const totalP = er.totalParadas || (r.paradas ? r.paradas.length : 0);
-            const metaParada = totalP > 1
-                ? '<span class="regla">parada ' + Math.min(totalP, (er.llegadas || 0) + (llego ? 0 : 1)) + '/' + totalP + '</span>'
-                : '';
-            const proxima = (!llego && er.parada) ? '<span>siguiente: ' + esc(er.parada.texto || '') + '</span>' : '';
-            const modoTxt = r.optimo ? 'mejor ruta' : 'secuencial';
-            return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
-                '<span class="ico rondo-usym" style="color:' + color + '">' + UIS.route + '</span>' +
-                '<div class="cuerpo"><b>' + esc(eco || info.nombre) + ' · ' + est + '</b>' +
-                '<span>' + esc(dest) + ' · ' + Math.round(r.total / 1000) + ' km · ' + esc(r.modo || '') + ' \u00b7 ' + modoTxt + '</span>' +
-                '<div class="meta">' +
-                '<span class="regla">' + (s ? 'progreso ' + Math.round(s.progreso * 100) + '%' : 'sin datos') + '</span>' +
-                metaParada +
-                (s ? '<span>' + Math.round(s.dist) + ' m de la ruta</span>' : '') +
-                (etaTxt ? '<span>' + etaTxt + '</span>' : '') +
-                (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min OSRM</span>' : '') +
-                proxima +
-                '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
-                '</div></div>' +
+            const chips = [];
+            if (s) chips.push('progreso ' + pct + '%');
+            if (totalP > 1) chips.push('parada ' + Math.min(totalP, (er.llegadas || 0) + (llego ? 0 : 1)) + '/' + totalP);
+            if (s) chips.push('a ' + rxFmtDist(s.dist) + ' del trazado');
+            if (etaSeg != null) chips.push('ETA ' + rxFmtDur(etaSeg));
+            if (r.duracion) chips.push(esc(r.modo || '') + ' ' + rxFmtDur(r.duracion));
+            if (!llego && er.parada) chips.push('siguiente: ' + esc(er.parada.texto || ''));
+            chips.push(new Date(r.creada).toLocaleString().slice(0, 16));
+            return '<div class="rondo-ruta-card est-' + estClase + '">' +
+                '<div class="rr-head">' +
+                '<span class="rr-eco">' + esc(eco || info.nombre) + '</span>' +
+                '<span class="rr-est rr-est-' + estClase + '">' + esc(est) + '</span>' +
+                '<span class="rr-km">' + rxFmtDist(r.total) + '</span>' +
+                '<span class="rr-modo">' + esc(r.optimo ? 'mejor ruta' : 'secuencial') + ' \u00b7 ' + esc(r.modo || '') + '</span>' +
+                '<span class="rr-actions">' +
                 '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas del plan"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
                 '<button class="mini rondo-ruta-mapa" data-eco="' + esc(eco) + '" title="Dibujar la ruta encima del mapa de la plataforma"><span class="rondo-usym">' + UIS.map + '</span></button>' +
                 '<button class="mini rondo-ruta-gmaps" data-eco="' + esc(eco) + '" title="Abrir la ruta en Google Maps (con paradas)"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
@@ -394,33 +402,46 @@
                 '<button class="mini rondo-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
                 '<button class="mini rondo-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
                 '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button>' +
+                '</span>' +
+                '</div>' +
+                '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
+                (totalP > 1 || s ? '<div class="rr-progress"><div class="rr-progress-fill" style="width:' + pct + '%"></div></div>' : '') +
+                '<div class="rr-meta">' + chips.map((c) => '<span class="rr-chip">' + c + '</span>').join('') + '</div>' +
                 '</div>';
         };
         let html = pendientes.map((x) => {
             const eco = x.info.clave;
             const dest = watchDest(x.info);
-            const intentos = APP.rutaIntentos[eco] || 0;
-            return '<div class="alerta" style="border-left:4px solid var(--rondo-warn-fg)">' +
-                '<span class="ico rondo-usym" style="color:var(--rondo-warn-fg)">' + UIS.route + '</span>' +
-                '<div class="cuerpo"><b>' + esc(eco) + ' \u00b7 SIN TRAZAR</b>' +
-                '<span>' + esc(dest) + '</span>' +
-                '<div class="meta"><span class="regla">pendiente</span>' +
-                (intentos ? '<span>' + intentos + ' intento(s)</span>' : '') +
-                (intentos >= 2 ? '<span>usa Trazar pendientes</span>' : '') +
-                '</div></div>' +
+            const intentos = (APP.rutaIntentos && APP.rutaIntentos[eco]) || 0;
+            return '<div class="rondo-ruta-card est-pend">' +
+                '<div class="rr-head">' +
+                '<span class="rr-eco">' + esc(eco) + '</span>' +
+                '<span class="rr-est rr-est-pend">SIN TRAZAR</span>' +
+                '<span class="rr-actions">' +
                 '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
                 '<button class="mini rondo-ruta-trazar" data-eco="' + esc(eco) + '" title="Trazar ahora"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
+                '</span>' +
+                '</div>' +
+                '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
+                '<div class="rr-meta">' +
+                '<span class="rr-chip">pendiente</span>' +
+                (intentos ? '<span class="rr-chip">' + intentos + ' intento(s)</span>' : '') +
+                (intentos >= 2 ? '<span class="rr-chip">usa Trazar pendientes</span>' : '') +
+                '</div>' +
                 '</div>';
         }).join('');
         html += filas.map((x) => tarjeta(x.info, x.st)).join('');
         sinUnidad.forEach((eco) => {
             const r = APP.rutas[eco];
             if (!r) return;
-            html += '<div class="alerta" style="border-left:4px solid var(--rondo-fg-mute);opacity:.75">' +
-                '<span class="ico rondo-usym">' + UIS.route + '</span>' +
-                '<div class="cuerpo"><b>' + esc(eco) + ' · FUERA DE VIGILANCIA</b>' +
-                '<span>' + esc(r.destinoTexto || '') + ' · ' + Math.round(r.total / 1000) + ' km</span></div>' +
-                '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button>' +
+            html += '<div class="rondo-ruta-card est-sin" style="opacity:.75">' +
+                '<div class="rr-head">' +
+                '<span class="rr-eco">' + esc(eco) + '</span>' +
+                '<span class="rr-est rr-est-sin">FUERA DE VIGILANCIA</span>' +
+                '<span class="rr-km">' + rxFmtDist(r.total) + '</span>' +
+                '<span class="rr-actions"><button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button></span>' +
+                '</div>' +
+                '<div class="rr-dest" title="' + esc(r.destinoTexto || '') + '">' + esc(r.destinoTexto || '') + '</div>' +
                 '</div>';
         });
         setHtml(cont, html);

@@ -518,6 +518,8 @@
             g('c-zonas').checked = !!APP.config.loadZones;
             g('c-geo').checked = !!APP.config.geocode;
             g('c-hist').checked = !!APP.config.historico;
+            const cGeoPais = byId('c-geo-pais'); if (cGeoPais) cGeoPais.value = APP.config.geoPais || '';
+            const cGeoBias = byId('c-geo-bias'); if (cGeoBias) cGeoBias.value = (APP.config.geoBiasKm != null ? APP.config.geoBiasKm : DEFAULTS.geoBiasKm);
             g('c-verif').checked = !!APP.config.verificar;
             g('c-verif-seg').value = APP.config.verifSeg;
             g('c-tema').value = APP.config.theme;
@@ -782,6 +784,8 @@
             cf.loadZones = g('c-zonas').checked;
             cf.geocode = g('c-geo').checked;
             cf.historico = g('c-hist').checked;
+            cf.geoPais = String((g('c-geo-pais') || {}).value || '').trim().toLowerCase().replace(/[^a-z,]/g, '');
+            cf.geoBiasKm = clamp(isoNum((g('c-geo-bias') || {}).value, cf.geoBiasKm), 0, 2000);
             cf.verificar = g('c-verif').checked;
             cf.verifSeg = Math.max(2, isoNum(g('c-verif-seg').value, cf.verifSeg));
             cf.theme = g('c-tema').value;

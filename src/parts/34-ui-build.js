@@ -394,6 +394,9 @@
             checkRow('c-zonas', 'Cargar geocercas') +
             checkRow('c-geo', 'Geocodificación inversa') +
             checkRow('c-hist', 'Consultar histórico de detención') +
+            '<h4>Búsqueda de lugares / municipios</h4>' +
+            '<label class="full">País (código ISO, ej. <b>mx</b>; vacío = sin restricción) <input type="text" id="c-geo-pais" maxlength="40" placeholder="mx"></label>' +
+            numRow('c-geo-bias', 'Sesgo por cercanía a la unidad (km, 0 = sin sesgo)') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="reglas" style="display:none">' +
             '<h4>Umbrales</h4>' +

@@ -206,6 +206,26 @@
         if (APP.municipios.length > 150) APP.municipios = APP.municipios.slice(-150);
         writeJSON(LS.municipios, APP.municipios);
     }
+    // v6.0.7: parametros extra de Nominatim: pais (countrycodes) y sesgo por
+    // cercania (viewbox) al punto de referencia (la unidad), para priorizar
+    // resultados cercanos y en el idioma/pais correctos (antes salian en
+    // ingles o de otros paises, p. ej. "SAN FRANCISCO").
+    function rxGeoParams(ref) {
+        let s = '';
+        const cfg = APP.config || {};
+        const pais = String(cfg.geoPais || '').trim().toLowerCase();
+        if (pais) s += '&countrycodes=' + encodeURIComponent(pais);
+        const km = Number(cfg.geoBiasKm);
+        const r = ref || (APP && APP.geoRef);
+        if (r && r.lat != null && r.lon != null && Number.isFinite(km) && km > 0) {
+            const dLat = km / 111;
+            const dLon = km / (111 * Math.max(0.15, Math.cos(r.lat * Math.PI / 180)));
+            // viewbox = lonMin,latMax,lonMax,latMin (sesgo, no restringe).
+            s += '&viewbox=' + (r.lon - dLon).toFixed(5) + ',' + (r.lat + dLat).toFixed(5) + ',' +
+                (r.lon + dLon).toFixed(5) + ',' + (r.lat - dLat).toFixed(5);
+        }
+        return s;
+    }
     // Consulta (o recupera de cache) un municipio de OSM. Devuelve el objeto
     // normalizado con centro/poligono/bbox, o null si no se pudo resolver.
     async function municipioOSM(texto, recargar, soloMunicipio) {
@@ -219,7 +239,7 @@
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=5&accept-language=es&q=' + encodeURIComponent(q);
+            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=5&accept-language=es' + rxGeoParams() + '&q=' + encodeURIComponent(q);
             const d = await _rxFetchJson(url, {}, 15000);
             if (!Array.isArray(d) || !d.length) return null;
             let cand = d.map(municipioDesdeNominatim).filter(Boolean);

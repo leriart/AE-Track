@@ -47,6 +47,11 @@
         loadZones: true,
         geocode: true,
         historico: true,
+        // v6.0.7: busqueda de lugares/municipios. Pais ISO (por defecto Mexico)
+        // y sesgo por cercania a la unidad para no traer resultados en ingles
+        // ni de otros paises.
+        geoPais: 'mx',
+        geoBiasKm: 200,
         verificar: false,
         verifSeg: 6,
         theme: 'oscuro',

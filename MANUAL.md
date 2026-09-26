@@ -849,7 +849,9 @@ te pedirá confirmación.
 Abre Ajustes con el boton de engranaje del panel. Pestanas:
 
 - **General**: frecuencia de refresco, umbral de sin senal, cooldown, monitorear
-  todas, abrir al caer, cargar geocercas, geocodificacion y historico.
+  todas, abrir al caer, cargar geocercas, geocodificacion, historico y
+  **busqueda de lugares/municipios** (pais por codigo ISO, por defecto `mx`, y
+  sesgo por cercania a la unidad en km).
 - **Reglas**: umbrales y activacion de cada regla.
 - **Avisos**: motor de voz (Navegador / StreamElements / Google), idioma y
   voz, pitido y volumen, notificacion del navegador, duracion de tarjetas,
