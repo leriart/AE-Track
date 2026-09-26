@@ -595,7 +595,7 @@ ok('chatContextoFlota devuelve unidades[]', /unidades: detalle/.test(src));
 ok('chatContextoFlota cap de detalle a 80', /detalle\.length < 80/.test(src));
 ok('chatContextoFlota incluye geocercasCargadas', /geocercasCargadas: zonasCargadas/.test(src));
 ok('chatContextoFlota incluye ecosFueraDeGeocerca', /ecosFueraDeGeocerca: fueraDeGeocerca\.slice\(0, 40\)/.test(src));
-ok('chatContextoFlota lista geocercas con unidades dentro', /geocercas = zonasCargadas \? \(APP\.zonas \|\| \[\]\)\.slice\(0, 40\)/.test(src) && /unidadesDentro: dentro/.test(src));
+ok('chatContextoFlota lista TODAS las geocercas con unidades dentro', /geocercasTodas = zonasCargadas \? \(APP\.zonas \|\| \[\]\)\.map\(/.test(src) && /unidadesDentro: porZona\.get\(nom\)/.test(src) && /geocercasTotal/.test(src));
 ok('chatContextoFlota resumen de zonas de riesgo', /zonasDeRiesgo: riesgoResumen/.test(src));
 ok('chatContextoFlota cuenta rutas activas', /rutasActivas: Object\.keys\(APP\.rutas \|\| \{\}\)\.length/.test(src));
 ok('chatContextoFlota ultimosAvisos con detalle', /detalle: \(a\.detalle \|\| ''\)\.slice\(0, 160\)/.test(src));
@@ -800,6 +800,20 @@ ok('tarjeta de rutas rediseñada', /class="rondo-ruta-card/.test(src) && /rr-hea
 ok('ruta en ventanas de vehiculos', /function rxMapaVentanasToggle\(/.test(src) && /function rxMapaVentanasSync\(/.test(src) && /openWindows\(\)/.test(src) && /rondo-rutas-ventanas/.test(src));
 
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
+
+// v6.0.9: editor multipunto movible/redimensionable, reordenar y teclado.
+ok('editor multipunto movible y redimensionable', /function rpmBindWin\(/.test(src) && /function rpmClampWin\(/.test(src) && /class="rpm-resize"/.test(src) && /RPM_WIN_KEY/.test(src));
+ok('editor multipunto: reordenar paradas arrastrando', /function rpmBindReorden\(/.test(src) && /drop-target/.test(src));
+ok('editor multipunto: sugerencias con flechas y Enter', /function rpmSeleccionarSug\(/.test(src) && /function rpmResaltarSug\(/.test(src) && /ArrowDown/.test(src) && /_rpmSugList/.test(src));
+
+// v6.0.9: el boton Ocultar oculta/muestra las ventanas abiertas.
+ok('boton Ocultar muestra y oculta ventanas', /function alternarVentanas\(/.test(src) && /function ocultarVentanas\(/.test(src) && /function mostrarVentanas\(/.test(src) && /function rxVentanasSync\(/.test(src) && /pintarBotonVentanas/.test(src) && /'rondo-sb-panel'\)\.addEventListener\('click', alternarVentanas\)/.test(src));
+
+// v6.0.9: la IA amplia contexto por la API (historial, propiedades, reporte, catalogo).
+ok('IA: contexto ampliado por API', /function iaContextoAmpliado\(/.test(src) && /function iaDatosUnidad\(/.test(src) && /function iaEcosEnTexto\(/.test(src));
+ok('IA: historial y propiedades de la unidad', /function iaFetchUnidadHistorial\(/.test(src) && /function iaFetchUnidadProps\(/.test(src) && /_rxResumenHistorial/.test(src));
+ok('IA: reporte del dia opcional del servidor', /function iaFetchReporteDia\(/.test(src) && /function iaFetchReportTemplates\(/.test(src) && /report\/exec_report/.test(src) && /iaReporteServidor/.test(src));
+ok('IA: catalogo de municipios y geocercas completas', /municipiosCatalogo/.test(src) && /municipiosRiesgoCatalogo/.test(src) && /iaContextoAPI/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

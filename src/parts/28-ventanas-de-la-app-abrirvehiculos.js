@@ -277,6 +277,66 @@
         document.querySelectorAll('[id$="_pursuit_win_close_id"]').forEach((b) => {
             b.dispatchEvent(new PAGE.MouseEvent('click', { bubbles: true, cancelable: true }));
         });
+        // Si estaban ocultas, al cerrarlas el modo deja de aplicar.
+        _ventanasOcultas = false;
+        pintarBotonVentanas();
+    }
+    // v6.0.9: el boton "Ocultar" (junto a Automatizar) oculta o vuelve a
+    // mostrar las ventanas de unidades abiertas, sin cerrarlas.
+    let _ventanasOcultas = false;
+    function ventanasOcultasOn() { return _ventanasOcultas; }
+    function pintarBotonVentanas() {
+        const btn = byId('rondo-sb-panel');
+        if (!btn) return;
+        const icon = btn.querySelector('.rondo-usym');
+        const lbl = btn.querySelector('.tile-lbl');
+        if (_ventanasOcultas) {
+            if (icon) icon.innerHTML = UIS.panel;
+            if (lbl) lbl.textContent = 'Mostrar';
+            btn.title = 'Mostrar las ventanas de unidades que ocultaste';
+            btn.classList.add('activo');
+        } else {
+            if (icon) icon.innerHTML = UIS.collapse;
+            if (lbl) lbl.textContent = 'Ocultar';
+            btn.title = 'Ocultar las ventanas de unidades abiertas (sin cerrarlas)';
+            btn.classList.remove('activo');
+        }
+    }
+    function ocultarVentanas() {
+        const list = openWindows();
+        if (!list.length) { adviceWarn('Sin ventanas', 'No hay ventanas de unidades abiertas.'); return; }
+        list.forEach((v) => {
+            if (!v.cont) return;
+            v.cont.dataset.rondoOculta = '1';
+            v.cont.style.display = 'none';
+        });
+        _ventanasOcultas = true;
+        pintarBotonVentanas();
+        advice('Ventanas ocultas', list.length + ' ventana(s) · pulsa de nuevo para mostrarlas');
+    }
+    function mostrarVentanas() {
+        const list = openWindows();
+        list.forEach((v) => {
+            if (!v.cont) return;
+            if (v.cont.dataset.rondoOculta) { v.cont.style.display = ''; delete v.cont.dataset.rondoOculta; }
+        });
+        _ventanasOcultas = false;
+        pintarBotonVentanas();
+        advice('Ventanas visibles', list.length + ' ventana(s)');
+    }
+    function alternarVentanas() {
+        if (_ventanasOcultas) mostrarVentanas(); else ocultarVentanas();
+    }
+    // Mantiene ocultas las ventanas nuevas que se abran mientras el modo este
+    // activo (se llama desde el intervalo de 1 s).
+    function rxVentanasSync() {
+        if (!_ventanasOcultas) return;
+        openWindows().forEach((v) => {
+            if (v.cont && !v.cont.dataset.rondoOculta) {
+                v.cont.dataset.rondoOculta = '1';
+                v.cont.style.display = 'none';
+            }
+        });
     }
     // Cierre seguro en dos pasos: el primer clic "arma" el boton y el segundo
     // ejecuta el cierre. Asi un clic accidental no cierra todas las ventanas.

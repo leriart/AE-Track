@@ -106,7 +106,8 @@
         if (railEl) railEl.addEventListener('click', togglePanel);
         byId('rondo-sb-main').addEventListener('click', () => mainBtn.click());
         byId('rondo-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
-        byId('rondo-sb-panel').addEventListener('click', togglePanel);
+        byId('rondo-sb-panel').addEventListener('click', alternarVentanas);
+        pintarBotonVentanas();
         // Clic fuera del panel en modo barra lateral: se oculta.
         document.addEventListener('pointerdown', (e) => {
             if (!APP.config.ocultarAlClicFuera) return;
@@ -500,6 +501,11 @@
             if (iaRadioEl) iaRadioEl.value = APP.config.iaRadioPoisM != null ? APP.config.iaRadioPoisM : 250;
             const iaTimeoutEl = byId('c-ia-timeout');
             if (iaTimeoutEl) iaTimeoutEl.value = APP.config.iaTimeoutS != null ? APP.config.iaTimeoutS : 25;
+            // v6.0.9: contexto ampliado por API y reporte del servidor.
+            const iaCtxEl = byId('c-ia-contexto-api');
+            if (iaCtxEl) iaCtxEl.checked = APP.config.iaContextoAPI !== false;
+            const iaRepEl = byId('c-ia-reporte-servidor');
+            if (iaRepEl) iaRepEl.checked = !!APP.config.iaReporteServidor;
             // v5.14: analisis en lote + resumen + limite diario.
             const iaResumenEl = byId('c-ia-resumen-on');
             if (iaResumenEl) iaResumenEl.checked = !!APP.config.iaResumenInforme;
@@ -765,6 +771,8 @@
             }
             const iaRadioEl = byId('c-ia-radio'); if (iaRadioEl) cf.iaRadioPoisM = clamp(isoNum(iaRadioEl.value, 250), 50, 2000);
             const iaTimeoutEl = byId('c-ia-timeout'); if (iaTimeoutEl) cf.iaTimeoutS = clamp(isoNum(iaTimeoutEl.value, 25), 5, 120);
+            const iaCtxEl = byId('c-ia-contexto-api'); if (iaCtxEl) cf.iaContextoAPI = !!iaCtxEl.checked;
+            const iaRepEl = byId('c-ia-reporte-servidor'); if (iaRepEl) cf.iaReporteServidor = !!iaRepEl.checked;
             // v5.14: analisis en lote + resumen narrativo.
             const iaResumenEl = byId('c-ia-resumen-on'); if (iaResumenEl) cf.iaResumenInforme = !!iaResumenEl.checked;
             const iaBatchmaxEl = byId('c-ia-batchmax'); if (iaBatchmaxEl) cf.iaBatchMax = clamp(isoNum(iaBatchmaxEl.value, DEFAULTS.iaBatchMax), 5, 50);

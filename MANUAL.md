@@ -96,10 +96,14 @@ Para ajustar la barra ve a Ajustes, pestana **Ventanas**, y elige **Lado**
 (derecha o izquierda) y **Ancho de la barra (px)**.
 
 Para mostrar u ocultar la barra usa el boton **Panel** de la barra superior, el
-boton **Ocultar** de la propia barra lateral, el icono de campana con tachado
-del menu **No molestar**, o el atajo **Alt + P** (tambien **Alt + L**). Al
-ocultarla queda una pequena pestana vertical en el borde (el **rail**) que la
-trae de vuelta con un clic y una animacion suave.
+icono de campana con tachado del menu **No molestar**, o el atajo **Alt + P**
+(tambien **Alt + L**). Al ocultarla queda una pequena pestana vertical en el
+borde (el **rail**) que la trae de vuelta con un clic y una animacion suave.
+
+El boton **Ocultar** (junto a **Automatizar**, arriba de la barra lateral) ya no
+oculta la barra: **oculta o vuelve a mostrar las ventanas de unidades abiertas**
+sin cerrarlas. Mientras estan ocultas, el boton dice **Mostrar** y las ventanas
+nuevas que se abran se ocultan solas.
 
 Ademas, **al hacer clic fuera del panel** la barra se oculta automaticamente y
 deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
@@ -186,8 +190,15 @@ El editor (boton **Paradas**, o clic derecho &gt; **Destinos y paradas
 - Anade paradas con el buscador: **geocercas**, **municipios** (OpenStreetMap)
   o lugares; escribe `lat,lon` para una coordenada. Mientras escribes aparecen
   **sugerencias** con su tipo.
-- Reordena con las flechas, **Fija** una parada para conservar su posicion o
-  quitala con la x. **Vaciar paradas** las borra todas.
+- Reordena con las flechas, **arrastrando** el asa (⠿) de cada parada o con los
+  botones subir/bajar. **Fija** una parada para conservar su posicion o quitala
+  con la x. **Vaciar paradas** las borra todas.
+- La ventana del editor se puede **mover** (arrastra el encabezado) y
+  **redimensionar** (esquina inferior derecha). Recuerda su posicion y tamano
+  durante la sesion, para que no estorbe mientras revisas el mapa.
+- En el buscador, usa las **flechas arriba/abajo** para recorrer las sugerencias
+  y **Enter** para elegir la resaltada; si no hay ninguna resaltada, Enter anade
+  el texto como lugar. **Esc** cierra el desplegable.
 - **Guardar y trazar** calcula la ruta y la sigue en la pestana Rutas.
 
 ### Orden de las ventanas
@@ -400,14 +411,21 @@ El chat conoce **dos cosas**:
    - **Conteos y agregados**: en linea, sin senal, en movimiento, detenidas,
      velocidad promedio, cuantas fuera de geocerca, cuantas sin senal **y**
      fuera de geocerca.
-   - **Geocercas** de la plataforma, con las unidades dentro de cada una.
+   - **Geocercas**: la lista completa (no un recorte), con su tipo y las
+     unidades dentro de cada una.
    - **Zonas de riesgo** cargadas: total, por nivel y las de mayor score con
      estado/municipio.
-   - **Municipios** conocidos (OSM y derivados de riesgo).
+   - **Municipios** conocidos (OSM y derivados de riesgo), con el catalogo de
+     nombres.
    - **Viajes** analizados (km, paradas, carga, llegada, regreso).
    - **Alertas de hoy** por severidad y por regla, y los ultimos avisos con su
      detalle, mas las **desconexiones** del dia.
    - **Rutas** activas, con destino, modo (secuencial/mejor ruta) y paradas.
+   - **Detalle por unidad**: si tu pregunta menciona un economico (3 a 5
+     digitos), Rondo consulta por API sus **campos personalizados** (conductor,
+     marca, etc.) y su **historial de las ultimas 24 h** (km, velocidad maxima,
+     tiempo en movimiento/detenido, paradas y ultima posicion). Opcionalmente,
+     y si lo activas en Ajustes &gt; IA, un **reporte del dia** del servidor.
    - **Configuracion** de umbrales activa, para que pueda explicar y proponer.
 
 Asi puedes preguntar, por ejemplo, "que unidades estan fuera de

@@ -24,7 +24,7 @@
         panelEl.innerHTML = (
             '<div class="rondo-sidebar-tools" id="rondo-sidebar-tools">' +
             '<button class="rondo-tile primary" id="rondo-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="rondo-usym">' + UIS.gear + '</span><span class="tile-lbl">Automatizar</span></button>' +
-            '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar el panel (Alt+P)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
+            '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar o mostrar las ventanas de unidades abiertas (sin cerrarlas)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
             '<button class="rondo-tile" id="rondo-sb-close" title="Cerrar todas las ventanas de unidades"><span class="rondo-usym">' + UIS.close + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
 '<header id="rondo-drag">' +
@@ -589,6 +589,9 @@
             '<label>Max tokens (opcional, vacio = el del modelo) <input type="text" id="c-ia-maxtok" autocomplete="off" placeholder="(omitir)" spellcheck="false" title="Vacio = se omite. Algunos modelos rechazan max_tokens bajo."></label>' +
             numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
             numRow('c-ia-timeout', 'Timeout (s)') +
+            '<h4>Contexto de la API</h4>' +
+            checkRow('c-ia-contexto-api', 'Ampliar contexto con la API (historial y propiedades de la unidad preguntada)') +
+            checkRow('c-ia-reporte-servidor', 'Usar reportes del servidor (report/exec_report; puede interferir con los reportes de la plataforma)') +
             '<h4>Analisis en lote y resumen</h4>' +
             checkRow('c-ia-resumen-on', 'Incluir resumen IA en el informe diario') +
             numRow('c-ia-batchmax', 'Max avisos por analisis en lote (5-50)') +
