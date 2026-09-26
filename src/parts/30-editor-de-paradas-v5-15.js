@@ -208,8 +208,10 @@
             paradas: (plan.paradas || []).map((p) => Object.assign({}, p))
         };
         rpmWinCargar();
-        renderEditorParadas();
+        // Muestra el modal antes de medir, para que el acotado de la ventana
+        // use el tamano real de la tarjeta (si esta en display:none mide 0).
         planModalEl().classList.add('abierto');
+        renderEditorParadas();
     }
     function renderEditorParadas() {
         const el = planModalEl();
