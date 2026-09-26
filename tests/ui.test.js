@@ -402,7 +402,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 6.0.0 en @UserScript', /@version\s+6\.0\.0/.test(src));
+ok('version presente en @UserScript', /@version\s+\d+\.\d+\.\d+/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -615,8 +615,12 @@ ok('MANUAL.md lista regla Aproximacion a zona de riesgo', /Aproximacion a zona d
 ok('MANUAL.md atajo Alt+7', /Alt.*\+.*7.*Chat IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]6\.0\.0['"]/.test(src));
-ok('@version 6.0.0 sincronizado con VER', /@version\s+6\.0\.0[\s\S]{0,50000}const VER = ['"]6\.0\.0['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]\d+\.\d+\.\d+['"]/.test(src));
+ok('@version sincronizado con VER (dinamico)', (function () {
+    const a = src.match(/@version\s+(\d+\.\d+\.\d+)/);
+    const b = src.match(/const VER = ['"](\d+\.\d+\.\d+)['"]/);
+    return !!(a && b && a[1] === b[1]);
+})());
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
