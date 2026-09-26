@@ -1395,13 +1395,15 @@ ta.value = '';
     // activa y hay avisos. Se llama desde paintAlertas y tras cambios de
     // config (paintIASwitch, borrar key, etc).
     function paintIABatchBtn() {
-        const b = byId('rondo-ia-batch');
-        const f = byId('rondo-ia-flota');
+        const bar = byId('rondo-ia-bar');
         const cfg = APP.config || {};
         const ok = !!(cfg.iaHabilitada && cfg.iaApiKey);
         const hay = (APP.historial || []).length > 0;
-        if (b) b.style.display = (ok && hay) ? '' : 'none';
-        if (f) f.style.display = ok ? '' : 'none';
+        if (bar) bar.style.display = ok ? '' : 'none';
+        const b = byId('rondo-ia-batch');
+        if (b) { b.disabled = !hay; b.style.opacity = hay ? '' : '.55'; }
+        const f = byId('rondo-ia-flota');
+        if (f) f.disabled = false;
     }
     // v5.14: pinta el contador de uso diario en la pestana IA.
     function paintIAUso() {
@@ -1435,6 +1437,10 @@ ta.value = '';
             const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
             const hoy = APP.historial.filter((a) => a.ts >= inicio.getTime());
             const muestra = hoy.length >= cfg.iaBatchMax ? hoy : APP.historial.slice(0, cfg.iaBatchMax);
+            if (!muestra.length) {
+                advice('Sin avisos', 'Todavia no hay avisos para analizar.');
+                return;
+            }
             const r = await aiAnalizarLote(muestra);
             paintIAUso();
             // v5.14.3: dialog rico con endpoint + tips + cambio rapido.
@@ -1447,10 +1453,13 @@ ta.value = '';
             const ranking = Array.isArray(r.ranking) ? r.ranking : [];
             const recos = Array.isArray(r.recomendaciones) ? r.recomendaciones : [];
             const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+            const sevCount = muestra.reduce((m, a) => { m[a.sev] = (m[a.sev] || 0) + 1; return m; }, {});
+            const sevTxt = ['critico', 'alto', 'medio', 'bajo'].filter((s) => sevCount[s])
+                .map((s) => sevCount[s] + ' ' + s).join(' \u00b7 ');
             const html =
                 '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
                 '<div style="color:var(--rondo-fg-dim);margin-bottom:6px">Proveedor: <b>' + esc(provNombre) + '</b>' +
-                (ranking.length ? ' · ' + ranking.length + ' avisos priorizados' : '') + '</div>' +
+                ' \u00b7 ' + muestra.length + ' aviso(s)' + (sevTxt ? ' (' + esc(sevTxt) + ')' : '') + '</div>' +
                 (r.resumen ? '<div style="margin:0 0 10px"><b>Resumen:</b> ' + esc(r.resumen) + '</div>' : '') +
                 (ranking.length ? '<div style="margin:0 0 10px"><b>Ranking:</b><ol style="margin:4px 0 0 18px;padding:0">' +
                     ranking.map((it) => {

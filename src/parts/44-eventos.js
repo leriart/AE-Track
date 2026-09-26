@@ -300,15 +300,6 @@
             applyBar();
             advice('Barra', APP.barra.vertical ? 'orientacion vertical' : 'orientacion horizontal');
         });
-        [[mainBtn, 'main', 'Automatizar'], [panelBtn, 'panel', 'Panel'], [closeBtn, 'close', 'Cerrar']]
-            .forEach(([btn, key, name]) => {
-                btn.addEventListener('contextmenu', (ev) => {
-                    ev.preventDefault();
-                    APP.barra.botones[key] = false;
-                    applyBar();
-                    advice('Botón oculto: ' + name, 'Reactívalo en Ajustes · Barra de botones');
-                });
-            });
 
         document.getElementById('rondo-body').addEventListener('change', (e) => {
             if (!e.target.classList.contains('rondo-sel')) return;
@@ -515,11 +506,6 @@
             g('c-confirmar-cierre').checked = !!APP.config.confirmarCierre;
             g('c-panel-lado').value = APP.config.panelLado || 'derecha';
             g('c-panel-ancho').value = APP.config.panelAncho || 460;
-            g('c-b-main').checked = !!APP.barra.botones.main;
-            g('c-b-panel').checked = !!APP.barra.botones.panel;
-            g('c-b-close').checked = !!APP.barra.botones.close;
-            g('c-b-plegada').checked = !!APP.barra.plegada;
-            g('c-b-vertical').checked = !!APP.barra.vertical;
             g('c-r-off').checked = !!APP.config.reglas.offline;
             g('c-r-gps').checked = !!APP.config.reglas.gpsPerdido;
             g('c-r-det').checked = !!APP.config.reglas.detenido;
@@ -528,6 +514,8 @@
             const cRGeoDet = byId('c-r-geo-det'); if (cRGeoDet) cRGeoDet.checked = !!APP.config.reglas.geocercaDetenido;
             const cGeoDetMin = byId('c-geo-det-min');
             if (cGeoDetMin) cGeoDetMin.value = APP.config.geocercaDetenidoMin != null ? APP.config.geocercaDetenidoMin : DEFAULTS.geocercaDetenidoMin;
+            const cGeoEst = byId('c-geo-estable');
+            if (cGeoEst) cGeoEst.value = APP.config.geocercaEstableSeg != null ? APP.config.geocercaEstableSeg : DEFAULTS.geocercaEstableSeg;
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
@@ -786,6 +774,8 @@
             const geoDetEl = g('c-r-geo-det'); if (geoDetEl) cf.reglas.geocercaDetenido = !!geoDetEl.checked;
             const geoDetMinEl = g('c-geo-det-min');
             if (geoDetMinEl) cf.geocercaDetenidoMin = clamp(isoNum(geoDetMinEl.value, DEFAULTS.geocercaDetenidoMin), 1, 240);
+            const geoEstEl = g('c-geo-estable');
+            if (geoEstEl) cf.geocercaEstableSeg = clamp(isoNum(geoEstEl.value, DEFAULTS.geocercaEstableSeg), 2, 300);
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
@@ -855,11 +845,6 @@
             cf.panelAncho = clamp(isoNum(g('c-panel-ancho').value, cf.panelAncho), 360, 900);
             cf.ocultarAlClicFuera = g('c-panel-clicfuera').checked;
             cf.confirmarCierre = g('c-confirmar-cierre').checked;
-            APP.barra.botones.main = g('c-b-main').checked;
-            APP.barra.botones.panel = g('c-b-panel').checked;
-            APP.barra.botones.close = g('c-b-close').checked;
-            APP.barra.plegada = g('c-b-plegada').checked;
-            APP.barra.vertical = g('c-b-vertical').checked;
             applyBar();
             paintVerifyButton();
             if (!cf.loadZones) APP.zonas = [];
@@ -879,12 +864,6 @@
             adviceOk(LANG.guardado);
         });
 
-        byId('rondo-b-reset').addEventListener('click', () => {
-            APP.barra.x = Math.max(4, window.innerWidth - barraEl.offsetWidth - 15);
-            APP.barra.y = 80;
-            applyBar();
-            adviceOk('Barra recentrada');
-        });
         byId('rondo-reset-panel').addEventListener('click', () => {
             APP.config.panelAncho = 460;
             writeJSON(LS.cfg, APP.config);

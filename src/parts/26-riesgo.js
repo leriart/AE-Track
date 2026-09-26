@@ -979,18 +979,37 @@
         }
     }
     function reglaGeocerca(st, prev, R, info, etq) {
-        if (!APP.config.reglas.geocerca || !prev || prev.zona === R.zona) return;
-        if (R.zona) {
+        if (!APP.config.reglas.geocerca) return;
+        // v6.0.2: histeresis. Un cambio de geocerca solo se confirma si se
+        // sostiene geocercaEstableSeg segundos; asi el GPS que oscila en el
+        // borde no genera ENTER/EXIT repetidos.
+        const actual = R.zona || '';
+        if (R.zonaEst == null) R.zonaEst = actual;
+        if (actual === R.zonaEst) {
+            R.zonaPend = null;
+            return;
+        }
+        if (R.zonaPend !== actual) {
+            R.zonaPend = actual;
+            R.zonaPendDesde = Date.now();
+            return;
+        }
+        const minSeg = Math.max(2, +APP.config.geocercaEstableSeg || 15);
+        if ((Date.now() - R.zonaPendDesde) / 1000 < minSeg) return;
+        const previo = R.zonaEst || '';
+        R.zonaEst = actual;
+        R.zonaPend = null;
+        if (actual) {
             pushAlert({
                 regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
-                titulo: 'ENTRO · ' + etq,
-                detalle: 'entro a ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
+                titulo: 'ENTRO \u00b7 ' + etq,
+                detalle: 'entro a ' + actual + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
-        } else if (prev.zona) {
+        } else if (previo) {
             pushAlert({
                 regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
-                titulo: 'SALIO · ' + etq,
-                detalle: 'salio de ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
+                titulo: 'SALIO \u00b7 ' + etq,
+                detalle: 'salio de ' + previo + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
         }
     }
@@ -1255,6 +1274,11 @@
         const R = {
             estado: st.estado, t: st.t, vel: st.vel, lat: st.lat, lon: st.lon,
             zona: zoneAt(st.lat, st.lon),
+            // v6.0.2: geocerca "estabilizada" para avisos ENTER/EXIT (con
+            // histeresis) y candidato pendiente.
+            zonaEst: prev ? (prev.zonaEst !== undefined ? prev.zonaEst : (prev.zona || '')) : null,
+            zonaPend: prev ? (prev.zonaPend !== undefined ? prev.zonaPend : null) : null,
+            zonaPendDesde: prev ? (prev.zonaPendDesde || 0) : 0,
             detenidoDesde: prev ? prev.detenidoDesde : null,
             zonaExt: prev ? prev.zonaExt : null,
             enDestino: prev ? prev.enDestino : false,
