@@ -5625,6 +5625,7 @@
             '<button class="carga-btn primary" data-carga="asignar-trazar"><span class="rondo-usym">' + UIS.route + '</span> Asignar y trazar</button>' +
             '</div>' +
             '</div>';
+        try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
         byId('carga-unidad').onchange = (e) => { if (_carga) _carga.eco = e.target.value; };
         byId('carga-modo').onchange = (e) => { if (_carga) _carga.modo = e.target.value; };
         byId('carga-engine').onchange = (e) => { if (_carga) _carga.engine = e.target.value; };
@@ -5747,6 +5748,7 @@
         const primerUso = !localStorage.getItem(LS.cfg);
         injectCSS();
         buildUI();
+        try { rxBarridoAutofill(); } catch (_) { /* noop */ }
         // La barra lateral se aplica de inmediato (antes de esperar a Wialon)
         // para que el panel ya tenga su layout correcto desde el primer dibujo.
         aplicarModoPanel();
