@@ -166,9 +166,13 @@
              '<span data-sev="alto">Altas</span>' +
              '<span data-sev="medio">Medias</span>' +
              '<span data-sev="bajo">Bajas</span>' +
-             '<span style="flex:1"></span>' +
-             '<button type="button" class="accbtn rondo-ia-batch-btn" id="rondo-ia-batch" title="Analizar todos los avisos visibles con la IA y obtener un ranking de los mas urgentes" style="font-size:11px;padding:2px 8px;display:none"><span class="rondo-usym sm">' + UIS.robot + '</span> Analizar lote</button>' +
-             '<button type="button" class="accbtn rondo-ia-batch-btn" id="rondo-ia-flota" title="Revision proactiva de toda la flota con la IA: unidades que requieren atencion, riesgos y recomendaciones" style="font-size:11px;padding:2px 8px;display:none"><span class="rondo-usym sm">' + UIS.robot + '</span> Analizar flota</button>' +
+             '</div>' +
+             '<div class="rondo-ia-bar" id="rondo-ia-bar" style="display:none">' +
+             '<span class="rondo-ia-bar-title"><span class="rondo-usym">' + UIS.robot + '</span> Analisis con IA</span>' +
+             '<button type="button" class="rondo-ia-action" id="rondo-ia-batch" title="Analiza los avisos del dia (o los ultimos) y devuelve un ranking de los mas urgentes"><span class="rondo-usym lg">' + UIS.robot + '</span>' +
+             '<span class="rondo-ia-action-txt"><b>Analizar lote</b><small>Prioriza los avisos mas urgentes</small></span></button>' +
+             '<button type="button" class="rondo-ia-action" id="rondo-ia-flota" title="Revision proactiva de toda la flota: unidades que requieren atencion, riesgos y recomendaciones"><span class="rondo-usym lg">' + UIS.robot + '</span>' +
+             '<span class="rondo-ia-action-txt"><b>Analizar flota</b><small>Unidades por atender, riesgos y consejos</small></span></button>' +
              '</div>' +
              '<div id="rondo-lista-alertas"></div>' +
              '</div>' +
@@ -402,6 +406,7 @@
             checkRow('c-r-geo', 'Geocercas') +
             checkRow('c-r-geo-det', 'Detenida en geocerca') +
             numRow('c-geo-det-min', 'Min detenido para alertar (min)') +
+            numRow('c-geo-estable', 'Confirmar cambio de geocerca (s)') +
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
@@ -506,15 +511,6 @@
             checkRow('c-panel-clicfuera', 'Ocultar la barra lateral al hacer clic fuera') +
             checkRow('c-confirmar-cierre', 'Pedir confirmación al cerrar todas las ventanas') +
             '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:2px 0 0">Rondo vive como barra lateral redimensionable. La barra recuerda su lado y si estaba abierta.</p>' +
-            '<h4>Barra de botones</h4>' +
-            '<div class="row-grid">' +
-            checkRow('c-b-main', 'Automatizar') +
-            checkRow('c-b-panel', 'Panel') +
-            checkRow('c-b-close', 'Cerrar') +
-            '</div>' +
-            checkRow('c-b-plegada', 'Barra plegada') +
-            checkRow('c-b-vertical', 'Orientacion vertical') +
-            '<div style="margin-top:6px"><button class="accbtn" id="rondo-b-reset" style="width:100%"><span class="rondo-usym">' + UIS.expand + '</span> Recentrar barra</button></div>' +
             '<h4>Verificacion</h4>' +
             checkRow('c-verif', 'Verificación automática') +
             numRow('c-verif-seg', 'Revisar cada (seg)') +

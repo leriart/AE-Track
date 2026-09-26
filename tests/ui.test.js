@@ -417,7 +417,8 @@ ok('default iaLimiteDiario = 200', /iaLimiteDiario:\s*200/.test(src));
 ok('default iaCacheTTL = 21600 (6h)', /iaCacheTTL:\s*21600/.test(src));
 ok('clave sessionStorage iaCache', /iaCache:\s*'rondo\.api\.s\.iaCache'/.test(src));
 ok('boton Analizar lote en cabecera Avisos', /id="rondo-ia-batch"/.test(src));
-ok('boton Analizar lote arranca oculto', /id="rondo-ia-batch"[\s\S]{0,200}display:none/.test(src));
+ok('barra de IA en Avisos arranca oculta', /id="rondo-ia-bar"[\s\S]{0,80}display:none/.test(src));
+ok('barra de IA con acciones Analizar lote/flota', /class="rondo-ia-action" id="rondo-ia-batch"/.test(src) && /class="rondo-ia-action" id="rondo-ia-flota"/.test(src));
 ok('toggle c-ia-resumen-on existe', /checkRow\('c-ia-resumen-on'/.test(src));
 ok('input c-ia-batchmax existe', /numRow\('c-ia-batchmax'/.test(src));
 ok('input c-ia-limite existe', /numRow\('c-ia-limite'/.test(src));
@@ -755,6 +756,15 @@ ok('menu contextual unificado (sin ruta-plan/ruta-astar sueltos)', src.indexOf("
 ok('tarjeta de unidad se actualiza por campos', /function unidCardNode\(/.test(src) && /function unidCardUpdate\(/.test(src) && src.indexOf('function renderCards(') < 0);
 
 ok('init es idempotente (evita doble UI en modo hibrido)', /if \(APP\._iniciado\) return;/.test(src) && /APP\._iniciado = true;/.test(src));
+
+// v6.0.2: indice de geocercas, histeresis ENTER/EXIT y limpieza de Ajustes.
+ok('default geocercaEstableSeg = 15', /geocercaEstableSeg:\s*15/.test(src));
+ok('indice espacial de geocercas', /function construirIndiceZonas\(/.test(src) && /APP\.zonasIndex/.test(src));
+ok('histeresis ENTER/EXIT en reglaGeocerca', /R\.zonaEst/.test(src) && /R\.zonaPend/.test(src) && /geocercaEstableSeg \|\| 15/.test(src));
+ok('evaluateUnit inicializa zonaEst/zonaPend', /zonaEst: prev/.test(src) && /zonaPendDesde: prev/.test(src));
+ok('Ajustes Ventanas ya no configura la barra de botones', src.indexOf("c-b-main") < 0 && src.indexOf("c-b-plegada") < 0 && src.indexOf("rondo-b-reset") < 0);
+ok('sin ocultar botones por clic derecho', src.indexOf("APP.barra.botones[key] = false") < 0);
+ok('CSS de la barra de IA', /\.rondo-ia-bar\{/.test(src) && /\.rondo-ia-action\{/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

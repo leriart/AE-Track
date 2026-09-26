@@ -71,9 +71,51 @@
         const dx = (lon2 - lon1) * mx, dy = (lat2 - lat1) * my;
         return Math.sqrt(dx * dx + dy * dy);
     }
+    // v6.0.2: indice espacial de geocercas por celdas (~2 km). Acelera
+    // zoneAt cuando hay muchas zonas y se consulta por unidad/refresco. Si
+    // alguna zona no tiene bounding box (o es enorme), se desactiva y se usa
+    // el recorrido lineal. Se reconstruye solo cuando cambia el array.
+    function construirIndiceZonas() {
+        const zs = APP.zonas || [];
+        const sinIndice = () => { APP.zonasIndex = { arr: zs, mapa: null, celda: 0 }; };
+        if (zs.length < 8) { sinIndice(); return; }
+        const celda = 0.02;
+        const mapa = new Map();
+        let celdas = 0;
+        for (let i = 0; i < zs.length; i++) {
+            const b = zs[i] && zs[i].b;
+            if (!b || b.min_x == null || b.max_x == null || b.min_y == null || b.max_y == null) { sinIndice(); return; }
+            const x0 = Math.floor(b.min_x / celda), x1 = Math.floor(b.max_x / celda);
+            const y0 = Math.floor(b.min_y / celda), y1 = Math.floor(b.max_y / celda);
+            celdas += (x1 - x0 + 1) * (y1 - y0 + 1);
+            if (celdas > 20000) { sinIndice(); return; }
+            for (let cx = x0; cx <= x1; cx++) {
+                for (let cy = y0; cy <= y1; cy++) {
+                    const k = cx + '|' + cy;
+                    let arr = mapa.get(k);
+                    if (!arr) { arr = []; mapa.set(k, arr); }
+                    arr.push(i);
+                }
+            }
+        }
+        APP.zonasIndex = { arr: zs, mapa: mapa, celda: celda };
+    }
     function zoneAt(lat, lon) {
         if (!APP.config.loadZones || lat == null || lon == null) return '';
         const zs = APP.zonas;
+        if (!zs || !zs.length) return '';
+        const idx = APP.zonasIndex;
+        if (!idx || idx.arr !== zs) construirIndiceZonas();
+        const ix = APP.zonasIndex;
+        if (ix && ix.mapa) {
+            const arr = ix.mapa.get(Math.floor(lon / ix.celda) + '|' + Math.floor(lat / ix.celda));
+            if (!arr) return '';
+            for (let i = 0; i < arr.length; i++) {
+                const z = zs[arr[i]];
+                if (z && inZone(lat, lon, z)) return z.n || ('Zona ' + z.id);
+            }
+            return '';
+        }
         for (let i = 0; i < zs.length; i++) {
             if (inZone(lat, lon, zs[i])) return zs[i].n || ('Zona ' + zs[i].id);
         }

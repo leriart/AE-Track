@@ -130,6 +130,18 @@
             "#rondo-panel .severidad-pick{display:flex;gap:3px;align-items:center;padding:6px 9px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-panel .severidad-pick span{cursor:pointer;padding:2px 6px;border-radius:5px;font:600 11px var(--rondo-font);border:1px solid var(--rondo-border);color:var(--rondo-fg-dim)}\n" +
             "#rondo-panel .severidad-pick span.activo{border-color:var(--rondo-accent-2);color:var(--rondo-fg)}\n" +
+            // v6.0.x: barra de analisis con IA en Avisos.
+            "#rondo-panel .rondo-ia-bar{display:flex;gap:8px;align-items:stretch;padding:8px 9px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-ia-bar-title{display:inline-flex;align-items:center;gap:5px;font:700 11px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ia-bar-title .rondo-usym{color:var(--rondo-accent-2);font-size:15px}\n" +
+            "#rondo-panel .rondo-ia-action{flex:1;min-width:150px;display:flex;align-items:center;gap:9px;text-align:left;background:var(--rondo-bg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:7px 10px;cursor:pointer;color:var(--rondo-fg);transition:background .15s,border-color .15s,transform .1s,box-shadow .15s}\n" +
+            "#rondo-panel .rondo-ia-action:hover:not(:disabled){background:var(--rondo-bg-strong);border-color:var(--rondo-accent-2);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
+            "#rondo-panel .rondo-ia-action:disabled{cursor:default}\n" +
+            "#rondo-panel .rondo-ia-action .rondo-usym.lg{color:var(--rondo-accent-2);font-size:20px;flex-shrink:0}\n" +
+            "#rondo-panel .rondo-ia-action-txt{display:flex;flex-direction:column;gap:1px;min-width:0}\n" +
+            "#rondo-panel .rondo-ia-action-txt b{font:700 12px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-ia-action-txt small{font-size:10px;color:var(--rondo-fg-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-ia-action.busy{opacity:.7;pointer-events:none}\n" +
             "#rondo-panel .tabla{overflow:auto;flex:1}\n" +
             "#rondo-panel table{width:100%;border-collapse:collapse}\n" +
             "#rondo-panel th{position:sticky;top:0;background:var(--rondo-bg-soft);text-align:left;padding:6px 9px;font-size:11px;color:var(--rondo-fg-dim);border-bottom:1px solid var(--rondo-border-soft);z-index:1;letter-spacing:.3px;text-transform:uppercase}\n" +

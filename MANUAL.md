@@ -82,8 +82,8 @@ horizontal o vertical.
   rojo alertas criticas recientes, gris con borde punteado si esta activo
   **No molestar**.
 
-Con el boton derecho sobre un boton de la barra lo ocultas; lo vuelves a
-activar en Ajustes, pestana Ventanas.
+La barra se puede arrastrar por la pantalla (desde el asa) y no se sale de la
+ventana. Con **doble clic** en el asa cambias su orientacion.
 
 ## El panel: barra lateral
 
@@ -242,7 +242,7 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | GPS perdido en marcha | Pierde senal mientras iba en movimiento | 15 min |
 | Detenido | Lleva parada fuera de una base | 30 min |
 | Zona no prevista | Permanece en una geocerca no esperada | 20 min |
-| Geocercas | Entra o sale de cualquier geocerca | inmediato |
+| Geocercas | Entra o sale de cualquier geocerca | confirmado 15 s (evita parpadeo en el borde) |
 | Destino | Llega al destino o inicia el regreso | progreso >= 95% o a menos de 400 m |
 | Llegada a parada | Alcanza una parada intermedia de una ruta multipunto | acumulado de la parada |
 | Regreso a base | Completa un circuito (todas las paradas + vuelta al origen) | circuito del plan |
@@ -807,9 +807,9 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   mostrar coordenadas. El tamaño de la interfaz agranda el texto y los
   controles de todo el panel, útil si te cuesta ver; se previsualiza al
   elegirlo y se aplica al guardar.
-- **Ventanas**: modo del panel, lado y ancho de la barra lateral, ocultar al
-  hacer clic fuera, confirmacion al cerrar todas las ventanas, botones de la
-  barra, orientacion, verificacion automatica y tamano del panel.
+- **Ventanas**: lado y ancho de la barra lateral, ocultar al hacer clic
+  fuera, confirmacion al cerrar todas las ventanas, verificacion automatica y
+  tamano del panel.
 - **Rutas**: servicios de OpenStreetMap, trazado, paradas multipunto y
   alertas de ruta (incluye la tolerancia de desvio por municipio).
 - **IA**: habilita la IA de razonamiento. Elige proveedor (DeepSeek,

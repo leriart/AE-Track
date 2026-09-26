@@ -3,6 +3,7 @@
         unidades: [],
         zonas: [],
         zonasPorNombre: new Map(),
+        zonasIndex: null,       // indice espacial de geocercas (v6.0.2)
         zonasDiag: null,        // diagnostico de la ultima extraccion de geocercas
         watchMap: readSessionObject(SS.watch, {}, LS.watch),
         seleccion: new Set(readSessionArray(SS.seleccion, [], LS.seleccion)),

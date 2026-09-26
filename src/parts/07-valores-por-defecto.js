@@ -102,6 +102,10 @@
         // una geocerca). Si la unidad se mueve o sale de la geocerca,
         // rearma para volver a avisar en el siguiente episodio.
         geocercaDetenidoMin: 5,          // minutos detenido dentro de geocerca para alertar
+        // v6.0.2: segundos que debe sostenerse un cambio de geocerca antes de
+        // avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila
+        // en el borde de una geocerca.
+        geocercaEstableSeg: 15,
         // v5.15: tolerancia de desvio por municipio. Mientras la unidad siga
         // DENTRO de un municipio por el que pasa su ruta (o una de sus
         // paradas), el desvio no se marca hasta desvioMunicipioM metros.
