@@ -125,8 +125,10 @@
             "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
             "#rondo-panel .rondo-ruta-card .rr-mini{height:150px;margin-top:2px}\n" +
             // v6.0.11: replay del dia.
-            "#rondo-panel .rondo-replay-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
-            "#rondo-panel .rondo-replay-bar .filtro{min-width:0}\n" +
+            "#rondo-panel .rondo-replay-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}\n" +
+            "#rondo-panel .rondo-replay-bar .filtro{min-width:0;width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-bar .mini{width:100%;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-bar > input[type=date]{grid-column:1 / -1}\n" +
             "#rondo-panel .rondo-replay-mapa{width:100%;height:240px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;overflow:hidden;margin:8px 0}\n" +
             "#rondo-panel .rondo-replay-mapa svg{width:100%;height:100%;display:block}\n" +
             "#rondo-panel .rondo-replay-vacio{display:flex;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
@@ -156,9 +158,9 @@
             "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
             "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
-            "#rondo-panel .rondo-replay-buscar{position:relative;flex:1;min-width:150px}\n" +
+            "#rondo-panel .rondo-replay-buscar{position:relative;grid-column:1 / -1;min-width:0}\n" +
             "#rondo-panel .rondo-replay-buscar input{width:100%;box-sizing:border-box}\n" +
-            "#rondo-panel .rondo-replay-sug{position:absolute;top:100%;left:0;right:0;z-index:6;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border);border-radius:8px;margin-top:3px;max-height:220px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.4);display:none}\n" +
+            "#rondo-panel .rondo-replay-sug{position:relative;margin-top:4px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border);border-radius:8px;max-height:200px;overflow:auto;box-shadow:0 8px 22px rgba(0,0,0,.35);display:none}\n" +
             "#rondo-panel .rondo-replay-sug.abierto{display:block}\n" +
             "#rondo-panel .rondo-replay-sug-item{padding:6px 9px;cursor:pointer;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-panel .rondo-replay-sug-item:last-child{border-bottom:none}\n" +
