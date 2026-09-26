@@ -14,7 +14,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-6.0.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.0.0.md)
+[![version](https://img.shields.io/badge/version-6.0.1-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.0.1.md)
 [![tests](https://img.shields.io/badge/tests-971%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
