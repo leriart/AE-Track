@@ -2469,6 +2469,24 @@ function _extraerZonasDe(items) {
             APP.rutas[clave] = ruta;
             guardarRutas();
             resetEstadoRuta(clave);
+            // v6.0.9: alerta de cordura. Si la ruta es desproporcionada
+            // respecto a la distancia en linea recta, el destino se resolvio
+            // a un lugar equivocado (p. ej. otro pais). Si el origen detectado
+            // queda muy lejos de la unidad, el punto de partida es dudoso.
+            const recta = haversine(origen.lat, origen.lon, ruta.destino.lat, ruta.destino.lon);
+            if (recta > 3000 && ruta.total > recta * 6 + 150000) {
+                adviceWarn('Ruta inusualmente larga',
+                    Math.round(ruta.total / 1000) + ' km (linea recta ' + Math.round(recta / 1000) +
+                    ' km). Revisa el destino: puede haberse resuelto en otro lugar.');
+            }
+            if (it.st.lat != null && it.st.lon != null) {
+                const dUnidad = haversine(it.st.lat, it.st.lon, origen.lat, origen.lon);
+                if (dUnidad > 200000) {
+                    adviceWarn('Origen lejano',
+                        'El origen de la ruta esta a ' + Math.round(dUnidad / 1000) +
+                        ' km de la unidad. Revisa el punto de partida o el destino.');
+                }
+            }
             const extra = plan.modo === 'optimo' ? ' \u00b7 mejor ruta' : '';
             adviceOk('Ruta creada', Math.round(ruta.total / 1000) + ' km \u00b7 ' + ruta.modo + extra + ' \u00b7 ' + paradas.length + ' parada(s)');
             if (APP.tab === 'rutas') paintRutas();
