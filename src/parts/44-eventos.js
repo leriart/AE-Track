@@ -130,6 +130,8 @@
         byId('rondo-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
         const rutasTrazar = byId('rondo-rutas-trazar');
         if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
+        const rutasVentanas = byId('rondo-rutas-ventanas');
+        if (rutasVentanas) rutasVentanas.addEventListener('click', () => rxMapaVentanasToggle());
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
         byId('rondo-informe').addEventListener('click', exportInforme);

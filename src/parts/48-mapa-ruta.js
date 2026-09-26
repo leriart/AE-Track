@@ -85,7 +85,7 @@
     }
     function rxMapaRutaActiva() { return !!_rxMapaLayer; }
 
-    function rxMapaDibujarLeaflet(map, L, r) {
+    function rxMapaDibujarLeaflet(map, L, r, fit) {
         const grp = L.layerGroup();
         const pts = r.coords.map((c) => [c[1], c[0]]);
         L.polyline(pts, { color: '#850D22', weight: 4, opacity: 0.9 }).addTo(grp);
@@ -97,7 +97,7 @@
         });
         if (r.destino) L.circleMarker([r.destino.lat, r.destino.lon], { radius: 6, color: '#b71c1c', fillColor: '#b71c1c', fillOpacity: 1 }).bindTooltip('Destino').addTo(grp);
         grp.addTo(map);
-        try { map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] }); } catch (_) { /* noop */ }
+        if (fit !== false) { try { map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] }); } catch (_) { /* noop */ } }
         return grp;
     }
     function rxMapaDibujarMapbox(map, r) {
@@ -197,4 +197,58 @@
         const url = 'https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=' +
             r.origen.lat + ',' + r.origen.lon + ';' + d.lat + ',' + d.lon;
         try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+    }
+
+    // ---- Rutas dibujadas en las ventanas de cada vehiculo (v6.0.8) ----
+    // Cada ventana de unidad tiene su propio mapa; si el motor es Leaflet se
+    // detecta el mapa dentro de cada ventana y se dibuja la ruta de esa unidad.
+    let _rxWinsOn = false;
+    const _rxWinsLayers = new Map(); // eco -> capa Leaflet
+    function rxMapaVentanasOn() { return _rxWinsOn; }
+    function rxMapaVentanasQuitar() {
+        _rxWinsLayers.forEach((layer) => { try { layer.remove(); } catch (_) { /* noop */ } });
+        _rxWinsLayers.clear();
+    }
+    function rxMapaVentanasSync() {
+        if (!_rxWinsOn) return;
+        if (typeof openWindows !== 'function') return;
+        const L = PAGE && PAGE.L;
+        if (!L) return;
+        const mapas = rxMapaCandidatos().filter((c) => c.motor === 'leaflet').map((c) => c.obj);
+        if (!mapas.length) return;
+        const wins = openWindows();
+        const activos = new Set();
+        for (let i = 0; i < wins.length; i++) {
+            const eco = wins[i].eco;
+            const cont = wins[i].cont;
+            if (!eco || !cont) continue;
+            const it = unitByEco(eco);
+            const r = it ? rutaDe(it.info) : null;
+            if (!r || !r.coords || r.coords.length < 2) continue;
+            activos.add(eco);
+            if (_rxWinsLayers.has(eco)) continue;
+            let map = null;
+            for (let k = 0; k < mapas.length; k++) {
+                const c = mapas[k] && mapas[k]._container;
+                if (c && cont.contains(c)) { map = mapas[k]; break; }
+            }
+            if (!map) continue;
+            try { _rxWinsLayers.set(eco, rxMapaDibujarLeaflet(map, L, r, false)); } catch (_) { /* noop */ }
+        }
+        _rxWinsLayers.forEach((layer, eco) => {
+            if (activos.has(eco)) return;
+            try { layer.remove(); } catch (_) { /* noop */ }
+            _rxWinsLayers.delete(eco);
+        });
+    }
+    function rxMapaVentanasToggle() {
+        _rxWinsOn = !_rxWinsOn;
+        if (_rxWinsOn) {
+            rxMapaVentanasSync();
+            adviceOk('Rutas en ventanas', 'Dibujando la ruta en el mapa de cada ventana abierta.');
+        } else {
+            rxMapaVentanasQuitar();
+            advice('Rutas en ventanas', 'Se dejo de dibujar en las ventanas.');
+        }
+        if (APP.tab === 'rutas') paintRutas();
     }

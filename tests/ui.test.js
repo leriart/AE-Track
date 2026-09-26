@@ -797,5 +797,7 @@ ok('busqueda OSM restringida por pais', /function rxGeoParams\(/.test(src) && /c
 ok('sesgo por cercania a la unidad', /geoBiasKm/.test(src) && /viewbox=/.test(src) && /APP\.geoRef/.test(src));
 ok('tarjeta de rutas rediseñada', /class="rondo-ruta-card/.test(src) && /rr-head/.test(src) && /rr-chip/.test(src) && /rr-progress/.test(src) && /function rxFmtDist\(/.test(src));
 
+ok('ruta en ventanas de vehiculos', /function rxMapaVentanasToggle\(/.test(src) && /function rxMapaVentanasSync\(/.test(src) && /openWindows\(\)/.test(src) && /rondo-rutas-ventanas/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
