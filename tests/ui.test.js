@@ -820,7 +820,7 @@ ok('IA: catalogo de municipios y geocercas completas', /municipiosCatalogo/.test
 ok('editor multipunto mas grande y ajustado a la pantalla', /width:min\(1120px,96vw\)/.test(src) && /max-height:92vh/.test(src) && /rpmWin\.v2/.test(src));
 ok('dialogo acotado a la pantalla con cuerpo desplazable', /#rondo-dialog\{[^}]*max-height:90vh/.test(src) && /\.dlg-body\{[^}]*overflow-y:auto/.test(src) && /el\.style\.width = 'min\('/.test(src));
 ok('resultados de IA con ancho propio', /ancho: 760/.test(src) && /ancho: 780/.test(src));
-ok('botones +/- para redimensionar ventanas', /id="rondo-sb-mas"/.test(src) && /id="rondo-sb-menos"/.test(src) && /function rxAjustarVentanas\(/.test(src) && /RX_VENTANA_PASO/.test(src) && /mas: \[/.test(src) && /menos: \[/.test(src));
+ok('botones +/- para redimensionar ventanas (verticales, sin texto)', /id="rondo-sb-mas"/.test(src) && /id="rondo-sb-menos"/.test(src) && /rondo-tile-escala/.test(src) && /rondo-tile mini/.test(src) && !/id="rondo-sb-mas"[^\n]*tile-lbl/.test(src) && !/id="rondo-sb-menos"[^\n]*tile-lbl/.test(src) && /function rxAjustarVentanas\(/.test(src) && /RX_VENTANA_PASO/.test(src) && /mas: \[/.test(src) && /menos: \[/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

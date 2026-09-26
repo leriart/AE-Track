@@ -806,6 +806,9 @@
             "#rondo-panel .rondo-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
             "#rondo-panel .rondo-tile.primary{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .rondo-tile.primary .rondo-usym{color:#fff}\n" +
+            "#rondo-panel .rondo-tile-escala{display:flex;flex-direction:column;gap:3px;justify-content:center;align-items:stretch;min-width:0}\n" +
+            "#rondo-panel .rondo-tile.mini{flex:1 1 0;min-height:0;padding:1px 0;gap:0;border-radius:8px}\n" +
+            "#rondo-panel .rondo-tile.mini .rondo-usym{font-size:12px}\n" +
             "#rondo-barra .rondo-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#rondo-barra .rondo-badge-estado.ok{background:var(--rondo-ok)}\n" +
             "#rondo-barra .rondo-badge-estado.warn{background:var(--rondo-warn)}\n" +
