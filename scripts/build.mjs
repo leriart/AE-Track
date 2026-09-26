@@ -64,15 +64,18 @@ partes.forEach((p) => porChunk[p.chunk].push(p.texto));
 
 const REPO = 'leriart/AE-Track';
 // Canales:
-//   main    -> raw main/dist (estable, no depende de releases)
-//   dev     -> raw dev/dist  (pruebas)
-//   release -> assets inmutables del release (opcional/archivable)
+//   release -> assets inmutables del release (main). URL unica por version:
+//              https://github.com/REPO/releases/download/vX.Y.Z/rondo-*.js
+//   main    -> raw main/dist/vX.Y.Z/rondo-*.js  (ruta versionada: unica)
+//   dev     -> raw dev/dist/vX.Y.Z/rondo-*.js
+// La ruta versionada (en vez de ?v=) evita que un gestor reutilice un chunk
+// cacheado aunque ignore el query string.
 const urlChunk = (chunk) => {
     if (args.channel === 'release') {
         return 'https://github.com/' + REPO + '/releases/download/v' + version + '/rondo-' + chunk + '.js';
     }
     const branch = (args.channel === 'dev') ? 'dev' : 'main';
-    return 'https://raw.githubusercontent.com/' + REPO + '/' + branch + '/dist/rondo-' + chunk + '.js?v=' + version;
+    return 'https://raw.githubusercontent.com/' + REPO + '/' + branch + '/dist/v' + version + '/rondo-' + chunk + '.js';
 };
 
 function escribir(destino, contenido) {
@@ -90,9 +93,16 @@ if (modo === 'bundle') {
     const core = conVersion(prelude + "'use strict';\n" + porChunk.core.join(''));
     // El chunk ui NO llama a init(): lo llama el bootstrap una sola vez.
     const uiBody = porChunk.ui.join('').replace(/\n[ \t]*init\(\);[ \t]*\n*$/, '\n');
-    escribir(distDir + '/rondo-core.js', core);
-    escribir(distDir + '/rondo-engine.js', conVersion("'use strict';\n" + porChunk.engine.join('')));
-    escribir(distDir + '/rondo-ui.js', conVersion("'use strict';\n" + uiBody));
+    const engineBody = conVersion("'use strict';\n" + porChunk.engine.join(''));
+    const escribirChunks = (baseDir) => {
+        escribir(baseDir + '/rondo-core.js', core);
+        escribir(baseDir + '/rondo-engine.js', engineBody);
+        escribir(baseDir + '/rondo-ui.js', conVersion("'use strict';\n" + uiBody));
+    };
+    // Flat (para los assets del release y comparacion de CI).
+    escribirChunks(distDir);
+    // Ruta versionada para los canales raw (main/dev): URL unica por version.
+    if (args.channel !== 'release') escribirChunks(distDir + '/v' + version);
 
     const requires = ['core', 'engine', 'ui']
         .map((c) => '// @require      ' + urlChunk(c)).join('\n');

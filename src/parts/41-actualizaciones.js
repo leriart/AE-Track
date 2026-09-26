@@ -58,6 +58,7 @@
         else if (u.state === 'ahead') html += ' · <b style="color:var(--rondo-fg-dim)">build local ahead</b>';
         else if (u.state === 'unknown') html += ' · <b style="color:var(--rondo-warn-fg)">no se pudo comprobar</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
         else if (u.state === 'error') html += ' · <b style="color:var(--rondo-warn-fg)">error</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
+        else if (u.state === 'stale') html += ' · <b style="color:var(--rondo-warn-fg)">modulos desactualizados</b> (' + esc((u.stale && u.stale.detectado) || '?') + ' vs ' + esc(VER) + ') · clic en el chip para reinstalar';
         el.innerHTML = html;
     }
     // v5.14.1: chip de version en la cabecera del panel. Muestra la version
@@ -87,6 +88,9 @@
             titulo = 'Error comprobando actualizaciones · clic para reintentar';
         } else if (estado === 'installed') {
             titulo = 'Actualizacion instalada · recarga para aplicar';
+        } else if (estado === 'stale') {
+            titulo = 'Modulos desactualizados (' + (u.stale && u.stale.declarado) + ' vs ' + (u.stale && u.stale.detectado) +
+                ') · clic para reinstalar y forzar la recarga de modulos';
         }
         chip.dataset.estado = estado;
         chip.title = titulo;
@@ -94,6 +98,8 @@
         if (label && estado === 'available' && u.remote) {
             // Mostrar "v5.14.0 -> 5.14.1" cuando hay update.
             label.textContent = 'v' + VER + ' -> ' + u.remote;
+        } else if (label && estado === 'stale' && u.stale && u.stale.detectado) {
+            label.textContent = 'v' + u.stale.detectado + ' -> v' + VER;
         } else if (label) {
             label.textContent = 'v' + VER;
         }

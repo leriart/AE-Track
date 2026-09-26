@@ -264,10 +264,14 @@
                     return;
                 }
                 lastClickChip = ahora;
-                // Si hay update disponible, abrir directamente el dialogo
-                // de aplicacion; si no, forzar re-comprobacion.
+                // Si hay update disponible (o modulos desfasados por cache),
+                // aplicar/reinstalar; si no, forzar re-comprobacion.
                 if (APP.update && APP.update.state === 'available') {
                     aplicarActualizacion();
+                } else if (APP.update && APP.update.state === 'stale') {
+                    // Reinstalar fuerza al gestor a re-descargar los @require.
+                    try { window.open(UPDATE_URL, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+                    advice('Reinstalando modulos', 'Confirma la instalacion en el gestor de userscripts y recarga la pagina.');
                 } else {
                     APP.update.notificado = false;
                     comprobarActualizacion();
