@@ -620,7 +620,8 @@ La pestana **Replay** reproduce el recorrido de una unidad:
 5. Arriba veras un **resumen** (rango de horas, distancia, duracion, paradas,
    tiempo en movimiento y detenido, velocidad maxima y excesos) y, abajo, junto
    a **GeoJSON** y **Paradas CSV**, el boton **Reporte PDF** genera un PDF del
-   recorrido (resumen, paradas con su lugar y eventos).
+   recorrido con la **imagen del mapa** (recorrido y puntos marcados), el
+   resumen, las paradas con su lugar y los eventos.
 
 Es solo lectura (historial de la plataforma). Atajo: **Alt + 8**. Tambien puedes
 abrirla desde el **clic derecho** sobre una unidad, en **Reproducir el dia
@@ -904,8 +905,7 @@ te pedirá confirmación.
   KPIs, unidades, avisos del dia, rutas activas, unidades sin senal, geocercas y
   zonas de riesgo) y abre el dialogo de impresion del navegador; elige
   **Guardar como PDF**. Esta paginado en A4, con encabezados de tabla que se
-  repiten y sin emojis. Si la IA esta activa y el resumen del informe esta
-  habilitado, incluye tambien el analisis con IA.
+  repiten y sin emojis.
 - **Informe (Markdown)**: el icono junto a Reporte PDF descarga el informe del
   dia en texto Markdown (alertas por severidad, por regla, etc.).
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y

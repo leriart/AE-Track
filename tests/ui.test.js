@@ -814,6 +814,8 @@ ok('paradas con lugar de OpenStreetMap', /function rxReplayLugarOSM\(/.test(src)
 ok('mini-mapa: actualizar marcas sin reencuadrar', /inst\.setMarcas = /.test(src));
 ok('reporte PDF completo y profesional', /function exportReportePDF\(/.test(src) && /function rxInformeHTML\(/.test(src) && /function rxImprimirHTML\(/.test(src) && /function rxInfEstilo\(/.test(src) && /size:A4/.test(src) && /rondo-print-frame/.test(src) && /id="rondo-informe-md"/.test(src));
 ok('reporte PDF del recorrido junto a GeoJSON/CSV', /function rxReplayInformeHTML\(/.test(src) && /function exportReplayPDF\(/.test(src) && /id="rondo-replay-pdf"/.test(src) && /rondo-replay-acciones/.test(src));
+ok('mini-mapa: version imprimible y capa fija (sin parpadeo)', /function rxMiniMapaHTML\(/.test(src) && /function rxMMTilesHTML\(/.test(src) && /rr-mini-abs/.test(src) && /rondo-lista-rutas\{position:relative\}/.test(src));
+ok('reporte del recorrido incluye el mapa', /rondo-mm-print/.test(src) && /mapa-leyenda/.test(src) && /rxMiniMapaHTML\(\{/.test(src));
 
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
 

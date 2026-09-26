@@ -79,7 +79,12 @@
             'p{margin:0 0 8px;font-size:10.5px;line-height:1.5}' +
             '.resumen{background:#f7f8fb;border:1px solid #e3e6ee;border-radius:8px;padding:10px 12px;margin:0 0 4px}' +
             '.ia{border:1px solid #e3e6ee;border-left:4px solid #1565c0;border-radius:6px;padding:8px 10px;background:#f7f9fc}' +
-            '.pie{margin-top:20px;border-top:1px solid #d9dce4;padding-top:6px;font-size:8.5px;color:#8890a2;display:flex;justify-content:space-between}';
+            '.pie{margin-top:20px;border-top:1px solid #d9dce4;padding-top:6px;font-size:8.5px;color:#8890a2;display:flex;justify-content:space-between}' +
+            '.rondo-mm-print{position:relative;overflow:hidden;background:#eef1f6;border:1px solid #d9dce4;border-radius:6px;margin:4px 0 10px}' +
+            '.rondo-mm-print .rondo-mm-tile{position:absolute;width:256px;height:256px}' +
+            '.rondo-mm-print svg{position:absolute;left:0;top:0}' +
+            '.mapa-leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:9.5px;color:#5a6072;margin:0 0 10px}' +
+            '.mapa-leyenda i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}';
     }
     function rxInfCabecera(titulo, subtitulo, meta) {
         return '<div class="cover">' +
@@ -90,7 +95,7 @@
     function rxInfPie() {
         return '<div class="pie"><span>Rondo &middot; generado automaticamente</span><span>Documento de solo lectura: no modifica datos en la plataforma.</span></div>';
     }
-    function rxInformeHTML(resumenIA) {
+    function rxInformeHTML() {
         const d = rxInformeDatos();
         const fecha = d.now.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
         const hora = d.now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -187,7 +192,6 @@
             '<div class="kpis">' + kpis + '</div>' +
             '<h2 class="seccion">Resumen ejecutivo</h2>' +
             '<div class="resumen"><p>' + esc(rxInfResumenTexto(d)) + '</p><p style="margin:0">' + sevResumen + '</p></div>' +
-            (resumenIA ? '<h2 class="seccion">Analisis con IA</h2><div class="ia"><p>' + esc(resumenIA) + '</p></div>' : '') +
             seccion('1. Unidades (' + d.watched.length + ')', rxInfTabla(['Eco', 'Placa', 'Estado', 'Ultimo reporte', 'Velocidad', 'Zona', 'Ruta', 'Odometro', 'Limite'], filasUnidades)) +
             seccion('2. Avisos del dia (' + d.hoy.length + ')', rxInfTabla(['Hora', 'Severidad', 'Regla', 'Eco', 'Titulo y detalle'], filasAvisos)) +
             seccion('3. Rutas activas (' + rutas.length + ')', rxInfTabla(['Eco', 'Destino', 'Estado', 'Progreso', 'Distancia', 'ETA', 'Desviado'], rutas)) +
@@ -231,6 +235,21 @@
             esc(e2.txt),
             (+e2.lat).toFixed(5) + ',' + (+e2.lon).toFixed(5)
         ]);
+        // Mapa del recorrido con los puntos marcados (tiles de OSM + trazo SVG).
+        const marcasMapa = [];
+        (r.paradas || []).forEach((p, i) => marcasMapa.push({ lat: p.lat, lon: p.lon, color: '#7d8595', radio: 6, num: i + 1, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
+        (r.eventos || []).forEach((e2) => marcasMapa.push({ lat: e2.lat, lon: e2.lon, color: rxReplayColor(e2.tipo), radio: 5, txt: rxReplayHHMM(e2.t) + ' \u00b7 ' + e2.txt }));
+        const mapa = rxMiniMapaHTML({
+            lineas: [{ pts: (r.msgs || []).map((m) => ({ lat: m.lat, lon: m.lon })), color: '#850D22', width: 4, opacity: 0.95, glow: true }],
+            marcas: marcasMapa
+        }, 680, 300);
+        const leyenda = '<div class="mapa-leyenda">' +
+            '<span><i style="background:#850D22"></i>Recorrido</span>' +
+            '<span><i style="background:#7d8595"></i>Parada (numerada)</span>' +
+            '<span><i style="background:#1565c0"></i>Geocerca</span>' +
+            '<span><i style="background:#b71c1c"></i>Exceso</span>' +
+            '<span><i style="background:#e65100"></i>Desvio</span>' +
+            '<span class="muted">Mapa: OpenStreetMap</span></div>';
         const seccion = (titulo, contenido) => '<h2 class="seccion">' + esc(titulo) + '</h2>' + contenido;
         return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
             '<title>Recorrido ' + esc(r.eco) + ' ' + esc(fecha) + '</title>' +
@@ -238,8 +257,9 @@
             rxInfCabecera('Rondo', 'Recorrido de la unidad',
                 'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(fecha) + ' &middot; ' + esc(rango) + '<br>Documento de solo lectura') +
             '<div class="kpis">' + kpis + '</div>' +
-            seccion('1. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
-            seccion('2. Eventos (' + filasEventos.length + ')', rxInfTabla(['Hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
+            seccion('1. Mapa del recorrido', mapa + leyenda) +
+            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
+            seccion('3. Eventos (' + filasEventos.length + ')', rxInfTabla(['Hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
             (r.truncado ? '<p class="muted">Nota: el historial se trunco al limite de mensajes; el resumen puede ser parcial.</p>' : '') +
             rxInfPie() +
             '</body></html>';
@@ -256,32 +276,34 @@
         fr.id = 'rondo-print-frame';
         fr.setAttribute('style', 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none');
         document.body.appendChild(fr);
+        let doc = null;
         try {
-            const doc = fr.contentWindow.document;
+            doc = fr.contentWindow.document;
             doc.open(); doc.write(html); doc.close();
         } catch (_) {
             adviceWarn('No se pudo preparar el reporte', 'Intenta de nuevo.');
             try { fr.remove(); } catch (_) { /* noop */ }
             return;
         }
-        setTimeout(() => {
-            try { fr.contentWindow.focus(); fr.contentWindow.print(); }
-            catch (_) { adviceWarn('No se pudo imprimir', 'Permite la impresion/ventanas emergentes e intenta de nuevo.'); }
-            setTimeout(() => { try { fr.remove(); } catch (_) { /* noop */ } }, 60000);
-        }, 600);
+        // Espera a que carguen los tiles del mapa antes de imprimir.
+        const pendientes = () => {
+            try { return Array.prototype.filter.call(doc.images || [], (i) => !i.complete).length; }
+            catch (_) { return 0; }
+        };
+        const t0 = Date.now();
+        const listo = () => {
+            if (pendientes() && (Date.now() - t0) < 5000) { setTimeout(listo, 150); return; }
+            setTimeout(() => {
+                try { fr.contentWindow.focus(); fr.contentWindow.print(); }
+                catch (_) { adviceWarn('No se pudo imprimir', 'Permite la impresion/ventanas emergentes e intenta de nuevo.'); }
+                setTimeout(() => { try { fr.remove(); } catch (_) { /* noop */ } }, 60000);
+            }, 250);
+        };
+        setTimeout(listo, 400);
     }
-    async function exportReportePDF() {
+    function exportReportePDF() {
         const d = rxInformeDatos();
         if (!d.watched.length) { adviceWarn('Sin unidades', 'No hay unidades en el alcance para el reporte.'); return; }
-        let resumenIA = '';
-        const quiereIA = !!(APP.config && APP.config.iaHabilitada && APP.config.iaApiKey && APP.config.iaResumenInforme);
-        if (quiereIA) {
-            advice('Generando reporte', 'Pidiendo el resumen a la IA...');
-            try {
-                const r = await aiResumenDia(d.hoy);
-                if (r && r.texto) resumenIA = String(r.texto).replace(/\s*\n\s*/g, ' ').trim();
-            } catch (_) { resumenIA = ''; }
-        }
-        rxImprimirHTML(rxInformeHTML(resumenIA));
+        rxImprimirHTML(rxInformeHTML());
         advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
     }

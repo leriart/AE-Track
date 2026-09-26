@@ -64,7 +64,7 @@
         inst.ox = cx - W / 2;
         inst.oy = cy - H / 2;
     }
-    function rxMMTiles(inst) {
+    function rxMMTilesHTML(inst, lazy) {
         const z = inst.z;
         const n = Math.pow(2, z);
         const x0 = Math.floor(inst.ox / 256), x1 = Math.floor((inst.ox + inst.W) / 256);
@@ -77,10 +77,13 @@
                 const left = tx * 256 - inst.ox;
                 const top = ty * 256 - inst.oy;
                 html += '<img class="rondo-mm-tile" src="https://tile.openstreetmap.org/' + z + '/' + wx + '/' + ty + '.png"' +
-                    ' style="left:' + left + 'px;top:' + top + 'px" alt="" draggable="false" loading="lazy">';
+                    ' style="left:' + left + 'px;top:' + top + 'px" alt="" draggable="false"' + (lazy === false ? '' : ' loading="lazy"') + '>';
             }
         }
-        inst.capaTiles.innerHTML = html;
+        return html;
+    }
+    function rxMMTiles(inst) {
+        inst.capaTiles.innerHTML = rxMMTilesHTML(inst);
     }
     function rxMMLineaHTML(inst, ln) {
         if (!ln || !ln.pts || ln.pts.length < 2) return '';
@@ -108,6 +111,11 @@
             html += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (m.radio || 5) +
                 '" fill="' + (m.color || '#1565c0') + '" stroke="#fff" stroke-width="1.5">' +
                 (m.txt ? '<title>' + esc(m.txt) + '</title>' : '') + '</circle>';
+            if (m.num != null) {
+                html += '<text x="' + (q[0] + 7).toFixed(1) + '" y="' + (q[1] + 3.5).toFixed(1) + '" font-size="10" font-weight="700"' +
+                    ' fill="#1c2030" stroke="#fff" stroke-width="2.5" paint-order="stroke" style="font-family:system-ui,Arial,sans-serif">' +
+                    esc(String(m.num)) + '</text>';
+            }
         });
         return html;
     }
@@ -208,6 +216,27 @@
         inst.encuadrar();
         return inst;
     }
+    // Mini-mapa estatico en HTML (tiles + SVG) para incrustar en el reporte PDF.
+    // Los tiles son <img> normales: el navegador los carga y los imprime.
+    function rxMiniMapaHTML(cfg, W, H) {
+        const o = cfg || {};
+        const inst = {
+            W: Math.max(160, W || 680), H: Math.max(120, H || 300), z: 16, ox: 0, oy: 0,
+            lineas: o.lineas || [], marcas: o.marcas || [], pos: o.pos || null
+        };
+        rxMMFit(inst);
+        let svg = '';
+        (inst.lineas || []).forEach((ln) => { svg += rxMMLineaHTML(inst, ln); });
+        svg += rxMMMarcasHTML(inst);
+        if (inst.pos) {
+            const q = rxMMPt(inst, inst.pos.lat, inst.pos.lon);
+            svg += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#850D22" stroke="#fff" stroke-width="2"/>';
+        }
+        return '<div class="rondo-mm-print" style="width:' + inst.W + 'px;height:' + inst.H + 'px">' +
+            rxMMTilesHTML(inst, false) +
+            '<svg width="' + inst.W + '" height="' + inst.H + '" viewBox="0 0 ' + inst.W + ' ' + inst.H + '">' + svg + '</svg>' +
+            '</div>';
+    }
     // Lineas y marcadores de una ruta (trazo resaltado con halo).
     function rxRutaLineasMarcas(r) {
         const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95, glow: true }];
@@ -219,11 +248,15 @@
         if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 6, txt: 'Destino' });
         return { lineas: lineas, marcas: marcas };
     }
-    // Mini-mapas embebidos en las tarjetas de la pestana Rutas. Se conservan
-    // entre repintados (el panel se repinta cada segundo): el nodo del mapa se
-    // re-anexa al nuevo placeholder en vez de recrearlo.
-    const _rxRutaMini = new Map(); // eco -> { inst, key }
+    // Mini-mapas de las tarjetas de la pestana Rutas. Para que no parpadeen ni
+    // se reencuadren, NO van dentro del HTML que se repinta cada segundo: se
+    // crean una vez como capa absoluta dentro de la lista y solo se reposicionan
+    // sobre su hueco (.rr-mini) en cada repintado.
+    const _rxRutaMini = new Map(); // eco -> { inst, hold, key, w, h }
     function rxRutasMiniSync(filas) {
+        const list = byId('rondo-lista-rutas');
+        if (!list) return;
+        const listRect = list.getBoundingClientRect();
         const vistos = new Set();
         (filas || []).forEach((x) => {
             const info = x && x.info ? x.info : x;
@@ -238,17 +271,37 @@
             const er = (typeof estadoRuta === 'function') ? estadoRuta(info, st) : { snap: null };
             const s = er.snap || null;
             const key = (r.creada || 0) + ':' + eco + ':' + r.coords.length;
+            const phRect = ph.getBoundingClientRect();
+            const w = Math.max(120, Math.round(phRect.width || 300));
+            const h = Math.max(90, Math.round(phRect.height || 150));
+            const left = Math.round(phRect.left - listRect.left);
+            const top = Math.round(phRect.top - listRect.top);
             let ent = _rxRutaMini.get(eco);
             if (!ent || ent.key !== key) {
-                if (ent) { try { ent.inst.destruir(); } catch (_) { /* noop */ } }
+                if (ent) {
+                    try { ent.inst.destruir(); } catch (_) { /* noop */ }
+                    if (ent.hold && ent.hold.parentNode) ent.hold.parentNode.removeChild(ent.hold);
+                }
+                const hold = document.createElement('div');
+                hold.className = 'rr-mini-abs';
+                hold.style.left = left + 'px'; hold.style.top = top + 'px';
+                hold.style.width = w + 'px'; hold.style.height = h + 'px';
+                list.appendChild(hold);
                 const lm = rxRutaLineasMarcas(r);
                 lm.lineas.push({ pts: [], dyn: true });
                 const pos = (st && st.lat != null) ? { lat: st.lat, lon: st.lon } : null;
-                ent = { inst: rxMiniMapa(ph, { lineas: lm.lineas, marcas: lm.marcas, pos: pos }), key: key };
+                ent = { inst: rxMiniMapa(hold, { lineas: lm.lineas, marcas: lm.marcas, pos: pos }), hold: hold, key: key, w: w, h: h };
                 _rxRutaMini.set(eco, ent);
-            } else if (ent.inst.cont.parentNode !== ph) {
-                // El repintado recreo la tarjeta: re-anexa el mini-mapa (conserva tiles).
-                try { ph.appendChild(ent.inst.cont); ent.inst.medir(); ent.inst.render(); } catch (_) { /* noop */ }
+            } else {
+                // El repintado vacio la lista: re-inserta la capa (conserva tiles y paneo).
+                if (ent.hold.parentNode !== list) list.appendChild(ent.hold);
+                if (ent.hold.style.left !== (left + 'px')) ent.hold.style.left = left + 'px';
+                if (ent.hold.style.top !== (top + 'px')) ent.hold.style.top = top + 'px';
+                if (ent.w !== w || ent.h !== h) {
+                    ent.hold.style.width = w + 'px'; ent.hold.style.height = h + 'px';
+                    ent.w = w; ent.h = h;
+                    try { ent.inst.medir(); ent.inst.render(); } catch (_) { /* noop */ }
+                }
             }
             if (s && st && st.lat != null) {
                 const idx = clamp((s.idx || 0) + 1, 0, r.coords.length - 1);
@@ -266,6 +319,7 @@
         _rxRutaMini.forEach((ent, eco) => {
             if (vistos.has(eco)) return;
             try { ent.inst.destruir(); } catch (_) { /* noop */ }
+            if (ent.hold && ent.hold.parentNode) ent.hold.parentNode.removeChild(ent.hold);
             _rxRutaMini.delete(eco);
         });
     }

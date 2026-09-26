@@ -123,6 +123,9 @@
             "#rondo-panel .rondo-ruta-card .rr-meta{display:flex;flex-wrap:wrap;gap:5px}\n" +
             "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
             "#rondo-panel .rondo-ruta-card .rr-mini{height:150px;margin-top:2px}\n" +
+            "#rondo-lista-rutas{position:relative}\n" +
+            "#rondo-lista-rutas .rr-mini-abs{position:absolute;left:0;top:0;z-index:1}\n" +
+            "#rondo-lista-rutas .rr-mini-abs.rondo-mm{position:absolute}\n" +
             // v6.0.11: replay del dia.
             "#rondo-panel .rondo-replay-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}\n" +
             "#rondo-panel .rondo-replay-bar .filtro{min-width:0;width:100%;box-sizing:border-box}\n" +
