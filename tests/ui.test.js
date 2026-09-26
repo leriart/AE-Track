@@ -754,5 +754,7 @@ ok('boton Unidades y rutas en herramientas', /id="rondo-unidades-menu"/.test(src
 ok('menu contextual unificado (sin ruta-plan/ruta-astar sueltos)', src.indexOf("id: 'ruta-plan'") < 0 && src.indexOf("id: 'ruta-astar'") < 0 && src.indexOf("id: 'ruta-paradas'") >= 0);
 ok('tarjeta de unidad se actualiza por campos', /function unidCardNode\(/.test(src) && /function unidCardUpdate\(/.test(src) && src.indexOf('function renderCards(') < 0);
 
+ok('init es idempotente (evita doble UI en modo hibrido)', /if \(APP\._iniciado\) return;/.test(src) && /APP\._iniciado = true;/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
