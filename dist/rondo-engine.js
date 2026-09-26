@@ -1396,13 +1396,15 @@ ta.value = '';
     // activa y hay avisos. Se llama desde paintAlertas y tras cambios de
     // config (paintIASwitch, borrar key, etc).
     function paintIABatchBtn() {
-        const b = byId('rondo-ia-batch');
-        const f = byId('rondo-ia-flota');
+        const bar = byId('rondo-ia-bar');
         const cfg = APP.config || {};
         const ok = !!(cfg.iaHabilitada && cfg.iaApiKey);
         const hay = (APP.historial || []).length > 0;
-        if (b) b.style.display = (ok && hay) ? '' : 'none';
-        if (f) f.style.display = ok ? '' : 'none';
+        if (bar) bar.style.display = ok ? '' : 'none';
+        const b = byId('rondo-ia-batch');
+        if (b) { b.disabled = !hay; b.style.opacity = hay ? '' : '.55'; }
+        const f = byId('rondo-ia-flota');
+        if (f) f.disabled = false;
     }
     // v5.14: pinta el contador de uso diario en la pestana IA.
     function paintIAUso() {
@@ -1436,6 +1438,10 @@ ta.value = '';
             const inicio = new Date(); inicio.setHours(0, 0, 0, 0);
             const hoy = APP.historial.filter((a) => a.ts >= inicio.getTime());
             const muestra = hoy.length >= cfg.iaBatchMax ? hoy : APP.historial.slice(0, cfg.iaBatchMax);
+            if (!muestra.length) {
+                advice('Sin avisos', 'Todavia no hay avisos para analizar.');
+                return;
+            }
             const r = await aiAnalizarLote(muestra);
             paintIAUso();
             // v5.14.3: dialog rico con endpoint + tips + cambio rapido.
@@ -1448,10 +1454,13 @@ ta.value = '';
             const ranking = Array.isArray(r.ranking) ? r.ranking : [];
             const recos = Array.isArray(r.recomendaciones) ? r.recomendaciones : [];
             const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+            const sevCount = muestra.reduce((m, a) => { m[a.sev] = (m[a.sev] || 0) + 1; return m; }, {});
+            const sevTxt = ['critico', 'alto', 'medio', 'bajo'].filter((s) => sevCount[s])
+                .map((s) => sevCount[s] + ' ' + s).join(' \u00b7 ');
             const html =
                 '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
                 '<div style="color:var(--rondo-fg-dim);margin-bottom:6px">Proveedor: <b>' + esc(provNombre) + '</b>' +
-                (ranking.length ? ' · ' + ranking.length + ' avisos priorizados' : '') + '</div>' +
+                ' \u00b7 ' + muestra.length + ' aviso(s)' + (sevTxt ? ' (' + esc(sevTxt) + ')' : '') + '</div>' +
                 (r.resumen ? '<div style="margin:0 0 10px"><b>Resumen:</b> ' + esc(r.resumen) + '</div>' : '') +
                 (ranking.length ? '<div style="margin:0 0 10px"><b>Ranking:</b><ol style="margin:4px 0 0 18px;padding:0">' +
                     ranking.map((it) => {
@@ -2995,18 +3004,37 @@ ta.value = '';
         }
     }
     function reglaGeocerca(st, prev, R, info, etq) {
-        if (!APP.config.reglas.geocerca || !prev || prev.zona === R.zona) return;
-        if (R.zona) {
+        if (!APP.config.reglas.geocerca) return;
+        // v6.0.2: histeresis. Un cambio de geocerca solo se confirma si se
+        // sostiene geocercaEstableSeg segundos; asi el GPS que oscila en el
+        // borde no genera ENTER/EXIT repetidos.
+        const actual = R.zona || '';
+        if (R.zonaEst == null) R.zonaEst = actual;
+        if (actual === R.zonaEst) {
+            R.zonaPend = null;
+            return;
+        }
+        if (R.zonaPend !== actual) {
+            R.zonaPend = actual;
+            R.zonaPendDesde = Date.now();
+            return;
+        }
+        const minSeg = Math.max(2, +APP.config.geocercaEstableSeg || 15);
+        if ((Date.now() - R.zonaPendDesde) / 1000 < minSeg) return;
+        const previo = R.zonaEst || '';
+        R.zonaEst = actual;
+        R.zonaPend = null;
+        if (actual) {
             pushAlert({
                 regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
-                titulo: 'ENTRO · ' + etq,
-                detalle: 'entro a ' + R.zona + ' · ' + Math.round(st.vel) + ' km/h'
+                titulo: 'ENTRO \u00b7 ' + etq,
+                detalle: 'entro a ' + actual + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
-        } else if (prev.zona) {
+        } else if (previo) {
             pushAlert({
                 regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
-                titulo: 'SALIO · ' + etq,
-                detalle: 'salio de ' + prev.zona + ' · ' + Math.round(st.vel) + ' km/h'
+                titulo: 'SALIO \u00b7 ' + etq,
+                detalle: 'salio de ' + previo + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
         }
     }
@@ -3271,6 +3299,11 @@ ta.value = '';
         const R = {
             estado: st.estado, t: st.t, vel: st.vel, lat: st.lat, lon: st.lon,
             zona: zoneAt(st.lat, st.lon),
+            // v6.0.2: geocerca "estabilizada" para avisos ENTER/EXIT (con
+            // histeresis) y candidato pendiente.
+            zonaEst: prev ? (prev.zonaEst !== undefined ? prev.zonaEst : (prev.zona || '')) : null,
+            zonaPend: prev ? (prev.zonaPend !== undefined ? prev.zonaPend : null) : null,
+            zonaPendDesde: prev ? (prev.zonaPendDesde || 0) : 0,
             detenidoDesde: prev ? prev.detenidoDesde : null,
             zonaExt: prev ? prev.zonaExt : null,
             enDestino: prev ? prev.enDestino : false,
