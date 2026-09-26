@@ -5318,6 +5318,11 @@
 
     /* ====================== INIT ====================== */
     async function init() {
+        // Idempotente: en modo hibrido el chunk ui y el bootstrap pueden
+        // llamarla; evita construir la interfaz dos veces (dos UI superpuestas,
+        // la de arriba sin listeners = botones muertos).
+        if (APP._iniciado) return;
+        APP._iniciado = true;
         const primerUso = !localStorage.getItem(LS.cfg);
         injectCSS();
         buildUI();
@@ -5415,6 +5420,4 @@
         setTimeout(() => { autoTrazarRutas(); }, 2500);
     }
     function log() { try { console.log.apply(console, ['[Rondo]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
-
-    init();
 
