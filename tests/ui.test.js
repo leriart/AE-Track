@@ -812,7 +812,8 @@ ok('replay: perfil de velocidad', /function rxReplayChartHTML\(/.test(src) && /f
 // v6.0.13: lugares OSM en las paradas y reporte PDF.
 ok('paradas con lugar de OpenStreetMap', /function rxReplayLugarOSM\(/.test(src) && /function rxReplayReversa\(/.test(src) && /nominatim\.openstreetmap\.org\/reverse/.test(src) && /function rxReplayPoiCerca\(/.test(src) && /function rxReplayUbicarParadas\(/.test(src));
 ok('mini-mapa: actualizar marcas sin reencuadrar', /inst\.setMarcas = /.test(src));
-ok('reporte PDF completo y profesional', /function exportReportePDF\(/.test(src) && /function rxInformeHTML\(/.test(src) && /function rxImprimirHTML\(/.test(src) && /size:A4/.test(src) && /rondo-print-frame/.test(src) && /id="rondo-informe-md"/.test(src) && /Rondo<small>Vigilancia/.test(src));
+ok('reporte PDF completo y profesional', /function exportReportePDF\(/.test(src) && /function rxInformeHTML\(/.test(src) && /function rxImprimirHTML\(/.test(src) && /function rxInfEstilo\(/.test(src) && /size:A4/.test(src) && /rondo-print-frame/.test(src) && /id="rondo-informe-md"/.test(src));
+ok('reporte PDF del recorrido junto a GeoJSON/CSV', /function rxReplayInformeHTML\(/.test(src) && /function exportReplayPDF\(/.test(src) && /id="rondo-replay-pdf"/.test(src) && /rondo-replay-acciones/.test(src));
 
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
 

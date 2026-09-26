@@ -238,6 +238,7 @@
              '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
              '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
              '<div class="rondo-replay-acciones">' +
+             '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido (resumen, paradas y eventos)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
              '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
              '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
              '</div>' +

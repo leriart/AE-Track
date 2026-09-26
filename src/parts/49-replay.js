@@ -749,6 +749,8 @@
         if (geo) geo.addEventListener('click', () => rxReplayExportarGeoJSON());
         const csv = byId('rondo-replay-csv');
         if (csv) csv.addEventListener('click', () => rxReplayExportarParadasCSV());
+        const pdf = byId('rondo-replay-pdf');
+        if (pdf) pdf.addEventListener('click', () => exportReplayPDF());
         // Rangos rapidos.
         document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((b) => {
             b.addEventListener('click', () => {

@@ -618,8 +618,9 @@ La pestana **Replay** reproduce el recorrido de una unidad:
    municipio). Con **Overpass** activado en Ajustes se afinan mas los nombres de
    comercios. Haz clic en una parada o en un evento para saltar a ese momento.
 5. Arriba veras un **resumen** (rango de horas, distancia, duracion, paradas,
-   tiempo en movimiento y detenido, velocidad maxima y excesos) y puedes
-   **exportar** el recorrido a **GeoJSON** o las paradas a **CSV**.
+   tiempo en movimiento y detenido, velocidad maxima y excesos) y, abajo, junto
+   a **GeoJSON** y **Paradas CSV**, el boton **Reporte PDF** genera un PDF del
+   recorrido (resumen, paradas con su lugar y eventos).
 
 Es solo lectura (historial de la plataforma). Atajo: **Alt + 8**. Tambien puedes
 abrirla desde el **clic derecho** sobre una unidad, en **Reproducir el dia
