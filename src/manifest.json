@@ -199,6 +199,10 @@
     {
       "file": "49-replay.js",
       "chunk": "ui"
+    },
+    {
+      "file": "50-informe.js",
+      "chunk": "ui"
     }
   ]
 }

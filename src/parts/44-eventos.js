@@ -135,7 +135,9 @@
         if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
-        byId('rondo-informe').addEventListener('click', exportInforme);
+        byId('rondo-informe').addEventListener('click', () => exportReportePDF());
+        const informeMd = byId('rondo-informe-md');
+        if (informeMd) informeMd.addEventListener('click', exportInforme);
         const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {

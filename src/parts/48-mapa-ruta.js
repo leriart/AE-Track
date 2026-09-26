@@ -170,6 +170,10 @@
             inst.lineas[i] = { pts: pts, color: color, width: width, opacity: opacity, dyn: true };
             if (inst.svg) rxMMDibujar(inst, true);
         };
+        inst.setMarcas = (marcas) => {
+            inst.marcas = marcas || [];
+            if (inst.svg) rxMMDibujar(inst, false);
+        };
         inst.destruir = () => { try { cont.innerHTML = ''; } catch (_) { /* noop */ } };
         // Pan con arrastre.
         let drag = null;

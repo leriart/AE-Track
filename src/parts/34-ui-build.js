@@ -91,7 +91,8 @@
             '<button id="rondo-unidades-menu" class="rondo-tool" data-tabs="unidades" title="Agregar unidades, destinos y rutas multipunto"><span class="rondo-usym">' + UIS.route + '</span> Unidades y rutas</button>' +
             '<button id="rondo-carga-btn" class="rondo-tool" data-tabs="unidades" title="Carga rapida: pega la lista de clientes del embarque y asigna la ruta a una unidad"><span class="rondo-usym">' + UIS.watch + '</span> Carga rapida</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
-            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar informe del dia"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
+            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+            '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
             '<button id="rondo-captura" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Capturar las ventanas abiertas"><span class="rondo-usym">' + UIS.expand + '</span></button>' +

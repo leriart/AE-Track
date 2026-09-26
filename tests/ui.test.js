@@ -809,6 +809,11 @@ ok('replay: buscador de unidades', /function rxReplayUnidades\(/.test(src) && /f
 ok('replay: rango por dia y horas', /id="rondo-replay-desde"/.test(src) && /id="rondo-replay-hasta"/.test(src) && /function rxReplayRango\(/.test(src) && /function rxReplayRangoRapido\(/.test(src) && /data-rango="noche"/.test(src));
 ok('replay: perfil de velocidad', /function rxReplayChartHTML\(/.test(src) && /function rxReplayChartCursor\(/.test(src) && /id="rondo-replay-chart"/.test(src) && /rondo-replay-chart-cur/.test(src));
 
+// v6.0.13: lugares OSM en las paradas y reporte PDF.
+ok('paradas con lugar de OpenStreetMap', /function rxReplayLugarOSM\(/.test(src) && /function rxReplayReversa\(/.test(src) && /nominatim\.openstreetmap\.org\/reverse/.test(src) && /function rxReplayPoiCerca\(/.test(src) && /function rxReplayUbicarParadas\(/.test(src));
+ok('mini-mapa: actualizar marcas sin reencuadrar', /inst\.setMarcas = /.test(src));
+ok('reporte PDF completo y profesional', /function exportReportePDF\(/.test(src) && /function rxInformeHTML\(/.test(src) && /function rxImprimirHTML\(/.test(src) && /size:A4/.test(src) && /rondo-print-frame/.test(src) && /id="rondo-informe-md"/.test(src) && /Rondo<small>Vigilancia/.test(src));
+
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
 
 // v6.0.9: editor multipunto movible/redimensionable, reordenar y teclado.

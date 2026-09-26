@@ -126,6 +126,129 @@
         try { const m = municipioEn(lat, lon); municipio = (m && m.nombre) ? m.nombre : ''; } catch (_) { /* noop */ }
         return { zona: zona, municipio: municipio };
     }
+    // ---- Lugares de OpenStreetMap para las paradas ----
+    // Etiqueta de una parada: lugar de OSM > geocerca > municipio > coordenadas.
+    function rxReplayParadaEtiqueta(p) {
+        if (!p) return '';
+        if (p.lugar) return p.lugar + (p.categoria ? ' (' + p.categoria + ')' : '');
+        if (p.zona) return p.zona;
+        if (p.municipio) return p.municipio;
+        return (+p.lat).toFixed(4) + ',' + (+p.lon).toFixed(4);
+    }
+    function rxReplayParadaTooltip(p) {
+        const partes = [];
+        if (p.lugar) partes.push(p.lugar + (p.categoria ? ' (' + p.categoria + ')' : ''));
+        if (p.direccion && p.direccion !== p.lugar) partes.push(p.direccion);
+        if (p.zona) partes.push('geocerca: ' + p.zona);
+        if (p.municipio) partes.push('municipio: ' + p.municipio);
+        partes.push((+p.lat).toFixed(5) + ',' + (+p.lon).toFixed(5));
+        return partes.join(' \u00b7 ');
+    }
+    function rxReplayCatPOI(t) {
+        if (!t) return 'lugar';
+        if (t.shop) {
+            const map = { convenience: 'tienda de conveniencia', supermarket: 'supermercado', bakery: 'panaderia', butcher: 'carniceria', greengrocer: 'fruteria', clothes: 'ropa', hardware: 'ferreteria', car_repair: 'taller', tyres: 'llantera', pharmacy: 'farmacia', beverages: 'bebidas', department_store: 'tienda', variety_store: 'tienda', wholesale: 'mayoreo', doityourself: 'ferreteria', mall: 'plaza' };
+            return map[t.shop] || ('tienda de ' + t.shop);
+        }
+        if (t.amenity) {
+            const map = { fuel: 'gasolinera', restaurant: 'restaurante', fast_food: 'comida rapida', cafe: 'cafeteria', bank: 'banco', atm: 'cajero', pharmacy: 'farmacia', hospital: 'hospital', clinic: 'clinica', school: 'escuela', parking: 'estacionamiento', marketplace: 'mercado', toilets: 'sanitarios', place_of_worship: 'templo', police: 'policia' };
+            return map[t.amenity] || ('servicio de ' + t.amenity);
+        }
+        if (t.tourism) return 'turismo';
+        if (t.leisure) return 'ocio';
+        if (t.office) return 'oficina';
+        return 'lugar';
+    }
+    async function rxReplayPoiCerca(lat, lon, radio) {
+        const q = '[out:json][timeout:12];(' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["shop"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["amenity"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["tourism"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["leisure"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["office"];' +
+            ');out center 25;';
+        const res = await _rxFetchJson('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(q)
+        }, 12000);
+        const els = (res && res.elements) || [];
+        let mejor = null;
+        els.forEach((el) => {
+            const t = el.tags || {};
+            if (!t.name) return;
+            const y = (el.lat != null) ? el.lat : (el.center && el.center.lat);
+            const x = (el.lon != null) ? el.lon : (el.center && el.center.lon);
+            if (y == null || x == null) return;
+            const d = haversine(lat, lon, y, x);
+            if (d > radio) return;
+            if (!mejor || d < mejor.dist) mejor = { nombre: t.name, categoria: rxReplayCatPOI(t), direccion: '', dist: Math.round(d) };
+        });
+        return mejor;
+    }
+    async function rxReplayReversa(lat, lon) {
+        const espera = 1100 - (Date.now() - APP.geoLast);
+        if (espera > 0) await sleep(espera);
+        APP.geoLast = Date.now();
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=es&lat=' + lat + '&lon=' + lon;
+        const d = await _rxFetchJson(url, {}, 15000);
+        if (!d) return null;
+        const a = d.address || {};
+        const via = [a.road || a.pedestrian || a.footway, a.house_number].filter(Boolean).join(' ');
+        const colonia = a.suburb || a.neighbourhood || a.city_district || a.quarter || '';
+        const ciudad = a.city || a.town || a.village || a.municipality || a.county || '';
+        const direccion = [via, colonia, ciudad].filter(Boolean).join(', ');
+        const nombre = (d.name && d.name !== ciudad) ? d.name : '';
+        if (!nombre && !direccion) return null;
+        return { nombre: nombre, categoria: '', direccion: direccion, dist: null };
+    }
+    const _rxRepLugares = new Map(); // "lat,lon" -> lugar|null
+    async function rxReplayLugarOSM(lat, lon) {
+        if (lat == null || lon == null) return null;
+        const key = (+lat).toFixed(5) + ',' + (+lon).toFixed(5);
+        if (_rxRepLugares.has(key)) return _rxRepLugares.get(key);
+        let out = null;
+        if (APP.config && APP.config.overpass) {
+            try { out = await rxReplayPoiCerca(lat, lon, 90); } catch (_) { out = null; }
+        }
+        if (!out) {
+            try { out = await rxReplayReversa(lat, lon); } catch (_) { out = null; }
+        }
+        _rxRepLugares.set(key, out);
+        return out;
+    }
+    // Ubica las paradas con OSM en segundo plano y refresca la lista/mapa.
+    async function rxReplayUbicarParadas() {
+        const r = RX_REPLAY;
+        if (!r || !r.paradas || !r.paradas.length) return;
+        const pend = r.paradas.filter((p) => p.lugar === undefined);
+        if (!pend.length) return;
+        r.ubicando = true;
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        for (let i = 0; i < pend.length; i++) {
+            if (RX_REPLAY !== r) return;
+            const p = pend[i];
+            let lugar = null;
+            try { lugar = await rxReplayLugarOSM(p.lat, p.lon); } catch (_) { lugar = null; }
+            p.lugar = lugar ? (lugar.nombre || lugar.direccion || '') : '';
+            p.categoria = lugar ? (lugar.categoria || '') : '';
+            p.direccion = lugar ? (lugar.direccion || '') : '';
+            if (pars) {
+                const celda = pars.querySelector('.rondo-replay-par[data-idx="' + p.idx + '"] .par-lugar');
+                if (celda) { celda.textContent = rxReplayParadaEtiqueta(p); celda.title = rxReplayParadaTooltip(p); }
+            }
+        }
+        if (RX_REPLAY !== r) return;
+        r.ubicando = false;
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        if (r.mapa) {
+            const marcas = [];
+            r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
+            r.eventos.forEach((m) => marcas.push({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
+            r.mapa.setMarcas(marcas);
+        }
+    }
     function rxReplayAnalizar(msgs, info) {
         const eventos = [], paradas = [];
         const paradaMinS = Math.max(60, (Number(APP.config.paradaMin) || 15) * 60);
@@ -228,15 +351,16 @@
         const r = RX_REPLAY;
         if (!r) return '';
         if (!r.paradas.length) return '<div class="rondo-replay-hint">Sin paradas de mas de ' + (APP.config.paradaMin || 15) + ' min.</div>';
-        return r.paradas.map((p, i) =>
+        let html = r.paradas.map((p, i) =>
             '<div class="rondo-replay-par" data-idx="' + p.idx + '" data-idxfin="' + (p.idxFin == null ? p.idx : p.idxFin) + '">' +
             '<span class="par-idx">' + (i + 1) + '</span>' +
             '<span class="par-hora">' + rxReplayHHMM(p.t) + '</span>' +
             '<span class="par-dur">' + rxFmtDur(p.dur) + '</span>' +
-            '<span class="par-lugar" title="' + esc(p.zona || p.municipio || (p.lat.toFixed(4) + ',' + p.lon.toFixed(4))) + '">' +
-            esc(p.zona || p.municipio || (p.lat.toFixed(4) + ',' + p.lon.toFixed(4))) + '</span>' +
+            '<span class="par-lugar" title="' + esc(rxReplayParadaTooltip(p)) + '">' + esc(rxReplayParadaEtiqueta(p)) + '</span>' +
             '</div>'
         ).join('');
+        if (r.ubicando) html += '<div class="rondo-replay-hint">Ubicando las paradas con OpenStreetMap...</div>';
+        return html;
     }
     function rxReplayEventosHTML() {
         const r = RX_REPLAY;
@@ -300,7 +424,7 @@
         cont.innerHTML = '';
         const full = r.msgs.map((m) => ({ lat: m.lat, lon: m.lon }));
         const marcas = [];
-        r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + (p.zona ? ' \u00b7 ' + p.zona : '') }));
+        r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
         r.eventos.forEach((m) => marcas.push({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
         r.mapa = rxMiniMapa(cont, {
             lineas: [
@@ -555,6 +679,7 @@
                 truncado: msgs.length >= 10000
             };
             rxReplayPintar();
+            rxReplayUbicarParadas();
             adviceOk('Recorrido cargado', eco + ' \u00b7 ' + rxReplayHHMM(msgs[0].t) + '-' + rxReplayHHMM(msgs[msgs.length - 1].t) +
                 ' \u00b7 ' + Math.round(acum / 1000) + ' km \u00b7 ' + an.paradas.length + ' parada(s)' + (msgs.length >= 10000 ? ' (truncado)' : ''));
         } finally {

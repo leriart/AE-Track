@@ -611,9 +611,12 @@ La pestana **Replay** reproduce el recorrido de una unidad:
 3. El **mini-mapa** (tiles de OpenStreetMap) muestra el trazo completo, el tramo
    ya recorrido y la posicion actual. Arrastra para moverlo, rueda para acercar
    y **Centrar** para volver a encuadrarlo.
-4. **Paradas** (hora, duracion y zona o municipio) y **Eventos**
-   (entradas/salidas de geocerca, excesos de velocidad y desvios). Haz clic en
-   una parada o en un evento para saltar a ese momento.
+4. **Paradas** (hora, duracion y **lugar**) y **Eventos** (entradas/salidas de
+   geocerca, excesos de velocidad y desvios). El lugar de cada parada se
+   resuelve con **OpenStreetMap**: si se detuvo en un OXXO, una tienda, una
+   gasolinera o un restaurante, lo menciona (y si no, la direccion o el
+   municipio). Con **Overpass** activado en Ajustes se afinan mas los nombres de
+   comercios. Haz clic en una parada o en un evento para saltar a ese momento.
 5. Arriba veras un **resumen** (rango de horas, distancia, duracion, paradas,
    tiempo en movimiento y detenido, velocidad maxima y excesos) y puedes
    **exportar** el recorrido a **GeoJSON** o las paradas a **CSV**.
@@ -886,6 +889,7 @@ te pedirá confirmación.
 | `Alt` + `5` | Zonas |
 | `Alt` + `6` | Caravana |
 | `Alt` + `7` | Chat IA (si la IA esta activa) |
+| `Alt` + `8` | Replay |
 | `Alt` + `P` | Mostrar u ocultar la barra lateral |
 | `Alt` + `L` | Mostrar u ocultar la barra lateral |
 | `Alt` + `H` | Plegar la barra de botones |
@@ -895,8 +899,14 @@ te pedirá confirmación.
 
 - **CSV** (Unidades): descarga la lista de unidades con estado, velocidad y zona.
 - **Avisos CSV**: descarga el historial de avisos.
-- **Informe**: genera un informe del dia en Markdown con alertas por severidad,
-  por regla, unidades con mas avisos y unidades sin senal.
+- **Reporte PDF**: genera un **reporte operativo completo** (resumen ejecutivo,
+  KPIs, unidades, avisos del dia, rutas activas, unidades sin senal, geocercas y
+  zonas de riesgo) y abre el dialogo de impresion del navegador; elige
+  **Guardar como PDF**. Esta paginado en A4, con encabezados de tabla que se
+  repiten y sin emojis. Si la IA esta activa y el resumen del informe esta
+  habilitado, incluye tambien el analisis con IA.
+- **Informe (Markdown)**: el icono junto a Reporte PDF descarga el informe del
+  dia en texto Markdown (alertas por severidad, por regla, etc.).
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y
   prueba; descarga un JSON con toda tu configuracion, listas, limites y rutas.
 - **Importar** configuracion: en la misma seccion; restaura ese JSON.
