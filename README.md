@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.14.8-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.14.8.md)
-[![tests](https://img.shields.io/badge/tests-862%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.15.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.15.0.md)
+[![tests](https://img.shields.io/badge/tests-930%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -76,11 +76,21 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **Rutas con OpenStreetMap**: planifica con OSRM (servidor publico) o con
   A* local sobre el grafo de OSM (Overpass), respetando `oneway` y
   `maxspeed`.
+- **Rutas multipunto**: cada unidad puede tener varias **paradas**
+  (geocercas, municipios, coordenadas o lugares) en modo **secuencial** o
+  **mejor ruta** (optimiza el orden y cierra el circuito en el origen). El
+  editor de paradas tiene **busqueda difusa con sugerencias** de geocercas y
+  municipios.
+- **Municipios de OpenStreetMap**: se guarda su poligono/bbox y se usa como
+  **tolerancia de desvio** (si la unidad sigue dentro del municipio de la ruta,
+  no se marca desvio hasta un margen configurable).
 - **Trazado automatico** al asignar un destino en la lista vigilada: cuando
   una unidad tiene `eco=destino`, Rondo calcula la ruta en background y
   actualiza una columna "Ruta" con estado (EN RUTA / LLEGO / DESV),
-  progreso y ETA.
-- **Deteccion de desvios, giros en U y retornos** con alertas propias.
+  progreso y ETA. Con varias paradas indica ademas la **parada actual** y la
+  **siguiente**.
+- **Deteccion de desvios, giros en U y retornos** con alertas propias, mas
+  llegada a cada parada y **regreso a base** al completar el circuito.
 - **Modo caravana**: unidades (vigiladas o no) cerca de una unidad "lider"
   en la misma ruta, con distancia firmada delante/detras, marca de sentido
   contrario y pildora **NO VIGILADA** para las que no estan en tu lista.
@@ -90,8 +100,10 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 
 ### Zonas
 
-- **Geocercas** de la plataforma consultadas en tiempo real, con unidades
-  dentro y boton Recargar.
+- **Geocercas** de la plataforma consultadas en tiempo real, con KPIs (total,
+  con unidades, base, carga), busqueda, orden, filtro por rol, unidades dentro,
+  area/centro y exportacion a CSV/GeoJSON. Desde cada tarjeta puedes convertir
+  la geocerca en **parada** de una unidad.
 - **Zonas de riesgo** (optativo): configura una URL o importa un CSV/JSON
   con zonas de alto riesgo delictivo. Cuando una unidad transiciona de
   con-senal a sin-senal y su ultima posicion valida cae dentro del buffer
@@ -130,6 +142,10 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **Analisis en lote** (cabecera de Avisos): envia hasta 25 avisos en
   una sola llamada y devuelve resumen ejecutivo + ranking priorizado
   + recomendaciones operativas.
+- **Analizar flota** (cabecera de Avisos): revision proactiva de **toda la
+  plataforma** con las unidades que requieren atencion, riesgos detectados y
+  recomendaciones. La IA recibe posicion, municipio, zona, limite, odometro,
+  ruta con paradas, zonas de riesgo, viajes, configuracion y alertas del dia.
 - **Resumen narrativo del informe** (boton Informe): el `.md` diario
   arranca con un bloque `## Resumen IA` de 3-6 frases en espanol.
 - **Deteccion de patrones** (Ajustes > IA): la IA analiza las
@@ -311,9 +327,12 @@ node tests/ui.test.js
 node tests/autoruta.test.js
 node tests/caravana.test.js
 node tests/riesgo.test.js
+node tests/paradas.test.js
+node tests/syntax.test.js
+node tests/extraer_patrones.test.js
 ```
 
-**8 suites, ~473 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**11 suites, ~930 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana
@@ -321,8 +340,10 @@ automatico de rutas, calculo de ETA, estado de ruta, modo caravana
 directa), algoritmos de la pestana de zonas de riesgo (clasificacion por
 nivel, estadisticas, filtrado, ordenamiento y agrupacion), integridad
 del set de iconos (paths SVG, diferenciacion de pares y regresion de
-bugs) y la integracion de voz (test de voz, IA con DeepSeek / NVIDIA /
-Kimi, contexto Overpass, boton en alertas).
+bugs), la integracion de voz (test de voz, IA con DeepSeek / NVIDIA /
+Kimi, contexto Overpass, boton en alertas) y, desde la 5.15.0, busqueda
+difusa, parser de paradas multipunto, optimizador de orden y municipios de
+OpenStreetMap.
 
 ## Ramas
 

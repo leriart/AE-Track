@@ -130,12 +130,16 @@ En la parte superior del panel:
   medias, bajas). Cada aviso indica la regla que lo genero y la hora.
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
   trazado, ETA y acciones para recalcular, exportar o eliminar.
-- **Zonas**: fusiona las **geocercas de la plataforma** (nombre y unidades
-  dentro, con boton **Recargar**) y las **zonas de riesgo** (dona con la
-  distribucion por nivel, histograma de scores, KPIs clicables Total/Alto/
-  Medio/Bajo, busqueda libre, chips de nivel, 6 criterios de orden, vista
-  agrupada o plana, drag-and-drop de CSV/JSON y exportacion a CSV / GeoJSON /
-  portapapeles). Ver [Zonas de riesgo](#zonas-de-riesgo).
+- **Zonas**: fusiona las **geocercas de la plataforma** y las **zonas de
+  riesgo**. En el lado de **Geocercas** hay KPIs (total, con unidades, base,
+  carga), buscador, orden (nombre/unidades/area), filtro por rol, area y centro
+  por zona, boton **Recargar** y exportacion a **CSV / GeoJSON**; desde cada
+  tarjeta puedes **usar la geocerca como parada** de una unidad o copiar su
+  nombre y centro. El lado de **Riesgo** mantiene la dona con la distribucion
+  por nivel, el histograma de scores, KPIs clicables Total/Alto/Medio/Bajo,
+  busqueda libre, chips de nivel, 6 criterios de orden, vista agrupada o plana,
+  drag-and-drop de CSV/JSON y exportacion a CSV / GeoJSON / portapapeles. Ver
+  [Zonas de riesgo](#zonas-de-riesgo).
 - **Caravana**: unidades (vigiladas o no) que acompanian a una unidad
   "lider" en la misma ruta (proyeccion al eje) o dentro del radio de
   cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
@@ -213,6 +217,8 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | Zona no prevista | Permanece en una geocerca no esperada | 20 min |
 | Geocercas | Entra o sale de cualquier geocerca | inmediato |
 | Destino | Llega al destino o inicia el regreso | progreso >= 95% o a menos de 400 m |
+| Llegada a parada | Alcanza una parada intermedia de una ruta multipunto | acumulado de la parada |
+| Regreso a base | Completa un circuito (todas las paradas + vuelta al origen) | circuito del plan |
 | Desconexion | Sigue sin senal demasiado tiempo | 25 min |
 | Velocidad | Supera el limite (global o por unidad) | 110 km/h |
 | Desvio de ruta | Se aleja del trazado de la ruta | 250 m durante 5 min |
@@ -361,17 +367,39 @@ El chat conoce **dos cosas**:
    resumen en vivo en cada mensaje con:
    - **Unidades** en el alcance: economico, placa, estado
      (online/offline), geocerca actual (o fuera de toda geocerca),
-     minutos desde el ultimo reporte y velocidad.
-   - **Conteos**: en linea, sin senal, cuantas fuera de geocerca,
-     cuantas sin senal **y** fuera de geocerca.
+     municipio (OpenStreetMap), minutos desde el ultimo reporte, velocidad,
+     rumbo, limite de velocidad, odometro, si esta silenciada y su ruta con
+     paradas, progreso y siguiente parada.
+   - **Conteos y agregados**: en linea, sin senal, en movimiento, detenidas,
+     velocidad promedio, cuantas fuera de geocerca, cuantas sin senal **y**
+     fuera de geocerca.
    - **Geocercas** de la plataforma, con las unidades dentro de cada una.
-   - **Zonas de riesgo** cargadas (total y por nivel).
-   - **Alertas de hoy** por severidad y los ultimos avisos con su
+   - **Zonas de riesgo** cargadas: total, por nivel y las de mayor score con
+     estado/municipio.
+   - **Municipios** conocidos (OSM y derivados de riesgo).
+   - **Viajes** analizados (km, paradas, carga, llegada, regreso).
+   - **Alertas de hoy** por severidad y por regla, y los ultimos avisos con su
      detalle, mas las **desconexiones** del dia.
-   - **Rutas** activas.
+   - **Rutas** activas, con destino, modo (secuencial/mejor ruta) y paradas.
+   - **Configuracion** de umbrales activa, para que pueda explicar y proponer.
 
 Asi puedes preguntar, por ejemplo, "que unidades estan fuera de
 geocerca y sin senal" y la IA responde con la lista concreta.
+
+### Monitor de flota (Analizar flota)
+
+Ademas del chat, en la cabecera de la pestana **Avisos** esta el boton
+**Analizar flota**. Envia el snapshot completo de la plataforma a la IA y
+devuelve:
+
+- un **resumen** del estado general;
+- la lista de unidades que **requieren atencion**, ordenadas por prioridad,
+  con motivo y accion sugerida;
+- **riesgos** detectados (por ejemplo, cerca de una zona de riesgo);
+- **recomendaciones** operativas o de ajuste de parametros.
+
+Es la forma mas rapida de obtener una revision tipo monitorista sin revisar
+unidad por unidad.
 
 > Si las geocercas no estan cargadas (Ajustes > General > "Cargar
 > geocercas"), la IA te lo indicara y no afirmara que una unidad esta
@@ -443,6 +471,60 @@ y, opcionalmente, datos de Overpass para calcular con el algoritmo A*.
    **Planear ruta (A*)**.
 3. Escribe el destino como un lugar o direccion, o como coordenadas `lat,lon`.
 4. El origen es la posicion actual de la unidad.
+
+### Rutas multipunto (varias paradas)
+
+Cada unidad puede tener una ruta con **varias paradas**. Abre el editor con:
+
+- el boton de ruta (⚑) de la fila en **Automatizar Unidades**;
+- el boton **Editar paradas** en la pestana **Rutas**;
+- el clic derecho sobre la unidad &gt; **Editar paradas (multipunto)**.
+
+En el editor puedes anadir paradas de varios tipos:
+
+- **Geocercas** de la plataforma;
+- **Municipios** (se buscan en OpenStreetMap);
+- **Lugares o direcciones** (Nominatim);
+- **Coordenadas** `lat,lon`.
+
+Mientras escribes aparecen **sugerencias** de geocercas y municipios
+(busqueda difusa, sin acentos). Enter anade el texto como lugar.
+
+Cada plan tiene un **modo**:
+
+- **Secuencial**: las paradas se visitan en el orden indicado. Puedes
+  reordenarlas con las flechas.
+- **Mejor ruta**: Rondo reordena las paradas por cercania (vecino mas
+  cercano + 2-opt) y **cierra el recorrido volviendo al punto de partida**.
+  Usa **Fijar** en una parada para que conserve su posicion en el orden.
+
+Pulsa **Guardar y trazar** para calcular la ruta. La pestana **Rutas** muestra
+el progreso, la **parada actual/total**, la **siguiente parada** y la ETA.
+Durante el recorrido Rondo avisa de:
+
+- **LLEGO A PARADA n** al alcanzar una parada intermedia;
+- **LLEGO A DESTINO** al alcanzar la ultima;
+- **REGRESO A BASE** cuando se completa un circuito.
+
+El formato de texto rapido tambien admite varias paradas separadas por `|`,
+`;` o saltos de linea, con los prefijos `geo:` (geocerca), `mun:` (municipio)
+y `coord:` (coordenadas). Por ejemplo:
+
+```
+eco=Monterrey | geo:CEDIS Norte | mun:Saltillo
+```
+
+### Municipios y tolerancia de desvio
+
+Rondo consulta los municipios en **OpenStreetMap** (Nominatim) y guarda su
+poligono (o su boundingbox) para reutilizarlo sin conexion. Un municipio puede
+ser una parada mas de la ruta.
+
+Ademas, el municipio funciona como **rango de tolerancia**: mientras una
+unidad siga dentro de un municipio por el que pasa su ruta, un alejamiento del
+eje **no se marca como desvio** hasta `desvioMunicipioM` metros (3000 por
+defecto). Ajustalo en **Ajustes &gt; Rutas**, en **"No marcar desvio dentro
+del municipio"** y **"Tolerancia dentro del municipio (m)"**.
 
 ### Trazado automatico al asignar destino
 
@@ -635,8 +717,8 @@ Sobre una unidad en la pestana Unidades:
 - Aplicar verificacion.
 - Anadir o quitar de la lista vigilada.
 - Limite de velocidad.
-- Planear ruta (OSRM), planear ruta (A*), exportar ruta GeoJSON, eliminar ruta,
-  exportar traza GeoJSON.
+- Planear ruta (OSRM), planear ruta (A*), **editar paradas (multipunto)**,
+  exportar ruta GeoJSON, eliminar ruta, exportar traza GeoJSON.
 - Analizar viaje (historial), exportar viaje GeoJSON.
 - Reiniciar odometro.
 - Ver en OpenStreetMap, ver en Google Maps.
@@ -701,7 +783,8 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 - **Ventanas**: modo del panel, lado y ancho de la barra lateral, ocultar al
   hacer clic fuera, confirmacion al cerrar todas las ventanas, botones de la
   barra, orientacion, verificacion automatica y tamano del panel.
-- **Rutas**: servicios de OpenStreetMap, trazado y alertas de ruta.
+- **Rutas**: servicios de OpenStreetMap, trazado, paradas multipunto y
+  alertas de ruta (incluye la tolerancia de desvio por municipio).
 - **IA**: habilita la IA de razonamiento. Elige proveedor (DeepSeek,
   NVIDIA NIM, Kimi for Coding, Moonshot, MiniMax o Personalizado), pega
   tu API key y, opcionalmente, endpoint y modelo. Aqui tambien estan el

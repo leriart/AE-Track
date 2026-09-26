@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.14.8 en @UserScript', /@version\s+5\.14\.8/.test(src));
+ok('version 5.15.0 en @UserScript', /@version\s+5\.15\.0/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -616,8 +616,8 @@ ok('MANUAL.md lista regla Aproximacion a zona de riesgo', /Aproximacion a zona d
 ok('MANUAL.md atajo Alt+7', /Alt.*\+.*7.*Chat IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.14\.8['"]/.test(src));
-ok('@version 5.14.8 sincronizado con VER', /@version\s+5\.14\.8[\s\S]{0,50000}const VER = ['"]5\.14\.8['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.15\.0['"]/.test(src));
+ok('@version 5.15.0 sincronizado con VER', /@version\s+5\.15\.0[\s\S]{0,50000}const VER = ['"]5\.15\.0['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
@@ -689,6 +689,39 @@ ok('selector de orden de unidades presente', src.indexOf('rondo-uni-orden') >= 0
 ok('sin thead en unidades', src.indexOf('<tbody id="rondo-body">') < 0);
 // La delegacion de eventos usa .fila (no tr.fila).
 ok('delegacion usa closest(".fila")', src.indexOf("closest('.fila')") >= 0 || src.indexOf('closest(".fila")') >= 0);
+
+// v5.15: rutas multipunto, municipios OSM, busqueda difusa, geocercas ampliadas.
+ok('default desvioMunicipio = true', /desvioMunicipio:\s*true/.test(src));
+ok('default desvioMunicipioM = 3000', /desvioMunicipioM:\s*3000/.test(src));
+ok('default paradaLlegadaM = 150', /paradaLlegadaM:\s*150/.test(src));
+ok('OSRM multipunto existe', /async function osrmRouteMulti\(/.test(src));
+ok('A* multipunto existe', /async function astarRouteMulti\(/.test(src));
+ok('planearRuta usa plan multipunto', /function planearRuta\(eco, destino/.test(src) && /Array\.isArray\(destino\.paradas\)/.test(src));
+ok('estadoRuta reporta paradas', /totalParadas: paradas\.length/.test(src));
+ok('reglaDestino alerta parada intermedia', /LLEGO A PARADA /.test(src));
+ok('reglaDestino detecta regreso a base', /REGRESO A BASE/.test(src));
+ok('desvio con tolerancia de municipio', /municipioEn\(st\.lat, st\.lon\)/.test(src) && /municipioDeRuta\(ruta, mun\)/.test(src));
+ok('editor de paradas: modal', /rondo-plan-modal/.test(src));
+ok('editor de paradas: modo secuencial/optimo', /id="rpm-modo"/.test(src) && /value="optimo"/.test(src));
+ok('editor de paradas: buscador con sugerencias', /id="rpm-buscar"/.test(src) && /function catalogoParadas\(/.test(src));
+ok('editor de paradas: funciones', /function abrirEditorParadas\(/.test(src) && /function guardarEditorParadas\(/.test(src));
+ok('boton editar paradas en modal lista', /rondo-plan-open/.test(src));
+ok('boton editar paradas en pestana Rutas', /rondo-plan-edit/.test(src));
+ok('municipios OSM: parser Nominatim', /function municipioDesdeNominatim\(/.test(src) && /function municipioEn\(/.test(src));
+ok('municipios: derivados de riesgo', /function recalcularMunicipiosRiesgo\(/.test(src));
+ok('busqueda difusa: fuzzyScore', /function fuzzyScore\(/.test(src) && /function levenshteinAcotado\(/.test(src));
+ok('optimizador de paradas', /function ordenarParadasOptimo\(/.test(src) && /function ordenarSegmento\(/.test(src));
+ok('geocercas: KPIs', /id="rondo-geo-kpis"/.test(src));
+ok('geocercas: buscador/orden/rol', /id="rondo-geo-buscar"/.test(src) && /id="rondo-geo-orden"/.test(src) && /id="rondo-geo-rol"/.test(src));
+ok('geocercas: export CSV/GeoJSON', /function exportarGeocercasCSV\(/.test(src) && /function exportarGeocercasGeoJSON\(/.test(src));
+ok('geocercas: usar como parada', /function elegirUnidadParaGeocerca\(/.test(src));
+ok('IA: analisis de flota', /function aiAnalizarFlota\(/.test(src) && /const IA_SYSTEM_FLOTA/.test(src));
+ok('IA: boton Analizar flota', /id="rondo-ia-flota"/.test(src) && /function aiFlotaUI\(/.test(src));
+ok('IA: contexto de flota con rutas/municipios/config', /rutasResumen/.test(src) && /configResumen/.test(src) && /municipioActual/.test(src));
+ok('ajustes: desvio municipio', /checkRow\('c-desvio-municipio'/.test(src) && /numRow\('c-desvio-municipio-m'/.test(src));
+// v5.15: se elimino el modo flotante.
+ok('sin codigo de modo flotante', src.indexOf('placePanel') < 0 && src.indexOf('savePanelPos') < 0 && src.indexOf('panelMode') < 0);
+ok('sin CSS .dragging del panel', src.indexOf('#rondo-panel.dragging') < 0);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

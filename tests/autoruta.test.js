@@ -41,6 +41,10 @@ const code =
     'function shouldWatch(u) { return APP.config.watchAll === true; }\n' +
     'function parseUnitName(u) { const m = (u.nm||"").match(/\\.\\s*0*(\\d{3,5})/); return { id: u.id, nombre: u.nm, eco: m ? m[1] : "", placa: "", clave: m ? m[1] : String(u.id) }; }\n' +
     'function watchDest(info) { return APP.watchMap[info.eco] || ""; }\n' +
+    // v5.15: stubs de los helpers de plan multipunto que usa watchDest real
+    // (el slice re-define watchDest, que ahora consulta planDe).
+    'function planDe(){ return null; }\n' +
+    'function planATexto(){ return ""; }\n' +
     'function rutaDe(info) { return APP.rutas[info.clave] || APP.rutas[info.eco] || null; }\n' +
     src.slice(ini, fin) +
     '\nfunction rutaClasePill(estado){switch(estado){case "LLEGO":return "ok";case "DESV":return "warn";case "EN RUTA":return "on";case "SIN POSICION":return "off";default:return "mute";}}\n' +

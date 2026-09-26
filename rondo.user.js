@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.14.8
-// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Sin emojis.
+// @version      5.15.0
+// @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Rutas multipunto (secuencial o mejor ruta), municipios de OpenStreetMap con tolerancia de desvio, busqueda difusa de geocercas/municipios, geocercas con KPIs y exportacion, y monitor de flota con IA. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
 // @copyright    Proyecto original de Hector Ramirez (https://github.com/HectorRamirez-cpu)
@@ -134,11 +134,8 @@
                 ['hjp.api.hist',     'rondo.api.hist'],
                 ['hjp.api.geo',      'rondo.api.geo'],
                 ['hjp.api.barra',    'rondo.api.barra'],
-                ['hjp.api.panelpos', 'rondo.api.panelpos'],
                 ['hjp.api.panelsize','rondo.api.panelsize'],
                 ['hjp.api.nmolestar','rondo.api.nmolestar'],
-                ['hjp.api.expanded', 'rondo.api.expanded'],
-                ['hjp.api.fullscreen','rondo.api.fullscreen'],
                 ['hjp.api.limites',  'rondo.api.limites'],
                 ['hjp.api.perfiles', 'rondo.api.perfiles'],
                 ['hjp.api.filtEstado','rondo.api.filtEstado'],
@@ -391,7 +388,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.14.8';
+    const VER = '5.15.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -463,13 +460,10 @@
         hist: 'rondo.api.hist',
         geo: 'rondo.api.geo',
         barra: 'rondo.api.barra',
-        panelpos: 'rondo.api.panelpos',
         panelsize: 'rondo.api.panelsize',
         seleccion: 'rondo.api.seleccion',
         kpi: 'rondo.api.kpi',
         nmolestar: 'rondo.api.nmolestar',
-        expanded: 'rondo.api.expanded',
-        fullscreen: 'rondo.api.fullscreen',
         limites: 'rondo.api.limites',
         perfiles: 'rondo.api.perfiles',
         filtEstado: 'rondo.api.filtEstado',
@@ -477,7 +471,10 @@
         sortDir: 'rondo.api.sortDir',
         rutas: 'rondo.api.rutas',
         odometro: 'rondo.api.odometro',
-        riesgo: 'rondo.api.riesgo'
+        riesgo: 'rondo.api.riesgo',
+        // v5.15: municipios de OpenStreetMap (poligonos/bbox) para la
+        // tolerancia de desvio y como parada tipo "municipio".
+        municipios: 'rondo.api.municipios'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
@@ -494,7 +491,9 @@
         orden: 'rondo.api.s.orden',
         viajes: 'rondo.api.s.viajes',
         riesgo: 'rondo.api.s.riesgo',
-        iaCache: 'rondo.api.s.iaCache'
+        iaCache: 'rondo.api.s.iaCache',
+        // v5.15: planes de ruta multipunto por unidad (pestana).
+        planes: 'rondo.api.s.planes'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -548,7 +547,6 @@
         historico: true,
         verificar: false,
         verifSeg: 6,
-        fullscreen: false,
         theme: 'oscuro',
         density: 'normal',
         acento: '#850D22',
@@ -556,7 +554,6 @@
         contornos: true,
         contornoHoras: 24,
         mostrarCoords: false,
-        panelMode: 'lateral',
         panelLado: 'derecha',
         panelAncho: 460,
         panelVisible: false,
@@ -603,6 +600,13 @@
         // una geocerca). Si la unidad se mueve o sale de la geocerca,
         // rearma para volver a avisar en el siguiente episodio.
         geocercaDetenidoMin: 5,          // minutos detenido dentro de geocerca para alertar
+        // v5.15: tolerancia de desvio por municipio. Mientras la unidad siga
+        // DENTRO de un municipio por el que pasa su ruta (o una de sus
+        // paradas), el desvio no se marca hasta desvioMunicipioM metros.
+        desvioMunicipio: true,
+        desvioMunicipioM: 3000,
+        // v5.15: radio (m) para considerar "llego" a cada parada del plan.
+        paradaLlegadaM: 150,
         // v5.14.7: checkbox del chat IA. false = solo vigiladas (default,
         // mas enfocado), true = toda la flota que reporta en la plataforma.
         chatTodaFlota: false,
@@ -650,10 +654,6 @@
         try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* noop */ }
     }
 
-    function clearKey(key) {
-        try { localStorage.removeItem(key); } catch (_) { /* noop */ }
-    }
-
     // sessionStorage por pestaña. Migra desde LS la primera vez para no perder
     // los datos guardados en versiones anteriores.
     function readSession(key, fallback, legacyKey) {
@@ -685,9 +685,6 @@
     function readSessionObject(key, fallback, legacyKey) {
         const v = readSession(key, fallback, legacyKey);
         return (v && typeof v === 'object' && !Array.isArray(v)) ? v : fallback;
-    }
-    function clearSession(key) {
-        try { sessionStorage.removeItem(key); } catch (_) { /* noop */ }
     }
 
     function readArray(key, fallback) {
@@ -744,6 +741,12 @@
         limites: readSessionObject(SS.limites, {}, LS.limites),
         perfiles: readObject(LS.perfiles, {}),
         rutas: readObject(LS.rutas, {}),
+        // v5.15: planes de ruta multipunto por unidad. Si no hay plan se
+        // deriva del destino simple (watchMap) para no romper lo existente.
+        planes: readSessionObject(SS.planes, {}, null),
+        // v5.15: municipios OSM (poligono o bbox) persistidos localmente.
+        municipios: readArray(LS.municipios, []),
+        municipiosRiesgo: [],   // aproximacion derivada de las zonas de riesgo
         odometro: readObject(LS.odometro, {}),
         viajes: readSessionObject(SS.viajes, {}, null),
         trazas: {},
@@ -753,11 +756,9 @@
             x: null, y: null, plegada: false, vertical: false,
             botones: { main: true, panel: true, close: true }
         }),
-        panelPos: readJSON(LS.panelpos, null),
         panelSize: readJSON(LS.panelsize, null),
         noMolestar: readJSON(LS.nmolestar, null),
         kpi: readSessionObject(SS.kpi, { online: [], offline: [] }, LS.kpi),
-        expanded: readJSON(LS.expanded, false),
         config: deepMerge(readObject(LS.cfg, {}), DEFAULTS),
 
         timer: null,
@@ -794,7 +795,11 @@
         riesgoOrden: 'score',   // 'score' | 'estado' | 'municipio' | 'radio'
         riesgoVista: 'grupo',   // 'grupo' (por estado) | 'plano' (lista)
         riesgoColapsado: {},    // mapa estado -> bool (true = colapsado)
-        zonasVista: 'geocercas' // 'geocercas' | 'riesgo' (segmentado de la pestana Zonas)
+        zonasVista: 'geocercas', // 'geocercas' | 'riesgo' (segmentado de la pestana Zonas)
+        // v5.15: filtros/orden de las geocercas (pestana Zonas > Geocercas).
+        geoFiltro: '',
+        geoOrden: 'nombre',
+        geoRol: 'todas'
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
@@ -1336,17 +1341,40 @@ function _extraerZonasDe(items) {
         return null;
     }
 
-    // OSRM publico (OpenStreetMap): ruta de conduccion entre dos puntos.
-    async function osrmRoute(origen, destino) {
-        const url = 'https://router.project-osrm.org/route/v1/driving/' +
-            origen.lon + ',' + origen.lat + ';' + destino.lon + ',' + destino.lat +
+    // OSRM publico (OpenStreetMap): ruta de conduccion entre dos o mas puntos.
+    // OSRM acepta coordenadas separadas por ';' y devuelve un tramo ("leg")
+    // por cada par consecutivo, que usamos para situar cada parada.
+    async function osrmRouteMulti(puntos) {
+        if (!puntos || puntos.length < 2) throw new Error('OSRM: faltan puntos');
+        const coords = puntos.map((p) => p.lon + ',' + p.lat).join(';');
+        const url = 'https://router.project-osrm.org/route/v1/driving/' + coords +
             '?overview=full&geometries=geojson&alternatives=false&steps=false';
         const res = await fetch(url);
         if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
         const d = await res.json();
         if (!d.routes || !d.routes.length) throw new Error('OSRM sin ruta');
         const r = d.routes[0];
-        return { coords: r.geometry.coordinates, distancia: r.distance, duracion: r.duration, modo: 'osrm' };
+        return {
+            coords: r.geometry.coordinates, distancia: r.distance, duracion: r.duration,
+            legs: r.legs || [], modo: 'osrm'
+        };
+    }
+    async function osrmRoute(origen, destino) {
+        return osrmRouteMulti([origen, destino]);
+    }
+    // A* multipunto: encadena tramos respetando el grafo de OSM y concatena
+    // la geometria (sin repetir el nodo de union entre tramos).
+    async function astarRouteMulti(puntos) {
+        const legs = [];
+        let coordsAll = [];
+        let dist = 0;
+        for (let i = 0; i < puntos.length - 1; i++) {
+            const r = await astarRoute(puntos[i], puntos[i + 1]);
+            dist += r.distancia;
+            legs.push({ distance: r.distancia, distancia: r.distancia, duration: null });
+            coordsAll = coordsAll.length ? coordsAll.concat(r.coords.slice(1)) : coordsAll.concat(r.coords);
+        }
+        return { coords: coordsAll, distancia: dist, duracion: null, legs, modo: 'astar' };
     }
 
     // Overpass (OpenStreetMap): descarga el grafo vial de una caja y lo cachea.
@@ -1461,6 +1489,454 @@ function _extraerZonasDe(items) {
         } catch (_) { return null; }
     }
 
+    /* ====================== MUNICIPIOS (OpenStreetMap) ======================
+     * v5.15. Los municipios se usan de dos formas:
+     *   1) Como parada de una ruta multipunto (trazar hasta su centro).
+     *   2) Como "rango" de tolerancia: si una unidad sigue dentro del
+     *      municipio por el que pasa su ruta, un alejamiento del eje no se
+     *      marca como desvio hasta desvioMunicipioM metros.
+     *
+     * La fuente es OpenStreetMap: Nominatim (con polygon_geojson=1) devuelve
+     * el poligono administrativo o, como minimo, su boundingbox. Los datos se
+     * cachean en localStorage (rondo.api.municipios) para no repetir consultas
+     * y para poder evaluar la geometria sin conexion.
+     *
+     * `municipiosRiesgo` aproxima los municipios que aparecen en las zonas de
+     * riesgo como circulos (centroide ponderado + radio maximo) para que la
+     * tolerancia funcione aunque el usuario no haya consultado OSM.
+     */
+    function centroDeZona(z) {
+        if (!z) return null;
+        const b = z.b;
+        if (z.t === 3 || (b && b.cen_x != null && b.cen_y != null)) {
+            const lon = (z.c && z.c.x != null) ? +z.c.x : (b && b.cen_x != null ? +b.cen_x : null);
+            const lat = (z.c && z.c.y != null) ? +z.c.y : (b && b.cen_y != null ? +b.cen_y : null);
+            if (lat != null && lon != null) return { lat, lon };
+        }
+        let pts = z.p;
+        if (typeof pts === 'string') { try { pts = JSON.parse(pts); } catch (_) { pts = null; } }
+        if (Array.isArray(pts) && pts.length) {
+            let sLat = 0, sLon = 0, n = 0;
+            for (let i = 0; i < pts.length; i++) {
+                const a = pts[i];
+                const la = (a && a.y != null) ? +a.y : (Array.isArray(a) ? +a[1] : null);
+                const lo = (a && a.x != null) ? +a.x : (Array.isArray(a) ? +a[0] : null);
+                if (la == null || lo == null || isNaN(la) || isNaN(lo)) continue;
+                sLat += la; sLon += lo; n++;
+            }
+            if (n) return { lat: sLat / n, lon: sLon / n };
+        }
+        if (b && b.min_y != null && b.max_y != null && b.min_x != null && b.max_x != null) {
+            return { lat: (+b.min_y + +b.max_y) / 2, lon: (+b.min_x + +b.max_x) / 2 };
+        }
+        return null;
+    }
+    // Punto-en-poligono (ray casting) con anillo en orden GeoJSON [[lon,lat],...].
+    function puntoEnPoligono(lat, lon, anillo) {
+        if (!Array.isArray(anillo) || anillo.length < 3) return false;
+        let dentro = false;
+        for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+            const xi = +anillo[i][0], yi = +anillo[i][1];
+            const xj = +anillo[j][0], yj = +anillo[j][1];
+            const cruza = ((yi > lat) !== (yj > lat)) && (lon < (xj - xi) * (lat - yi) / ((yj - yi) || 1e-12) + xi);
+            if (cruza) dentro = !dentro;
+        }
+        return dentro;
+    }
+    function simplificarAnillo(anillo, maxPts) {
+        if (!Array.isArray(anillo) || anillo.length <= (maxPts || 600)) return anillo;
+        // Reduccion por paso uniforme; suficiente para tolerancia de desvio.
+        const paso = Math.ceil(anillo.length / (maxPts || 600));
+        const out = [];
+        for (let i = 0; i < anillo.length; i += paso) out.push(anillo[i]);
+        if (out[out.length - 1] !== anillo[anillo.length - 1]) out.push(anillo[anillo.length - 1]);
+        return out;
+    }
+    function _anilloExterior(geojson) {
+        if (!geojson) return null;
+        if (geojson.type === 'Polygon' && geojson.coordinates && geojson.coordinates[0]) return geojson.coordinates[0];
+        if (geojson.type === 'MultiPolygon' && geojson.coordinates && geojson.coordinates.length) {
+            let mejor = null;
+            for (let i = 0; i < geojson.coordinates.length; i++) {
+                const r = geojson.coordinates[i] && geojson.coordinates[i][0];
+                if (r && (!mejor || r.length > mejor.length)) mejor = r;
+            }
+            return mejor;
+        }
+        return null;
+    }
+    function municipioDesdeNominatim(r) {
+        if (!r) return null;
+        const a = r.address || {};
+        const nombre = a.municipality || a.city || a.town || a.village || a.county || r.name || (r.display_name || '').split(',')[0];
+        if (!nombre) return null;
+        const estado = a.state || a.region || a.state_district || '';
+        const bb = Array.isArray(r.boundingbox) ? r.boundingbox.map(Number) : null;
+        const anillo = _anilloExterior(r.geojson);
+        const poligono = anillo ? simplificarAnillo(anillo, 600) : null;
+        let centro = null;
+        if (poligono && poligono.length) {
+            let sLat = 0, sLon = 0;
+            for (let i = 0; i < poligono.length; i++) { sLon += +poligono[i][0]; sLat += +poligono[i][1]; }
+            centro = { lat: sLat / poligono.length, lon: sLon / poligono.length };
+        } else if (r.lat != null && r.lon != null) {
+            centro = { lat: +r.lat, lon: +r.lon };
+        } else if (bb) {
+            centro = { lat: (bb[0] + bb[1]) / 2, lon: (bb[2] + bb[3]) / 2 };
+        }
+        if (!centro) return null;
+        return {
+            id: 'osm:' + norm(nombre) + ':' + norm(estado),
+            nombre: String(nombre),
+            estado: String(estado || ''),
+            centro,
+            poligono,                                   // [[lon,lat],...] o null
+            bbox: bb ? { minLat: bb[0], maxLat: bb[1], minLon: bb[2], maxLon: bb[3] } : null,
+            fuente: 'osm'
+        };
+    }
+    function buscarMunicipioLocal(texto) {
+        const q = norm(texto || '');
+        if (!q) return null;
+        const todos = (APP.municipios || []).concat(APP.municipiosRiesgo || []);
+        let mejor = null, mejorSc = 0;
+        for (let i = 0; i < todos.length; i++) {
+            const m = todos[i];
+            const n = norm(m.nombre || '');
+            let sc = 0;
+            if (n === q) sc = 1000;
+            else if (n.indexOf(q) >= 0 || q.indexOf(n) >= 0) sc = 700 - Math.abs(n.length - q.length);
+            if (sc > mejorSc) { mejorSc = sc; mejor = m; }
+        }
+        return mejor;
+    }
+    function guardarMunicipios() {
+        // Tope defensivo para no llenar localStorage: 150 municipios.
+        if (APP.municipios.length > 150) APP.municipios = APP.municipios.slice(-150);
+        writeJSON(LS.municipios, APP.municipios);
+    }
+    // Consulta (o recupera de cache) un municipio de OSM. Devuelve el objeto
+    // normalizado con centro/poligono/bbox, o null si no se pudo resolver.
+    async function municipioOSM(texto, recargar) {
+        const q = String(texto || '').trim();
+        if (!q) return null;
+        if (!recargar) {
+            const local = buscarMunicipioLocal(q);
+            if (local && (local.poligono || local.bbox)) return local;
+        }
+        const espera = 1100 - (Date.now() - APP.geoLast);
+        if (espera > 0) await sleep(espera);
+        APP.geoLast = Date.now();
+        try {
+            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=3&accept-language=es&q=' + encodeURIComponent(q);
+            const res = await fetch(url);
+            const d = await res.json();
+            if (!d || !d.length) return null;
+            const cand = d.map(municipioDesdeNominatim).filter(Boolean);
+            if (!cand.length) return null;
+            cand.sort((a, b) => (b.poligono ? 1 : 0) - (a.poligono ? 1 : 0));
+            const m = cand[0];
+            const idx = APP.municipios.findIndex((x) => x.id === m.id);
+            if (idx >= 0) APP.municipios[idx] = Object.assign({}, APP.municipios[idx], m);
+            else APP.municipios.push(m);
+            guardarMunicipios();
+            return m;
+        } catch (_) { return null; }
+    }
+    // Devuelve el municipio que contiene el punto (poligono o circulo).
+    function municipioEn(lat, lon) {
+        if (lat == null || lon == null) return null;
+        const todos = (APP.municipios || []).concat(APP.municipiosRiesgo || []);
+        for (let i = 0; i < todos.length; i++) {
+            const m = todos[i];
+            if (!m) continue;
+            if (m.poligono && m.poligono.length) {
+                if (puntoEnPoligono(lat, lon, m.poligono)) return m;
+            } else if (m.bbox) {
+                if (lat >= m.bbox.minLat && lat <= m.bbox.maxLat && lon >= m.bbox.minLon && lon <= m.bbox.maxLon) return m;
+            } else if (m.centro && m.radioM) {
+                if (haversine(lat, lon, m.centro.lat, m.centro.lon) <= m.radioM) return m;
+            }
+        }
+        return null;
+    }
+    // Aproxima los municipios de las zonas de riesgo como circulos.
+    function recalcularMunicipiosRiesgo() {
+        if (!APP.riesgo || !APP.riesgo.length) { APP.municipiosRiesgo = []; return; }
+        const map = new Map();
+        for (let i = 0; i < APP.riesgo.length; i++) {
+            const z = APP.riesgo[i];
+            if (!z || !z.municipio || !z.centro) continue;
+            const k = norm(z.estado || '') + '|' + norm(z.municipio);
+            let m = map.get(k);
+            if (!m) { m = { id: 'riesgo:' + k, nombre: z.municipio, estado: z.estado || '', fuente: 'riesgo', centro: { lat: 0, lon: 0 }, radioM: 0, peso: 0 }; map.set(k, m); }
+            const w = Math.max(1, +z.score || 1);
+            m.centro.lat = (m.centro.lat * m.peso + z.centro[0] * w) / (m.peso + w);
+            m.centro.lon = (m.centro.lon * m.peso + z.centro[1] * w) / (m.peso + w);
+            m.peso += w;
+            m.radioM = Math.max(m.radioM, (+z.radio_m || 0));
+        }
+        APP.municipiosRiesgo = Array.from(map.values()).map((m) => {
+            m.radioM = Math.max(800, m.radioM);
+            return m;
+        });
+    }
+
+    /* ====================== BUSQUEDA DIFUSA ======================
+     * v5.15. Puntua coincidencias sin acentos ni mayusculas, con prioridad a
+     * igualdad > prefijo > subcadena > tokens > subsecuencia > distancia de
+     * edicion. Alimenta el autocompletado de paradas (geocercas y municipios).
+     */
+    function normalizarBusqueda(s) {
+        return norm(s).replace(/[^A-Z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+    function levenshteinAcotado(a, b, tope) {
+        const m = a.length, n = b.length;
+        if (Math.abs(m - n) > (tope || 3)) return tope || 3;
+        const prev = new Array(n + 1);
+        for (let j = 0; j <= n; j++) prev[j] = j;
+        for (let i = 1; i <= m; i++) {
+            let cur = [i];
+            let filaMin = i;
+            for (let j = 1; j <= n; j++) {
+                const costo = a[i - 1] === b[j - 1] ? 0 : 1;
+                cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + costo);
+                if (cur[j] < filaMin) filaMin = cur[j];
+            }
+            if (filaMin > (tope || 3)) return tope || 3;
+            for (let j = 0; j <= n; j++) prev[j] = cur[j];
+        }
+        return prev[n];
+    }
+    function fuzzyScore(query, texto) {
+        const a = normalizarBusqueda(query);
+        const b = normalizarBusqueda(texto);
+        if (!a) return 1;
+        if (!b) return 0;
+        if (b === a) return 1000;
+        if (b.indexOf(a) === 0) return 850 - Math.min(100, b.length);
+        if (b.indexOf(' ' + a) >= 0) return 750;
+        if (b.indexOf(a) >= 0) return 650 - Math.min(200, b.indexOf(a));
+        const at = a.split(' ').filter(Boolean);
+        const bt = b.split(' ').filter(Boolean);
+        if (at.length) {
+            let hit = 0;
+            for (let i = 0; i < at.length; i++) {
+                if (bt.some((x) => x.indexOf(at[i]) === 0)) hit++;
+            }
+            if (hit) return 400 + hit * 25;
+        }
+        let k = 0;
+        for (let i = 0; i < b.length && k < a.length; i++) { if (b[i] === a[k]) k++; }
+        if (k === a.length) return 250;
+        const d = levenshteinAcotado(a, b, 3);
+        if (d <= 2) return 150 - d * 30;
+        return 0;
+    }
+    // Catalogo de paradas sugeridas: geocercas + municipios (OSM y riesgo).
+    function catalogoParadas(query, limite) {
+        const q = String(query || '').trim();
+        const out = [];
+        const push = (item) => {
+            const sc = fuzzyScore(q, (item.texto || '') + ' ' + (item.sub || ''));
+            if (sc > 0) out.push(Object.assign({ score: sc }, item));
+        };
+        for (let i = 0; i < (APP.zonas || []).length; i++) {
+            const z = APP.zonas[i];
+            const c = centroDeZona(z);
+            push({ tipo: 'geocerca', texto: z.n || ('Zona ' + z.id), sub: 'geocerca', coords: c, zonaId: z.id });
+        }
+        const ms = (APP.municipios || []).concat(APP.municipiosRiesgo || []);
+        const vistos = new Set();
+        for (let i = 0; i < ms.length; i++) {
+            const m = ms[i];
+            const k = norm(m.nombre) + '|' + norm(m.estado || '');
+            if (vistos.has(k)) continue;
+            vistos.add(k);
+            push({ tipo: 'municipio', texto: m.nombre, sub: (m.estado || '') + ' \u00b7 municipio', coords: m.centro, municipioId: m.id });
+        }
+        out.sort((a, b) => b.score - a.score);
+        return out.slice(0, Math.max(1, limite || 8));
+    }
+    function encontrarZona(texto) {
+        const q = norm(texto || '');
+        if (!q) return null;
+        let mejor = null, mejorSc = 0;
+        for (let i = 0; i < (APP.zonas || []).length; i++) {
+            const z = APP.zonas[i];
+            const n = norm(z.n || '');
+            let sc = 0;
+            if (n === q) sc = 1000;
+            else if (n.indexOf(q) >= 0 || q.indexOf(n) >= 0) sc = 700 - Math.abs(n.length - q.length);
+            if (sc > mejorSc) { mejorSc = sc; mejor = z; }
+        }
+        return mejor;
+    }
+
+    /* ====================== PARADAS MULTIPUNTO ======================
+     * v5.15. Un plan de ruta es una lista ordenada de paradas con un modo:
+     *   - 'secuencial': se visitan en el orden dado.
+     *   - 'optimo': el optimizador reordena las paradas no fijadas y, si la
+     *     opcion circuito esta activa, cierra el recorrido volviendo al origen.
+     * Cada parada tiene { id, tipo, texto, coords, fijo }. El texto muestra
+     * una pista del tipo: "geo:", "mun:" o "coord:" (el resto es libre).
+     */
+    function nuevaParada(tipo, texto, coords) {
+        return {
+            id: 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+            tipo: tipo || 'lugar',
+            texto: String(texto || '').trim(),
+            coords: coords || null,
+            fijo: false
+        };
+    }
+    function parsearParada(txt) {
+        let t = String(txt || '').trim();
+        if (!t) return null;
+        let tipo = 'lugar';
+        const m = /^(geo|mun|coord):\s*(.+)$/i.exec(t);
+        if (m) {
+            tipo = { geo: 'geocerca', mun: 'municipio', coord: 'coord' }[m[1].toLowerCase()];
+            t = m[2].trim();
+        }
+        let coords = null;
+        const cm = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(t);
+        if (cm) { tipo = 'coord'; coords = { lat: parseFloat(cm[1]), lon: parseFloat(cm[2]) }; }
+        return nuevaParada(tipo, t, coords);
+    }
+    function textoAParadas(texto) {
+        return String(texto || '').split(/[|\n;]+/).map(parsearParada).filter(Boolean);
+    }
+    function paradaATexto(p) {
+        if (!p) return '';
+        const pref = p.tipo === 'geocerca' ? 'geo:' : (p.tipo === 'municipio' ? 'mun:' : (p.tipo === 'coord' ? 'coord:' : ''));
+        return pref + (p.texto || '');
+    }
+    function planATexto(plan) {
+        return (plan && plan.paradas ? plan.paradas : []).map(paradaATexto).join(' | ');
+    }
+    function planDe(info) {
+        if (!info) return null;
+        const k = info.clave;
+        if (k && APP.planes[k]) return APP.planes[k];
+        // Compatibilidad: destino simple guardado en watchMap.
+        const txt = (k && APP.watchMap[k]) || APP.watchMap[info.eco] || APP.watchMap[info.placa] || '';
+        if (!txt) return null;
+        return { modo: 'secuencial', circuito: false, paradas: textoAParadas(txt) };
+    }
+    function guardarPlanes() { writeSession(SS.planes, APP.planes); }
+    // Resuelve las coordenadas de una parada (geocerca, municipio, coord o
+    // lugar) y guarda en la misma parada la informacion util de la capa.
+    async function resolverParada(p) {
+        if (!p) return null;
+        if (p.coords && p.coords.lat != null && p.coords.lon != null) return p;
+        if (p.tipo === 'geocerca') {
+            const z = encontrarZona(p.texto);
+            if (!z) return null;
+            const c = centroDeZona(z);
+            if (!c) return null;
+            p.coords = c; p.zonaId = z.id; p.texto = z.n || p.texto;
+            return p;
+        }
+        if (p.tipo === 'municipio') {
+            const m = await municipioOSM(p.texto);
+            if (!m) return null;
+            p.coords = m.centro; p.municipioId = m.id; p.texto = m.nombre;
+            return p;
+        }
+        const c = await geocodificarLugar(p.texto);
+        if (!c) return null;
+        p.coords = c;
+        return p;
+    }
+    // Optimizador de orden de paradas. Mantiene las paradas fijadas en su
+    // posicion relativa; el resto se resuelve con vecino mas cercano + 2-opt.
+    function ordenarParadasOptimo(paradas, origen, circuito) {
+        if (!paradas || paradas.length < 2) return paradas;
+        if (!origen || origen.lat == null) return paradas;
+        for (let i = 0; i < paradas.length; i++) {
+            if (!paradas[i].coords) return paradas; // sin resolver: no reordenar
+        }
+        const n = paradas.length;
+        const fixedPos = [];
+        for (let i = 0; i < n; i++) if (paradas[i].fijo) fixedPos.push(i);
+        const out = [];
+        const ultimoCoords = () => (out.length ? out[out.length - 1].coords : origen);
+        let cursor = -1;
+        for (let f = 0; f < fixedPos.length; f++) {
+            const end = fixedPos[f];
+            const seg = [];
+            for (let i = cursor + 1; i < end; i++) seg.push(paradas[i]);
+            const orden = ordenarSegmento(seg, ultimoCoords(), paradas[end].coords);
+            for (let i = 0; i < orden.length; i++) out.push(orden[i]);
+            out.push(paradas[end]);
+            cursor = end;
+        }
+        const tail = [];
+        for (let i = cursor + 1; i < n; i++) tail.push(paradas[i]);
+        const orden = ordenarSegmento(tail, ultimoCoords(), circuito ? origen : null);
+        for (let i = 0; i < orden.length; i++) out.push(orden[i]);
+        return out;
+    }
+    function ordenarSegmento(items, inicio, fin) {
+        if (!items || items.length <= 1) return items || [];
+        // Vecino mas cercano desde `inicio`.
+        const restantes = items.slice();
+        const orden = [];
+        let actual = inicio;
+        while (restantes.length) {
+            let bi = 0, bd = Infinity;
+            for (let i = 0; i < restantes.length; i++) {
+                const c = restantes[i].coords;
+                const d = haversine(actual.lat, actual.lon, c.lat, c.lon);
+                if (d < bd) { bd = d; bi = i; }
+            }
+            const sig = restantes.splice(bi, 1)[0];
+            orden.push(sig);
+            actual = sig.coords;
+        }
+        if (!fin) return orden;
+        // 2-opt con extremos fijos (inicio -> ... -> fin). Los marcadores de
+        // inicio/fin se representan con objetos centinela para no moverlos.
+        const seq = [{ coords: inicio }].concat(orden).concat([{ coords: fin }]);
+        const hav = (a, b) => haversine(a.lat, a.lon, b.lat, b.lon);
+        let mejoro = true, vueltas = 0;
+        while (mejoro && vueltas < 40) {
+            mejoro = false; vueltas++;
+            for (let i = 1; i < seq.length - 2; i++) {
+                for (let j = i + 1; j < seq.length - 1; j++) {
+                    const antes = hav(seq[i - 1].coords, seq[i].coords) + hav(seq[j].coords, seq[j + 1].coords);
+                    const despues = hav(seq[i - 1].coords, seq[j].coords) + hav(seq[i].coords, seq[j + 1].coords);
+                    if (despues + 1 < antes) {
+                        let lo = i, hi = j;
+                        while (lo < hi) { const tmp = seq[lo]; seq[lo] = seq[hi]; seq[hi] = tmp; lo++; hi--; }
+                        mejoro = true;
+                    }
+                }
+            }
+        }
+        return seq.slice(1, seq.length - 1);
+    }
+    // Nombres de los municipios por los que pasa una ruta (guardado al trazar).
+    function municipioDeRuta(ruta, m) {
+        if (!ruta || !m) return false;
+        const lista = ruta.municipios || [];
+        const n = norm(m.nombre || '');
+        for (let i = 0; i < lista.length; i++) if (norm(lista[i]) === n) return true;
+        return false;
+    }
+    function calcularMunicipiosDeRuta(coords) {
+        if (!coords || !coords.length || !(APP.municipios || APP.municipiosRiesgo || []).length) return [];
+        const set = new Set();
+        const paso = Math.max(1, Math.floor(coords.length / 60));
+        for (let i = 0; i < coords.length; i += paso) {
+            const c = coords[i]; // [lon,lat]
+            const m = municipioEn(c[1], c[0]);
+            if (m && m.nombre) set.add(m.nombre);
+        }
+        return Array.from(set);
+    }
+
     /* ====================== RUTAS (almacenamiento y planificacion) ====================== */
     function rutaDe(info) {
         if (!info) return null;
@@ -1472,45 +1948,101 @@ function _extraerZonasDe(items) {
         if (m) {
             m.progMax = 0; m.retornoAlerta = false; m.llego = false;
             m.desviadoDesde = null; m.rumboOpDesde = null;
+            m.llegadas = null; m.paradaActual = 0; m.circuitoAlerta = false;
             writeSession(SS.memo, APP.memo);
         }
         if (APP.snapMemo[clave]) delete APP.snapMemo[clave];
     }
-    async function planearRuta(eco, destinoTexto, origenOv, modo) {
+    async function planearRuta(eco, destino, origenOv, modo) {
         const it = unitByEco(eco);
         if (!it) { adviceErr('Unidad no encontrada', eco); return null; }
+        const clave = it.info.clave;
+        // Normaliza la entrada a un plan de paradas. Acepta:
+        //   - un objeto { modo, circuito, paradas:[...] } (editor de paradas);
+        //   - un texto con paradas separadas por '|', ';' o salto de linea.
+        let plan;
+        if (destino && typeof destino === 'object' && Array.isArray(destino.paradas)) {
+            plan = {
+                modo: destino.modo === 'optimo' ? 'optimo' : 'secuencial',
+                circuito: !!destino.circuito,
+                paradas: destino.paradas.map((p) => Object.assign({}, p))
+            };
+            APP.planes[clave] = plan;
+            guardarPlanes();
+        } else {
+            const txt = String(destino || '').trim();
+            const existente = APP.planes[clave];
+            if (existente && planATexto(existente) === txt) {
+                plan = existente;
+            } else {
+                plan = {
+                    modo: existente ? existente.modo : 'secuencial',
+                    circuito: existente ? !!existente.circuito : false,
+                    paradas: textoAParadas(txt)
+                };
+                APP.planes[clave] = plan;
+                guardarPlanes();
+            }
+        }
+        if (!plan.paradas.length) { adviceErr('Sin paradas', 'Anade al menos un destino'); return null; }
+        const circuito = (plan.modo === 'optimo') ? true : !!plan.circuito;
         let origen = origenOv || null;
         // Cuando el trazado automatico esta activo, siempre intentamos
         // detectar el punto de partida por el algoritmo antes de caer a la
-        // posicion actual. Asi la ruta refleja el viaje real de la unidad
-        // (origen historico -> destino -> posible regreso al origen).
+        // posicion actual. Asi la ruta refleja el viaje real de la unidad.
         const buscarPartida = APP.config.autoRuta || APP.config.analizarAuto;
         if (!origen && buscarPartida) {
-            // Punto de partida detectado en el historial (parada > partidaHoras).
             try {
                 const v = await analizarViaje(eco, true);
                 if (v && v.partida) origen = { lat: v.partida.lat, lon: v.partida.lon };
             } catch (_) { /* noop */ }
         }
         if (!origen) origen = (it.st.lat != null ? { lat: it.st.lat, lon: it.st.lon } : null);
-        if (!origen) { adviceWarn('Sin origen', 'La unidad no reporta posición actual ni historial'); return null; }
-        let destino = null;
-        const txt = String(destinoTexto || '').trim();
-        if (/^-?\d+(\.\d+)?\s*,\s*-?\d+(\.\d+)?$/.test(txt)) {
-            const p = txt.split(',').map(Number);
-            destino = { lat: p[0], lon: p[1] };
-        } else if (txt) {
-            destino = await geocodificarLugar(txt);
+        if (!origen) { adviceWarn('Sin origen', 'La unidad no reporta posicion actual ni historial'); return null; }
+        // Resuelve cada parada (geocerca, municipio, coord o lugar).
+        advice('Resolviendo paradas', plan.paradas.length + ' parada(s)...');
+        const resueltas = [];
+        for (let i = 0; i < plan.paradas.length; i++) {
+            const p = await resolverParada(plan.paradas[i]);
+            if (!p) {
+                adviceErr('Parada no resuelta', 'No se pudo ubicar "' + plan.paradas[i].texto + '"');
+                return null;
+            }
+            resueltas.push(p);
         }
-        if (!destino) { adviceErr('Destino no resuelto', 'Escribe un lugar o "lat,lon"'); return null; }
-        advice('Calculando ruta', (modo === 'astar' ? 'A* sobre OSM' : 'OSRM') + '...');
+        // Optimiza el orden si el plan es "mejor ruta".
+        let paradas = resueltas;
+        if (plan.modo === 'optimo') {
+            paradas = ordenarParadasOptimo(resueltas, origen, circuito);
+        }
+        if (paradas.length > 25) { adviceErr('Demasiadas paradas', 'Maximo 25 paradas por ruta'); return null; }
+        plan.paradas = paradas;
+        APP.planes[clave] = plan;
+        guardarPlanes();
+        const puntos = [origen].concat(paradas.map((p) => p.coords));
+        if (circuito) puntos.push({ lat: origen.lat, lon: origen.lon });
+        advice('Calculando ruta', (modo === 'astar' ? 'A* sobre OSM' : 'OSRM') + ' \u00b7 ' + paradas.length + ' parada(s)');
         try {
-            const calc = (modo === 'astar') ? await astarRoute(origen, destino) : await osrmRoute(origen, destino);
+            const calc = (modo === 'astar') ? await astarRouteMulti(puntos) : await osrmRouteMulti(puntos);
             const coords = simplificarRuta(calc.coords, 40);
             const pre = precomputarRuta(coords);
-            const clave = it.info.clave;
+            // Acumulado (m) por parada a partir de los tramos ("legs").
+            let acum = 0;
+            const legs = calc.legs || [];
+            for (let i = 0; i < paradas.length; i++) {
+                const leg = legs[i];
+                const d = leg ? (leg.distance != null ? leg.distance : (leg.distancia || 0)) : 0;
+                acum += d;
+                paradas[i].acum = acum;
+                paradas[i].prog = pre.total ? Math.min(1, acum / pre.total) : 0;
+            }
+            const ultima = paradas[paradas.length - 1];
             const ruta = {
-                eco: it.info.eco || clave, origen, destino, destinoTexto: txt,
+                eco: it.info.eco || clave, origen,
+                destino: { lat: ultima.coords.lat, lon: ultima.coords.lon },
+                destinoTexto: planATexto(plan),
+                plan, paradas, circuito, optimo: plan.modo === 'optimo',
+                municipios: calcularMunicipiosDeRuta(coords),
                 coords, acum: pre.acum, total: pre.total,
                 distancia: calc.distancia || pre.total, duracion: calc.duracion || null,
                 modo: calc.modo, creada: Date.now()
@@ -1518,9 +2050,9 @@ function _extraerZonasDe(items) {
             APP.rutas[clave] = ruta;
             guardarRutas();
             resetEstadoRuta(clave);
-            adviceOk('Ruta creada', Math.round(ruta.total / 1000) + ' km · ' + ruta.modo);
+            const extra = plan.modo === 'optimo' ? ' \u00b7 mejor ruta' : '';
+            adviceOk('Ruta creada', Math.round(ruta.total / 1000) + ' km \u00b7 ' + ruta.modo + extra + ' \u00b7 ' + paradas.length + ' parada(s)');
             if (APP.tab === 'rutas') paintRutas();
-            // Reanaliza el viaje ahora que existe destino (llegada/regreso/carga).
             analizarViaje(eco, true);
             return ruta;
         } catch (e) {
@@ -1604,10 +2136,24 @@ function _extraerZonasDe(items) {
         const memo = APP.snapMemo[info.clave] || (APP.snapMemo[info.clave] = { idx: 0 });
         const s = snapRuta(st.lat, st.lon, r, memo);
         if (!s) return { estado: 'SIN POSICION', ruta: r };
-        const llego = s.progreso >= 0.95 && s.dist <= APP.config.retornoM;
+        const paradas = r.paradas || [];
+        let llegadas = 0;
+        let paradaActual = paradas.length;
+        const llegadaM = Math.max(80, +APP.config.paradaLlegadaM || 150);
+        for (let i = 0; i < paradas.length; i++) {
+            if (paradas[i].acum != null && s.recorrido >= paradas[i].acum - llegadaM) llegadas++;
+            else if (paradaActual === paradas.length) paradaActual = i;
+        }
+        const llego = paradas.length
+            ? (llegadas >= paradas.length)
+            : (s.progreso >= 0.95 && s.dist <= APP.config.retornoM);
         const desviado = s.dist > APP.config.desvioM;
         const estado = llego ? 'LLEGO' : (desviado ? 'DESV' : 'EN RUTA');
-        return { estado, ruta: r, snap: s, llego, desviado };
+        return {
+            estado, ruta: r, snap: s, llego, desviado,
+            llegadas, paradaActual, totalParadas: paradas.length,
+            parada: (paradas[paradaActual] || null)
+        };
     }
     /* === BEGIN: unidadesEnCaravana === */
     // Determina que unidades acompanial al "lider" en una misma ruta o muy
@@ -1999,9 +2545,15 @@ function _extraerZonasDe(items) {
     }
     function isWatched(info) {
         const e = info.eco, p = info.placa, i = String(info.id);
-        return !!(e && APP.watchMap[e]) || !!(p && APP.watchMap[p]) || !!APP.watchMap[i];
+        const has = (k) => k && Object.prototype.hasOwnProperty.call(APP.watchMap, k);
+        return has(e) || has(p) || has(i);
     }
     function watchDest(info) {
+        // v5.15: si hay un plan multipunto, el texto de destino es su
+        // serializacion (paradas separadas por " | "), lo que mantiene
+        // comparaciones estables con autoTrazarRutasPendientes.
+        const plan = planDe(info);
+        if (plan && plan.paradas && plan.paradas.length) return planATexto(plan);
         const e = info.eco, p = info.placa, i = String(info.id);
         return (e && APP.watchMap[e]) || (p && APP.watchMap[p]) || (APP.watchMap[i]) || '';
     }
@@ -2623,6 +3175,29 @@ Reglas:
 - NO incluyas avisos duplicados: si varias alertas son de la misma unidad en la misma ventana de 10 min, colapsalas en una sola entrada.
 - Todo en espanol, tono profesional y directo.`;
 
+    // v5.15: prompt para el analisis proactivo de TODA la flota (no de
+    // alertas sueltas). Recibe el snapshot completo de la plataforma y
+    // devuelve una lista priorizada de lo que requiere atencion AHORA,
+    // como lo haria un monitorista experimentado.
+    const IA_SYSTEM_FLOTA = String.raw`Eres un monitorista experto de flotas de vehiculos en Mexico. Recibes un snapshot EN VIVO de la plataforma: unidades (posicion, estado, zona, municipio, ruta con paradas, odometro, limite, silenciada), geocercas, municipios, zonas de riesgo, viajes, alertas del dia y la configuracion de umbrales de Rondo.
+
+Tu trabajo es vigilar la flota y decir que requiere atencion AHORA, con criterio de operador (no alarmista). Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma:
+{
+  "resumen": "2-4 frases en espanol con el estado general de la flota",
+  "atencion": [
+    { "eco": "eco o placa", "prioridad": "critica|alta|media", "motivo": "frase corta", "accion": "que deberia hacer el operador" }
+  ],
+  "riesgos": ["observacion de riesgo concreta (unidad cerca de zona de riesgo, sin senal en municipio peligroso, etc.)"],
+  "recomendaciones": ["ajuste operativo o de parametros de Rondo"]
+}
+
+Reglas:
+- Ordena "atencion" de mas a menos urgente; maximo 12 entradas. Si una unidad esta bien, no la incluyas.
+- Prioriza: sin senal + zona/municipio de riesgo; desvio de ruta sostenido; detenciones largas fuera de base; excesos claros; rutas sin avanzar; odometro incongruente.
+- Considera la hora del dia y si la unidad esta en una zona de riesgo o en un municipio con score alto.
+- No inventes datos: si un campo no viene en el snapshot, no lo afirmes.
+- Espanol de Mexico, tono profesional y directo, sin emojis.`;
+
     // v5.14: prompt para RESUMEN NARRATIVO del dia (encabezado del
     // informe Markdown). Devuelve texto libre, NO JSON. Pensado para
     // que un supervisor lea el informe y de un vistazo sepa que paso.
@@ -2707,13 +3282,32 @@ Reglas:
             .filter((h) => h.eco === eco)
             .slice(0, 5)
             .map((h) => ({ regla: h.regla, sev: h.sev, ts: new Date(h.ts).toISOString(), titulo: h.titulo }));
+        // v5.15: mas datos de plataforma para que el veredicto tenga contexto.
+        const mun = pos ? municipioEn(pos.lat, pos.lon) : null;
+        const ruta = u ? rutaDe(info) : null;
+        const memoU = (u && APP.memo[info.clave]) || {};
+        const odo = u ? odometroDe(info) : null;
+        const er = ruta ? estadoRuta(info, st) : { estado: 'SIN RUTA' };
+        const rutaInfo = ruta ? {
+            estado: er.estado, modo: ruta.modo, optimo: !!ruta.optimo, circuito: !!ruta.circuito,
+            destino: ruta.destinoTexto || '', km: Math.round((ruta.total || 0) / 1000),
+            progreso: er.snap ? Math.round(er.snap.progreso * 100) : null,
+            desviado: !!er.desviado,
+            paradas: (ruta.paradas || []).map((p) => ({ texto: p.texto, tipo: p.tipo })).slice(0, 12),
+            paradaActual: (+memoU.paradaActual || 0)
+        } : null;
         return {
             eco, placa: info.placa || '', nombre: info.nombre || '',
             regla: alert.regla, sev: alert.sev,
             titulo: alert.titulo, detalle: alert.detalle || '',
             ultimaPosicion: pos, edadMin: st.edadMin || 0,
             velocidad: st.vel || 0, estado: st.estado || 'desconocido',
-            geocercaActual, pois, alertasRecientes: hist
+            geocercaActual, pois, alertasRecientes: hist,
+            municipioActual: (mun && mun.nombre) ? { nombre: mun.nombre, estado: mun.estado || '' } : null,
+            silenciada: APP.dismissed.has(eco),
+            limiteKmh: u ? limiteDe(info) : null,
+            odometroKm: odo ? Math.round((+odo.m || 0) / 1000) : 0,
+            ruta: rutaInfo
         };
     }
 
@@ -2893,6 +3487,22 @@ Reglas:
             alertas: compact
         };
         const r = await aiLlamarProveedorPrompt(IA_SYSTEM_LOTE, ctx);
+        if (r && !r.error) iaCacheSet(cacheKey, r);
+        return r;
+    }
+
+    // v5.15: analisis proactivo de TODA la flota. A diferencia del lote
+    // (que prioriza avisos ya generados), este revisa el snapshot completo
+    // de la plataforma y devuelve que unidades requieren atencion. Se
+    // cachea por minuto para no repetir llamadas seguidas.
+    async function aiAnalizarFlota() {
+        if (!APP.config.iaHabilitada) return { error: 'IA deshabilitada' };
+        if (!APP.config.iaApiKey) return { error: 'Falta API key' };
+        const ctx = chatContextoFlota();
+        const cacheKey = 'flota:' + new Date().toISOString().slice(0, 16) + ':' + (ctx.unidades ? ctx.unidades.length : 0);
+        const cacheHit = iaCacheGet(cacheKey);
+        if (cacheHit) return cacheHit;
+        const r = await aiLlamarProveedorPrompt(IA_SYSTEM_FLOTA, ctx);
         if (r && !r.error) iaCacheSet(cacheKey, r);
         return r;
     }
@@ -3393,12 +4003,45 @@ Reglas:
                     if (!online) offlineFuera.push(eco);
                 }
                 if (detalle.length < 80) {
+                    // v5.15: contexto enriquecido por unidad: posicion,
+                    // municipio, limite, odometro, plan de ruta y estado de
+                    // reglas, para que la IA pueda asistir de verdad.
+                    const r = rutaDe(info) || null;
+                    const memoU = APP.memo[info.clave] || {};
+                    const er = (r && st.lat != null && st.online) ? estadoRuta(info, st) : { estado: r ? 'SIN POSICION' : 'SIN RUTA' };
+                    const odo = odometroDe(info);
+                    const mun = (st.lat != null) ? municipioEn(st.lat, st.lon) : null;
+                    const visitadas = (Array.isArray(memoU.llegadas)) ? memoU.llegadas.filter(Boolean).length : 0;
+                    const paradaProg = (r && r.paradas && r.paradas.length) ? {
+                        total: r.paradas.length,
+                        visitadas: visitadas,
+                        siguiente: (r.paradas[Math.min(r.paradas.length - 1, (+memoU.paradaActual || 0))] || {}).texto || null
+                    } : null;
                     detalle.push({
                         eco, placa: info.placa || '',
                         estado: online ? 'online' : 'offline',
                         zona: zona || null,
+                        municipio: (mun && mun.nombre) ? mun.nombre : null,
                         edadMin: edad,
-                        vel: isFinite(st.vel) ? Math.round(st.vel) : 0
+                        vel: isFinite(st.vel) ? Math.round(st.vel) : 0,
+                        curso: isFinite(st.curso) ? Math.round(st.curso) : null,
+                        lat: st.lat != null ? +(+st.lat).toFixed(4) : null,
+                        lon: st.lon != null ? +(+st.lon).toFixed(4) : null,
+                        limite: limiteDe(info),
+                        odometroKm: odo ? Math.round((+odo.m || 0) / 1000) : 0,
+                        silenciada: APP.dismissed.has(eco),
+                        detenidoMin: memoU.detenidoDesde ? Math.round((Date.now() / 1000 - memoU.detenidoDesde) / 60) : null,
+                        ruta: r ? {
+                            estado: er.estado,
+                            modo: r.modo,
+                            optimo: !!r.optimo,
+                            circuito: !!r.circuito,
+                            destino: r.destinoTexto || '',
+                            km: Math.round((r.total || 0) / 1000),
+                            progreso: er.snap ? Math.round(er.snap.progreso * 100) : null,
+                            desviado: !!er.desviado,
+                            parada: paradaProg
+                        } : null
                     });
                 }
             }
@@ -3441,22 +4084,64 @@ Reglas:
                     ts: new Date(a.ts).toISOString().slice(11, 16),
                     eco: a.eco, regla: a.regla, detalle: (a.detalle || '').slice(0, 160)
                 }));
+            const porRegla = {};
+            hoyFiltrado.forEach((a) => { porRegla[a.regla] = (porRegla[a.regla] || 0) + 1; });
+            const moviendo = detalle.filter((d) => d.estado === 'online' && d.vel > 1).length;
+            const detenidas = detalle.filter((d) => d.estado === 'online' && d.vel <= 1).length;
+            const velProm = (() => {
+                const v = detalle.filter((d) => d.estado === 'online');
+                return v.length ? Math.round(v.reduce((s, d) => s + d.vel, 0) / v.length) : 0;
+            })();
+            const rutasResumen = detalle.filter((d) => d.ruta).slice(0, 30).map((d) => Object.assign({ eco: d.eco }, d.ruta));
+            const viajes = Object.keys(APP.viajes || {}).slice(0, 12).map((eco) => {
+                const v = APP.viajes[eco] || {};
+                return {
+                    eco, km: v.distanciaKm || 0, paradas: (v.paradas || []).length,
+                    cargo: !!v.cargo, llego: !!v.llego, regreso: !!v.regreso,
+                    zonaPartida: v.zonaPartida || null
+                };
+            });
+            const riesgoZonas = (APP.riesgo && APP.riesgo.length)
+                ? APP.riesgo.slice().sort((a, b) => (b.score || 0) - (a.score || 0)).slice(0, 15)
+                    .map((z) => ({ id: z.id, estado: z.estado || '', municipio: z.municipio || '', score: z.score, radio_m: z.radio_m || 0 }))
+                : [];
+            const municipios = { osm: (APP.municipios || []).length, deRiesgo: (APP.municipiosRiesgo || []).length };
+            const configResumen = {
+                cadenciaSeg: Math.round((APP.config.pollMs || 10000) / 1000),
+                offlineMin: APP.config.offlineMin, gpsMin: APP.config.gpsMin,
+                stopMin: APP.config.stopMin, zonaMin: APP.config.zonaMin,
+                descoMin: APP.config.descoMin, velMax: APP.config.velMax, cooldownMin: APP.config.cooldownMin,
+                desvioM: APP.config.desvioM, desvioMin: APP.config.desvioMin,
+                retornoM: APP.config.retornoM, retornoPct: APP.config.retornoPct,
+                giroGrados: APP.config.giroGrados, giroMin: APP.config.giroMin,
+                desvioMunicipio: !!APP.config.desvioMunicipio, desvioMunicipioM: APP.config.desvioMunicipioM,
+                paradaLlegadaM: APP.config.paradaLlegadaM,
+                reglasActivas: Object.keys(APP.config.reglas || {}).filter((k) => APP.config.reglas[k]),
+                horario: APP.config.horario
+            };
             return {
                 alcance: toda ? 'toda la flota' : 'solo unidades vigiladas',
                 fecha: new Date().toISOString().slice(0, 16).replace('T', ' '),
                 geocercasCargadas: zonasCargadas,
                 unidadesEnAlcance: unidadesRaw.length,
                 enLinea, sinSenal: unidadesRaw.length - enLinea,
+                moviendo, detenidas, velocidadPromedio: velProm,
                 unidadesFueraDeGeocerca: fueraDeGeocerca.length,
                 ecosFueraDeGeocerca: fueraDeGeocerca.slice(0, 40),
                 offlineFueraDeGeocerca: offlineFuera.slice(0, 40),
                 alertasHoy: hoyFiltrado.length,
                 porSeveridad: porSev,
+                alertasPorRegla: porRegla,
                 ultimosAvisos: ultimos,
                 desconexionesHoy: desconexiones,
                 geocercas,
                 zonasDeRiesgo: riesgoResumen,
+                riesgoZonas,
+                municipios,
                 rutasActivas: Object.keys(APP.rutas || {}).length,
+                rutas: rutasResumen,
+                viajes,
+                configResumen,
                 unidades: detalle
             };
         } catch (_) { return { fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; }
@@ -3715,11 +4400,12 @@ ta.value = '';
     // config (paintIASwitch, borrar key, etc).
     function paintIABatchBtn() {
         const b = byId('rondo-ia-batch');
-        if (!b) return;
+        const f = byId('rondo-ia-flota');
         const cfg = APP.config || {};
         const ok = !!(cfg.iaHabilitada && cfg.iaApiKey);
         const hay = (APP.historial || []).length > 0;
-        b.style.display = (ok && hay) ? '' : 'none';
+        if (b) b.style.display = (ok && hay) ? '' : 'none';
+        if (f) f.style.display = ok ? '' : 'none';
     }
     // v5.14: pinta el contador de uso diario en la pestana IA.
     function paintIAUso() {
@@ -3787,6 +4473,59 @@ ta.value = '';
                 okText: 'Cerrar',
                 onOk: () => {},
                 ancho: 520
+            });
+        } finally {
+            setBusy(btn, false);
+        }
+    }
+
+    // v5.15: revision proactiva de la flota con IA. Muestra en un dialogo
+    // el resumen, las unidades que requieren atencion y los riesgos.
+    async function aiFlotaUI() {
+        const cfg = APP.config || {};
+        if (!cfg.iaHabilitada || !cfg.iaApiKey) {
+            adviceWarn('IA deshabilitada', 'Activala y mete tu API key en Ajustes > IA.');
+            abrirCfg();
+            const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="ia"]');
+            if (tab) tab.click();
+            return;
+        }
+        const btn = byId('rondo-ia-flota');
+        setBusy(btn, true);
+        try {
+            const r = await aiAnalizarFlota();
+            paintIAUso();
+            if (r.error) { mostrarDialogoErrorIA(r, 'Error al analizar la flota'); return; }
+            const atencion = Array.isArray(r.atencion) ? r.atencion : [];
+            const riesgos = Array.isArray(r.riesgos) ? r.riesgos : [];
+            const recos = Array.isArray(r.recomendaciones) ? r.recomendaciones : [];
+            const colores = { critica: '#b71c1c', alta: '#e65100', media: '#f9a825' };
+            const provNombre = (IA_PROVEEDORES[APP.config.iaProveedor] || {}).nombre || APP.config.iaProveedor;
+            const html =
+                '<div style="text-align:left;font-size:12.5px;line-height:1.45">' +
+                '<div style="color:var(--rondo-fg-dim);margin-bottom:6px">Proveedor: <b>' + esc(provNombre) + '</b>' +
+                (atencion.length ? ' \u00b7 ' + atencion.length + ' unidad(es) por atender' : '') + '</div>' +
+                (r.resumen ? '<div style="margin:0 0 10px"><b>Resumen:</b> ' + esc(r.resumen) + '</div>' : '') +
+                (atencion.length ? '<div style="margin:0 0 10px"><b>Requieren atencion:</b><ol style="margin:4px 0 0 18px;padding:0">' +
+                    atencion.map((it) => {
+                        const c = colores[String(it.prioridad || '').toLowerCase()] || '#555';
+                        return '<li style="margin-bottom:5px"><b style="color:' + c + '">' + esc(String(it.prioridad || '?').toUpperCase()) + '</b>' +
+                            ' \u00b7 <b>' + esc(it.eco || '') + '</b> \u00b7 ' + esc(it.motivo || '') +
+                            (it.accion ? '<div style="color:var(--rondo-fg-dim);font-size:11.5px;margin-left:2px">\u2192 ' + esc(it.accion) + '</div>' : '') +
+                            '</li>';
+                    }).join('') + '</ol></div>' : '') +
+                (riesgos.length ? '<div style="margin:0 0 10px"><b>Riesgos:</b><ul style="margin:4px 0 0 18px;padding:0">' +
+                    riesgos.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') +
+                (recos.length ? '<div><b>Recomendaciones:</b><ul style="margin:4px 0 0 18px;padding:0">' +
+                    recos.map((x) => '<li>' + esc(x) + '</li>').join('') + '</ul></div>' : '') +
+                '</div>';
+            abrirDialogo({
+                titulo: 'Monitor de flota \u00b7 IA',
+                html: html,
+                cancelText: 'Cerrar',
+                okText: 'Cerrar',
+                onOk: () => {},
+                ancho: 540
             });
         } finally {
             setBusy(btn, false);
@@ -4552,6 +5291,7 @@ ta.value = '';
                 APP.riesgoErr = null;
                 APP.riesgoTs = Date.now();
                 APP.riesgoEstado = 'ok';
+                recalcularMunicipiosRiesgo();
                 if (APP.unlocked) {
                     try { console.log('[Rondo] riesgo cargado:', items.length, 'zonas (' + fmt + ')'); } catch (_) {}
                 }
@@ -5169,8 +5909,17 @@ ta.value = '';
         if (!APP.config.reglas.zona) return;
         const z = R.zona;
         if (z && !isBase(z)) {
-            const destino = watchDest(info);
-            const esperada = destino && norm(z).indexOf(norm(destino)) >= 0;
+            // v5.15: una zona es "esperada" si coincide con cualquiera de las
+            // paradas del plan multipunto (geocercas incluidas).
+            const plan = planDe(info);
+            let esperada = false;
+            if (plan && plan.paradas) {
+                for (let i = 0; i < plan.paradas.length; i++) {
+                    const t = norm(plan.paradas[i].texto || '');
+                    if (!t) continue;
+                    if (norm(z).indexOf(t) >= 0 || t.indexOf(norm(z)) >= 0) { esperada = true; break; }
+                }
+            }
             if (!esperada) {
                 if (!R.zonaExt || R.zonaExt.n !== z) R.zonaExt = { n: z, desde: Date.now() / 1000 };
                 const m = (Date.now() / 1000 - R.zonaExt.desde) / 60;
@@ -5237,51 +5986,79 @@ ta.value = '';
     }
     async function reglaDestino(st, R, info, etq) {
         if (!APP.config.reglas.destino) return;
-        const destino = watchDest(info);
-        if (!destino || !st.online) return;
+        const plan = planDe(info);
+        if (!plan || !plan.paradas || !plan.paradas.length || !st.online) return;
         const ruta = rutaDe(info);
-        let enDestino = false;
-        let detalle = '';
-        // Preferimos la deteccion geometrica cuando hay ruta trazada: el
-        // avance sobre la polilinea es mas preciso y rapido que el geocoding
-        // inverso, y no depende del area行政 devuelta por Nominatim.
-        if (ruta && st.lat != null && st.lon != null) {
+        const paradas = (ruta && ruta.paradas && ruta.paradas.length) ? ruta.paradas : null;
+        const llegadaM = Math.max(80, +APP.config.paradaLlegadaM || 150);
+        if (paradas && st.lat != null && st.lon != null) {
             const memo = APP.snapMemo[info.clave] || (APP.snapMemo[info.clave] = { idx: 0 });
             const s = snapRuta(st.lat, st.lon, ruta, memo);
             if (s) {
-                if (s.progreso >= 0.95) {
-                    enDestino = true;
-                    detalle = 'a ' + Math.round(s.dist) + ' m del destino';
-                } else if (s.dist <= APP.config.retornoM) {
-                    // Muy cerca del destino aunque el progreso no este completo
-                    // (por ejemplo, llegada por un camino alterno).
-                    enDestino = true;
-                    detalle = 'cerca del destino (' + Math.round(s.dist) + ' m)';
+                if (!Array.isArray(R.llegadas) || R.llegadas.length !== paradas.length) {
+                    R.llegadas = new Array(paradas.length);
+                    for (let i = 0; i < paradas.length; i++) R.llegadas[i] = false;
                 }
+                for (let i = 0; i < paradas.length; i++) {
+                    if (R.llegadas[i]) continue;
+                    const p = paradas[i];
+                    if (p.acum == null) continue;
+                    const esUlt = (i === paradas.length - 1);
+                    const alcanzada = (s.recorrido >= p.acum - llegadaM) ||
+                        (esUlt && s.dist <= llegadaM);
+                    if (!alcanzada) continue;
+                    R.llegadas[i] = true;
+                    R.paradaActual = i + 1;
+                    R.enDestino = true;
+                    const restantes = paradas.length - i - 1;
+                    pushAlert({
+                        regla: 'destino', sev: esUlt ? 'ok' : 'bajo', clave: info.clave, eco: info.eco,
+                        titulo: (esUlt ? 'LLEGO A DESTINO' : 'LLEGO A PARADA ' + (i + 1)) + ' \u00b7 ' + etq,
+                        detalle: (p.texto || ('parada ' + (i + 1))) +
+                            (esUlt ? '' : ' \u00b7 faltan ' + restantes + ' parada(s)'),
+                        hablar: esUlt
+                            ? ('La unidad ' + etq + ' llego a su destino')
+                            : ('La unidad ' + etq + ' llego a la parada ' + (i + 1))
+                    });
+                }
+                // Circuito completado: todas las paradas visitadas y de
+                // regreso en el origen. No es un viaje cancelado.
+                if (ruta.circuito && R.llegadas.length === paradas.length && R.llegadas.every(Boolean)) {
+                    const dOrigen = haversine(st.lat, st.lon, ruta.origen.lat, ruta.origen.lon);
+                    if (dOrigen <= Math.max(APP.config.retornoM, llegadaM) && !R.circuitoAlerta) {
+                        R.circuitoAlerta = true;
+                        pushAlert({
+                            regla: 'retorno', sev: 'ok', clave: info.clave, eco: info.eco,
+                            titulo: 'REGRESO A BASE \u00b7 ' + etq,
+                            detalle: 'circuito completado \u00b7 ' + paradas.length + ' parada(s) visitada(s)',
+                            hablar: 'La unidad ' + etq + ' completo su circuito y regreso a la base'
+                        });
+                    }
+                }
+                return;
             }
         }
-        if (!enDestino) {
-            const geo = await reverseGeocode(st.lat, st.lon);
-            const ciudad = geo ? geo.ciudad : '';
-            if (ciudad && (norm(ciudad).indexOf(norm(destino)) >= 0 || norm(destino).indexOf(norm(ciudad)) >= 0)) {
-                enDestino = true;
-                detalle = 'en ' + ciudad;
-            }
-        }
+        // Fallback legacy: sin ruta trazada, geocoding inverso contra la
+        // primera parada del plan.
+        const primera = plan.paradas[0].texto || '';
+        if (!primera) return;
+        const geo = await reverseGeocode(st.lat, st.lon);
+        const ciudad = geo ? geo.ciudad : '';
+        const enDestino = !!(ciudad && (norm(ciudad).indexOf(norm(primera)) >= 0 || norm(primera).indexOf(norm(ciudad)) >= 0));
         if (enDestino && !R.enDestino) {
             R.enDestino = true;
             pushAlert({
                 regla: 'destino', sev: 'ok', clave: info.clave, eco: info.eco,
-                titulo: 'LLEGO A DESTINO · ' + etq,
-                detalle: detalle || 'cerca del destino',
+                titulo: 'LLEGO A DESTINO \u00b7 ' + etq,
+                detalle: 'en ' + ciudad,
                 hablar: 'La unidad ' + etq + ' llego a su destino'
             });
         } else if (!enDestino && R.enDestino && st.vel > 10) {
             R.enDestino = false;
             pushAlert({
                 regla: 'destino', sev: 'bajo', clave: info.clave, eco: info.eco,
-                titulo: 'EN REGRESO · ' + etq,
-                detalle: 'salio de ' + destino + ' · ' + Math.round(st.vel) + ' km/h',
+                titulo: 'EN REGRESO \u00b7 ' + etq,
+                detalle: 'salio de ' + primera + ' \u00b7 ' + Math.round(st.vel) + ' km/h',
                 hablar: 'La unidad ' + etq + ' va en regreso'
             });
         }
@@ -5340,7 +6117,21 @@ ta.value = '';
         R.rutaProg = s.progreso;
 
         if (APP.config.reglas.desvio) {
-            if (s.dist > APP.config.desvioM) {
+            let umbral = +APP.config.desvioM || 250;
+            let tolerado = false;
+            // v5.15: tolerancia de municipio. Si la unidad sigue dentro de un
+            // municipio por el que pasa su ruta, el alejamiento no se marca
+            // como desvio mientras no supere desvioMunicipioM.
+            if (s.dist > umbral && APP.config.desvioMunicipio) {
+                const mun = municipioEn(st.lat, st.lon);
+                if (mun && municipioDeRuta(ruta, mun)) {
+                    const cap = Math.max(umbral, +APP.config.desvioMunicipioM || 3000);
+                    if (s.dist <= cap) tolerado = true;
+                    else umbral = cap;
+                }
+            }
+            R.desvioTolerado = tolerado;
+            if (!tolerado && s.dist > umbral) {
                 if (!R.desviadoDesde) R.desviadoDesde = Date.now() / 1000;
                 const m = (Date.now() / 1000 - R.desviadoDesde) / 60;
                 if (m >= APP.config.desvioMin) {
@@ -5351,7 +6142,8 @@ ta.value = '';
                         hablar: 'Atencion, la unidad ' + etq + ' se ha desviado de la ruta'
                     });
                 }
-            } else {
+            } else if (s.dist <= umbral * 0.8) {
+                // Histeresis: para limpiar el desvio hay que volver bien al eje.
                 R.desviadoDesde = null;
             }
         }
@@ -5362,19 +6154,22 @@ ta.value = '';
             const dDestino = haversine(st.lat, st.lon, ruta.destino.lat, ruta.destino.lon);
             const retrocedio = (R.progMax - s.progreso) >= (APP.config.retornoPct / 100);
             const enOrigen = dOrigen <= APP.config.retornoM && R.progMax >= 0.2;
-            if (dDestino <= APP.config.retornoM && s.progreso >= 0.85) {
-                if (!R.llego) {
-                    R.llego = true;
-                    R.retornoAlerta = false;
-                    pushAlert({
-                        regla: 'destino', sev: 'ok', clave: info.clave, eco: info.eco,
-                        titulo: 'LLEGO A DESTINO · ' + etq,
-                        detalle: ruta.destinoTexto ? 'en ' + ruta.destinoTexto : 'en el punto de destino',
-                        hablar: 'La unidad ' + etq + ' llego a su destino'
-                    });
+            // Marca "llego" (lo usa la regla de demora en base) sin duplicar
+            // la alerta: la llegada a cada parada la emite reglaDestino.
+            const paradas = ruta.paradas || [];
+            if (paradas.length) {
+                const lm = Math.max(80, +APP.config.paradaLlegadaM || 150);
+                let lleg = 0;
+                for (let i = 0; i < paradas.length; i++) {
+                    if (paradas[i].acum != null && s.recorrido >= paradas[i].acum - lm) lleg++;
                 }
+                if (lleg >= paradas.length) R.llego = true;
+            } else if (dDestino <= APP.config.retornoM && s.progreso >= 0.85) {
+                R.llego = true;
             }
-            if (!R.retornoAlerta && !R.llego && R.progMax >= 0.15 && (enOrigen || retrocedio)) {
+            // En un plan de circuito volver al origen es lo esperado: no se
+            // reporta como "viaje cancelado" (de eso se encarga reglaDestino).
+            if (!ruta.circuito && !R.retornoAlerta && !R.llego && R.progMax >= 0.15 && (enOrigen || retrocedio)) {
                 R.retornoAlerta = true;
                 pushAlert({
                     regla: 'retorno', sev: 'critico', clave: info.clave, eco: info.eco,
@@ -5428,7 +6223,12 @@ ta.value = '';
             // geoDetenidoAlerta: true si ya se emitio la alerta para
             //   este episodio; rearma cuando sale o se mueve.
             geoDetenidoDesde: prev ? prev.geoDetenidoDesde : null,
-            geoDetenidoAlerta: prev ? !!prev.geoDetenidoAlerta : false
+            geoDetenidoAlerta: prev ? !!prev.geoDetenidoAlerta : false,
+            // v5.15: seguimiento de paradas del plan multipunto.
+            llegadas: (prev && Array.isArray(prev.llegadas)) ? prev.llegadas : null,
+            paradaActual: prev ? (prev.paradaActual || 0) : 0,
+            circuitoAlerta: prev ? !!prev.circuitoAlerta : false,
+            desvioTolerado: false
         };
         try {
             await reglaOffline(st, prev, R, info, etq);
@@ -5540,7 +6340,7 @@ ta.value = '';
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
     function esUIPropia(el) {
         try {
-            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog'));
+            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog,#rondo-plan-modal'));
         } catch (_) { return false; }
     }
     function findSearchInput() {
@@ -5935,6 +6735,13 @@ ta.value = '';
         const destinoPrev = APP.watchMap[eco] || '';
         APP.watchMap[eco] = (destino || APP.watchMap[eco] || '').trim();
         if (APP.orden.indexOf(eco) < 0) APP.orden.push(eco);
+        // v5.15: si el texto pegado cambia el destino, descarta el plan
+        // estructurado previo para que el texto sea la fuente del plan.
+        const it = unitByEco(eco);
+        if (it && APP.planes[it.info.clave] && APP.watchMap[eco] !== destinoPrev) {
+            delete APP.planes[it.info.clave];
+            guardarPlanes();
+        }
         guardarOrden();
         guardarLista();
         // Si se anade o cambia un destino y esta el auto-trazado activo,
@@ -5943,7 +6750,7 @@ ta.value = '';
             const it = unitByEco(eco);
             if (it) {
                 const r = rutaDe(it.info);
-                if (!r || r.destinoTexto !== APP.watchMap[eco]) {
+                if (!r || r.destinoTexto !== watchDest(it.info)) {
                     autoTrazarRutas();
                 }
             }
@@ -5958,6 +6765,10 @@ ta.value = '';
             guardarOrden();
             guardarLista();
         }
+        // v5.15: elimina tambien el plan estructurado de esa unidad.
+        const it = unitByEco(eco);
+        const clave = it ? it.info.clave : eco;
+        if (APP.planes[clave]) { delete APP.planes[clave]; guardarPlanes(); }
     }
     function parsearPegado(texto) {
         if (!texto || !texto.trim()) return 0;
@@ -5988,7 +6799,8 @@ ta.value = '';
             '<span class="rondo-drag-handle" draggable="true" title="Arrastrar para cambiar el orden">⠿</span>' +
             '<span class="orden-num">' + (i + 1) + '</span>' +
             '<span class="eco">' + esc(eco) + '</span>' +
-            '<input type="text" class="rondo-dest" data-eco="' + esc(eco) + '" value="' + esc(APP.watchMap[eco] || '') + '" placeholder="destino opcional">' +
+            '<input type="text" class="rondo-dest" data-eco="' + esc(eco) + '" value="' + esc(APP.watchMap[eco] || '') + '" placeholder="destino | parada 2 | ...">' +
+            '<button class="mini rondo-plan-open" data-eco="' + esc(eco) + '" title="Editar paradas de la ruta (geocercas, municipios, lugares)"><span class="rondo-usym">' + UIS.route + '</span></button>' +
             '<button class="rondo-del" data-eco="' + esc(eco) + '" draggable="false" title="Quitar de la lista"><span class="rondo-usym">' + UIS.close + '</span></button>' +
             '</div>'
         )).join('');
@@ -6031,6 +6843,186 @@ ta.value = '';
             pintarModalLista();
             reacomodarVentanas();
         });
+    }
+
+    /* ====================== EDITOR DE PARADAS (v5.15) ======================
+     * Permite construir un plan multipunto por unidad: anadir geocercas,
+     * municipios o lugares (con sugerencias difusas), reordenarlos, fijarlos
+     * y elegir entre recorrido secuencial o "mejor ruta".
+     */
+    let _planEdit = null;
+    function planModalEl() {
+        let el = byId('rondo-plan-modal');
+        if (el) return el;
+        el = makeEl('div', { id: 'rondo-plan-modal' });
+        document.body.appendChild(el);
+        el.addEventListener('pointerdown', (e) => { if (e.target === el) cerrarEditorParadas(); });
+        return el;
+    }
+    function cerrarEditorParadas() {
+        const el = byId('rondo-plan-modal');
+        if (el) el.classList.remove('abierto');
+        _planEdit = null;
+    }
+    function abrirEditorParadas(eco) {
+        const it = unitByEco(eco);
+        const clave = it ? it.info.clave : eco;
+        const plan = (it ? planDe(it.info) : null) || { modo: 'secuencial', circuito: false, paradas: [] };
+        _planEdit = {
+            eco: eco, clave: clave,
+            modo: plan.modo || 'secuencial',
+            circuito: !!plan.circuito,
+            paradas: (plan.paradas || []).map((p) => Object.assign({}, p))
+        };
+        renderEditorParadas();
+        planModalEl().classList.add('abierto');
+    }
+    function renderEditorParadas() {
+        const el = planModalEl();
+        if (!el || !_planEdit) return;
+        const modo = _planEdit.modo;
+        const stops = _planEdit.paradas;
+        const filas = stops.map((p, i) => (
+            '<div class="rpm-stop' + (p.fijo ? ' pinned' : '') + '" data-i="' + i + '">' +
+            '<span class="rpm-idx">' + (i + 1) + '</span>' +
+            '<span class="rpm-tipo">' + esc(p.tipo || 'lugar') + '</span>' +
+            '<span class="rpm-txt" title="' + esc(p.texto) + '">' + esc(p.texto) + (p.coords ? '' : ' <em>(sin ubicar)</em>') + '</span>' +
+            '<button class="rpm-mini rpm-pin" data-i="' + i + '" title="Fijar esta parada en su orden">' + (p.fijo ? 'Fijada' : 'Fijar') + '</button>' +
+            '<button class="rpm-mini rpm-up" data-i="' + i + '" title="Subir"><span class="rondo-usym">' + UIS.up + '</span></button>' +
+            '<button class="rpm-mini rpm-down" data-i="' + i + '" title="Bajar"><span class="rondo-usym">' + UIS.down + '</span></button>' +
+            '<button class="rpm-mini rpm-del" data-i="' + i + '" title="Quitar"><span class="rondo-usym">' + UIS.close + '</span></button>' +
+            '</div>'
+        )).join('') || '<div class="rpm-hint">Sin paradas. Anade geocercas, municipios o lugares abajo.</div>';
+        el.innerHTML =
+            '<div class="rpm-card">' +
+            '<div class="rpm-head"><span class="rondo-usym">' + UIS.route + '</span> <span class="rpm-eco">' + esc(_planEdit.eco) + '</span> &middot; Paradas de la ruta' +
+            '<span style="flex:1"></span><button class="rpm-mini" id="rpm-x"><span class="rondo-usym">' + UIS.close + '</span></button></div>' +
+            '<div class="rpm-body">' +
+            '<div class="rpm-row">' +
+            '<label class="rpm-lbl">Modo</label>' +
+            '<select id="rpm-modo">' +
+            '<option value="secuencial"' + (modo === 'secuencial' ? ' selected' : '') + '>Secuencial (en este orden)</option>' +
+            '<option value="optimo"' + (modo === 'optimo' ? ' selected' : '') + '>Mejor ruta (optimiza y regresa a base)</option>' +
+            '</select>' +
+            '<label class="rpm-lbl"><input type="checkbox" id="rpm-circuito"' + (_planEdit.circuito || modo === 'optimo' ? ' checked' : '') + (modo === 'optimo' ? ' disabled' : '') + '> Regresar al origen</label>' +
+            '</div>' +
+            '<div class="rpm-hint">En modo <b>mejor ruta</b> las paradas no fijadas se reordenan por cercania y el recorrido cierra en el origen. Usa <b>Fijar</b> para respetar el orden de una parada.</div>' +
+            '<div class="rpm-stops">' + filas + '</div>' +
+            '<div class="rpm-add">' +
+            '<input type="text" id="rpm-buscar" placeholder="Buscar geocerca, municipio o lugar..." autocomplete="off">' +
+            '<button class="rpm-mini" id="rpm-agregar" title="Anadir el texto como lugar">Anadir</button>' +
+            '<div class="rpm-sug" id="rpm-sug"></div>' +
+            '</div>' +
+            '<div class="rpm-hint">Escribe para ver sugerencias de <b>geocercas</b> y <b>municipios</b> (OpenStreetMap); Enter anade el texto como lugar.</div>' +
+            '</div>' +
+            '<div class="rpm-foot">' +
+            '<button id="rpm-cancelar">Cancelar</button>' +
+            '<button id="rpm-guardar">Solo guardar</button>' +
+            '<button class="primary" id="rpm-guardar-trazar">Guardar y trazar</button>' +
+            '</div>' +
+            '</div>';
+        byId('rpm-x').onclick = cerrarEditorParadas;
+        byId('rpm-cancelar').onclick = cerrarEditorParadas;
+        byId('rpm-guardar').onclick = () => guardarEditorParadas(false);
+        byId('rpm-guardar-trazar').onclick = () => guardarEditorParadas(true);
+        const modoEl = byId('rpm-modo');
+        modoEl.onchange = () => {
+            _planEdit.modo = modoEl.value;
+            if (modoEl.value === 'optimo') _planEdit.circuito = true;
+            renderEditorParadas();
+        };
+        const circEl = byId('rpm-circuito');
+        if (circEl) circEl.onchange = () => { _planEdit.circuito = circEl.checked; };
+        el.querySelectorAll('.rpm-pin').forEach((b) => {
+            b.onclick = () => { const i = +b.dataset.i; _planEdit.paradas[i].fijo = !_planEdit.paradas[i].fijo; renderEditorParadas(); };
+        });
+        el.querySelectorAll('.rpm-del').forEach((b) => {
+            b.onclick = () => { _planEdit.paradas.splice(+b.dataset.i, 1); renderEditorParadas(); };
+        });
+        el.querySelectorAll('.rpm-up').forEach((b) => {
+            b.onclick = () => { const i = +b.dataset.i; const a = _planEdit.paradas; if (i > 0) { const t = a[i - 1]; a[i - 1] = a[i]; a[i] = t; renderEditorParadas(); } };
+        });
+        el.querySelectorAll('.rpm-down').forEach((b) => {
+            b.onclick = () => { const i = +b.dataset.i; const a = _planEdit.paradas; if (i < a.length - 1) { const t = a[i + 1]; a[i + 1] = a[i]; a[i] = t; renderEditorParadas(); } };
+        });
+        const buscar = byId('rpm-buscar');
+        const sug = byId('rpm-sug');
+        const pintarSug = () => {
+            const q = buscar.value.trim();
+            if (!q) { sug.classList.remove('abierto'); sug.innerHTML = ''; return; }
+            const items = catalogoParadas(q, 8);
+            let html = items.map((cand, k) =>
+                '<div class="rpm-sug-item" data-k="' + k + '"><span class="k">' + esc(cand.tipo) + '</span>' +
+                '<span class="t">' + esc(cand.texto || '') + (cand.sub ? ' <span class="k">' + esc(cand.sub) + '</span>' : '') + '</span></div>'
+            ).join('');
+            html += '<div class="rpm-sug-item" data-libre="1"><span class="k">lugar</span><span class="t">Buscar "' + esc(q) + '" en OpenStreetMap</span></div>';
+            sug.innerHTML = html;
+            sug.classList.add('abierto');
+            sug.querySelectorAll('.rpm-sug-item').forEach((n) => {
+                n.onclick = () => {
+                    if (n.dataset.libre) agregarParadaEditor('lugar', q, null);
+                    else {
+                        const cand = items[+n.dataset.k];
+                        agregarParadaEditor(cand.tipo, cand.texto, cand.coords || null, cand);
+                    }
+                    buscar.value = '';
+                    sug.classList.remove('abierto');
+                };
+            });
+        };
+        buscar.oninput = pintarSug;
+        buscar.onfocus = pintarSug;
+        buscar.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const q = buscar.value.trim();
+                if (!q) return;
+                agregarParadaEditor('lugar', q, null);
+                buscar.value = '';
+                sug.classList.remove('abierto');
+            }
+        };
+        byId('rpm-agregar').onclick = () => {
+            const q = buscar.value.trim();
+            if (!q) return;
+            agregarParadaEditor('lugar', q, null);
+            buscar.value = '';
+            sug.classList.remove('abierto');
+        };
+    }
+    function agregarParadaEditor(tipo, texto, coords, extra) {
+        if (!_planEdit) return;
+        if (_planEdit.paradas.length >= 25) { adviceWarn('Maximo 25 paradas', 'Quita alguna antes de anadir otra.'); return; }
+        const p = nuevaParada(tipo, texto, coords);
+        if (extra && extra.zonaId) p.zonaId = extra.zonaId;
+        if (extra && extra.municipioId) p.municipioId = extra.municipioId;
+        _planEdit.paradas.push(p);
+        renderEditorParadas();
+    }
+    function guardarEditorParadas(trazar) {
+        if (!_planEdit) return;
+        const clave = _planEdit.clave, eco = _planEdit.eco;
+        const modo = _planEdit.modo === 'optimo' ? 'optimo' : 'secuencial';
+        const plan = {
+            modo: modo,
+            circuito: (modo === 'optimo') ? true : !!_planEdit.circuito,
+            paradas: _planEdit.paradas
+        };
+        APP.planes[clave] = plan;
+        APP.watchMap[eco] = planATexto(plan);
+        if (APP.orden.indexOf(eco) < 0) APP.orden.push(eco);
+        guardarPlanes();
+        guardarLista();
+        guardarOrden();
+        cerrarEditorParadas();
+        pintarModalLista();
+        paintInfo();
+        if (trazar) {
+            const engine = (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm';
+            planearRuta(eco, plan, null, engine);
+        } else if (APP.config.autoRuta) {
+            autoTrazarRutas();
+        }
     }
 
     /* ====================== VERIFICACION ====================== */
@@ -6305,7 +7297,6 @@ ta.value = '';
             "#rondo-panel.lateral header{cursor:default}\n" +
             "#rondo-panel.lateral.oculto{transform:translateX(100%);opacity:0;pointer-events:none}\n" +
             "#rondo-panel.lateral.izquierda.oculto{transform:translateX(-100%)}\n" +
-            "#rondo-panel.dragging{transition:none;opacity:1}\n" +
             "#rondo-rail{position:fixed;top:50%;transform:translateY(-50%);width:34px;height:104px;background:var(--rondo-accent-grad);\n" +
             "  border:none;border-radius:17px;display:none;align-items:center;justify-content:center;flex-direction:column;gap:2px;\n" +
             "  cursor:pointer;z-index:999999;box-shadow:var(--rondo-elev);color:#fff;font:600 15px var(--rondo-font);\n" +
@@ -7168,7 +8159,49 @@ ta.value = '';
             "#rondo-ayuda p,#rondo-ayuda li{font-size:calc(12.5px * var(--rondo-esc))}\n" +
             "#rondo-ayuda h4{font-size:calc(11px * var(--rondo-esc))}\n" +
             "#rondo-contexto .op{padding:calc(7px * var(--rondo-esc)) calc(12px * var(--rondo-esc));font-size:calc(12.5px * var(--rondo-esc))}\n" +
-            "#rondo-dialog .dlg-foot button{padding:calc(8px * var(--rondo-esc)) calc(16px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n";
+            "#rondo-dialog .dlg-foot button{padding:calc(8px * var(--rondo-esc)) calc(16px * var(--rondo-esc));font-size:calc(12px * var(--rondo-esc))}\n" +
+            /* ── v5.15: editor de paradas multipunto ───────────────── */
+            "#rondo-plan-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:14px}\n" +
+            "#rondo-plan-modal.abierto{display:flex}\n" +
+            "#rondo-plan-modal .rpm-card{width:min(580px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font)}\n" +
+            "#rondo-plan-modal .rpm-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700}\n" +
+            "#rondo-plan-modal .rpm-head .rpm-eco{color:var(--rondo-accent-2)}\n" +
+            "#rondo-plan-modal .rpm-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}\n" +
+            "#rondo-plan-modal .rpm-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}\n" +
+            "#rondo-plan-modal label.rpm-lbl{font-size:11.5px;color:var(--rondo-fg-dim);font-weight:600}\n" +
+            "#rondo-plan-modal select,#rondo-plan-modal input[type=text]{background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font-size:12px}\n" +
+            "#rondo-plan-modal .rpm-stops{display:flex;flex-direction:column;gap:5px}\n" +
+            "#rondo-plan-modal .rpm-stop{display:flex;align-items:center;gap:8px;padding:6px 8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
+            "#rondo-plan-modal .rpm-stop .rpm-idx{width:22px;height:22px;flex:0 0 auto;border-radius:50%;background:var(--rondo-bg-strong);display:inline-flex;align-items:center;justify-content:center;font:700 11px var(--rondo-font)}\n" +
+            "#rondo-plan-modal .rpm-stop .rpm-tipo{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.4px;flex:0 0 auto}\n" +
+            "#rondo-plan-modal .rpm-stop .rpm-txt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-plan-modal .rpm-stop.pinned{border-color:var(--rondo-accent-2)}\n" +
+            "#rondo-plan-modal .rpm-mini{background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:6px;cursor:pointer;padding:3px 7px;font-size:11px}\n" +
+            "#rondo-plan-modal .rpm-mini:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-plan-modal .rpm-add{position:relative;display:flex;gap:6px}\n" +
+            "#rondo-plan-modal .rpm-add input{flex:1}\n" +
+            "#rondo-plan-modal .rpm-sug{position:absolute;top:100%;left:0;right:0;z-index:5;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border);border-radius:8px;margin-top:3px;max-height:210px;overflow-y:auto;box-shadow:0 12px 30px rgba(0,0,0,.4);display:none}\n" +
+            "#rondo-plan-modal .rpm-sug.abierto{display:block}\n" +
+            "#rondo-plan-modal .rpm-sug-item{padding:7px 10px;cursor:pointer;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-plan-modal .rpm-sug-item:last-child{border-bottom:none}\n" +
+            "#rondo-plan-modal .rpm-sug-item:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-plan-modal .rpm-sug-item .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-plan-modal .rpm-sug-item .k{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase}\n" +
+            "#rondo-plan-modal .rpm-foot{display:flex;gap:8px;justify-content:flex-end;padding:11px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-plan-modal .rpm-foot button{padding:7px 14px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font-weight:600}\n" +
+            "#rondo-plan-modal .rpm-foot button.primary{background:var(--rondo-accent);color:#fff;border-color:transparent}\n" +
+            "#rondo-plan-modal .rpm-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
+            /* ── v5.15: geocercas enriquecidas ─────────────────────── */
+            "#rondo-panel .rondo-geo-kpis{display:flex;gap:6px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-geo-kpi{flex:1;min-width:70px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-panel .rondo-geo-kpi b{font-size:15px;color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-geo-kpi span{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.3px}\n" +
+            "#rondo-panel .rondo-geo-filters{display:flex;gap:6px;flex-wrap:wrap;align-items:center}\n" +
+            "#rondo-panel .rondo-geo-filters input{flex:1;min-width:110px}\n" +
+            "#rondo-panel .rondo-geo-role{font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.3px;flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-geo-card.rol-base .rondo-geo-role{color:var(--rondo-ok-fg);border-color:rgba(67,160,71,.5)}\n" +
+            "#rondo-panel .rondo-geo-card.rol-carga .rondo-geo-role{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.5)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n";
 
         const style = makeEl('style');
         style.textContent = css;
@@ -7184,9 +8217,6 @@ ta.value = '';
     }
     function numRow(id, txt) {
         return '<label>' + txt + ' <input type="number" id="' + id + '"></label>';
-    }
-    function textRow(id, txt, ph) {
-        return '<label class="full">' + txt + '<textarea id="' + id + '"' + (ph ? ' placeholder="' + esc(ph) + '"' : '') + '></textarea></label>';
     }
     function buildUI() {
         mainBtn = makeEl('button', { innerHTML: '<span class="rondo-usym">' + UIS.gear + '</span> Automatizar Unidades', id: 'rondo-btn-main', className: 'rondo-btn', title: 'Abrir lista de unidades y automatizar ventanas' });
@@ -7347,6 +8377,7 @@ ta.value = '';
              '<span data-sev="bajo">Bajas</span>' +
              '<span style="flex:1"></span>' +
              '<button type="button" class="accbtn rondo-ia-batch-btn" id="rondo-ia-batch" title="Analizar todos los avisos visibles con la IA y obtener un ranking de los mas urgentes" style="font-size:11px;padding:2px 8px;display:none"><span class="rondo-usym sm">' + UIS.robot + '</span> Analizar lote</button>' +
+             '<button type="button" class="accbtn rondo-ia-batch-btn" id="rondo-ia-flota" title="Revision proactiva de toda la flota con la IA: unidades que requieren atencion, riesgos y recomendaciones" style="font-size:11px;padding:2px 8px;display:none"><span class="rondo-usym sm">' + UIS.robot + '</span> Analizar flota</button>' +
              '</div>' +
              '<div id="rondo-lista-alertas"></div>' +
              '</div>' +
@@ -7387,6 +8418,28 @@ ta.value = '';
             '<span class="rondo-zbar-info"><b id="rondo-geo-count">0</b> geocercas</span>' +
             '<button class="mini" id="rondo-geo-recargar" title="Volver a consultar las geocercas de la plataforma"><span class="rondo-usym">' + UIS.refresh + '</span> Recargar</button>' +
             '<button class="mini" id="rondo-geo-configurar" title="Ajustes > General: Cargar geocercas"><span class="rondo-usym">' + UIS.gear + '</span> Ajustes</button>' +
+            '</div>' +
+            '<div class="rondo-geo-kpis" id="rondo-geo-kpis">' +
+            '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-total">0</b><span>Geocercas</span></div>' +
+            '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-ocupadas">0</b><span>Con unidades</span></div>' +
+            '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-base">0</b><span>Base</span></div>' +
+            '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-carga">0</b><span>Carga</span></div>' +
+            '</div>' +
+            '<div class="rondo-geo-filters">' +
+            '<input id="rondo-geo-buscar" class="filtro" placeholder="Buscar geocerca o unidad\u2026">' +
+            '<select id="rondo-geo-orden" class="filtro" title="Ordenar">' +
+            '<option value="nombre">Nombre (A-Z)</option>' +
+            '<option value="unidades">Mas unidades</option>' +
+            '<option value="area">Mayor area</option>' +
+            '</select>' +
+            '<select id="rondo-geo-rol" class="filtro" title="Filtrar por rol">' +
+            '<option value="todas">Todas</option>' +
+            '<option value="base">Base</option>' +
+            '<option value="carga">Carga</option>' +
+            '<option value="ocupadas">Con unidades</option>' +
+            '</select>' +
+            '<button class="mini" id="rondo-geo-csv" title="Descargar CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
+            '<button class="mini" id="rondo-geo-geo" title="Descargar GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
             '</div>' +
             '<div class="rondo-geo-list"><div id="rondo-body-zonas" class="rondo-geo-cards"></div></div>' +
             '</div>' +
@@ -7701,6 +8754,9 @@ ta.value = '';
             checkRow('c-r-desvio', 'Desvío de ruta') +
             numRow('c-desvio-m', 'Desvío mayor a (m)') +
             numRow('c-desvio-min', 'Desvío sostenido (min)') +
+            checkRow('c-desvio-municipio', 'No marcar desvío dentro del municipio (OpenStreetMap)') +
+            numRow('c-desvio-municipio-m', 'Tolerancia dentro del municipio (m)') +
+            numRow('c-parada-llegada', 'Radio de llegada a cada parada (m)') +
             checkRow('c-r-retorno', 'Retorno / viaje cancelado') +
             numRow('c-retorno-m', 'Radio de origen (m)') +
             numRow('c-retorno-pct', 'Retroceso mínimo (%)') +
@@ -7968,9 +9024,6 @@ ta.value = '';
             '<span class="rondo-rail-txt">PANEL</span>';
         railEl.classList.toggle('mostrar', APP.panelHidden);
     }
-    function placePanel() {
-        // No hay modo flotante: nada que recolocar.
-    }
     function attachDraggables() {
         (function dragBar() {
             let activo = false, dx = 0, dy = 0;
@@ -7999,56 +9052,11 @@ ta.value = '';
             barraEl.addEventListener('pointercancel', end);
         })();
 
-         (function dragPanel() {
-            const head = byId('rondo-drag');
-            let activo = false, dx = 0, dy = 0;
-            head.addEventListener('pointerdown', (e) => {
-                if (e.button !== 0) return;
-                if (e.target.closest('.rondo-iconbtn')) return;
-                if (esLateral()) return;
-                activo = true;
-                panelEl.classList.add('dragging');
-                const r = panelEl.getBoundingClientRect();
-                dx = e.clientX - r.left; dy = e.clientY - r.top;
-                try { head.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
-                e.preventDefault();
-            });
-            head.addEventListener('pointermove', (e) => {
-                if (!activo) return;
-                panelEl.style.left = (e.clientX - dx) + 'px';
-                panelEl.style.top = (e.clientY - dy) + 'px';
-                panelEl.style.bottom = 'auto';
-            });
-            const end = () => { if (activo) { activo = false; savePanelPos(); panelEl.classList.remove('dragging'); } };
-            head.addEventListener('pointerup', end);
-            head.addEventListener('pointercancel', end);
-        })();
-
-        if (typeof ResizeObserver !== 'undefined') {
-            const ro = new ResizeObserver(() => {
-                if (esLateral()) return;
-                const w = panelEl.offsetWidth;
-                const h = panelEl.offsetHeight;
-                APP.panelSize = { w: w, h: h };
-                writeJSON(LS.panelsize, APP.panelSize);
-            });
-            ro.observe(panelEl);
-        }
-
+        // v5.15: se elimino el modo flotante. El panel es siempre barra
+        // lateral; la barra de botones sigue siendo arrastrable.
         window.addEventListener('resize', () => {
             placeBar();
-            if (esLateral()) { aplicarModoPanel(); return; }
-            placePanel();
-            const r = panelEl.getBoundingClientRect();
-            APP.panelSize = { w: r.width, h: r.height };
-            writeJSON(LS.panelsize, APP.panelSize);
         });
-    }
-    function savePanelPos() {
-        if (!panelEl) return;
-        const r = panelEl.getBoundingClientRect();
-        APP.panelPos = { x: r.left, y: r.top };
-        writeJSON(LS.panelpos, APP.panelPos);
     }
 
     /* ====================== PAINT ====================== */
@@ -8599,11 +9607,179 @@ ta.value = '';
             s.classList.toggle('activo', s.dataset.sev === (APP.filtSever || 'todas'));
         });
     }
+    /* ====================== GEOCERCAS: ANALISIS Y EXPORT (v5.15) ====================== */
+    function zonaRol(z) {
+        const n = (z && z.n) || '';
+        if (isBase(n)) return 'base';
+        if (esZonaCarga(n)) return 'carga';
+        return 'normal';
+    }
+    function zonaAreaM2(z) {
+        if (!z) return 0;
+        const c = centroDeZona(z) || { lat: 0, lon: 0 };
+        const mx = 111320 * Math.cos(rad(c.lat)), my = 110540;
+        if (z.t === 3 || (z.b && z.b.cen_x != null)) {
+            const r = +(z.w || z.r || 0);
+            return Math.PI * r * r;
+        }
+        const xy = (a) => {
+            const la = (a && a.y != null) ? +a.y : (Array.isArray(a) ? +a[1] : null);
+            const lo = (a && a.x != null) ? +a.x : (Array.isArray(a) ? +a[0] : null);
+            return (la == null || lo == null) ? null : [lo * mx, la * my];
+        };
+        let pts = z.p;
+        if (typeof pts === 'string') { try { pts = JSON.parse(pts); } catch (_) { pts = null; } }
+        if (Array.isArray(pts) && pts.length >= 3) {
+            let a2 = 0;
+            let prev = xy(pts[pts.length - 1]);
+            for (let i = 0; i < pts.length; i++) {
+                const cur = xy(pts[i]);
+                if (!cur || !prev) { prev = cur; continue; }
+                a2 += prev[0] * cur[1] - cur[0] * prev[1];
+                prev = cur;
+            }
+            return Math.abs(a2 / 2);
+        }
+        if (z.b && z.b.min_x != null) {
+            const w = (z.b.max_x - z.b.min_x) * mx, h = (z.b.max_y - z.b.min_y) * my;
+            return Math.abs(w * h);
+        }
+        return 0;
+    }
+    function zonaGeometry(z) {
+        const c = centroDeZona(z);
+        if ((z.t === 3 || (z.b && z.b.cen_x != null)) && c) return { type: 'Point', coordinates: [c.lon, c.lat] };
+        let pts = z.p;
+        if (typeof pts === 'string') { try { pts = JSON.parse(pts); } catch (_) { pts = null; } }
+        if (Array.isArray(pts) && pts.length >= 3) {
+            const ring = pts.map((a) => {
+                const la = (a && a.y != null) ? +a.y : +a[1];
+                const lo = (a && a.x != null) ? +a.x : +a[0];
+                return [lo, la];
+            });
+            if (ring.length && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) ring.push(ring[0]);
+            return { type: 'Polygon', coordinates: [ring] };
+        }
+        return c ? { type: 'Point', coordinates: [c.lon, c.lat] } : null;
+    }
+    function zonasStats(unidades) {
+        let ocupadas = 0, base = 0, carga = 0, areaM2 = 0;
+        for (let i = 0; i < APP.zonas.length; i++) {
+            const z = APP.zonas[i];
+            const rol = zonaRol(z);
+            if (rol === 'base') base++;
+            else if (rol === 'carga') carga++;
+            areaM2 += zonaAreaM2(z);
+            let occ = false;
+            for (let k = 0; k < unidades.length; k++) {
+                const u = unidades[k];
+                if (u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)) { occ = true; break; }
+            }
+            if (occ) ocupadas++;
+        }
+        return { total: APP.zonas.length, ocupadas, base, carga, areaM2 };
+    }
+    function geocercasSubsetVisible() {
+        // Devuelve las geocercas segun el filtro/rol actuales (para export).
+        const f = (APP.geoFiltro || '').toLowerCase();
+        const rol = APP.geoRol || 'todas';
+        const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
+        return APP.zonas.filter((z) => {
+            const r = zonaRol(z);
+            if (rol !== 'todas' && rol !== r && !(rol === 'ocupadas' && unidades.some((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)))) return false;
+            if (f) {
+                const ecos = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)).map((u) => u.info.eco);
+                if (!((z.n || '').toLowerCase().indexOf(f) >= 0 || ecos.some((e) => (e || '').toLowerCase().indexOf(f) >= 0))) return false;
+            }
+            return true;
+        });
+    }
+    function exportarGeocercasCSV() {
+        const items = geocercasSubsetVisible();
+        if (!items.length) { adviceWarn('Sin geocercas', 'Nada que exportar con los filtros actuales'); return; }
+        const escCsv = (c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"';
+        const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
+        const filas = [['nombre', 'rol', 'area_km2', 'lat', 'lon', 'unidades']];
+        for (let i = 0; i < items.length; i++) {
+            const z = items[i];
+            const c = centroDeZona(z) || {};
+            const ecos = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)).map((u) => u.info.eco);
+            filas.push([z.n || ('Zona ' + z.id), zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3), c.lat, c.lon, ecos.join(' ')]);
+        }
+        const csv = filas.map((r) => r.map(escCsv).join(',')).join('\n');
+        const a = makeEl('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })) });
+        a.download = 'rondo_geocercas_' + new Date().toISOString().slice(0, 10) + '.csv';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        adviceOk('Geocercas exportadas', items.length + ' zonas');
+    }
+    function exportarGeocercasGeoJSON() {
+        const items = geocercasSubsetVisible();
+        if (!items.length) { adviceWarn('Sin geocercas', 'Nada que exportar con los filtros actuales'); return; }
+        const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
+        const features = items.map((z) => {
+            const ecos = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)).map((u) => u.info.eco);
+            const geom = zonaGeometry(z);
+            return {
+                type: 'Feature',
+                properties: { nombre: z.n || ('Zona ' + z.id), rol: zonaRol(z), area_km2: +(zonaAreaM2(z) / 1e6).toFixed(3), unidades: ecos },
+                geometry: geom || { type: 'Point', coordinates: [0, 0] }
+            };
+        });
+        descargarJSON({ type: 'FeatureCollection', features }, 'rondo_geocercas_' + new Date().toISOString().slice(0, 10) + '.geojson');
+        adviceOk('Geocercas exportadas', items.length + ' zonas');
+    }
+    // Anade una geocerca como parada del plan de una unidad vigilada.
+    function elegirUnidadParaGeocerca(z) {
+        if (!z) return;
+        const vigiladas = (APP.unidades || []).filter(shouldWatch).map((u) => parseUnitName(u)).filter((i) => i.eco || i.clave);
+        if (!vigiladas.length) {
+            adviceWarn('Sin unidades vigiladas', 'Vigila una unidad para asignarle paradas. Puedes hacerlo en Automatizar Unidades.');
+            return;
+        }
+        let elegido = vigiladas[0].eco || vigiladas[0].clave;
+        const opciones = vigiladas.map((i) => {
+            const eco = i.eco || i.clave;
+            return '<option value="' + esc(eco) + '">' + esc(eco) + (i.placa ? ' \u00b7 ' + esc(i.placa) : '') + '</option>';
+        }).join('');
+        abrirDialogo({
+            icon: UIS.route,
+            titulo: 'Usar geocerca como parada',
+            okText: 'Anadir',
+            html: '<p>Anade <b>' + esc(z.n || ('Zona ' + z.id)) + '</b> como parada del plan de:</p>' +
+                '<select id="rondo-geo-unit" class="filtro" style="width:100%">' + opciones + '</select>',
+            onOpen: (el) => {
+                const sel = el.querySelector('#rondo-geo-unit');
+                if (sel) { elegido = sel.value; sel.addEventListener('change', () => { elegido = sel.value; }); }
+            },
+            onOk: () => {
+                const eco = elegido;
+                const it = unitByEco(eco);
+                const clave = it ? it.info.clave : eco;
+                const plan = (it ? planDe(it.info) : null) || { modo: 'secuencial', circuito: false, paradas: [] };
+                plan.paradas = (plan.paradas || []).concat([nuevaParada('geocerca', z.n || ('Zona ' + z.id), centroDeZona(z))]);
+                APP.planes[clave] = plan;
+                APP.watchMap[eco] = planATexto(plan);
+                if (APP.orden.indexOf(eco) < 0) APP.orden.push(eco);
+                guardarPlanes(); guardarLista(); guardarOrden();
+                adviceOk('Parada anadida', (z.n || '') + ' \u2192 ' + eco);
+                if (APP.config.autoRuta) planearRuta(eco, plan, null, (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
+            }
+        });
+    }
+
     function paintGeocercas() {
         const body = byId('rondo-body-zonas');
         const countEl = byId('rondo-geo-count');
         const total = APP.zonas.length;
         if (countEl) countEl.textContent = total;
+        const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
+        const stats = zonasStats(unidades);
+        const setK = (id, v) => { const e = byId(id); if (e) e.textContent = v; };
+        setK('rondo-geo-kpi-total', stats.total);
+        setK('rondo-geo-kpi-ocupadas', stats.ocupadas);
+        setK('rondo-geo-kpi-base', stats.base);
+        setK('rondo-geo-kpi-carga', stats.carga);
         if (!body) return;
         if (!APP.config.loadZones || !total) {
             let hint = 'Activa <b>Cargar geocercas</b> en Ajustes &gt; General para verlas.';
@@ -8626,36 +9802,48 @@ ta.value = '';
             if (b) b.addEventListener('click', () => recargarGeocercas());
             return;
         }
-        const unidades = APP.unidades.filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
-        const f = (APP.filtro || '').toLowerCase();
-        const cards = [];
-        let ocupadas = 0;
-        for (let i = 0; i < APP.zonas.length; i++) {
-            const z = APP.zonas[i];
-            const dentro = unidades.filter((u) => u.st.online && inZone(u.st.lat, u.st.lon, z));
+        const f = (APP.geoFiltro || '').toLowerCase();
+        const rol = APP.geoRol || 'todas';
+        let lista = APP.zonas.map((z) => {
+            const dentro = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z));
             const ecos = dentro.map((u) => u.info.eco).filter(Boolean);
-            if (f) {
-                const hit = ecos.some((e) => e.toLowerCase().indexOf(f) >= 0) || ((z.n || '').toLowerCase().indexOf(f) >= 0);
-                if (!hit) continue;
-            }
-            if (ecos.length) ocupadas++;
-            cards.push(
-                '<div class="rondo-geo-card' + (ecos.length ? ' ocupada' : '') + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
+            return { z: z, ecos: ecos, rol: zonaRol(z), area: zonaAreaM2(z) };
+        });
+        if (rol === 'base' || rol === 'carga') lista = lista.filter((x) => x.rol === rol);
+        else if (rol === 'ocupadas') lista = lista.filter((x) => x.ecos.length);
+        if (f) {
+            lista = lista.filter((x) => ((x.z.n || '').toLowerCase().indexOf(f) >= 0) || x.ecos.some((e) => (e || '').toLowerCase().indexOf(f) >= 0));
+        }
+        const orden = APP.geoOrden || 'nombre';
+        lista.sort((a, b) => {
+            if (orden === 'unidades') return b.ecos.length - a.ecos.length || (a.z.n || '').localeCompare(b.z.n || '', 'es');
+            if (orden === 'area') return b.area - a.area;
+            return (a.z.n || '').localeCompare(b.z.n || '', 'es');
+        });
+        const cards = lista.map((x) => {
+            const z = x.z;
+            const rolTxt = x.rol === 'base' ? 'Base' : (x.rol === 'carga' ? 'Carga' : 'Normal');
+            const areaTxt = x.area ? fmtArea(x.area / 1e6) : '';
+            return '<div class="rondo-geo-card' + (x.ecos.length ? ' ocupada' : '') + ' rol-' + x.rol + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
                 '<span class="rondo-geo-dot"></span>' +
                 '<div class="rondo-geo-body">' +
                 '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) + '</b>' +
                 '<span class="rondo-geo-inside">' +
-                (ecos.length
-                    ? esc(ecos.slice(0, 8).join(' \u00b7 ')) + (ecos.length > 8 ? ' +' + (ecos.length - 8) : '')
+                (x.ecos.length
+                    ? esc(x.ecos.slice(0, 8).join(' \u00b7 ')) + (x.ecos.length > 8 ? ' +' + (x.ecos.length - 8) : '')
                     : 'sin unidades dentro') +
                 '</span>' +
                 '</div>' +
-                '<span class="rondo-geo-badge">' + ecos.length + '</span>' +
-                '</div>'
-            );
-        }
+                '<span class="rondo-geo-role">' + rolTxt + (areaTxt ? ' \u00b7 ' + areaTxt : '') + '</span>' +
+                '<span class="rondo-geo-acc">' +
+                '<button class="mini rondo-geo-usar" data-zona="' + esc(z.n || '') + '" title="Anadir como parada a una unidad"><span class="rondo-usym">' + UIS.route + '</span></button>' +
+                '<button class="mini rondo-geo-copy" data-zona="' + esc(z.n || '') + '" title="Copiar nombre y centro"><span class="rondo-usym">' + UIS.copy + '</span></button>' +
+                '</span>' +
+                '<span class="rondo-geo-badge">' + x.ecos.length + '</span>' +
+                '</div>';
+        });
         setHtml(body, cards.join('') || '<div class="rondo-geo-empty">' + emptyState(UIS.filter, LANG.sinCoin,
-            'Ninguna geocerca coincide con el filtro actual.') + '</div>');
+            'Ninguna geocerca coincide con los filtros actuales.') + '</div>');
     }
     // Muestra el panel de la pestana Zonas segun el segmentado (geocercas|riesgo).
     function aplicarZonasVista() {
@@ -8731,26 +9919,35 @@ ta.value = '';
         const tarjeta = (info, st) => {
             const eco = info.clave;
             const r = rutaDe(info);
-            const memo = APP.snapMemo[eco] || (APP.snapMemo[eco] = { idx: 0 });
-            const s = (st && st.online && st.lat != null && r) ? snapRuta(st.lat, st.lon, r, memo) : null;
-            const desviado = !!(s && s.dist > APP.config.desvioM);
-            const llego = !!(s && s.progreso >= 0.95);
+            const er = estadoRuta(info, st);
+            const s = er.snap || null;
+            const desviado = !!er.desviado;
+            const llego = !!er.llego;
             const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
             const color = llego ? 'var(--rondo-ok-fg)' : (desviado ? 'var(--rondo-bad-fg)' : 'var(--rondo-accent-2)');
             const dest = r.destinoTexto || (r.destino.lat.toFixed(4) + ',' + r.destino.lon.toFixed(4));
             const etaSeg = s ? calcularETA(s, r, st.vel) : null;
             const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min ETA' : '';
+            const totalP = er.totalParadas || (r.paradas ? r.paradas.length : 0);
+            const metaParada = totalP > 1
+                ? '<span class="regla">parada ' + Math.min(totalP, (er.llegadas || 0) + (llego ? 0 : 1)) + '/' + totalP + '</span>'
+                : '';
+            const proxima = (!llego && er.parada) ? '<span>siguiente: ' + esc(er.parada.texto || '') + '</span>' : '';
+            const modoTxt = r.optimo ? 'mejor ruta' : 'secuencial';
             return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
                 '<span class="ico rondo-usym" style="color:' + color + '">' + UIS.route + '</span>' +
                 '<div class="cuerpo"><b>' + esc(eco || info.nombre) + ' · ' + est + '</b>' +
-                '<span>' + esc(dest) + ' · ' + Math.round(r.total / 1000) + ' km · ' + esc(r.modo || '') + '</span>' +
+                '<span>' + esc(dest) + ' · ' + Math.round(r.total / 1000) + ' km · ' + esc(r.modo || '') + ' \u00b7 ' + modoTxt + '</span>' +
                 '<div class="meta">' +
                 '<span class="regla">' + (s ? 'progreso ' + Math.round(s.progreso * 100) + '%' : 'sin datos') + '</span>' +
+                metaParada +
                 (s ? '<span>' + Math.round(s.dist) + ' m de la ruta</span>' : '') +
                 (etaTxt ? '<span>' + etaTxt + '</span>' : '') +
                 (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min OSRM</span>' : '') +
+                proxima +
                 '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
                 '</div></div>' +
+                '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas del plan"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
                 '<button class="mini rondo-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="rondo-usym">' + UIS.export + '</span></button>' +
                 '<button class="mini rondo-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
                 '<button class="mini rondo-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
@@ -9627,8 +10824,8 @@ ta.value = '';
             version: 6, ts: Date.now(),
             config: APP.config, barra: APP.barra,
             seleccion: Array.from(APP.seleccion), dismissed: Array.from(APP.dismissed),
-            watchMap: APP.watchMap, limites: APP.limites, rutas: APP.rutas,
-            panelPos: APP.panelPos, panelSize: APP.panelSize
+            watchMap: APP.watchMap, limites: APP.limites, rutas: APP.rutas, planes: APP.planes,
+            panelSize: APP.panelSize
         };
         const a = makeEl('a', { href: URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })) });
         a.download = 'rondo_config_' + new Date().toISOString().slice(0, 10) + '.json';
@@ -9660,9 +10857,9 @@ ta.value = '';
                     }
                     if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeSession(SS.limites, APP.limites); }
                     if (d.rutas && typeof d.rutas === 'object') { APP.rutas = d.rutas; guardarRutas(); }
-                    if (d.panelPos) { APP.panelPos = d.panelPos; writeJSON(LS.panelpos, APP.panelPos); }
+                    if (d.planes && typeof d.planes === 'object') { APP.planes = d.planes; guardarPlanes(); }
                     if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
-                    applyBar(); applyTheme(); placePanel();
+                    applyBar(); applyTheme();
                     refresh();
                     paintIASwitch();
                     paintAlertas();
@@ -9795,6 +10992,8 @@ ta.value = '';
                 // el menu contextual, y por ultimo las ventanas modales.
                 if (dialogoAbierto()) { cerrarDialogo(); return; }
                 if (ctxEl && ctxEl.style.display === 'flex') { ctxEl.style.display = 'none'; return; }
+                const planM = byId('rondo-plan-modal');
+                if (planM && planM.classList.contains('abierto')) { cerrarEditorParadas(); return; }
                 const ventanas = [modalEl, cfgWinEl, ayudaEl];
                 for (let i = ventanas.length - 1; i >= 0; i--) {
                     const w = ventanas[i];
@@ -9865,9 +11064,14 @@ ta.value = '';
             }, { peligro: true, okText: 'Vaciar' });
         });
         document.getElementById('rondo-modal-lista').addEventListener('click', (e) => {
-            const eco = e.target.dataset && e.target.dataset.eco;
+            const b = e.target.closest && e.target.closest('button');
+            const eco = (b && b.dataset && b.dataset.eco) || (e.target.dataset && e.target.dataset.eco);
             if (!eco) return;
-            if (e.target.classList.contains('rondo-del')) {
+            if (b && b.classList.contains('rondo-plan-open')) {
+                abrirEditorParadas(eco);
+                return;
+            }
+            if (b && b.classList.contains('rondo-del')) {
                 quitarDeLista(eco);
                 pintarModalLista();
                 paintInfo();
@@ -9882,6 +11086,10 @@ ta.value = '';
             const destino = e.target.value.trim();
             if (APP.watchMap[eco] !== undefined) {
                 APP.watchMap[eco] = destino;
+                // Al escribir a mano, descarta el plan estructurado previo para
+                // que el texto editable sea la fuente del plan.
+                const it0 = unitByEco(eco);
+                if (it0 && APP.planes[it0.info.clave]) { delete APP.planes[it0.info.clave]; guardarPlanes(); }
                 guardarLista();
                 paintInfo();
                 if (APP.config.autoRuta && destino) {
@@ -9954,12 +11162,13 @@ ta.value = '';
                     rondoConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
                         if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
                     }, { peligro: true, okText: 'Eliminar', icon: UIS.close });
-                } else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
+                } else if (b.classList.contains('rondo-plan-edit')) abrirEditorParadas(eco);
+                else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
                 else if (b.classList.contains('rondo-traza-geo')) exportTraza(eco);
                 else if (b.classList.contains('rondo-ruta-calc')) {
                     const it = unitByEco(eco);
                     const r = it ? rutaDe(it.info) : APP.rutas[eco];
-                    if (r) planearRuta(eco, r.destinoTexto || (r.destino.lat + ',' + r.destino.lon), null, r.modo);
+                    if (r) planearRuta(eco, r.plan || r.destinoTexto || (r.destino.lat + ',' + r.destino.lon), null, r.modo);
                 }
             });
         }
@@ -10169,6 +11378,7 @@ ta.value = '';
                 { sep: 1 },
                 { id: 'ruta-plan', icon: UIS.route, label: 'Planear ruta (OSRM)' },
                 { id: 'ruta-astar', icon: UIS.route, label: 'Planear ruta (A*)' },
+                { id: 'ruta-paradas', icon: UIS.watch, label: 'Editar paradas (multipunto)' },
                 { id: 'ruta-geo', icon: UIS.export, label: 'Exportar ruta GeoJSON' },
                 { id: 'ruta-del', icon: UIS.close, label: 'Eliminar ruta' },
                 { id: 'traza-geo', icon: UIS.csv, label: 'Exportar traza GeoJSON' },
@@ -10214,6 +11424,7 @@ ta.value = '';
                     }, { icon: UIS.route, okText: 'Calcular', placeholder: 'Monterrey, NL  ·  o  25.68,-100.31' });
                 }
             } else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
+            else if (acc === 'ruta-paradas') abrirEditorParadas(eco);
             else if (acc === 'ruta-del') {
                 rondoConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
                     if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
@@ -10362,6 +11573,9 @@ ta.value = '';
             g('c-r-desvio').checked = !!APP.config.reglas.desvio;
             g('c-desvio-m').value = APP.config.desvioM;
             g('c-desvio-min').value = APP.config.desvioMin;
+            if (g('c-desvio-municipio')) g('c-desvio-municipio').checked = !!APP.config.desvioMunicipio;
+            if (g('c-desvio-municipio-m')) g('c-desvio-municipio-m').value = APP.config.desvioMunicipioM;
+            if (g('c-parada-llegada')) g('c-parada-llegada').value = APP.config.paradaLlegadaM;
             g('c-r-retorno').checked = !!APP.config.reglas.retorno;
             g('c-retorno-m').value = APP.config.retornoM;
             g('c-retorno-pct').value = APP.config.retornoPct;
@@ -10426,6 +11640,8 @@ ta.value = '';
         // v5.14: analisis en lote desde la cabecera de Avisos.
         const iaBatchBtn = byId('rondo-ia-batch');
         if (iaBatchBtn) iaBatchBtn.addEventListener('click', () => aiAnalizarLoteUI());
+        const iaFlotaBtn = byId('rondo-ia-flota');
+        if (iaFlotaBtn) iaFlotaBtn.addEventListener('click', () => aiFlotaUI());
         // v5.14: deteccion de patrones desde la pestana IA.
         const iaPatronesBtn = byId('c-ia-patrones');
         if (iaPatronesBtn) iaPatronesBtn.addEventListener('click', () => aiPatronesUI());
@@ -10620,6 +11836,9 @@ ta.value = '';
             cf.reglas.desvio = g('c-r-desvio').checked;
             cf.desvioM = Math.max(30, isoNum(g('c-desvio-m').value, cf.desvioM));
             cf.desvioMin = Math.max(1, isoNum(g('c-desvio-min').value, cf.desvioMin));
+            cf.desvioMunicipio = !!(g('c-desvio-municipio') && g('c-desvio-municipio').checked);
+            cf.desvioMunicipioM = clamp(isoNum(g('c-desvio-municipio-m').value, cf.desvioMunicipioM), 100, 30000);
+            cf.paradaLlegadaM = clamp(isoNum(g('c-parada-llegada').value, cf.paradaLlegadaM), 50, 3000);
             cf.reglas.retorno = g('c-r-retorno').checked;
             cf.retornoM = Math.max(50, isoNum(g('c-retorno-m').value, cf.retornoM));
             cf.retornoPct = clamp(isoNum(g('c-retorno-pct').value, cf.retornoPct), 5, 90);
@@ -10650,7 +11869,6 @@ ta.value = '';
             cf.horario.on = g('c-hor-on').checked;
             cf.horario.desde = g('c-hor-a').value || DEFAULTS.horario.desde;
             cf.horario.hasta = g('c-hor-b').value || DEFAULTS.horario.hasta;
-            cf.panelMode = 'lateral';
             cf.panelLado = g('c-panel-lado').value || 'derecha';
             cf.panelAncho = clamp(isoNum(g('c-panel-ancho').value, cf.panelAncho), 360, 900);
             cf.ocultarAlClicFuera = g('c-panel-clicfuera').checked;
@@ -10941,6 +12159,34 @@ ta.value = '';
         if (geoRec) geoRec.addEventListener('click', () => recargarGeocercas());
         const geoCfg = byId('rondo-geo-configurar');
         if (geoCfg) geoCfg.addEventListener('click', () => abrirAjustes());
+        // v5.15: filtros, orden y acciones de las geocercas.
+        const geoBuscar = byId('rondo-geo-buscar');
+        let _geoBusqT = null;
+        if (geoBuscar) geoBuscar.addEventListener('input', () => {
+            clearTimeout(_geoBusqT);
+            _geoBusqT = setTimeout(() => { APP.geoFiltro = geoBuscar.value.trim(); paintGeocercas(); }, 120);
+        });
+        const geoOrdenEl = byId('rondo-geo-orden');
+        if (geoOrdenEl) geoOrdenEl.addEventListener('change', () => { APP.geoOrden = geoOrdenEl.value; paintGeocercas(); });
+        const geoRolEl = byId('rondo-geo-rol');
+        if (geoRolEl) geoRolEl.addEventListener('change', () => { APP.geoRol = geoRolEl.value; paintGeocercas(); });
+        const geoCsv = byId('rondo-geo-csv');
+        if (geoCsv) geoCsv.addEventListener('click', exportarGeocercasCSV);
+        const geoGeo = byId('rondo-geo-geo');
+        if (geoGeo) geoGeo.addEventListener('click', exportarGeocercasGeoJSON);
+        const geoBody = byId('rondo-body-zonas');
+        if (geoBody) geoBody.addEventListener('click', (ev) => {
+            const b = ev.target.closest && ev.target.closest('button');
+            if (!b) return;
+            const nombre = b.dataset.zona;
+            const z = (APP.zonas || []).find((x) => (x.n || '') === nombre);
+            if (!z) return;
+            if (b.classList.contains('rondo-geo-usar')) elegirUnidadParaGeocerca(z);
+            else if (b.classList.contains('rondo-geo-copy')) {
+                const c = centroDeZona(z);
+                copiarAlPortapapeles((z.n || '') + (c ? '\n' + c.lat.toFixed(6) + ',' + c.lon.toFixed(6) : ''), 'Geocerca copiada', z.n || '');
+            }
+        });
         // ── Botones existentes (recargar / limpiar / archivo) ─────────
         const rec = byId('rondo-riesgo-recargar');
         if (rec) rec.addEventListener('click', () => cargarRiesgo());
@@ -11054,7 +12300,6 @@ ta.value = '';
         applyBar();
         applyTheme();
         aplicarModoPanel();
-        placePanel();
         paintVerifyButton();
         updateNoMolestar();
         paintIASwitch();
