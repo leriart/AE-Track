@@ -99,6 +99,30 @@
             "#rondo-panel #rondo-version-chip[data-estado=\"stale\"]{color:var(--rondo-bad-fg,#b71c1c);border-color:rgba(183,28,28,.5);background:rgba(183,28,28,.12);animation:rondo-ver-pulse 1.6s ease-in-out infinite}\n" +
             "#rondo-panel .rondo-rutas-bar{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
             "#rondo-panel .rondo-rutas-pend{flex:1;min-width:0;font-size:11.5px;color:var(--rondo-warn-fg);font-weight:600}\n" +
+            // v6.0.7: tarjeta de ruta rediseñada (datos legibles y ordenados).
+            "#rondo-panel #rondo-lista-rutas{display:flex;flex-direction:column;gap:8px;padding:8px}\n" +
+            "#rondo-panel .rondo-ruta-card{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:4px solid var(--rondo-accent-2);border-radius:var(--rondo-radius-sm);padding:8px 10px;display:flex;flex-direction:column;gap:6px}\n" +
+            "#rondo-panel .rondo-ruta-card.est-ok{border-left-color:var(--rondo-ok)}\n" +
+            "#rondo-panel .rondo-ruta-card.est-desv{border-left-color:var(--rondo-bad)}\n" +
+            "#rondo-panel .rondo-ruta-card.est-sin{border-left-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-ruta-card.est-pend{border-left-color:var(--rondo-warn)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-head{display:flex;align-items:center;gap:7px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-eco{font:700 14px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-est{font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;border-radius:9px;padding:2px 7px;border:1px solid var(--rondo-border);white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-est-ok{color:var(--rondo-ok-fg);border-color:rgba(67,160,71,.5);background:rgba(67,160,71,.12)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-est-desv{color:var(--rondo-bad-fg);border-color:rgba(183,28,28,.5);background:rgba(183,28,28,.12)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-est-ruta{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.55);background:rgba(var(--rondo-accent-rgb),.1)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-est-sin{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-est-pend{color:var(--rondo-warn-fg);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-km{font:700 12.5px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-modo{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-actions{margin-left:auto;display:inline-flex;gap:3px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-actions .mini{padding:2px 5px}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-dest{font-size:12.5px;color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-progress{height:6px;background:var(--rondo-bg);border-radius:3px;overflow:hidden}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-progress-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-meta{display:flex;flex-wrap:wrap;gap:5px}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
             "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.45)}50%{box-shadow:0 0 0 5px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
@@ -1447,6 +1471,9 @@
             checkRow('c-zonas', 'Cargar geocercas') +
             checkRow('c-geo', 'Geocodificación inversa') +
             checkRow('c-hist', 'Consultar histórico de detención') +
+            '<h4>Búsqueda de lugares / municipios</h4>' +
+            '<label class="full">País (código ISO, ej. <b>mx</b>; vacío = sin restricción) <input type="text" id="c-geo-pais" maxlength="40" placeholder="mx"></label>' +
+            numRow('c-geo-bias', 'Sesgo por cercanía a la unidad (km, 0 = sin sesgo)') +
             '</div>' +
             '<div class="cfg-pane" data-cfg="reglas" style="display:none">' +
             '<h4>Umbrales</h4>' +
@@ -2967,6 +2994,18 @@
                 '</div>';
         }).join(''));
     }
+    // v6.0.7: formato legible de distancias y duraciones para la tarjeta de rutas.
+    function rxFmtDist(m) {
+        if (!isFinite(m)) return '-';
+        if (m < 1000) return Math.round(m) + ' m';
+        const km = m / 1000;
+        return (km >= 100 ? Math.round(km) : Math.round(km * 10) / 10).toLocaleString('es-MX') + ' km';
+    }
+    function rxFmtDur(seg) {
+        const min = Math.round((seg || 0) / 60);
+        if (min < 60) return min + ' min';
+        return Math.floor(min / 60) + ' h ' + (min % 60) + ' min';
+    }
     function paintRutas() {
         paintViajes();
         const cont = byId('rondo-lista-rutas');
@@ -2988,32 +3027,28 @@
             const r = rutaDe(info);
             const er = estadoRuta(info, st);
             const s = er.snap || null;
-            const desviado = !!er.desviado;
-            const llego = !!er.llego;
+            const llego = !!er.llego, desviado = !!er.desviado;
             const est = !s ? 'SIN POSICION' : (llego ? 'LLEGO' : (desviado ? 'DESVIADO' : 'EN RUTA'));
-            const color = llego ? 'var(--rondo-ok-fg)' : (desviado ? 'var(--rondo-bad-fg)' : 'var(--rondo-accent-2)');
+            const estClase = llego ? 'ok' : (desviado ? 'desv' : (s ? 'ruta' : 'sin'));
             const dest = r.destinoTexto || (r.destino.lat.toFixed(4) + ',' + r.destino.lon.toFixed(4));
             const etaSeg = s ? calcularETA(s, r, st.vel) : null;
-            const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min ETA' : '';
+            const pct = s ? Math.round(s.progreso * 100) : 0;
             const totalP = er.totalParadas || (r.paradas ? r.paradas.length : 0);
-            const metaParada = totalP > 1
-                ? '<span class="regla">parada ' + Math.min(totalP, (er.llegadas || 0) + (llego ? 0 : 1)) + '/' + totalP + '</span>'
-                : '';
-            const proxima = (!llego && er.parada) ? '<span>siguiente: ' + esc(er.parada.texto || '') + '</span>' : '';
-            const modoTxt = r.optimo ? 'mejor ruta' : 'secuencial';
-            return '<div class="alerta" style="border-left:4px solid ' + color + '">' +
-                '<span class="ico rondo-usym" style="color:' + color + '">' + UIS.route + '</span>' +
-                '<div class="cuerpo"><b>' + esc(eco || info.nombre) + ' · ' + est + '</b>' +
-                '<span>' + esc(dest) + ' · ' + Math.round(r.total / 1000) + ' km · ' + esc(r.modo || '') + ' \u00b7 ' + modoTxt + '</span>' +
-                '<div class="meta">' +
-                '<span class="regla">' + (s ? 'progreso ' + Math.round(s.progreso * 100) + '%' : 'sin datos') + '</span>' +
-                metaParada +
-                (s ? '<span>' + Math.round(s.dist) + ' m de la ruta</span>' : '') +
-                (etaTxt ? '<span>' + etaTxt + '</span>' : '') +
-                (r.duracion ? '<span>' + Math.round(r.duracion / 60) + ' min OSRM</span>' : '') +
-                proxima +
-                '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
-                '</div></div>' +
+            const chips = [];
+            if (s) chips.push('progreso ' + pct + '%');
+            if (totalP > 1) chips.push('parada ' + Math.min(totalP, (er.llegadas || 0) + (llego ? 0 : 1)) + '/' + totalP);
+            if (s) chips.push('a ' + rxFmtDist(s.dist) + ' del trazado');
+            if (etaSeg != null) chips.push('ETA ' + rxFmtDur(etaSeg));
+            if (r.duracion) chips.push(esc(r.modo || '') + ' ' + rxFmtDur(r.duracion));
+            if (!llego && er.parada) chips.push('siguiente: ' + esc(er.parada.texto || ''));
+            chips.push(new Date(r.creada).toLocaleString().slice(0, 16));
+            return '<div class="rondo-ruta-card est-' + estClase + '">' +
+                '<div class="rr-head">' +
+                '<span class="rr-eco">' + esc(eco || info.nombre) + '</span>' +
+                '<span class="rr-est rr-est-' + estClase + '">' + esc(est) + '</span>' +
+                '<span class="rr-km">' + rxFmtDist(r.total) + '</span>' +
+                '<span class="rr-modo">' + esc(r.optimo ? 'mejor ruta' : 'secuencial') + ' \u00b7 ' + esc(r.modo || '') + '</span>' +
+                '<span class="rr-actions">' +
                 '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas del plan"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
                 '<button class="mini rondo-ruta-mapa" data-eco="' + esc(eco) + '" title="Dibujar la ruta encima del mapa de la plataforma"><span class="rondo-usym">' + UIS.map + '</span></button>' +
                 '<button class="mini rondo-ruta-gmaps" data-eco="' + esc(eco) + '" title="Abrir la ruta en Google Maps (con paradas)"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
@@ -3021,33 +3056,46 @@
                 '<button class="mini rondo-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
                 '<button class="mini rondo-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
                 '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button>' +
+                '</span>' +
+                '</div>' +
+                '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
+                (totalP > 1 || s ? '<div class="rr-progress"><div class="rr-progress-fill" style="width:' + pct + '%"></div></div>' : '') +
+                '<div class="rr-meta">' + chips.map((c) => '<span class="rr-chip">' + c + '</span>').join('') + '</div>' +
                 '</div>';
         };
         let html = pendientes.map((x) => {
             const eco = x.info.clave;
             const dest = watchDest(x.info);
-            const intentos = APP.rutaIntentos[eco] || 0;
-            return '<div class="alerta" style="border-left:4px solid var(--rondo-warn-fg)">' +
-                '<span class="ico rondo-usym" style="color:var(--rondo-warn-fg)">' + UIS.route + '</span>' +
-                '<div class="cuerpo"><b>' + esc(eco) + ' \u00b7 SIN TRAZAR</b>' +
-                '<span>' + esc(dest) + '</span>' +
-                '<div class="meta"><span class="regla">pendiente</span>' +
-                (intentos ? '<span>' + intentos + ' intento(s)</span>' : '') +
-                (intentos >= 2 ? '<span>usa Trazar pendientes</span>' : '') +
-                '</div></div>' +
+            const intentos = (APP.rutaIntentos && APP.rutaIntentos[eco]) || 0;
+            return '<div class="rondo-ruta-card est-pend">' +
+                '<div class="rr-head">' +
+                '<span class="rr-eco">' + esc(eco) + '</span>' +
+                '<span class="rr-est rr-est-pend">SIN TRAZAR</span>' +
+                '<span class="rr-actions">' +
                 '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
                 '<button class="mini rondo-ruta-trazar" data-eco="' + esc(eco) + '" title="Trazar ahora"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
+                '</span>' +
+                '</div>' +
+                '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
+                '<div class="rr-meta">' +
+                '<span class="rr-chip">pendiente</span>' +
+                (intentos ? '<span class="rr-chip">' + intentos + ' intento(s)</span>' : '') +
+                (intentos >= 2 ? '<span class="rr-chip">usa Trazar pendientes</span>' : '') +
+                '</div>' +
                 '</div>';
         }).join('');
         html += filas.map((x) => tarjeta(x.info, x.st)).join('');
         sinUnidad.forEach((eco) => {
             const r = APP.rutas[eco];
             if (!r) return;
-            html += '<div class="alerta" style="border-left:4px solid var(--rondo-fg-mute);opacity:.75">' +
-                '<span class="ico rondo-usym">' + UIS.route + '</span>' +
-                '<div class="cuerpo"><b>' + esc(eco) + ' · FUERA DE VIGILANCIA</b>' +
-                '<span>' + esc(r.destinoTexto || '') + ' · ' + Math.round(r.total / 1000) + ' km</span></div>' +
-                '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button>' +
+            html += '<div class="rondo-ruta-card est-sin" style="opacity:.75">' +
+                '<div class="rr-head">' +
+                '<span class="rr-eco">' + esc(eco) + '</span>' +
+                '<span class="rr-est rr-est-sin">FUERA DE VIGILANCIA</span>' +
+                '<span class="rr-km">' + rxFmtDist(r.total) + '</span>' +
+                '<span class="rr-actions"><button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button></span>' +
+                '</div>' +
+                '<div class="rr-dest" title="' + esc(r.destinoTexto || '') + '">' + esc(r.destinoTexto || '') + '</div>' +
                 '</div>';
         });
         setHtml(cont, html);
@@ -4675,6 +4723,8 @@
             g('c-zonas').checked = !!APP.config.loadZones;
             g('c-geo').checked = !!APP.config.geocode;
             g('c-hist').checked = !!APP.config.historico;
+            const cGeoPais = byId('c-geo-pais'); if (cGeoPais) cGeoPais.value = APP.config.geoPais || '';
+            const cGeoBias = byId('c-geo-bias'); if (cGeoBias) cGeoBias.value = (APP.config.geoBiasKm != null ? APP.config.geoBiasKm : DEFAULTS.geoBiasKm);
             g('c-verif').checked = !!APP.config.verificar;
             g('c-verif-seg').value = APP.config.verifSeg;
             g('c-tema').value = APP.config.theme;
@@ -4939,6 +4989,8 @@
             cf.loadZones = g('c-zonas').checked;
             cf.geocode = g('c-geo').checked;
             cf.historico = g('c-hist').checked;
+            cf.geoPais = String((g('c-geo-pais') || {}).value || '').trim().toLowerCase().replace(/[^a-z,]/g, '');
+            cf.geoBiasKm = clamp(isoNum((g('c-geo-bias') || {}).value, cf.geoBiasKm), 0, 2000);
             cf.verificar = g('c-verif').checked;
             cf.verifSeg = Math.max(2, isoNum(g('c-verif-seg').value, cf.verifSeg));
             cf.theme = g('c-tema').value;

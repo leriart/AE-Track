@@ -563,6 +563,11 @@
         loadZones: true,
         geocode: true,
         historico: true,
+        // v6.0.7: busqueda de lugares/municipios. Pais ISO (por defecto Mexico)
+        // y sesgo por cercania a la unidad para no traer resultados en ingles
+        // ni de otros paises.
+        geoPais: 'mx',
+        geoBiasKm: 200,
         verificar: false,
         verifSeg: 6,
         theme: 'oscuro',
@@ -838,6 +843,7 @@
         rutaIntentos: {},
         rutaTrazando: false,
         rutaRetryTimer: null,
+        geoRef: null,        // punto de referencia para sesgar busquedas OSM (v6.0.7)
         caravanaEco: '',
 
         // Riesgo: zonas de alto riesgo para flota, consultadas en cada arranque
@@ -1687,7 +1693,7 @@ function _extraerZonasDe(items) {
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(q), {}, 15000);
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es' + rxGeoParams() + '&q=' + encodeURIComponent(q), {}, 15000);
             let out = null;
             if (Array.isArray(d) && d.length) {
                 const lat = parseFloat(d[0].lat), lon = parseFloat(d[0].lon);
@@ -1909,6 +1915,26 @@ function _extraerZonasDe(items) {
         if (APP.municipios.length > 150) APP.municipios = APP.municipios.slice(-150);
         writeJSON(LS.municipios, APP.municipios);
     }
+    // v6.0.7: parametros extra de Nominatim: pais (countrycodes) y sesgo por
+    // cercania (viewbox) al punto de referencia (la unidad), para priorizar
+    // resultados cercanos y en el idioma/pais correctos (antes salian en
+    // ingles o de otros paises, p. ej. "SAN FRANCISCO").
+    function rxGeoParams(ref) {
+        let s = '';
+        const cfg = APP.config || {};
+        const pais = String(cfg.geoPais || '').trim().toLowerCase();
+        if (pais) s += '&countrycodes=' + encodeURIComponent(pais);
+        const km = Number(cfg.geoBiasKm);
+        const r = ref || (APP && APP.geoRef);
+        if (r && r.lat != null && r.lon != null && Number.isFinite(km) && km > 0) {
+            const dLat = km / 111;
+            const dLon = km / (111 * Math.max(0.15, Math.cos(r.lat * Math.PI / 180)));
+            // viewbox = lonMin,latMax,lonMax,latMin (sesgo, no restringe).
+            s += '&viewbox=' + (r.lon - dLon).toFixed(5) + ',' + (r.lat + dLat).toFixed(5) + ',' +
+                (r.lon + dLon).toFixed(5) + ',' + (r.lat - dLat).toFixed(5);
+        }
+        return s;
+    }
     // Consulta (o recupera de cache) un municipio de OSM. Devuelve el objeto
     // normalizado con centro/poligono/bbox, o null si no se pudo resolver.
     async function municipioOSM(texto, recargar, soloMunicipio) {
@@ -1922,7 +1948,7 @@ function _extraerZonasDe(items) {
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=5&accept-language=es&q=' + encodeURIComponent(q);
+            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=5&accept-language=es' + rxGeoParams() + '&q=' + encodeURIComponent(q);
             const d = await _rxFetchJson(url, {}, 15000);
             if (!Array.isArray(d) || !d.length) return null;
             let cand = d.map(municipioDesdeNominatim).filter(Boolean);
@@ -2073,7 +2099,7 @@ function _extraerZonasDe(items) {
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=es&q=' + encodeURIComponent(q), {}, 15000);
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=es' + rxGeoParams() + '&q=' + encodeURIComponent(q), {}, 15000);
             const arr = Array.isArray(d) ? d : [];
             const out = arr.map((r) => {
                 const a = r.address || {};
@@ -2390,13 +2416,19 @@ function _extraerZonasDe(items) {
         // Resuelve cada parada (geocerca, municipio, coord o lugar).
         advice('Resolviendo paradas', plan.paradas.length + ' parada(s)...');
         const resueltas = [];
-        for (let i = 0; i < plan.paradas.length; i++) {
-            const p = await resolverParada(plan.paradas[i]);
-            if (!p) {
-                adviceErr('Parada no resuelta', 'No se pudo ubicar "' + plan.paradas[i].texto + '"');
-                return null;
+        // v6.0.7: sesga las busquedas OSM hacia el origen de la ruta (unidad).
+        APP.geoRef = origen;
+        try {
+            for (let i = 0; i < plan.paradas.length; i++) {
+                const p = await resolverParada(plan.paradas[i]);
+                if (!p) {
+                    adviceErr('Parada no resuelta', 'No se pudo ubicar "' + plan.paradas[i].texto + '"');
+                    return null;
+                }
+                resueltas.push(p);
             }
-            resueltas.push(p);
+        } finally {
+            APP.geoRef = null;
         }
         // Optimiza el orden si el plan es "mejor ruta".
         let paradas = resueltas;

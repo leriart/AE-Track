@@ -4143,6 +4143,9 @@ ta.value = '';
             if (_rpmOsmTimer) clearTimeout(_rpmOsmTimer);
             _rpmOsmTimer = setTimeout(async () => {
                 if (buscar.value.trim() !== q) return;
+                // Sesga las sugerencias hacia la posicion de la unidad.
+                const itRef = _planEdit ? unitByEco(_planEdit.eco) : null;
+                APP.geoRef = (itRef && itRef.st.lat != null) ? { lat: itRef.st.lat, lon: itRef.st.lon } : null;
                 const osm = await sugerenciasOSM(q);
                 if (!osm.length || buscar.value.trim() !== q) return;
                 const vistos = new Set(locales.map((x) => norm(x.texto)));
