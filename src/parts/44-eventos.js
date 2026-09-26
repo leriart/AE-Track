@@ -133,8 +133,6 @@
         byId('rondo-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
         const rutasTrazar = byId('rondo-rutas-trazar');
         if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
-        const rutasVentanas = byId('rondo-rutas-ventanas');
-        if (rutasVentanas) rutasVentanas.addEventListener('click', () => rxMapaVentanasToggle());
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
         byId('rondo-informe').addEventListener('click', exportInforme);
@@ -158,7 +156,7 @@
                         planearRuta(eco, destino, null, (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
                     }
                 }
-                else if (b.classList.contains('rondo-ruta-mapa')) rxMapaDibujarRuta(eco);
+                else if (b.classList.contains('rondo-ruta-mapa')) rxRutaMiniMapa(eco);
                 else if (b.classList.contains('rondo-ruta-gmaps')) rxRutaGoogleMaps(eco);
                 else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
                 else if (b.classList.contains('rondo-traza-geo')) exportTraza(eco);
@@ -379,8 +377,7 @@
                 { id: 'limite', icon: UIS.speed, label: 'Límite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
                 { id: 'ruta-paradas', icon: UIS.route, label: 'Destinos y paradas (multipunto)…' },
-                { id: 'ruta-mapa', icon: UIS.map, label: 'Dibujar ruta en el mapa de la plataforma' },
-                { id: 'ruta-mapa-diag', icon: UIS.info, label: 'Diagnosticar mapa (consola)' },
+                { id: 'ruta-mapa', icon: UIS.map, label: 'Ver ruta en el mini-mapa' },
                 { id: 'ruta-gmaps', icon: UIS.pin, label: 'Abrir ruta en Google Maps' },
                 { id: 'ruta-osm', icon: UIS.zone, label: 'Abrir ruta en OpenStreetMap' },
                 { id: 'ruta-geo', icon: UIS.export, label: 'Exportar ruta GeoJSON' },
@@ -388,6 +385,7 @@
                 { id: 'traza-geo', icon: UIS.csv, label: 'Exportar traza GeoJSON' },
                 { id: 'viaje-analizar', icon: UIS.clock, label: 'Analizar viaje (historial)' },
                 { id: 'viaje-geo', icon: UIS.export, label: 'Exportar viaje GeoJSON' },
+                { id: 'replay', icon: UIS.moving, label: 'Reproducir el dia (replay)' },
                 { id: 'odo-reset', icon: UIS.refresh, label: 'Reiniciar odómetro' },
                 { sep: 1 },
                 { id: 'mapa-osm', icon: UIS.zone, label: 'Ver en OpenStreetMap' },
@@ -423,8 +421,7 @@
                     adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }, { type: 'number', icon: UIS.speed, okText: 'Guardar' });
             } else if (acc === 'ruta-paradas') abrirEditorParadas(eco);
-            else if (acc === 'ruta-mapa') rxMapaDibujarRuta(eco);
-            else if (acc === 'ruta-mapa-diag') rxMapaDiagnostico();
+            else if (acc === 'ruta-mapa') rxRutaMiniMapa(eco);
             else if (acc === 'ruta-gmaps') rxRutaGoogleMaps(eco);
             else if (acc === 'ruta-osm') rxRutaOSM(eco);
             else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
@@ -435,6 +432,7 @@
             } else if (acc === 'traza-geo') exportTraza(eco);
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
+            else if (acc === 'replay') rxReplayAbrirUnidad(eco);
             else if (acc === 'odo-reset') {
                 rondoConfirm('Reiniciar odómetro', 'El odómetro acumulado de ' + eco + ' volverá a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: UIS.refresh });
             }

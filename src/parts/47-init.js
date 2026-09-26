@@ -16,6 +16,7 @@
         bindKeys();
         bindEvents();
         bindCaravanaSelect();
+        bindReplay();
         bindRiesgo();
 
         const ok = await wialonReady();

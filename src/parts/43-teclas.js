@@ -5,7 +5,7 @@
             const enCampo = !!(tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable));
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
                 // v5.14.8: Alt+7 = Chat IA (solo si la IA esta configurada).
-                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana', '7': 'chat' };
+                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana', '7': 'chat', '8': 'replay' };
                 if (tabs[e.key] && (tabs[e.key] !== 'chat' || (APP.config.iaHabilitada && APP.config.iaApiKey))) {
                     setTab(tabs[e.key]);
                     if (APP.panelHidden) togglePanel();

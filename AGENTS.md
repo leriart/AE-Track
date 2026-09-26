@@ -73,7 +73,7 @@ Lee `ARCHITECTURE.md` para el mapa completo y `CONTRIBUTING.md` para el flujo.
 | geo-rutas | 12–20 | geodesia, Douglas-Peucker, OSM/OSRM/A*, municipios, busqueda difusa, paradas, rutas, caravana, analisis de viaje |
 | notif-ia | 21–24 | nombre/estado de unidades, notificaciones, IA de razonamiento, dialogos |
 | engine | 25–32 | motor de reglas, zonas de riesgo, refresh, ventanas, lista vigilada, editor de paradas, verificacion, tema |
-| ui | 33–47 | CSS, build de UI, drag, paint, geocercas, caravana, export, actualizaciones, menu, teclas, eventos, bindings, init |
+| ui | 33–49 | CSS, build de UI, drag, paint, geocercas, caravana, export, actualizaciones, menu, teclas, eventos, bindings, init, mapa, replay |
 
 ## Definicion de "mejora"
 

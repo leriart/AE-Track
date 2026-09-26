@@ -116,7 +116,7 @@ deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
 La barra **recuerda como la dejaste**: el lado, el ancho y si estaba abierta o
 cerrada. Al recargar la pagina se restaura en ese estado.
 
-## Las siete pestanas
+## Las ocho pestanas
 
 En la parte superior del panel:
 
@@ -156,6 +156,9 @@ En la parte superior del panel:
   cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
+- **Replay**: reproduce el recorrido de una unidad en un dia, con mini-mapa,
+  linea de tiempo y eventos (paradas, geocercas, excesos, desvios). Ver
+  [Reproducir el dia (Replay)](#reproducir-el-dia-replay).
 - **Chat IA**: asistente conversacional. Solo aparece si la IA esta
   habilitada con una API key en Ajustes > IA. Sirve tanto para consultar
   el estado de la flota como para resolver dudas del propio Rondo. Ver
@@ -574,19 +577,13 @@ eco=Monterrey | geo:CEDIS Norte | mun:Saltillo
 En la pestana **Rutas** (y en el clic derecho de una unidad) hay acciones para
 ver la ruta:
 
-- **Dibujar en el mapa de la plataforma**: agrega la ruta como una **capa
-  vectorial encima** del mapa (WebGIS, Bing, OpenStreetMap...). Rondo detecta el
-  motor del mapa (Leaflet, OpenLayers, Mapbox o WebGIS) y dibuja la polilinea y
-  las paradas. Volver a pulsar la quita.
+- **Mini-mapa**: abre una ventana con un **mini-mapa propio de Rondo** (tiles
+  de OpenStreetMap) con el trazo y los marcadores (origen, paradas y destino).
+  Arrastra para moverlo y usa la rueda para acercar. No depende del mapa de la
+  plataforma, por lo que funciona siempre.
 - **Google Maps**: abre la ruta en Google Maps con las paradas como *waypoints*
   (alternativa garantizada).
 - **OpenStreetMap**: abre el trayecto origen-destino en OSM.
-- **Diagnosticar mapa**: si el boton de dibujar no funciona, esto imprime en la
-  consola (F12) que motor de mapa detecto, para poder ajustarlo.
-- **Ventanas**: dibuja la ruta **en el mapa de cada ventana de unidad abierta**
-  (si el mapa de la plataforma es Leaflet). Pulsar de nuevo lo detiene. Se
-  mantiene actualizado mientras haya ventanas abiertas, aunque el panel este
-  oculto.
 
 El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
 
@@ -597,6 +594,24 @@ El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
 > mantenga `desvioMin` (5 min). Si la unidad sigue dentro de un municipio por el
 > que pasa la ruta, se tolera hasta `desvioMunicipioM` (3000 m). Ajustable en
 > Ajustes &gt; Rutas.
+
+### Reproducir el dia (Replay)
+
+La pestana **Replay** reproduce el recorrido de una unidad en un dia:
+
+1. Elige la **unidad** y la **fecha** (hoy por defecto) y pulsa **Cargar**.
+2. Con **Play/Pausa** y la velocidad (**1 min/s** a **1 h/s**) se reproduce el
+   dia; la barra inferior sirve para saltar a un momento concreto.
+3. El **mini-mapa** (tiles de OpenStreetMap) muestra el trazo completo, el tramo
+   ya recorrido y la posicion actual. Arrastra para moverlo, rueda para acercar
+   y **Centrar** para volver a encuadrarlo.
+4. La **lista de eventos** marca **paradas largas**, **entradas/salidas de
+   geocerca**, **excesos de velocidad** y **desvios** respecto a la ruta
+   planificada. Haz clic en un evento para saltar a ese momento.
+
+Es solo lectura (historial de la plataforma). Atajo: **Alt + 8**. Tambien puedes
+abrirla desde el **clic derecho** sobre una unidad, en **Reproducir el dia
+(replay)**.
 
 ### Carga rapida de rutas (embarque)
 

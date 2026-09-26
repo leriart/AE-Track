@@ -544,7 +544,7 @@ ok('bindings: chatSendBtn -> chatEnviar', /chatSendBtn\.addEventListener\('click
 ok('bindings: Enter envia, Shift+Enter inserta nueva linea', /e\.key === 'Enter' && !e\.shiftKey/.test(src));
 ok('bindings: textarea autoresize', /Math\.min\(140, chatInput\.scrollHeight\)/.test(src));
 ok('bindings: chatClearBtn con confirmacion', /rondoConfirm\('Limpiar conversacion'/.test(src));
-ok('setTab incluye chat en ids', /'dash', 'unidades', 'alertas', 'rutas', 'caravana', 'chat', 'zonas'/.test(src));
+ok('setTab incluye chat y replay en ids', /'dash', 'unidades', 'alertas', 'rutas', 'caravana', 'replay', 'chat', 'zonas'/.test(src));
 ok('setTab pinta chat al cambiar', /else if \(name === 'chat'\) pintarChat\(\)/.test(src));
 ok('toggleIA llama paintTabsChat', /paintIABatchBtn\(\);[\s\S]{0,200}paintTabsChat/.test(src));
 ok('cargarChat al arranque', /cargarChat\(\);[\s\S]{0,200}paintTabsChat\(\)/.test(src));
@@ -610,7 +610,7 @@ ok('ayuda rapida menciona Chat IA', /<b>Chat IA<\/b>: consultas libres a la IA/.
 ok('ayuda rapida tiene seccion Chat con la IA', /<h4>Chat con la IA<\/h4>/.test(src));
 ok('ayuda rapida menciona Alt+7', /<kbd>Alt<\/kbd>\+<kbd>7<\/kbd>: Chat IA/.test(src));
 ok('MANUAL.md tiene seccion Chat con la IA', /## Chat con la IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
-ok('MANUAL.md menciona las siete pestanas', /## Las siete pestanas/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+ok('MANUAL.md menciona las ocho pestanas', /## Las ocho pestanas/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 ok('MANUAL.md lista regla Detenida en geocerca', /Detenida en geocerca \| Lleva parada dentro de una geocerca/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 ok('MANUAL.md lista regla Aproximacion a zona de riesgo', /Aproximacion a zona de riesgo \| Una unidad en movimiento/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 ok('MANUAL.md atajo Alt+7', /Alt.*\+.*7.*Chat IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
@@ -777,8 +777,8 @@ ok('CSS del modal de carga', /#rondo-carga-modal \.carga-card\{/.test(src));
 ok('sugerencias en linea de OSM', /async function sugerenciasOSM\(/.test(src) && /nominatim\.openstreetmap\.org\/search\?format=jsonv2/.test(src));
 ok('editor de paradas usa sugerencias OSM (debounce)', /_rpmOsmTimer/.test(src) && /sugerenciasOSM\(q\)/.test(src));
 ok('carga rapida compara tambien municipios', /function cargaCatalogo\(/.test(src) && /municipiosRiesgo/.test(src));
-ok('ruta en el mapa: deteccion multi-motor', /function rxMapaCandidatos\(/.test(src) && /openlayers/.test(src) && /mapbox/.test(src) && /leaflet/.test(src));
-ok('ruta en el mapa: dibujar, quitar y diagnostico', /function rxMapaDibujarRuta\(/.test(src) && /function rxMapaQuitar\(/.test(src) && /function rxMapaDiagnostico\(/.test(src));
+ok('mini-mapa propio de OSM (sin depender del mapa de la plataforma)', /function rxMiniMapa\(/.test(src) && /function rxRutaMiniMapa\(/.test(src) && /tile\.openstreetmap\.org/.test(src) && /rondo-mm-tiles/.test(src));
+ok('mini-mapa: encuadre, tiles y marcadores', /function rxMMFit\(/.test(src) && /function rxMMTiles\(/.test(src) && /function rxMMMarcasHTML\(/.test(src) && /function rxMMDibujar\(/.test(src));
 ok('ruta en Google Maps y OSM (fallback)', /function rxRutaGoogleMaps\(/.test(src) && /google\.com\/maps\/dir\//.test(src) && /function rxRutaOSM\(/.test(src));
 ok('botones de mapa por ruta', /rondo-ruta-mapa/.test(src) && /rondo-ruta-gmaps/.test(src));
 
@@ -797,7 +797,10 @@ ok('busqueda OSM restringida por pais', /function rxGeoParams\(/.test(src) && /c
 ok('sesgo por cercania a la unidad', /geoBiasKm/.test(src) && /viewbox=/.test(src) && /APP\.geoRef/.test(src));
 ok('tarjeta de rutas rediseñada', /class="rondo-ruta-card/.test(src) && /rr-head/.test(src) && /rr-chip/.test(src) && /rr-progress/.test(src) && /function rxFmtDist\(/.test(src));
 
-ok('ruta en ventanas de vehiculos', /function rxMapaVentanasToggle\(/.test(src) && /function rxMapaVentanasSync\(/.test(src) && /openWindows\(\)/.test(src) && /rondo-rutas-ventanas/.test(src));
+ok('se elimino el overlay del mapa de la plataforma', !/function rxMapaDibujarRuta\(/.test(src) && !/function rxMapaCandidatos\(/.test(src) && !/function rxMapaVentanasToggle\(/.test(src) && !/rondo-rutas-ventanas/.test(src) && !/rxMapaDiagnostico/.test(src));
+
+// v6.0.11: replay del dia.
+ok('replay del dia con mini-mapa propio', /function rxReplayMapaCrear\(/.test(src) && /function rxReplayMarcas\(/.test(src) && /function rxReplayTick\(/.test(src) && /rondo-replay-eco/.test(src) && /rondo-replay-centrar/.test(src));
 
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
 

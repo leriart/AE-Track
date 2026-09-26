@@ -195,6 +195,10 @@
     {
       "file": "48-mapa-ruta.js",
       "chunk": "ui"
+    },
+    {
+      "file": "49-replay.js",
+      "chunk": "ui"
     }
   ]
 }

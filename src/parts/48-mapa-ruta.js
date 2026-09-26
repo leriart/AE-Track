@@ -1,177 +1,228 @@
-    /* ====================== RUTA EN EL MAPA DE LA PLATAFORMA ======================
-     * v6.0.4. Dibuja la ruta planificada de una unidad ENCIMA del mapa de la
-     * plataforma. El overlay es una capa vectorial, asi que funciona con
-     * cualquiera de los mapas base de la plataforma (WebGIS, Bing, OSM...).
+    /* ====================== MINI-MAPA PROPIO + RUTA (v6.0.11) ======================
+     * v6.0.11: se elimino el overlay sobre el mapa de la plataforma (dependia
+     * del motor del mapa y no era fiable). En su lugar, Rondo trae su propio
+     * mini-mapa de tiles de OpenStreetMap: no depende del mapa de la
+     * plataforma, asi que siempre funciona. Se usa para ver una ruta
+     * planificada y para el replay del dia.
      *
-     * Es solo lectura: agrega una capa de dibujo y no toca nada de Wialon.
-     * Se intenta detectar el motor del mapa (Leaflet, OpenLayers, Mapbox o el
-     * WebGIS de Wialon) y, si no se puede, se ofrecen alternativas (Google
-     * Maps / exportar GeoJSON).
+     * Es solo lectura: pide tiles publicos de OSM (con atribucion) y dibuja
+     * encima el trazo y los marcadores.
      */
-    let _rxMapaLayer = null;   // capa/overlay activo
-    let _rxMapaMotor = null;   // 'leaflet' | 'openlayers' | 'mapbox'
-    let _rxMapaInst = null;    // instancia del mapa
-    let _rxMapaClave = null;   // ruta dibujada
-
-    function rxMapaClasificar(o) {
-        if (!o || typeof o !== 'object') return null;
-        try {
-            if (typeof o.addLayer === 'function' && o._container && typeof o.getCenter === 'function') return 'leaflet';
-            if (typeof o.getTargetElement === 'function' && typeof o.getView === 'function' && typeof o.addLayer === 'function') return 'openlayers';
-            if (typeof o.addSource === 'function' && typeof o.addLayer === 'function' && typeof o.getCanvas === 'function') return 'mapbox';
-            if (o.map && typeof o.map.addLayer === 'function') return 'wialon';
-        } catch (_) { /* noop */ }
-        return null;
+    function rxMMLonX(lon, z) { return ((lon + 180) / 360) * Math.pow(2, z) * 256; }
+    function rxMMLatY(lat, z) {
+        const l = clamp(Number(lat) || 0, -85.05112878, 85.05112878);
+        const s = Math.sin(l * Math.PI / 180);
+        return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * Math.pow(2, z) * 256;
     }
-    // Busca una instancia de mapa: nombres tipicos, globals conocidos y, si no,
-    // un escaneo superficial del objeto global de la pagina.
-    function rxMapaCandidatos() {
+    function rxMMMuestrear(arr, max) {
+        if (!arr || arr.length <= max) return arr || [];
+        const paso = Math.ceil(arr.length / max);
         const out = [];
-        const vistos = new Set();
-        const probar = (nombre, obj) => {
-            if (!obj || typeof obj !== 'object' || vistos.has(obj)) return;
-            const motor = rxMapaClasificar(obj);
-            if (motor) { vistos.add(obj); out.push({ nombre: nombre, motor: motor, obj: obj }); }
-        };
-        // Globals conocidos (Wialon WebGIS, Leaflet, OpenLayers, Mapbox).
-        try { probar('webgis', PAGE.webgis); } catch (_) { /* noop */ }
-        try { probar('map', PAGE.map); } catch (_) { /* noop */ }
-        try { probar('mapa', PAGE.mapa); } catch (_) { /* noop */ }
-        try { probar('leafletMap', PAGE.leafletMap); } catch (_) { /* noop */ }
-        try { probar('wialonMap', PAGE.wialonMap); } catch (_) { /* noop */ }
-        try { probar('gmap', PAGE.gmap); } catch (_) { /* noop */ }
-        try { probar('_map', PAGE._map); } catch (_) { /* noop */ }
-        try { if (PAGE.webgis && PAGE.webgis.map) probar('webgis.map', PAGE.webgis.map); } catch (_) { /* noop */ }
-        try { if (PAGE.L && PAGE.L.Map && PAGE.L.Map._instances) Object.keys(PAGE.L.Map._instances).forEach((k) => probar('L.Map#' + k, PAGE.L.Map._instances[k])); } catch (_) { /* noop */ }
-        // Escaneo superficial.
-        try {
-            let n = 0;
-            for (const k in PAGE) {
-                if (n > 4000 || out.length > 3) break;
-                n++;
-                let v = null;
-                try { v = PAGE[k]; } catch (_) { continue; }
-                probar(k, v);
-            }
-        } catch (_) { /* noop */ }
-        // Prefiere motores que sepamos dibujar.
-        const orden = { leaflet: 0, mapbox: 1, openlayers: 2, wialon: 3 };
-        out.sort((a, b) => (orden[a.motor] || 9) - (orden[b.motor] || 9));
+        for (let i = 0; i < arr.length; i += paso) out.push(arr[i]);
+        if (out[out.length - 1] !== arr[arr.length - 1]) out.push(arr[arr.length - 1]);
         return out;
     }
-    function rxMapaDiagnostico() {
-        const c = rxMapaCandidatos();
-        try {
-            console.log('[Rondo] mapas detectados:', c.map((x) => x.nombre + ' (' + x.motor + ')'));
-            console.log('[Rondo] L:', !!PAGE.L, 'ol:', !!PAGE.ol, 'mapboxgl:', !!PAGE.mapboxgl, 'webgis:', !!PAGE.webgis);
-        } catch (_) { /* noop */ }
-        advice(c.length ? 'Mapa detectado' : 'Mapa no detectado',
-            c.length ? (c[0].nombre + ' \u00b7 ' + c[0].motor) : 'Revisa la consola (F12) para mas detalle.');
-        return c;
+    function rxMMPt(inst, lat, lon) {
+        return [rxMMLonX(lon, inst.z) - inst.ox, rxMMLatY(lat, inst.z) - inst.oy];
     }
-    function rxMapaQuitar() {
-        try {
-            if (_rxMapaLayer) {
-                if (_rxMapaMotor === 'leaflet' && typeof _rxMapaLayer.remove === 'function') _rxMapaLayer.remove();
-                else if (_rxMapaMotor === 'openlayers' && _rxMapaInst && typeof _rxMapaInst.removeLayer === 'function') _rxMapaInst.removeLayer(_rxMapaLayer);
-                else if (_rxMapaMotor === 'mapbox' && _rxMapaInst) {
-                    if (_rxMapaInst.getLayer('rondo-ruta-line')) _rxMapaInst.removeLayer('rondo-ruta-line');
-                    if (_rxMapaInst.getLayer('rondo-ruta-pts')) _rxMapaInst.removeLayer('rondo-ruta-pts');
-                    if (_rxMapaInst.getSource('rondo-ruta')) _rxMapaInst.removeSource('rondo-ruta');
-                }
+    function rxMMPuntos(inst) {
+        const out = [];
+        (inst.lineas || []).forEach((ln) => { if (ln && ln.pts) for (let i = 0; i < ln.pts.length; i++) out.push(ln.pts[i]); });
+        (inst.marcas || []).forEach((m) => out.push(m));
+        if (inst.pos) out.push(inst.pos);
+        return out;
+    }
+    function rxMMFit(inst) {
+        const pts = rxMMPuntos(inst);
+        if (!pts.length) return;
+        let latMin = Infinity, latMax = -Infinity, lonMin = Infinity, lonMax = -Infinity;
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
+            if (p.lat < latMin) latMin = p.lat;
+            if (p.lat > latMax) latMax = p.lat;
+            if (p.lon < lonMin) lonMin = p.lon;
+            if (p.lon > lonMax) lonMax = p.lon;
+        }
+        if (!isFinite(latMin)) return;
+        const W = Math.max(80, inst.W), H = Math.max(80, inst.H);
+        if (latMax - latMin < 1e-5 && lonMax - lonMin < 1e-5) {
+            inst.z = 16;
+            inst.ox = rxMMLonX(lonMin, 16) - W / 2;
+            inst.oy = rxMMLatY(latMin, 16) - H / 2;
+            return;
+        }
+        let z = 19;
+        for (; z >= 2; z--) {
+            const pw = rxMMLonX(lonMax, z) - rxMMLonX(lonMin, z);
+            const ph = rxMMLatY(latMin, z) - rxMMLatY(latMax, z);
+            if (pw <= W - 40 && ph <= H - 40) break;
+        }
+        inst.z = clamp(z, 2, 19);
+        const cx = (rxMMLonX(lonMin, inst.z) + rxMMLonX(lonMax, inst.z)) / 2;
+        const cy = (rxMMLatY(latMin, inst.z) + rxMMLatY(latMax, inst.z)) / 2;
+        inst.ox = cx - W / 2;
+        inst.oy = cy - H / 2;
+    }
+    function rxMMTiles(inst) {
+        const z = inst.z;
+        const n = Math.pow(2, z);
+        const x0 = Math.floor(inst.ox / 256), x1 = Math.floor((inst.ox + inst.W) / 256);
+        const y0 = Math.floor(inst.oy / 256), y1 = Math.floor((inst.oy + inst.H) / 256);
+        let html = '';
+        for (let tx = x0; tx <= x1; tx++) {
+            for (let ty = y0; ty <= y1; ty++) {
+                if (ty < 0 || ty >= n) continue;
+                const wx = ((tx % n) + n) % n;
+                const left = tx * 256 - inst.ox;
+                const top = ty * 256 - inst.oy;
+                html += '<img class="rondo-mm-tile" src="https://tile.openstreetmap.org/' + z + '/' + wx + '/' + ty + '.png"' +
+                    ' style="left:' + left + 'px;top:' + top + 'px" alt="" draggable="false" loading="lazy">';
             }
-        } catch (_) { /* noop */ }
-        _rxMapaLayer = null; _rxMapaMotor = null; _rxMapaInst = null; _rxMapaClave = null;
+        }
+        inst.capaTiles.innerHTML = html;
     }
-    function rxMapaRutaActiva() { return !!_rxMapaLayer; }
-
-    function rxMapaDibujarLeaflet(map, L, r, fit) {
-        const grp = L.layerGroup();
-        const pts = r.coords.map((c) => [c[1], c[0]]);
-        L.polyline(pts, { color: '#850D22', weight: 4, opacity: 0.9 }).addTo(grp);
-        if (r.origen) L.circleMarker([r.origen.lat, r.origen.lon], { radius: 6, color: '#2e7d32', fillColor: '#2e7d32', fillOpacity: 1 }).bindTooltip('Origen').addTo(grp);
-        (r.paradas || []).forEach((p, i) => {
-            if (!p.coords) return;
-            L.circleMarker([p.coords.lat, p.coords.lon], { radius: 5, color: '#1565c0', fillColor: '#1565c0', fillOpacity: 1 })
-                .bindTooltip((i + 1) + '. ' + (p.texto || '')).addTo(grp);
+    function rxMMLineaHTML(inst, ln) {
+        if (!ln || !ln.pts || ln.pts.length < 2) return '';
+        const pts = rxMMMuestrear(ln.pts, 2000);
+        let d = '';
+        for (let i = 0; i < pts.length; i++) {
+            const q = rxMMPt(inst, pts[i].lat, pts[i].lon);
+            d += (d ? ' ' : '') + q[0].toFixed(1) + ',' + q[1].toFixed(1);
+        }
+        return '<polyline fill="none" stroke="' + (ln.color || '#850D22') + '" stroke-width="' + (ln.width || 3) +
+            '" stroke-opacity="' + (ln.opacity == null ? 1 : ln.opacity) + '" stroke-linejoin="round" stroke-linecap="round" points="' + d + '"/>';
+    }
+    function rxMMMarcasHTML(inst) {
+        let html = '';
+        (inst.marcas || []).forEach((m) => {
+            if (!m || !isFinite(m.lat) || !isFinite(m.lon)) return;
+            const q = rxMMPt(inst, m.lat, m.lon);
+            html += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (m.radio || 5) +
+                '" fill="' + (m.color || '#1565c0') + '" stroke="#fff" stroke-width="1.5">' +
+                (m.txt ? '<title>' + esc(m.txt) + '</title>' : '') + '</circle>';
         });
-        if (r.destino) L.circleMarker([r.destino.lat, r.destino.lon], { radius: 6, color: '#b71c1c', fillColor: '#b71c1c', fillOpacity: 1 }).bindTooltip('Destino').addTo(grp);
-        grp.addTo(map);
-        if (fit !== false) { try { map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] }); } catch (_) { /* noop */ } }
-        return grp;
+        return html;
     }
-    function rxMapaDibujarMapbox(map, r) {
-        const src = { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: r.coords } } };
-        if (map.getSource('rondo-ruta')) map.removeSource('rondo-ruta');
-        map.addSource('rondo-ruta', src);
-        map.addLayer({ id: 'rondo-ruta-line', type: 'line', source: 'rondo-ruta', paint: { 'line-color': '#850D22', 'line-width': 4, 'line-opacity': 0.9 } });
-        const feat = (r.paradas || []).filter((p) => p.coords).map((p) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.coords.lon, p.coords.lat] } }));
-        feat.unshift({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [r.origen.lon, r.origen.lat] } });
-        map.addSource('rondo-ruta-pts', { type: 'geojson', data: { type: 'FeatureCollection', features: feat } });
-        map.addLayer({ id: 'rondo-ruta-pts', type: 'circle', source: 'rondo-ruta-pts', paint: { 'circle-radius': 5, 'circle-color': '#1565c0' } });
-        try {
-            const xs = r.coords.map((c) => c[0]), ys = r.coords.map((c) => c[1]);
-            map.fitBounds([[Math.min.apply(null, xs), Math.min.apply(null, ys)], [Math.max.apply(null, xs), Math.max.apply(null, ys)]], { padding: 40 });
-        } catch (_) { /* noop */ }
-        return true;
+    function rxMMDibujar(inst, soloDinamico) {
+        const est = inst.svg.querySelector('.rondo-mm-est');
+        const din = inst.svg.querySelector('.rondo-mm-din');
+        if (!soloDinamico && est) {
+            let h = '';
+            (inst.lineas || []).forEach((ln) => { if (ln && !ln.dyn) h += rxMMLineaHTML(inst, ln); });
+            h += rxMMMarcasHTML(inst);
+            est.innerHTML = h;
+        }
+        if (din) {
+            let h = '';
+            (inst.lineas || []).forEach((ln) => { if (ln && ln.dyn) h += rxMMLineaHTML(inst, ln); });
+            if (inst.pos && isFinite(inst.pos.lat)) {
+                const q = rxMMPt(inst, inst.pos.lat, inst.pos.lon);
+                h += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#850D22" stroke="#fff" stroke-width="2"/>';
+            }
+            din.innerHTML = h;
+        }
     }
-    function rxMapaDibujarOL(map, ol, r) {
-        const geom = new ol.geom.LineString(r.coords);
-        if (ol.proj && ol.proj.fromLonLat) geom.transform('EPSG:4326', 'EPSG:3857');
-        const features = [new ol.Feature({ geometry: geom })];
-        (r.paradas || []).forEach((p) => {
-            if (!p.coords) return;
-            const g = new ol.geom.Point([p.coords.lon, p.coords.lat]);
-            if (ol.proj && ol.proj.fromLonLat) g.transform('EPSG:4326', 'EPSG:3857');
-            features.push(new ol.Feature({ geometry: g }));
+    // Crea un mini-mapa dentro de `cont`.
+    // cfg: { lineas:[{pts:[{lat,lon}], color, width, opacity, dyn}], marcas:[{lat,lon,color,radio,txt}], pos }
+    function rxMiniMapa(cont, cfg) {
+        if (!cont) return null;
+        const o = cfg || {};
+        cont.classList.add('rondo-mm');
+        cont.innerHTML = '<div class="rondo-mm-tiles"></div>' +
+            '<svg class="rondo-mm-svg" xmlns="http://www.w3.org/2000/svg"><g class="rondo-mm-est"></g><g class="rondo-mm-din"></g></svg>' +
+            '<div class="rondo-mm-atrib">\u00a9 OpenStreetMap</div>';
+        const inst = {
+            cont: cont,
+            capaTiles: cont.querySelector('.rondo-mm-tiles'),
+            svg: cont.querySelector('.rondo-mm-svg'),
+            lineas: o.lineas || [],
+            marcas: o.marcas || [],
+            pos: o.pos || null,
+            W: 0, H: 0, z: 16, ox: 0, oy: 0
+        };
+        inst.medir = () => {
+            inst.W = Math.max(80, cont.clientWidth || 300);
+            inst.H = Math.max(80, cont.clientHeight || 240);
+            inst.svg.setAttribute('viewBox', '0 0 ' + inst.W + ' ' + inst.H);
+        };
+        inst.render = () => { rxMMTiles(inst); rxMMDibujar(inst, false); };
+        inst.encuadrar = () => { inst.medir(); rxMMFit(inst); inst.render(); };
+        inst.ponerDatos = (d) => {
+            if (!d) return;
+            if (d.lineas) inst.lineas = d.lineas;
+            if (d.marcas) inst.marcas = d.marcas;
+            inst.pos = d.pos || null;
+            inst.encuadrar();
+        };
+        inst.setPos = (lat, lon) => { inst.pos = { lat: lat, lon: lon }; if (inst.svg) rxMMDibujar(inst, true); };
+        inst.setLinea = (i, pts, color, width, opacity) => {
+            inst.lineas[i] = { pts: pts, color: color, width: width, opacity: opacity, dyn: true };
+            if (inst.svg) rxMMDibujar(inst, true);
+        };
+        inst.destruir = () => { try { cont.innerHTML = ''; } catch (_) { /* noop */ } };
+        // Pan con arrastre.
+        let drag = null;
+        cont.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            drag = { x: e.clientX, y: e.clientY, ox: inst.ox, oy: inst.oy };
+            try { cont.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+            e.preventDefault();
         });
-        const source = new ol.source.Vector({ features: features });
-        const layer = new ol.layer.Vector({ source: source, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#850D22', width: 4 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#1565c0' }) }) }) });
-        map.addLayer(layer);
-        try {
-            const ext = source.getExtent();
-            if (ext && map.getView) map.getView().fit(ext, { padding: [30, 30, 30, 30] });
-        } catch (_) { /* noop */ }
-        return layer;
+        cont.addEventListener('pointermove', (e) => {
+            if (!drag) return;
+            inst.ox = drag.ox - (e.clientX - drag.x);
+            inst.oy = drag.oy - (e.clientY - drag.y);
+            rxMMTiles(inst); rxMMDibujar(inst, false);
+        });
+        const fin = () => { drag = null; };
+        cont.addEventListener('pointerup', fin);
+        cont.addEventListener('pointercancel', fin);
+        // Zoom con rueda, centrado en el cursor.
+        cont.addEventListener('wheel', (e) => {
+            const nz = clamp(inst.z + (e.deltaY < 0 ? 1 : -1), 2, 19);
+            if (nz === inst.z) return;
+            e.preventDefault();
+            const rect = cont.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const f = Math.pow(2, nz - inst.z);
+            inst.ox = (inst.ox + mx) * f - mx;
+            inst.oy = (inst.oy + my) * f - my;
+            inst.z = nz;
+            rxMMTiles(inst); rxMMDibujar(inst, false);
+        }, { passive: false });
+        inst.encuadrar();
+        return inst;
     }
-
-    function rxMapaDibujarRuta(eco) {
+    // Abre una ventana con el mini-mapa de la ruta planificada de una unidad.
+    function rxRutaMiniMapa(eco) {
         const it = unitByEco(eco);
         const r = it ? rutaDe(it.info) : (APP.rutas[eco] || null);
-        if (!r || !r.coords || r.coords.length < 2) { adviceWarn('Sin ruta', 'No hay una ruta trazada para ' + eco + '.'); return false; }
-        const clave = (it && it.info.clave) || eco;
-        if (_rxMapaLayer && _rxMapaClave === clave) { rxMapaQuitar(); advice('Ruta quitada del mapa', eco); if (APP.tab === 'rutas') paintRutas(); return true; }
-        const cands = rxMapaCandidatos();
-        if (!cands.length) {
-            adviceWarn('Mapa no detectado', 'Usa "Google Maps" o exporta el GeoJSON. Abre la consola (F12) y pulsa el boton del mapa para diagnosticar.');
-            try { console.log('[Rondo] sin mapa detectado. L=', !!PAGE.L, 'ol=', !!PAGE.ol, 'mapboxgl=', !!PAGE.mapboxgl, 'webgis=', !!PAGE.webgis); } catch (_) { /* noop */ }
-            return false;
-        }
-        const c = cands[0];
-        rxMapaQuitar();
-        try {
-            if (c.motor === 'leaflet') {
-                const L = PAGE.L;
-                _rxMapaLayer = rxMapaDibujarLeaflet(c.obj, L, r);
-                _rxMapaMotor = 'leaflet'; _rxMapaInst = c.obj;
-            } else if (c.motor === 'mapbox') {
-                rxMapaDibujarMapbox(c.obj, r);
-                _rxMapaLayer = true; _rxMapaMotor = 'mapbox'; _rxMapaInst = c.obj;
-            } else if (c.motor === 'openlayers') {
-                _rxMapaLayer = rxMapaDibujarOL(c.obj, PAGE.ol, r);
-                _rxMapaMotor = 'openlayers'; _rxMapaInst = c.obj;
-            } else {
-                adviceWarn('Motor no soportado', 'Mapa "' + c.nombre + '". Exporta el GeoJSON.');
-                return false;
+        if (!r || !r.coords || r.coords.length < 2) { adviceWarn('Sin ruta', 'No hay una ruta trazada para ' + eco + '.'); return; }
+        const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95 }];
+        const marcas = [];
+        if (r.origen) marcas.push({ lat: r.origen.lat, lon: r.origen.lon, color: '#2e7d32', radio: 7, txt: 'Origen' });
+        (r.paradas || []).forEach((p, i) => {
+            if (p.coords) marcas.push({ lat: p.coords.lat, lon: p.coords.lon, color: '#1565c0', radio: 6, txt: (i + 1) + '. ' + (p.texto || '') });
+        });
+        if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 7, txt: 'Destino' });
+        const resumen = Math.round((r.total || 0) / 1000) + ' km' +
+            (r.modo ? ' \u00b7 ' + r.modo : '') + ' \u00b7 ' + ((r.paradas || []).length) + ' parada(s)';
+        abrirDialogo({
+            icon: UIS.map,
+            titulo: 'Ruta de ' + eco,
+            html: '<div class="rondo-mm-resumen">' + esc(resumen) + '</div>' +
+                '<div id="rondo-ruta-minimapa" class="rondo-minimapa"></div>' +
+                '<div class="rondo-mm-hint">Arrastra para mover, rueda para acercar. Trazo y marcadores de Rondo.</div>',
+            cancelText: 'Cerrar',
+            okText: 'Cerrar',
+            onOk: () => {},
+            ancho: 860,
+            onOpen: (el) => {
+                const cont = el.querySelector('#rondo-ruta-minimapa');
+                if (cont) rxMiniMapa(cont, { lineas: lineas, marcas: marcas });
             }
-            _rxMapaClave = clave;
-            adviceOk('Ruta dibujada en el mapa', eco + ' \u00b7 ' + Math.round((r.total || 0) / 1000) + ' km');
-            if (APP.tab === 'rutas') paintRutas();
-            return true;
-        } catch (e) {
-            adviceErr('No se pudo dibujar', (e && e.message) || '');
-            return false;
-        }
+        });
     }
     // Alternativa garantizada: abrir la ruta en Google Maps con paradas.
     function rxRutaGoogleMaps(eco) {
@@ -197,58 +248,4 @@
         const url = 'https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=' +
             r.origen.lat + ',' + r.origen.lon + ';' + d.lat + ',' + d.lon;
         try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
-    }
-
-    // ---- Rutas dibujadas en las ventanas de cada vehiculo (v6.0.8) ----
-    // Cada ventana de unidad tiene su propio mapa; si el motor es Leaflet se
-    // detecta el mapa dentro de cada ventana y se dibuja la ruta de esa unidad.
-    let _rxWinsOn = false;
-    const _rxWinsLayers = new Map(); // eco -> capa Leaflet
-    function rxMapaVentanasOn() { return _rxWinsOn; }
-    function rxMapaVentanasQuitar() {
-        _rxWinsLayers.forEach((layer) => { try { layer.remove(); } catch (_) { /* noop */ } });
-        _rxWinsLayers.clear();
-    }
-    function rxMapaVentanasSync() {
-        if (!_rxWinsOn) return;
-        if (typeof openWindows !== 'function') return;
-        const L = PAGE && PAGE.L;
-        if (!L) return;
-        const mapas = rxMapaCandidatos().filter((c) => c.motor === 'leaflet').map((c) => c.obj);
-        if (!mapas.length) return;
-        const wins = openWindows();
-        const activos = new Set();
-        for (let i = 0; i < wins.length; i++) {
-            const eco = wins[i].eco;
-            const cont = wins[i].cont;
-            if (!eco || !cont) continue;
-            const it = unitByEco(eco);
-            const r = it ? rutaDe(it.info) : null;
-            if (!r || !r.coords || r.coords.length < 2) continue;
-            activos.add(eco);
-            if (_rxWinsLayers.has(eco)) continue;
-            let map = null;
-            for (let k = 0; k < mapas.length; k++) {
-                const c = mapas[k] && mapas[k]._container;
-                if (c && cont.contains(c)) { map = mapas[k]; break; }
-            }
-            if (!map) continue;
-            try { _rxWinsLayers.set(eco, rxMapaDibujarLeaflet(map, L, r, false)); } catch (_) { /* noop */ }
-        }
-        _rxWinsLayers.forEach((layer, eco) => {
-            if (activos.has(eco)) return;
-            try { layer.remove(); } catch (_) { /* noop */ }
-            _rxWinsLayers.delete(eco);
-        });
-    }
-    function rxMapaVentanasToggle() {
-        _rxWinsOn = !_rxWinsOn;
-        if (_rxWinsOn) {
-            rxMapaVentanasSync();
-            adviceOk('Rutas en ventanas', 'Dibujando la ruta en el mapa de cada ventana abierta.');
-        } else {
-            rxMapaVentanasQuitar();
-            advice('Rutas en ventanas', 'Se dejo de dibujar en las ventanas.');
-        }
-        if (APP.tab === 'rutas') paintRutas();
     }

@@ -63,6 +63,8 @@
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-usym md">' + UIS.route + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="zonas" title="Geocercas de la plataforma y zonas de riesgo"><span class="rondo-usym md">' + UIS.map + '</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-usym md">' + UIS.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
+            // v6.0.11: tab de replay (reproducir el recorrido de un dia).
+            '<button class="tab" data-tab="replay" title="Reproducir el recorrido de una unidad en un dia"><span class="rondo-usym md">' + UIS.moving + '</span><span class="etqt">Replay</span></button>' +
             // v5.14.6: tab de chat con IA. Visible solo si la IA esta
             // habilitada y tiene API key (se oculta desde paintTabs() si no).
             '<button class="tab tab-ia" data-tab="chat" title="Chat con la IA (consultas libres)" style="display:none"><span class="rondo-usym md">' + UIS.robot + '</span><span class="etqt">Chat IA</span></button>' +
@@ -185,7 +187,6 @@
             '<div class="rondo-rutas-bar">' +
             '<span class="rondo-rutas-pend" id="rondo-rutas-pend"></span>' +
             '<button class="mini" id="rondo-rutas-trazar" title="Reintentar el trazado de todas las rutas pendientes (sin limite de intentos)"><span class="rondo-usym">' + UIS.refresh + '</span> Trazar pendientes</button>' +
-            '<button class="mini" id="rondo-rutas-ventanas" title="Dibujar la ruta en el mapa de cada ventana de unidad abierta (si el mapa es Leaflet)"><span class="rondo-usym">' + UIS.map + '</span> Ventanas</button>' +
             '</div>' +
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
@@ -196,6 +197,28 @@
              '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
              '</div>' +
              '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
+             '</div>' +
+             // v6.0.11: tab de replay. Reproduce el recorrido de un dia.
+             '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
+             '<div class="rondo-replay-bar">' +
+             '<select id="rondo-replay-eco" class="filtro" style="flex:1" title="Unidad a reproducir"></select>' +
+             '<input type="date" id="rondo-replay-fecha" class="filtro" title="Dia a reproducir">' +
+             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido del dia"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
+             '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '</div>' +
+             '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
+             '<div class="rondo-replay-ctrl">' +
+             '<button class="mini" id="rondo-replay-play" title="Reproducir o pausar">Play</button>' +
+             '<select id="rondo-replay-vel" class="filtro" title="Velocidad de reproduccion">' +
+             '<option value="60">1 min/s</option>' +
+             '<option value="300" selected>5 min/s</option>' +
+             '<option value="900">15 min/s</option>' +
+             '<option value="3600">1 h/s</option>' +
+             '</select>' +
+             '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
+             '</div>' +
+             '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
+             '<div id="rondo-replay-eventos" class="rondo-replay-eventos"></div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
              // habilitada y con API key (ver paintTabsChat()).
