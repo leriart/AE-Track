@@ -96,6 +96,7 @@
             "#rondo-panel #rondo-version-chip[data-estado=\"checking\"]{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.5);background:rgba(var(--rondo-accent-rgb),.08)}\n" +
             "#rondo-panel #rondo-version-chip[data-estado=\"unknown\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
             "#rondo-panel #rondo-version-chip[data-estado=\"error\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"stale\"]{color:var(--rondo-bad-fg,#b71c1c);border-color:rgba(183,28,28,.5);background:rgba(183,28,28,.12);animation:rondo-ver-pulse 1.6s ease-in-out infinite}\n" +
             "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.45)}50%{box-shadow:0 0 0 5px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
@@ -3648,6 +3649,7 @@
         else if (u.state === 'ahead') html += ' · <b style="color:var(--rondo-fg-dim)">build local ahead</b>';
         else if (u.state === 'unknown') html += ' · <b style="color:var(--rondo-warn-fg)">no se pudo comprobar</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
         else if (u.state === 'error') html += ' · <b style="color:var(--rondo-warn-fg)">error</b>' + (u.lastError ? ' (' + esc(u.lastError) + ')' : '');
+        else if (u.state === 'stale') html += ' · <b style="color:var(--rondo-warn-fg)">modulos desactualizados</b> (' + esc((u.stale && u.stale.detectado) || '?') + ' vs ' + esc(VER) + ') · clic en el chip para reinstalar';
         el.innerHTML = html;
     }
     // v5.14.1: chip de version en la cabecera del panel. Muestra la version
@@ -3677,6 +3679,9 @@
             titulo = 'Error comprobando actualizaciones · clic para reintentar';
         } else if (estado === 'installed') {
             titulo = 'Actualizacion instalada · recarga para aplicar';
+        } else if (estado === 'stale') {
+            titulo = 'Modulos desactualizados (' + (u.stale && u.stale.declarado) + ' vs ' + (u.stale && u.stale.detectado) +
+                ') · clic para reinstalar y forzar la recarga de modulos';
         }
         chip.dataset.estado = estado;
         chip.title = titulo;
@@ -3684,6 +3689,8 @@
         if (label && estado === 'available' && u.remote) {
             // Mostrar "v5.14.0 -> 5.14.1" cuando hay update.
             label.textContent = 'v' + VER + ' -> ' + u.remote;
+        } else if (label && estado === 'stale' && u.stale && u.stale.detectado) {
+            label.textContent = 'v' + u.stale.detectado + ' -> v' + VER;
         } else if (label) {
             label.textContent = 'v' + VER;
         }
@@ -4389,10 +4396,14 @@
                     return;
                 }
                 lastClickChip = ahora;
-                // Si hay update disponible, abrir directamente el dialogo
-                // de aplicacion; si no, forzar re-comprobacion.
+                // Si hay update disponible (o modulos desfasados por cache),
+                // aplicar/reinstalar; si no, forzar re-comprobacion.
                 if (APP.update && APP.update.state === 'available') {
                     aplicarActualizacion();
+                } else if (APP.update && APP.update.state === 'stale') {
+                    // Reinstalar fuerza al gestor a re-descargar los @require.
+                    try { window.open(UPDATE_URL, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+                    advice('Reinstalando modulos', 'Confirma la instalacion en el gestor de userscripts y recarga la pagina.');
                 } else {
                     APP.update.notificado = false;
                     comprobarActualizacion();

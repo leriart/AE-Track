@@ -428,6 +428,13 @@
                     if (v && v !== VER) {
                         try { console.warn('[Rondo] VER declarado (' + VER + ') no coincide con @version detectado (' + v + ').'); } catch (_) { /* noop */ }
                         APP.update.verDeclDeriva = { declarado: VER, detectado: v };
+                        // v6.0.5: desfase = el gestor cargo un chunk cacheado
+                        // viejo (VER) distinto del bootstrap (@version). Se
+                        // marca para avisar y ofrecer reinstalar/actualizar.
+                        APP.update.stale = { declarado: VER, detectado: v };
+                        APP.update.state = 'stale';
+                        try { paintVersionChip(); } catch (_) { /* noop */ }
+                        try { pintarInfoUpdate(); } catch (_) { /* noop */ }
                     }
                 },
                 onerror: () => { /* noop */ }

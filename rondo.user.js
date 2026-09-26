@@ -10,9 +10,9 @@
 // @supportURL   https://github.com/leriart/AE-Track/issues
 // @updateURL    https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js
 // @downloadURL  https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js
-// @require      https://raw.githubusercontent.com/leriart/AE-Track/main/dist/rondo-core.js?v=6.2.0
-// @require      https://raw.githubusercontent.com/leriart/AE-Track/main/dist/rondo-engine.js?v=6.2.0
-// @require      https://raw.githubusercontent.com/leriart/AE-Track/main/dist/rondo-ui.js?v=6.2.0
+// @require      https://github.com/leriart/AE-Track/releases/download/v6.2.0/rondo-core.js
+// @require      https://github.com/leriart/AE-Track/releases/download/v6.2.0/rondo-engine.js
+// @require      https://github.com/leriart/AE-Track/releases/download/v6.2.0/rondo-ui.js
 // @match        *://*.ae-track.com/*
 // @match        *://ae-track.com/*
 // @match        *://*.wialon.com/*
