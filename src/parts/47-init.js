@@ -8,6 +8,7 @@
         const primerUso = !localStorage.getItem(LS.cfg);
         injectCSS();
         buildUI();
+        try { rxBarridoAutofill(); } catch (_) { /* noop */ }
         // La barra lateral se aplica de inmediato (antes de esperar a Wialon)
         // para que el panel ya tenga su layout correcto desde el primer dibujo.
         aplicarModoPanel();
