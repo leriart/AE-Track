@@ -123,6 +123,7 @@
             "#rondo-panel .rondo-ruta-card .rr-progress-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-ruta-card .rr-meta{display:flex;flex-wrap:wrap;gap:5px}\n" +
             "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-mini{height:150px;margin-top:2px}\n" +
             // v6.0.11: replay del dia.
             "#rondo-panel .rondo-replay-bar{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
             "#rondo-panel .rondo-replay-bar .filtro{min-width:0}\n" +
@@ -144,6 +145,17 @@
             "#rondo-panel .rondo-replay-ev .ev-desvio{color:#e65100}\n" +
             "#rondo-panel .rondo-replay-ev .ev-zona{color:var(--rondo-accent-2)}\n" +
             "#rondo-panel .rondo-replay-ev .ev-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-sec{margin-top:8px}\n" +
+            "#rondo-panel .rondo-replay-sec h5{margin:0 0 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-lista{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}\n" +
+            "#rondo-panel .rondo-replay-par{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
+            "#rondo-panel .rondo-replay-par:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-replay-par.activo{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-par .par-idx{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--rondo-bg-strong);display:inline-flex;align-items:center;justify-content:center;font:700 10px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-replay-par .par-hora{color:var(--rondo-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
+            "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
             "#rondo-panel .rondo-replay-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
             // v6.0.11: mini-mapa propio (global: se usa en el panel y en el dialogo de ruta).
             ".rondo-minimapa{height:min(64vh,560px);border-radius:10px;overflow:hidden}\n" +
@@ -1329,6 +1341,7 @@
              '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido del dia"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
              '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
              '</div>' +
+             '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
              '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
              '<div class="rondo-replay-ctrl">' +
              '<button class="mini" id="rondo-replay-play" title="Reproducir o pausar">Play</button>' +
@@ -1341,7 +1354,12 @@
              '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
              '</div>' +
              '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
-             '<div id="rondo-replay-eventos" class="rondo-replay-eventos"></div>' +
+             '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-acciones">' +
+             '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
+             '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
+             '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
              // habilitada y con API key (ver paintTabsChat()).
@@ -3139,6 +3157,7 @@
                 '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
                 (totalP > 1 || s ? '<div class="rr-progress"><div class="rr-progress-fill" style="width:' + pct + '%"></div></div>' : '') +
                 '<div class="rr-meta">' + chips.map((c) => '<span class="rr-chip">' + c + '</span>').join('') + '</div>' +
+                '<div class="rr-mini" id="rondo-ru-mini-' + esc(eco) + '"></div>' +
                 '</div>';
         };
         let html = pendientes.map((x) => {
@@ -3177,6 +3196,7 @@
                 '</div>';
         });
         setHtml(cont, html);
+        try { rxRutasMiniSync(filas); } catch (_) { /* noop */ }
     }
     function paintPanel() { setTab(APP.tab); }
 
@@ -6117,8 +6137,15 @@
             const q = rxMMPt(inst, pts[i].lat, pts[i].lon);
             d += (d ? ' ' : '') + q[0].toFixed(1) + ',' + q[1].toFixed(1);
         }
-        return '<polyline fill="none" stroke="' + (ln.color || '#850D22') + '" stroke-width="' + (ln.width || 3) +
+        const color = ln.color || '#850D22';
+        let out = '';
+        if (ln.glow) {
+            out += '<polyline fill="none" stroke="' + color + '" stroke-width="' + ((ln.width || 3) + 7) +
+                '" stroke-opacity="0.22" stroke-linejoin="round" stroke-linecap="round" points="' + d + '"/>';
+        }
+        out += '<polyline fill="none" stroke="' + color + '" stroke-width="' + (ln.width || 3) +
             '" stroke-opacity="' + (ln.opacity == null ? 1 : ln.opacity) + '" stroke-linejoin="round" stroke-linecap="round" points="' + d + '"/>';
+        return out;
     }
     function rxMMMarcasHTML(inst) {
         let html = '';
@@ -6182,7 +6209,10 @@
             inst.pos = d.pos || null;
             inst.encuadrar();
         };
-        inst.setPos = (lat, lon) => { inst.pos = { lat: lat, lon: lon }; if (inst.svg) rxMMDibujar(inst, true); };
+        inst.setPos = (lat, lon) => {
+            inst.pos = (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) ? null : { lat: lat, lon: lon };
+            if (inst.svg) rxMMDibujar(inst, true);
+        };
         inst.setLinea = (i, pts, color, width, opacity) => {
             inst.lineas[i] = { pts: pts, color: color, width: width, opacity: opacity, dyn: true };
             if (inst.svg) rxMMDibujar(inst, true);
@@ -6221,18 +6251,73 @@
         inst.encuadrar();
         return inst;
     }
+    // Lineas y marcadores de una ruta (trazo resaltado con halo).
+    function rxRutaLineasMarcas(r) {
+        const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95, glow: true }];
+        const marcas = [];
+        if (r.origen) marcas.push({ lat: r.origen.lat, lon: r.origen.lon, color: '#2e7d32', radio: 6, txt: 'Origen' });
+        (r.paradas || []).forEach((p, i) => {
+            if (p.coords) marcas.push({ lat: p.coords.lat, lon: p.coords.lon, color: '#1565c0', radio: 5, txt: (i + 1) + '. ' + (p.texto || '') });
+        });
+        if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 6, txt: 'Destino' });
+        return { lineas: lineas, marcas: marcas };
+    }
+    // Mini-mapas embebidos en las tarjetas de la pestana Rutas. Se conservan
+    // entre repintados (el panel se repinta cada segundo): el nodo del mapa se
+    // re-anexa al nuevo placeholder en vez de recrearlo.
+    const _rxRutaMini = new Map(); // eco -> { inst, key }
+    function rxRutasMiniSync(filas) {
+        const vistos = new Set();
+        (filas || []).forEach((x) => {
+            const info = x && x.info ? x.info : x;
+            if (!info || !info.clave) return;
+            const eco = info.clave;
+            const r = rutaDe(info);
+            if (!r || !r.coords || r.coords.length < 2) return;
+            const ph = byId('rondo-ru-mini-' + eco);
+            if (!ph) return;
+            vistos.add(eco);
+            const st = x && x.st ? x.st : null;
+            const er = (typeof estadoRuta === 'function') ? estadoRuta(info, st) : { snap: null };
+            const s = er.snap || null;
+            const key = (r.creada || 0) + ':' + eco + ':' + r.coords.length;
+            let ent = _rxRutaMini.get(eco);
+            if (!ent || ent.key !== key) {
+                if (ent) { try { ent.inst.destruir(); } catch (_) { /* noop */ } }
+                const lm = rxRutaLineasMarcas(r);
+                lm.lineas.push({ pts: [], dyn: true });
+                const pos = (st && st.lat != null) ? { lat: st.lat, lon: st.lon } : null;
+                ent = { inst: rxMiniMapa(ph, { lineas: lm.lineas, marcas: lm.marcas, pos: pos }), key: key };
+                _rxRutaMini.set(eco, ent);
+            } else if (ent.inst.cont.parentNode !== ph) {
+                // El repintado recreo la tarjeta: re-anexa el mini-mapa (conserva tiles).
+                try { ph.appendChild(ent.inst.cont); ent.inst.medir(); ent.inst.render(); } catch (_) { /* noop */ }
+            }
+            if (s && st && st.lat != null) {
+                const idx = clamp((s.idx || 0) + 1, 0, r.coords.length - 1);
+                const paso = Math.max(1, Math.ceil((idx + 1) / 200));
+                const pts = [];
+                for (let i = 0; i <= idx; i += paso) { const c = r.coords[i]; pts.push({ lat: c[1], lon: c[0] }); }
+                pts.push({ lat: st.lat, lon: st.lon });
+                ent.inst.setLinea(1, pts, '#1565c0', 4, 0.95);
+                ent.inst.setPos(st.lat, st.lon);
+            } else {
+                ent.inst.setLinea(1, [], '#1565c0', 4, 0.95);
+                ent.inst.setPos(null, null);
+            }
+        });
+        _rxRutaMini.forEach((ent, eco) => {
+            if (vistos.has(eco)) return;
+            try { ent.inst.destruir(); } catch (_) { /* noop */ }
+            _rxRutaMini.delete(eco);
+        });
+    }
     // Abre una ventana con el mini-mapa de la ruta planificada de una unidad.
     function rxRutaMiniMapa(eco) {
         const it = unitByEco(eco);
         const r = it ? rutaDe(it.info) : (APP.rutas[eco] || null);
         if (!r || !r.coords || r.coords.length < 2) { adviceWarn('Sin ruta', 'No hay una ruta trazada para ' + eco + '.'); return; }
-        const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95 }];
-        const marcas = [];
-        if (r.origen) marcas.push({ lat: r.origen.lat, lon: r.origen.lon, color: '#2e7d32', radio: 7, txt: 'Origen' });
-        (r.paradas || []).forEach((p, i) => {
-            if (p.coords) marcas.push({ lat: p.coords.lat, lon: p.coords.lon, color: '#1565c0', radio: 6, txt: (i + 1) + '. ' + (p.texto || '') });
-        });
-        if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 7, txt: 'Destino' });
+        const lm = rxRutaLineasMarcas(r);
         const resumen = Math.round((r.total || 0) / 1000) + ' km' +
             (r.modo ? ' \u00b7 ' + r.modo : '') + ' \u00b7 ' + ((r.paradas || []).length) + ' parada(s)';
         abrirDialogo({
@@ -6247,7 +6332,7 @@
             ancho: 860,
             onOpen: (el) => {
                 const cont = el.querySelector('#rondo-ruta-minimapa');
-                if (cont) rxMiniMapa(cont, { lineas: lineas, marcas: marcas });
+                if (cont) rxMiniMapa(cont, { lineas: lm.lineas, marcas: lm.marcas });
             }
         });
     }
@@ -6276,13 +6361,15 @@
             r.origen.lat + ',' + r.origen.lon + ';' + d.lat + ',' + d.lon;
         try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
     }
-    /* ====================== REPLAY DEL DIA (v6.0.11) ======================
+    /* ====================== REPLAY DEL DIA (v6.0.12) ======================
      * Reproduce el recorrido de una unidad en un dia. Solo lectura: pide el
      * historial con messages/load_interval y lo dibuja en el mini-mapa propio
      * de Rondo (tiles de OSM), sin depender del mapa de la plataforma.
      *
-     * Eventos que marca: paradas largas, entradas/salidas de geocerca,
-     * excesos de velocidad y desvios respecto a una ruta planificada.
+     * Analiza y muestra: resumen del dia, paradas (con zona/municipio),
+     * entradas/salidas de geocerca, excesos de velocidad y desvios respecto a
+     * una ruta planificada. Permite exportar el recorrido (GeoJSON) y las
+     * paradas (CSV).
      */
     let RX_REPLAY = null;
 
@@ -6306,6 +6393,15 @@
     function rxReplayColor(tipo) {
         return { parada: '#7d8595', exceso: '#b71c1c', zona: '#1565c0', desvio: '#e65100' }[tipo] || '#888';
     }
+    function rxReplayDescargar(nombre, texto, mime) {
+        try {
+            const a = makeEl('a', { href: URL.createObjectURL(new Blob([texto], { type: mime || 'text/plain;charset=utf-8;' })) });
+            a.download = nombre;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) { /* noop */ } }, 1500);
+        } catch (_) { adviceWarn('No se pudo exportar', nombre); }
+    }
     function rxReplayPoblarSelect() {
         const sel = byId('rondo-replay-eco');
         if (!sel) return;
@@ -6324,50 +6420,58 @@
         sel.innerHTML = opciones.join('') || '<option value="">(sin unidades)</option>';
         if (prev && Array.prototype.some.call(sel.options, (o) => o.value === prev)) sel.value = prev;
     }
-    // Eventos del dia: paradas largas, geocercas, excesos y desvios de ruta.
-    function rxReplayMarcas(msgs, info) {
-        const marcas = [];
+    function rxReplayDetalleParada(lat, lon, zonas) {
+        let zona = '', municipio = '';
+        try { if (zonas && lat != null) zona = zoneAt(lat, lon) || ''; } catch (_) { /* noop */ }
+        try { const m = municipioEn(lat, lon); municipio = (m && m.nombre) ? m.nombre : ''; } catch (_) { /* noop */ }
+        return { zona: zona, municipio: municipio };
+    }
+    // Analiza un recorrido: paradas, eventos (zona/exceso/desvio) y resumen.
+    function rxReplayAnalizar(msgs, info) {
+        const eventos = [], paradas = [];
         const paradaMinS = Math.max(60, (Number(APP.config.paradaMin) || 15) * 60);
         const limite = info ? limiteDe(info) : APP.config.velMax;
         const zonas = !!(APP.config.loadZones && (APP.zonas || []).length);
-        let enParadaDesde = null, paradaLat = null, paradaLon = null;
+        let enParadaDesde = null, paradaLat = null, paradaLon = null, paradaIdx = 0;
         let zonaPrev = null;
-        let excesoDesde = null, excesoMax = 0, excesoLat = null, excesoLon = null;
+        let excesoDesde = null, excesoMax = 0, excesoLat = null, excesoLon = null, excesos = 0;
+        let detenido = 0, moviendo = 0, velMax = 0;
+        const cerrarParada = (tFin, idxFin) => {
+            const dur = tFin - enParadaDesde;
+            if (dur >= paradaMinS) {
+                const det = rxReplayDetalleParada(paradaLat, paradaLon, zonas);
+                paradas.push({ t: enParadaDesde, dur: dur, idx: paradaIdx, idxFin: idxFin, lat: paradaLat, lon: paradaLon, zona: det.zona, municipio: det.municipio });
+            }
+            enParadaDesde = null;
+        };
+        const cerrarExceso = (idx) => {
+            if (excesoDesde == null) return;
+            excesos++;
+            eventos.push({ t: excesoDesde, tipo: 'exceso', idx: idx, lat: excesoLat, lon: excesoLon, txt: 'Exceso ' + Math.round(excesoMax) + ' km/h (limite ' + Math.round(limite) + ')' });
+            excesoDesde = null;
+        };
         for (let i = 0; i < msgs.length; i++) {
             const m = msgs[i];
-            if (m.s > 3) {
-                if (enParadaDesde != null) {
-                    if (m.t - enParadaDesde >= paradaMinS) {
-                        marcas.push({ t: enParadaDesde, tipo: 'parada', idx: i, lat: paradaLat, lon: paradaLon, txt: 'Detenido ' + rxFmtDur(m.t - enParadaDesde) });
-                    }
-                    enParadaDesde = null;
-                }
-            } else if (enParadaDesde == null) {
-                enParadaDesde = m.t; paradaLat = m.lat; paradaLon = m.lon;
-            }
+            const dt = (i > 0) ? Math.max(0, m.t - (msgs[i - 1].t || m.t)) : 0;
+            if (m.s > 3) { moviendo += dt; if (m.s > velMax) velMax = m.s; } else { detenido += dt; }
+            if (m.s > 3) { if (enParadaDesde != null) cerrarParada(m.t, i); }
+            else if (enParadaDesde == null) { enParadaDesde = m.t; paradaLat = m.lat; paradaLon = m.lon; paradaIdx = i; }
             if (limite && m.s > limite) {
                 if (excesoDesde == null) { excesoDesde = m.t; excesoMax = m.s; excesoLat = m.lat; excesoLon = m.lon; }
                 else if (m.s > excesoMax) excesoMax = m.s;
-            } else if (excesoDesde != null) {
-                marcas.push({ t: excesoDesde, tipo: 'exceso', idx: i, lat: excesoLat, lon: excesoLon, txt: 'Exceso ' + Math.round(excesoMax) + ' km/h (limite ' + Math.round(limite) + ')' });
-                excesoDesde = null;
-            }
+            } else if (excesoDesde != null) cerrarExceso(i);
             if (zonas && m.lat != null) {
                 const z = zoneAt(m.lat, m.lon) || null;
                 if (z !== zonaPrev) {
-                    if (z) marcas.push({ t: m.t, tipo: 'zona', idx: i, lat: m.lat, lon: m.lon, txt: 'Entra a ' + z });
-                    else if (zonaPrev) marcas.push({ t: m.t, tipo: 'zona', idx: i, lat: m.lat, lon: m.lon, txt: 'Sale de ' + zonaPrev });
+                    if (z) eventos.push({ t: m.t, tipo: 'zona', idx: i, lat: m.lat, lon: m.lon, txt: 'Entra a ' + z });
+                    else if (zonaPrev) eventos.push({ t: m.t, tipo: 'zona', idx: i, lat: m.lat, lon: m.lon, txt: 'Sale de ' + zonaPrev });
                     zonaPrev = z;
                 }
             }
         }
         const ult = msgs[msgs.length - 1];
-        if (enParadaDesde != null && ult && ult.t - enParadaDesde >= paradaMinS) {
-            marcas.push({ t: enParadaDesde, tipo: 'parada', idx: msgs.length - 1, lat: paradaLat, lon: paradaLon, txt: 'Detenido ' + rxFmtDur(ult.t - enParadaDesde) });
-        }
-        if (excesoDesde != null) {
-            marcas.push({ t: excesoDesde, tipo: 'exceso', idx: msgs.length - 1, lat: excesoLat, lon: excesoLon, txt: 'Exceso ' + Math.round(excesoMax) + ' km/h (limite ' + Math.round(limite) + ')' });
-        }
+        if (enParadaDesde != null && ult) cerrarParada(ult.t, msgs.length - 1);
+        cerrarExceso(msgs.length - 1);
         // Desvio respecto a la ruta planificada (muestreado, ruta acotada).
         try {
             const ruta = info ? rutaDe(info) : null;
@@ -6385,23 +6489,60 @@
                         if (desde == null) { desde = m.t; max = s.dist; dLat = m.lat; dLon = m.lon; }
                         else if (s.dist > max) max = s.dist;
                     } else if (desde != null) {
-                        if (m.t - desde >= minSost) marcas.push({ t: desde, tipo: 'desvio', idx: i, lat: dLat, lon: dLon, txt: 'Desvio ' + Math.round(max) + ' m del trazado' });
+                        if (m.t - desde >= minSost) eventos.push({ t: desde, tipo: 'desvio', idx: i, lat: dLat, lon: dLon, txt: 'Desvio ' + Math.round(max) + ' m del trazado' });
                         desde = null;
                     }
                 }
                 if (desde != null && ult && ult.t - desde >= minSost) {
-                    marcas.push({ t: desde, tipo: 'desvio', idx: msgs.length - 1, lat: dLat, lon: dLon, txt: 'Desvio ' + Math.round(max) + ' m del trazado' });
+                    eventos.push({ t: desde, tipo: 'desvio', idx: msgs.length - 1, lat: dLat, lon: dLon, txt: 'Desvio ' + Math.round(max) + ' m del trazado' });
                 }
             }
         } catch (_) { /* sin desvios */ }
-        marcas.sort((a, b) => a.t - b.t);
-        return marcas;
+        eventos.sort((a, b) => a.t - b.t);
+        const resumen = {
+            distM: Math.round((ult && ult.km) || 0),
+            durSeg: (ult && msgs[0]) ? Math.max(0, ult.t - msgs[0].t) : 0,
+            inicio: msgs[0] ? msgs[0].t : 0,
+            fin: ult ? ult.t : 0,
+            detenidoSeg: Math.round(detenido),
+            moviendoSeg: Math.round(moviendo),
+            paradas: paradas.length,
+            velMax: Math.round(velMax),
+            excesos: excesos
+        };
+        return { eventos: eventos, paradas: paradas, resumen: resumen };
+    }
+    function rxReplayResumenHTML() {
+        const r = RX_REPLAY;
+        if (!r || !r.resumen) return '';
+        const s = r.resumen;
+        return '<span class="rr-chip"><b>' + esc(r.eco) + '</b></span>' +
+            '<span class="rr-chip">' + rxFmtDist(s.distM) + '</span>' +
+            '<span class="rr-chip">' + rxFmtDur(s.durSeg) + '</span>' +
+            '<span class="rr-chip">' + s.paradas + ' parada(s)</span>' +
+            '<span class="rr-chip">detenido ' + rxFmtDur(s.detenidoSeg) + '</span>' +
+            '<span class="rr-chip">max ' + s.velMax + ' km/h</span>' +
+            (s.excesos ? '<span class="rr-chip">' + s.excesos + ' exceso(s)</span>' : '');
+    }
+    function rxReplayParadasHTML() {
+        const r = RX_REPLAY;
+        if (!r) return '';
+        if (!r.paradas.length) return '<div class="rondo-replay-hint">Sin paradas de mas de ' + (APP.config.paradaMin || 15) + ' min.</div>';
+        return r.paradas.map((p, i) =>
+            '<div class="rondo-replay-par" data-idx="' + p.idx + '" data-idxfin="' + (p.idxFin == null ? p.idx : p.idxFin) + '">' +
+            '<span class="par-idx">' + (i + 1) + '</span>' +
+            '<span class="par-hora">' + rxReplayHHMM(p.t) + '</span>' +
+            '<span class="par-dur">' + rxFmtDur(p.dur) + '</span>' +
+            '<span class="par-lugar" title="' + esc(p.zona || p.municipio || (p.lat.toFixed(4) + ',' + p.lon.toFixed(4))) + '">' +
+            esc(p.zona || p.municipio || (p.lat.toFixed(4) + ',' + p.lon.toFixed(4))) + '</span>' +
+            '</div>'
+        ).join('');
     }
     function rxReplayEventosHTML() {
         const r = RX_REPLAY;
         if (!r) return '';
-        if (!r.marcas.length) return '<div class="rondo-replay-hint">Sin eventos relevantes (paradas largas, geocercas, excesos o desvios).</div>';
-        return r.marcas.map((m) =>
+        if (!r.eventos.length) return '<div class="rondo-replay-hint">Sin eventos (geocercas, excesos o desvios).</div>';
+        return r.eventos.map((m) =>
             '<div class="rondo-replay-ev" data-idx="' + m.idx + '">' +
             '<span class="ev-hora">' + rxReplayHHMM(m.t) + '</span>' +
             '<span class="ev-tipo ev-' + m.tipo + '">' + esc(m.tipo) + '</span>' +
@@ -6417,10 +6558,12 @@
         if (r.mapa) { try { r.mapa.destruir(); } catch (_) { /* noop */ } r.mapa = null; }
         cont.innerHTML = '';
         const full = r.msgs.map((m) => ({ lat: m.lat, lon: m.lon }));
-        const marcas = r.marcas.map((m) => ({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
+        const marcas = [];
+        r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + (p.zona ? ' \u00b7 ' + p.zona : '') }));
+        r.eventos.forEach((m) => marcas.push({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
         r.mapa = rxMiniMapa(cont, {
             lineas: [
-                { pts: full, color: '#850D22', width: 3, opacity: 0.3 },
+                { pts: full, color: '#850D22', width: 4, opacity: 0.35, glow: true },
                 { pts: [], dyn: true }
             ],
             marcas: marcas,
@@ -6450,7 +6593,7 @@
             info.innerHTML =
                 '<span class="rr-chip"><b>' + rxReplayHHMM(m.t) + '</b></span>' +
                 '<span class="rr-chip">' + Math.round(m.s) + ' km/h</span>' +
-                '<span class="rr-chip">' + (m.km || 0).toFixed(1) + ' km</span>' +
+                '<span class="rr-chip">' + ((m.km || 0) / 1000).toFixed(1) + ' km</span>' +
                 (zona ? '<span class="rr-chip">' + esc(zona) + '</span>' : '') +
                 (mun && mun.nombre ? '<span class="rr-chip">' + esc(mun.nombre) + '</span>' : '');
         }
@@ -6464,9 +6607,20 @@
         }
         const evs = byId('rondo-replay-eventos');
         if (evs) evs.querySelectorAll('.rondo-replay-ev').forEach((n) => n.classList.toggle('activo', +n.dataset.idx === r.idx));
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.querySelectorAll('.rondo-replay-par').forEach((n) => {
+            const a = +n.dataset.idx, b = +n.dataset.idxfin;
+            n.classList.toggle('activo', r.idx >= a && r.idx <= b);
+        });
     }
     function rxReplayPintar() {
         const r = RX_REPLAY;
+        const resumen = byId('rondo-replay-resumen');
+        if (resumen) resumen.innerHTML = rxReplayResumenHTML();
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        const evs = byId('rondo-replay-eventos');
+        if (evs) evs.innerHTML = rxReplayEventosHTML();
         if (r) rxReplayMapaCrear();
         else {
             const cont = byId('rondo-replay-mapa');
@@ -6474,8 +6628,6 @@
         }
         const sl = byId('rondo-replay-slider');
         if (sl && r) { sl.min = 0; sl.max = Math.max(0, r.msgs.length - 1); sl.value = r.idx; }
-        const evs = byId('rondo-replay-eventos');
-        if (evs) evs.innerHTML = rxReplayEventosHTML();
         if (r) rxReplayActualizar();
     }
     function rxReplayTick() {
@@ -6524,6 +6676,38 @@
         r.vt = r.msgs[r.idx].t;
         rxReplayActualizar();
     }
+    function rxReplayExportarGeoJSON() {
+        const r = RX_REPLAY;
+        if (!r) { adviceWarn('Sin recorrido', 'Carga un recorrido primero.'); return; }
+        const features = [{
+            type: 'Feature',
+            properties: { eco: r.eco, fecha: r.fecha, km: Math.round(r.resumen.distM / 1000), inicio: new Date(r.resumen.inicio * 1000).toISOString(), fin: new Date(r.resumen.fin * 1000).toISOString() },
+            geometry: { type: 'LineString', coordinates: r.msgs.map((m) => [+m.lon.toFixed(6), +m.lat.toFixed(6)]) }
+        }];
+        r.paradas.forEach((p, i) => features.push({
+            type: 'Feature',
+            properties: { tipo: 'parada', n: i + 1, hora: rxReplayHHMM(p.t), durMin: Math.round(p.dur / 60), zona: p.zona || '', municipio: p.municipio || '' },
+            geometry: { type: 'Point', coordinates: [+p.lon.toFixed(6), +p.lat.toFixed(6)] }
+        }));
+        r.eventos.forEach((e2) => features.push({
+            type: 'Feature',
+            properties: { tipo: e2.tipo, hora: rxReplayHHMM(e2.t), texto: e2.txt },
+            geometry: { type: 'Point', coordinates: [+e2.lon.toFixed(6), +e2.lat.toFixed(6)] }
+        }));
+        rxReplayDescargar('rondo-replay-' + r.eco + '-' + r.fecha + '.geojson',
+            JSON.stringify({ type: 'FeatureCollection', features: features }, null, 2),
+            'application/geo+json;charset=utf-8;');
+    }
+    function rxReplayExportarParadasCSV() {
+        const r = RX_REPLAY;
+        if (!r) { adviceWarn('Sin recorrido', 'Carga un recorrido primero.'); return; }
+        const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const filas = [['n', 'hora', 'duracion_min', 'lat', 'lon', 'zona', 'municipio']];
+        r.paradas.forEach((p, i) => filas.push([i + 1, rxReplayHHMM(p.t), Math.round(p.dur / 60), p.lat.toFixed(5), p.lon.toFixed(5), p.zona || '', p.municipio || '']));
+        rxReplayDescargar('rondo-paradas-' + r.eco + '-' + r.fecha + '.csv',
+            '\uFEFF' + filas.map((f) => f.map(q).join(',')).join('\r\n'),
+            'text/csv;charset=utf-8;');
+    }
     function rxReplayLimpiar() {
         const r = RX_REPLAY;
         if (r && r._timer) clearInterval(r._timer);
@@ -6533,6 +6717,10 @@
         if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
         const info = byId('rondo-replay-info');
         if (info) info.innerHTML = '';
+        const resumen = byId('rondo-replay-resumen');
+        if (resumen) resumen.innerHTML = '';
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.innerHTML = '';
         const evs = byId('rondo-replay-eventos');
         if (evs) evs.innerHTML = '';
         const sl = byId('rondo-replay-slider');
@@ -6578,16 +6766,17 @@
                 if (d <= 5000) acum += d;
                 msgs[i].km = acum;
             }
+            const an = rxReplayAnalizar(msgs, it.info);
             if (RX_REPLAY && RX_REPLAY._timer) clearInterval(RX_REPLAY._timer);
             RX_REPLAY = {
                 eco: eco, clave: it.info.clave, info: it.info, fecha: fecha,
-                msgs: msgs, marcas: rxReplayMarcas(msgs, it.info),
+                msgs: msgs, paradas: an.paradas, eventos: an.eventos, resumen: an.resumen,
                 idx: 0, vt: msgs[0].t, factor: 300, playing: false, _timer: null, _tick: 0,
                 truncado: msgs.length >= 10000
             };
             rxReplayPintar();
             adviceOk('Recorrido cargado', eco + ' \u00b7 ' + rxReplayHHMM(msgs[0].t) + '-' + rxReplayHHMM(msgs[msgs.length - 1].t) +
-                ' \u00b7 ' + Math.round(acum / 1000) + ' km' + (msgs.length >= 10000 ? ' (truncado)' : ''));
+                ' \u00b7 ' + Math.round(acum / 1000) + ' km \u00b7 ' + an.paradas.length + ' parada(s)' + (msgs.length >= 10000 ? ' (truncado)' : ''));
         } finally {
             if (btn) setBusy(btn, false);
         }
@@ -6622,6 +6811,17 @@
         });
         const centrar = byId('rondo-replay-centrar');
         if (centrar) centrar.addEventListener('click', () => { if (RX_REPLAY && RX_REPLAY.mapa) RX_REPLAY.mapa.encuadrar(); });
+        const geo = byId('rondo-replay-geo');
+        if (geo) geo.addEventListener('click', () => rxReplayExportarGeoJSON());
+        const csv = byId('rondo-replay-csv');
+        if (csv) csv.addEventListener('click', () => rxReplayExportarParadasCSV());
+        const paradas = byId('rondo-replay-paradas');
+        if (paradas) paradas.addEventListener('click', (e) => {
+            const n = e.target.closest && e.target.closest('.rondo-replay-par');
+            if (!n) return;
+            if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();
+            rxReplayIrA(+n.dataset.idx);
+        });
         const evs = byId('rondo-replay-eventos');
         if (evs) evs.addEventListener('click', (e) => {
             const n = e.target.closest && e.target.closest('.rondo-replay-ev');
