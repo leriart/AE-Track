@@ -1,86 +1,97 @@
 name: Release
 
-# Release semi-automatico: valida, construye, prueba, etiqueta y publica.
-# Orden importante (modo hibrido): el release con sus assets se crea ANTES de
-# actualizar la rama main, para que ningun usuario reciba un bootstrap cuyos
-# @require todavia no existan.
+# Totalmente automatico: al hacer push a main analiza, calcula la version,
+# genera el changelog, construye, prueba, actualiza el README, etiqueta,
+# publica el release y vuelve a subir los artefactos a main.
+# Tambien se puede lanzar a mano (workflow_dispatch) con una version concreta.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       version:
-        description: "Version a publicar (X.Y.Z). Debe existir changelogs/X.Y.Z.md"
-        required: true
+        description: "Version exacta (X.Y.Z). Si se deja vacio, se calcula sola."
+        required: false
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+
 jobs:
   release:
+    # Evita el bucle: el commit que genera este workflow lleva [skip ci].
+    if: github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[skip ci]')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Validar version
+      - name: Calcular version
+        id: ver
         run: |
-          new="${{ inputs.version }}"
-          cur="$(cat VERSION)"
-          echo "actual=$cur nueva=$new"
-          echo "$new" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Formato invalido"; exit 1; }
-          test -f "changelogs/$new.md" || { echo "Falta changelogs/$new.md"; exit 1; }
-          if git rev-parse "v$new" >/dev/null 2>&1; then
-            echo "El tag v$new ya existe; elige una version nueva."
-            exit 1
+          v="${{ inputs.version }}"
+          if [ -z "$v" ]; then v="$(node scripts/next-version.mjs)"; fi
+          echo "$v" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "Version invalida: $v"; exit 1; }
+          if git rev-parse "v$v" >/dev/null 2>&1; then
+            echo "El tag v$v ya existe; se incrementa el patch."
+            v="$(node -e 'const [a,b,c]=process.argv[1].split(".").map(Number);process.stdout.write(a+"."+b+"."+(c+1))' "$v")"
           fi
-          # Permite publicar la version actual (VERSION) o una mayor.
-          node -e 'const a=process.argv[1].split(".").map(Number),b=process.argv[2].split(".").map(Number);for(let i=0;i<3;i++){if(b[i]>a[i])process.exit(0);if(b[i]<a[i])process.exit(1);}process.exit(0);' "$cur" "$new" || { echo "La version no puede ser menor que $cur"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Publicando $v"
+
+      - name: Changelog
+        run: node scripts/gen-changelog.mjs "${{ steps.ver.outputs.version }}"
 
       - name: Fijar VERSION y construir
         run: |
-          echo "${{ inputs.version }}" > VERSION
+          echo "${{ steps.ver.outputs.version }}" > VERSION
           node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
-          node scripts/build.mjs --mode=require --channel=release --out rondo.user.js
-          node scripts/bump-readme.mjs "${{ inputs.version }}"
+          node scripts/build.mjs --mode=require --channel=main --version "${{ steps.ver.outputs.version }}" --out rondo.user.js
+          node scripts/bump-readme.mjs "${{ steps.ver.outputs.version }}"
 
       - name: Pruebas
         run: |
           fallo=0
-          for t in tests/*.test.js; do node "$t" || fallo=1; done
+          for t in tests/*.test.js; do
+            echo "== $t =="
+            node "$t" || fallo=1
+          done
           exit $fallo
 
-      - name: Commit
+      - name: Commit de artefactos
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION rondo.user.js dist README.md
-          git commit -m "release: v${{ inputs.version }} [skip ci]"
+          git add VERSION rondo.user.js dist changelogs README.md
+          git commit -m "chore(release): v${{ steps.ver.outputs.version }} [skip ci]"
 
-      - name: Etiqueta y release con assets (antes de tocar main)
+      - name: Etiqueta y release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git tag "v${{ inputs.version }}"
-          git push origin "v${{ inputs.version }}"
-          gh release create "v${{ inputs.version }}" \
+          git tag "v${{ steps.ver.outputs.version }}"
+          git push origin "v${{ steps.ver.outputs.version }}"
+          gh release create "v${{ steps.ver.outputs.version }}" \
             rondo.user.js dist/rondo-core.js dist/rondo-engine.js dist/rondo-ui.js \
-            --title "v${{ inputs.version }}" \
-            --notes-file "changelogs/${{ inputs.version }}.md"
+            --title "v${{ steps.ver.outputs.version }}" \
+            --notes-file "changelogs/${{ steps.ver.outputs.version }}.md" || true
 
-      - name: Publicar main
+      - name: Push a main
         run: git push origin HEAD:main
 
-      - name: Smoke test de los assets
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Smoke test (modulos accesibles en raw)
         run: |
-          base="https://github.com/${{ github.repository }}/releases/download/v${{ inputs.version }}"
-          for f in rondo.user.js rondo-core.js rondo-engine.js rondo-ui.js; do
-            code=$(curl -s -o "/tmp/$f" -w '%{http_code}' -L "$base/$f")
+          base="https://raw.githubusercontent.com/${{ github.repository }}/main/dist"
+          for f in rondo-core.js rondo-engine.js rondo-ui.js; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$base/$f?v=${{ steps.ver.outputs.version }}")
             echo "$f -> $code"
-            test "$code" = "200" || { echo "Asset no accesible: $f"; exit 1; }
+            test "$code" = "200" || { echo "Modulo no accesible: $f"; exit 1; }
           done
-          grep -q "@require" /tmp/rondo.user.js

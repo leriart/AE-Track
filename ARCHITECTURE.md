@@ -55,12 +55,15 @@ que ambos quedan siempre sincronizados.
 
 ## Distribucion
 
-- **main (estable)**: el bootstrap apunta a assets **inmutables por tag**:
-  `https://github.com/leriart/AE-Track/releases/download/vX.Y.Z/rondo-core.js`.
-- **dev (pruebas)**: el bootstrap apunta a
-  `https://raw.githubusercontent.com/leriart/AE-Track/dev/dist/rondo-core.js?v=…`.
+- **main (estable)**: el bootstrap apunta a raw
+  `https://raw.githubusercontent.com/leriart/AE-Track/main/dist/rondo-core.js?v=X.Y.Z`.
+  Como los `dist/` se commitean, **cualquier push a main queda funcionando al
+  instante**; el `?v=` rompe la cache del gestor al subir de version.
+- **dev (pruebas)**: igual pero sobre la rama `dev` (`/dev/dist/…`).
+- **release (archivo)**: en cada release se adjuntan tambien `rondo.user.js` y
+  los tres `dist/*.js` como assets inmutables (historial/descarga directa).
 - `@updateURL`/`@downloadURL` se mantienen en raw `main` para no romper la
-  cadena de actualizacion de versiones anteriores.
+  cadena de actualizacion.
 - **Resiliencia**: si falta un modulo, el bootstrap muestra un aviso claro
   (`#rondo-aviso`) en lugar de fallar en silencio.
 
@@ -75,7 +78,7 @@ fragmentos.
 | Workflow | Disparo | Que hace |
 | --- | --- | --- |
 | `ci.yml` | push/PR a `main`/`dev` | build bundle + 12 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/`. |
-| `release.yml` | manual | valida version y changelog, build, tests, commit, tag, release con assets (antes de tocar `main`), smoke test y push a `main`. |
+| `release.yml` | **push a `main`** (o manual) | calcula la version (conventional commits), genera el changelog, build, tests, actualiza el badge del README, commit de artefactos, tag, release con assets y push a `main`. |
 | `dev.yml` | push a `dev` | build con `X.Y.Z-dev.N`, tests y commit de `dist/` + bootstrap en `dev`. |
 
 ## Estado y compatibilidad

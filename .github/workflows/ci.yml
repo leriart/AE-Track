@@ -38,7 +38,7 @@ jobs:
       - name: Generar artefactos en un directorio temporal
         run: |
           rm -rf /tmp/dist-check
-          node scripts/build.mjs --mode=require --channel=release --dist /tmp/dist-check --out /tmp/bootstrap-check.js
+          node scripts/build.mjs --mode=require --channel=main --dist /tmp/dist-check --out /tmp/bootstrap-check.js
       - name: Comparar con lo commiteado
         run: |
           diff -u dist/rondo-core.js /tmp/dist-check/rondo-core.js

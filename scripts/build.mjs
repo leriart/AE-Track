@@ -63,9 +63,17 @@ const porChunk = { core: [], engine: [], ui: [] };
 partes.forEach((p) => porChunk[p.chunk].push(p.texto));
 
 const REPO = 'leriart/AE-Track';
-const urlChunk = (chunk) => (args.channel === 'dev')
-    ? 'https://raw.githubusercontent.com/' + REPO + '/dev/dist/rondo-' + chunk + '.js?v=' + version
-    : 'https://github.com/' + REPO + '/releases/download/v' + version + '/rondo-' + chunk + '.js';
+// Canales:
+//   main    -> raw main/dist (estable, no depende de releases)
+//   dev     -> raw dev/dist  (pruebas)
+//   release -> assets inmutables del release (opcional/archivable)
+const urlChunk = (chunk) => {
+    if (args.channel === 'release') {
+        return 'https://github.com/' + REPO + '/releases/download/v' + version + '/rondo-' + chunk + '.js';
+    }
+    const branch = (args.channel === 'dev') ? 'dev' : 'main';
+    return 'https://raw.githubusercontent.com/' + REPO + '/' + branch + '/dist/rondo-' + chunk + '.js?v=' + version;
+};
 
 function escribir(destino, contenido) {
     const abs = path.isAbsolute(destino) ? destino : path.join(raiz, destino);
