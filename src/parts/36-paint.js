@@ -17,7 +17,7 @@
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
         else if (name === 'caravana') paintCaravana();
-        else if (name === 'replay') { rxReplayPoblarSelect(); rxReplayPintar(); }
+        else if (name === 'replay') { rxReplayPintar(); }
         else if (name === 'chat') pintarChat();
         else if (name === 'zonas') { aplicarZonasVista(); paintGeocercas(); paintRiesgo(); }
         paintCounters();

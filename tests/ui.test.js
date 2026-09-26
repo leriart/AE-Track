@@ -804,6 +804,11 @@ ok('replay del dia con mini-mapa propio', /function rxReplayMapaCrear\(/.test(sr
 ok('replay: paradas, resumen y exportacion', /function rxReplayParadasHTML\(/.test(src) && /function rxReplayResumenHTML\(/.test(src) && /rondo-replay-paradas/.test(src) && /function rxReplayExportarGeoJSON\(/.test(src) && /function rxReplayExportarParadasCSV\(/.test(src));
 ok('mini-mapa por tarjeta de ruta (resaltado)', /function rxRutasMiniSync\(/.test(src) && /rondo-ru-mini-/.test(src) && /function rxRutaLineasMarcas\(/.test(src) && /glow: true/.test(src));
 
+// v6.0.12: replay con buscador, rango por horas y perfil de velocidad.
+ok('replay: buscador de unidades', /function rxReplayUnidades\(/.test(src) && /function rxReplayFiltrar\(/.test(src) && /id="rondo-replay-buscar"/.test(src) && /id="rondo-replay-sug"/.test(src));
+ok('replay: rango por dia y horas', /id="rondo-replay-desde"/.test(src) && /id="rondo-replay-hasta"/.test(src) && /function rxReplayRango\(/.test(src) && /function rxReplayRangoRapido\(/.test(src) && /data-rango="noche"/.test(src));
+ok('replay: perfil de velocidad', /function rxReplayChartHTML\(/.test(src) && /function rxReplayChartCursor\(/.test(src) && /id="rondo-replay-chart"/.test(src) && /rondo-replay-chart-cur/.test(src));
+
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
 
 // v6.0.9: editor multipunto movible/redimensionable, reordenar y teclado.

@@ -156,9 +156,9 @@ En la parte superior del panel:
   cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
-- **Replay**: reproduce el recorrido de una unidad en un dia, con mini-mapa,
-  linea de tiempo y eventos (paradas, geocercas, excesos, desvios). Ver
-  [Reproducir el dia (Replay)](#reproducir-el-dia-replay).
+- **Replay**: reproduce el recorrido de una unidad en un dia o **rango de
+  horas**, con buscador de unidades, mini-mapa, perfil de velocidad, resumen y
+  eventos. Ver [Reproducir el recorrido (Replay)](#reproducir-el-recorrido-replay).
 - **Chat IA**: asistente conversacional. Solo aparece si la IA esta
   habilitada con una API key en Ajustes > IA. Sirve tanto para consultar
   el estado de la flota como para resolver dudas del propio Rondo. Ver
@@ -597,23 +597,26 @@ El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
 > que pasa la ruta, se tolera hasta `desvioMunicipioM` (3000 m). Ajustable en
 > Ajustes &gt; Rutas.
 
-### Reproducir el dia (Replay)
+### Reproducir el recorrido (Replay)
 
-La pestana **Replay** reproduce el recorrido de una unidad en un dia:
+La pestana **Replay** reproduce el recorrido de una unidad:
 
-1. Elige la **unidad** y la **fecha** (hoy por defecto) y pulsa **Cargar**.
+1. **Busca la unidad** por economico, placa o nombre (tambien puedes escribir un
+   economico y pulsar Enter) y elige el **dia** y el **rango de horas**
+   (desde/hasta). Los botones **Hoy**, **Ayer**, **Turno dia** y **Turno noche**
+   lo rellenan de un clic. Pulsa **Cargar**.
 2. Con **Play/Pausa** y la velocidad (**1 min/s** a **1 h/s**) se reproduce el
-   dia; la barra inferior sirve para saltar a un momento concreto.
+   tramo; la barra inferior y el **perfil de velocidad** (haz clic en la grafica)
+   permiten saltar a un momento concreto.
 3. El **mini-mapa** (tiles de OpenStreetMap) muestra el trazo completo, el tramo
    ya recorrido y la posicion actual. Arrastra para moverlo, rueda para acercar
    y **Centrar** para volver a encuadrarlo.
-4. La **lista de eventos** marca **entradas/salidas de geocerca**,
-   **excesos de velocidad** y **desvios** respecto a la ruta planificada, y hay
-   una lista aparte de **Paradas** (hora, duracion y zona o municipio). Haz clic
-   en una parada o en un evento para saltar a ese momento.
-5. Arriba veras un **resumen del dia** (distancia, duracion, paradas, tiempo
-   detenido, velocidad maxima y excesos) y puedes **exportar** el recorrido a
-   **GeoJSON** o las paradas a **CSV**.
+4. **Paradas** (hora, duracion y zona o municipio) y **Eventos**
+   (entradas/salidas de geocerca, excesos de velocidad y desvios). Haz clic en
+   una parada o en un evento para saltar a ese momento.
+5. Arriba veras un **resumen** (rango de horas, distancia, duracion, paradas,
+   tiempo en movimiento y detenido, velocidad maxima y excesos) y puedes
+   **exportar** el recorrido a **GeoJSON** o las paradas a **CSV**.
 
 Es solo lectura (historial de la plataforma). Atajo: **Alt + 8**. Tambien puedes
 abrirla desde el **clic derecho** sobre una unidad, en **Reproducir el dia

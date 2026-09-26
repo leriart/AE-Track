@@ -201,10 +201,23 @@
              // v6.0.11: tab de replay. Reproduce el recorrido de un dia.
              '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
              '<div class="rondo-replay-bar">' +
-             '<select id="rondo-replay-eco" class="filtro" style="flex:1" title="Unidad a reproducir"></select>' +
+             '<div class="rondo-replay-buscar">' +
+             '<input type="text" id="rondo-replay-buscar" class="filtro" placeholder="Buscar unidad (eco, placa, nombre)..." autocomplete="off" spellcheck="false" title="Buscar la unidad a reproducir">' +
+             '<input type="hidden" id="rondo-replay-eco">' +
+             '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
+             '</div>' +
              '<input type="date" id="rondo-replay-fecha" class="filtro" title="Dia a reproducir">' +
-             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido del dia"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora desde" value="00:00">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora hasta" value="23:59">' +
+             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
              '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '</div>' +
+             '<div class="rondo-replay-quick">' +
+             '<span class="rq-lbl">Rango:</span>' +
+             '<button class="mini" data-rango="hoy">Hoy</button>' +
+             '<button class="mini" data-rango="ayer">Ayer</button>' +
+             '<button class="mini" data-rango="dia">Turno dia</button>' +
+             '<button class="mini" data-rango="noche">Turno noche</button>' +
              '</div>' +
              '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
              '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
@@ -218,6 +231,8 @@
              '</select>' +
              '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
              '</div>' +
+             '<div class="rondo-replay-chart" id="rondo-replay-chart" title="Velocidad en el tiempo; clic para saltar"><div class="rondo-replay-vacio">Perfil de velocidad</div></div>' +
+             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
              '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
              '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
              '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
