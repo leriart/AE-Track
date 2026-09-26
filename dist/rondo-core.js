@@ -399,7 +399,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '6.0.0-dev.5';
+    const VER = '6.0.0-dev.7';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -1990,6 +1990,41 @@ function _extraerZonasDe(items) {
         }
         out.sort((a, b) => b.score - a.score);
         return out.slice(0, Math.max(1, limite || 8));
+    }
+    // v6.0.4: sugerencias EN LINEA de OpenStreetMap (municipios, ciudades,
+    // direcciones...). Se usan al escribir en el editor de paradas y en la
+    // carga rapida cuando lo local (geocercas) no alcanza. Cache acotada y
+    // respeto del throttle de Nominatim (APP.geoLast).
+    const RX_OSM_SUG_CACHE = new Map();
+    async function sugerenciasOSM(query) {
+        const q = String(query || '').trim();
+        if (q.length < 3) return [];
+        const key = norm(q);
+        if (RX_OSM_SUG_CACHE.has(key)) return RX_OSM_SUG_CACHE.get(key);
+        const espera = 1100 - (Date.now() - APP.geoLast);
+        if (espera > 0) await sleep(espera);
+        APP.geoLast = Date.now();
+        try {
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=jsonv2&addressdetails=1&limit=6&accept-language=es&q=' + encodeURIComponent(q), {}, 15000);
+            const arr = Array.isArray(d) ? d : [];
+            const out = arr.map((r) => {
+                const a = r.address || {};
+                const esCiudad = !!(a.city);
+                const esMunicipio = !!(a.town || a.municipality || a.village || a.county);
+                const tipo = esCiudad ? 'ciudad' : (esMunicipio ? 'municipio' : 'lugar');
+                const lat = parseFloat(r.lat), lon = parseFloat(r.lon);
+                if (!isFinite(lat) || !isFinite(lon)) return null;
+                return {
+                    tipo: tipo,
+                    texto: r.name || String(r.display_name || '').split(',')[0],
+                    sub: String(r.display_name || '').split(',').slice(1, 3).join(',').trim(),
+                    coords: { lat: lat, lon: lon }
+                };
+            }).filter((x) => x && x.texto && x.coords);
+            if (RX_OSM_SUG_CACHE.size > 120) RX_OSM_SUG_CACHE.clear();
+            RX_OSM_SUG_CACHE.set(key, out);
+            return out;
+        } catch (_) { return []; }
     }
     function encontrarZona(texto) {
         const q = norm(texto || '');

@@ -514,8 +514,10 @@ En el editor puedes anadir paradas de varios tipos:
 - **Lugares o direcciones** (Nominatim);
 - **Coordenadas** `lat,lon`.
 
-Mientras escribes aparecen **sugerencias** de geocercas y municipios
-(busqueda difusa, sin acentos). Enter anade el texto como lugar.
+Mientras escribes aparecen **sugerencias**: primero tus **geocercas** y
+municipios guardados, y despues **resultados en linea de OpenStreetMap**
+(municipios, ciudades y direcciones). La busqueda es **difusa** (sin acentos y
+tolera errores). Enter anade el texto como lugar.
 
 Cada plan tiene un **modo**:
 
@@ -540,6 +542,49 @@ y `coord:` (coordenadas). Por ejemplo:
 ```
 eco=Monterrey | geo:CEDIS Norte | mun:Saltillo
 ```
+
+### Ver la ruta en el mapa
+
+En la pestana **Rutas** (y en el clic derecho de una unidad) hay acciones para
+ver la ruta:
+
+- **Dibujar en el mapa de la plataforma**: agrega la ruta como una **capa
+  vectorial encima** del mapa (WebGIS, Bing, OpenStreetMap...). Rondo detecta el
+  motor del mapa (Leaflet, OpenLayers, Mapbox o WebGIS) y dibuja la polilinea y
+  las paradas. Volver a pulsar la quita.
+- **Google Maps**: abre la ruta en Google Maps con las paradas como *waypoints*
+  (alternativa garantizada).
+- **OpenStreetMap**: abre el trayecto origen-destino en OSM.
+- **Diagnosticar mapa**: si el boton de dibujar no funciona, esto imprime en la
+  consola (F12) que motor de mapa detecto, para poder ajustarlo.
+
+El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
+
+### Carga rapida de rutas (embarque)
+
+Para asignar de golpe la ruta de un embarque a una unidad:
+
+1. En la pestana **Unidades**, pulsa **Carga rapida** (barra de herramientas).
+2. Elige la **unidad** y el **modo** (mejor ruta / secuencial) y el **motor**.
+3. Pega la lista de **clientes** (una por linea o la tabla completa copiada de
+   Excel: detecta la columna **Cliente**), o **arrastra el archivo**
+   `.xlsx` / `.csv` / `.tsv` / `.txt`.
+4. Pulsa **Emparejar clientes**: Rondo compara cada cliente con tus
+   **geocercas** usando **busqueda difusa** (tolera acentos y errores de
+   escritura) y propone la mejor coincidencia con su nivel de confianza
+   (alta / media / baja / sin).
+5. Revisa: puedes **desmarcar** clientes o **cambiar** la geocerca con el
+   desplegable.
+6. **Asignar y trazar** crea la ruta multipunto de esa unidad y la calcula; o
+   **Solo asignar** si la trazas despues.
+
+Notas:
+
+- Es **solo lectura**: no crea ni modifica nada en Wialon; unicamente arma el
+  plan de ruta local de Rondo.
+- Si un cliente no tiene geocerca, puedes dejar la parada sin asignar (se
+  omite) o elegir otra a mano.
+- El `.xlsx` se lee en el navegador sin subirlo a ningun servidor.
 
 ### Municipios y tolerancia de desvio
 

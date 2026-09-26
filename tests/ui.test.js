@@ -766,5 +766,21 @@ ok('Ajustes Ventanas ya no configura la barra de botones', src.indexOf("c-b-main
 ok('sin ocultar botones por clic derecho', src.indexOf("APP.barra.botones[key] = false") < 0);
 ok('CSS de la barra de IA', /\.rondo-ia-bar\{/.test(src) && /\.rondo-ia-action\{/.test(src));
 
+// v6.0.3: carga rapida de rutas (embarque) por busqueda difusa.
+ok('boton Carga rapida en herramientas', /id="rondo-carga-btn"/.test(src));
+ok('modal de carga rapida', /rondo-carga-modal/.test(src) && /function abrirCarga\(/.test(src));
+ok('parser de clientes y emparejamiento', /function rxCargaParsearFilas\(/.test(src) && /function rxCargaEmparejarCliente\(/.test(src));
+ok('lector xlsx solo lectura', /function rxCargaLeerXlsx\(/.test(src) && /DecompressionStream/.test(src));
+ok('CSS del modal de carga', /#rondo-carga-modal \.carga-card\{/.test(src));
+
+// v6.0.4: municipios/ciudades en el buscador y ruta en el mapa de la plataforma.
+ok('sugerencias en linea de OSM', /async function sugerenciasOSM\(/.test(src) && /nominatim\.openstreetmap\.org\/search\?format=jsonv2/.test(src));
+ok('editor de paradas usa sugerencias OSM (debounce)', /_rpmOsmTimer/.test(src) && /sugerenciasOSM\(q\)/.test(src));
+ok('carga rapida compara tambien municipios', /function cargaCatalogo\(/.test(src) && /municipiosRiesgo/.test(src));
+ok('ruta en el mapa: deteccion multi-motor', /function rxMapaCandidatos\(/.test(src) && /openlayers/.test(src) && /mapbox/.test(src) && /leaflet/.test(src));
+ok('ruta en el mapa: dibujar, quitar y diagnostico', /function rxMapaDibujarRuta\(/.test(src) && /function rxMapaQuitar\(/.test(src) && /function rxMapaDiagnostico\(/.test(src));
+ok('ruta en Google Maps y OSM (fallback)', /function rxRutaGoogleMaps\(/.test(src) && /google\.com\/maps\/dir\//.test(src) && /function rxRutaOSM\(/.test(src));
+ok('botones de mapa por ruta', /rondo-ruta-mapa/.test(src) && /rondo-ruta-gmaps/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

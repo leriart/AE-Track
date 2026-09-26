@@ -143,6 +143,38 @@
             "#rondo-panel .rondo-ia-action-txt b{font:700 12px var(--rondo-font)}\n" +
             "#rondo-panel .rondo-ia-action-txt small{font-size:10px;color:var(--rondo-fg-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
             "#rondo-panel .rondo-ia-action.busy{opacity:.7;pointer-events:none}\n" +
+            // v6.0.3: modal de Carga rapida de rutas (embarque).
+            "#rondo-carga-modal{position:fixed;inset:0;z-index:2147483647;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:14px}\n" +
+            "#rondo-carga-modal.abierto{display:flex}\n" +
+            "#rondo-carga-modal .carga-card{width:min(680px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font)}\n" +
+            "#rondo-carga-modal .carga-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700}\n" +
+            "#rondo-carga-modal .carga-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:9px}\n" +
+            "#rondo-carga-modal .carga-rowline{display:flex;gap:10px;flex-wrap:wrap;align-items:center}\n" +
+            "#rondo-carga-modal .carga-rowline label{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--rondo-fg-dim);font-weight:600}\n" +
+            "#rondo-carga-modal select,#rondo-carga-modal textarea{background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font-size:12px;font-family:var(--rondo-font)}\n" +
+            "#rondo-carga-modal #carga-texto{width:100%;height:110px;resize:vertical;box-sizing:border-box}\n" +
+            "#rondo-carga-modal .carga-drop{display:flex;align-items:center;gap:7px;justify-content:center;padding:10px;border:1.5px dashed var(--rondo-border);border-radius:8px;color:var(--rondo-fg-dim);font-size:12px;cursor:pointer;text-align:center}\n" +
+            "#rondo-carga-modal .carga-drop.over{border-color:var(--rondo-accent-2);color:var(--rondo-fg);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-carga-modal .carga-actions{display:flex;gap:7px;align-items:center;flex-wrap:wrap}\n" +
+            "#rondo-carga-modal .carga-resumen{font-size:11px;color:var(--rondo-fg-dim);margin-left:auto}\n" +
+            "#rondo-carga-modal .carga-btn{display:inline-flex;align-items:center;gap:5px;background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:8px;padding:7px 12px;cursor:pointer;font:600 12px var(--rondo-font)}\n" +
+            "#rondo-carga-modal .carga-btn:hover{background:var(--rondo-bg-strong);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-carga-modal .carga-btn.primary{background:var(--rondo-accent);color:#fff;border-color:transparent}\n" +
+            "#rondo-carga-modal .carga-mini{background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:6px;cursor:pointer;padding:3px 7px}\n" +
+            "#rondo-carga-modal .carga-list{display:flex;flex-direction:column;gap:5px}\n" +
+            "#rondo-carga-modal .carga-row{display:flex;align-items:center;gap:9px;padding:6px 8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
+            "#rondo-carga-modal .carga-row.off{opacity:.5}\n" +
+            "#rondo-carga-modal .carga-check{display:flex;align-items:center}\n" +
+            "#rondo-carga-modal .carga-cliente{flex:1;min-width:0;display:flex;align-items:center;gap:6px}\n" +
+            "#rondo-carga-modal .carga-cliente b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-carga-modal .carga-conf{font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;border-radius:8px;padding:1px 6px;border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-carga-modal .carga-conf-ok{color:var(--rondo-ok-fg);border-color:rgba(67,160,71,.5)}\n" +
+            "#rondo-carga-modal .carga-conf-warn{color:var(--rondo-warn-fg);border-color:rgba(249,168,37,.5)}\n" +
+            "#rondo-carga-modal .carga-conf-dim{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-carga-modal .carga-conf-no{color:var(--rondo-bad-fg);border-color:rgba(183,28,28,.5)}\n" +
+            "#rondo-carga-modal select.carga-zona{flex:0 0 46%;max-width:46%}\n" +
+            "#rondo-carga-modal .carga-vacio{padding:16px;text-align:center;color:var(--rondo-fg-mute);font-size:12px}\n" +
+            "#rondo-carga-modal .carga-foot{display:flex;gap:8px;justify-content:flex-end;padding:11px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
             "#rondo-panel .tabla{overflow:auto;flex:1}\n" +
             "#rondo-panel table{width:100%;border-collapse:collapse}\n" +
             "#rondo-panel th{position:sticky;top:0;background:var(--rondo-bg-soft);text-align:left;padding:6px 9px;font-size:11px;color:var(--rondo-fg-dim);border-bottom:1px solid var(--rondo-border-soft);z-index:1;letter-spacing:.3px;text-transform:uppercase}\n" +
@@ -1101,6 +1133,7 @@
             '<option value="invertir">Invertir orden</option>' +
             '</select>' +
             '<button id="rondo-unidades-menu" class="rondo-tool" data-tabs="unidades" title="Agregar unidades, destinos y rutas multipunto"><span class="rondo-usym">' + UIS.route + '</span> Unidades y rutas</button>' +
+            '<button id="rondo-carga-btn" class="rondo-tool" data-tabs="unidades" title="Carga rapida: pega la lista de clientes del embarque y asigna la ruta a una unidad"><span class="rondo-usym">' + UIS.watch + '</span> Carga rapida</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
             '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar informe del dia"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
@@ -2972,6 +3005,8 @@
                 '<span>' + new Date(r.creada).toLocaleString().slice(0, 16) + '</span>' +
                 '</div></div>' +
                 '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas del plan"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
+                '<button class="mini rondo-ruta-mapa" data-eco="' + esc(eco) + '" title="Dibujar la ruta encima del mapa de la plataforma"><span class="rondo-usym">' + UIS.map + '</span></button>' +
+                '<button class="mini rondo-ruta-gmaps" data-eco="' + esc(eco) + '" title="Abrir la ruta en Google Maps (con paradas)"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
                 '<button class="mini rondo-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="rondo-usym">' + UIS.export + '</span></button>' +
                 '<button class="mini rondo-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
                 '<button class="mini rondo-ruta-calc" data-eco="' + esc(eco) + '" title="Recalcular"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
@@ -4232,6 +4267,8 @@
                         if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
                     }, { peligro: true, okText: 'Eliminar', icon: UIS.close });
                 } else if (b.classList.contains('rondo-plan-edit')) abrirEditorParadas(eco);
+                else if (b.classList.contains('rondo-ruta-mapa')) rxMapaDibujarRuta(eco);
+                else if (b.classList.contains('rondo-ruta-gmaps')) rxRutaGoogleMaps(eco);
                 else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
                 else if (b.classList.contains('rondo-traza-geo')) exportTraza(eco);
                 else if (b.classList.contains('rondo-ruta-calc')) {
@@ -4447,6 +4484,10 @@
                 { id: 'limite', icon: UIS.speed, label: 'Límite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
                 { id: 'ruta-paradas', icon: UIS.route, label: 'Destinos y paradas (multipunto)…' },
+                { id: 'ruta-mapa', icon: UIS.map, label: 'Dibujar ruta en el mapa de la plataforma' },
+                { id: 'ruta-mapa-diag', icon: UIS.info, label: 'Diagnosticar mapa (consola)' },
+                { id: 'ruta-gmaps', icon: UIS.pin, label: 'Abrir ruta en Google Maps' },
+                { id: 'ruta-osm', icon: UIS.zone, label: 'Abrir ruta en OpenStreetMap' },
                 { id: 'ruta-geo', icon: UIS.export, label: 'Exportar ruta GeoJSON' },
                 { id: 'ruta-del', icon: UIS.close, label: 'Eliminar ruta' },
                 { id: 'traza-geo', icon: UIS.csv, label: 'Exportar traza GeoJSON' },
@@ -4487,6 +4528,10 @@
                     adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }, { type: 'number', icon: UIS.speed, okText: 'Guardar' });
             } else if (acc === 'ruta-paradas') abrirEditorParadas(eco);
+            else if (acc === 'ruta-mapa') rxMapaDibujarRuta(eco);
+            else if (acc === 'ruta-mapa-diag') rxMapaDiagnostico();
+            else if (acc === 'ruta-gmaps') rxRutaGoogleMaps(eco);
+            else if (acc === 'ruta-osm') rxRutaOSM(eco);
             else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
             else if (acc === 'ruta-del') {
                 rondoConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
@@ -5303,6 +5348,384 @@
         reader.readAsText(file);
     }
 
+    /* ====================== CARGA RAPIDA DE RUTAS (embarque) ======================
+     * v6.0.3. Pegas (o sueltas el .xlsx/.csv de) una lista de clientes, se
+     * emparejan con las geocercas existentes por BUSQUEDA DIFUSA y se arma la
+     * ruta multipunto de una unidad.
+     *
+     * Es 100% local y de SOLO LECTURA: no crea ni modifica nada en Wialon.
+     * Unicamente construye el plan de ruta de Rondo (APP.planes).
+     */
+
+    /* === BEGIN: rxCargaParse === */
+    // Limpia el nombre de un cliente: quita numeracion ("1. ", "2) ") y espacios.
+    function rxCargaLimpiarCliente(txt) {
+        let s = String(txt == null ? '' : txt).replace(/\s+/g, ' ').trim();
+        s = s.replace(/^\d+\s*[.):\-]?\s*/, '');
+        return s.trim();
+    }
+    // Busca la fila de encabezado con la columna "Cliente".
+    function rxCargaColumnaCliente(filas) {
+        for (let i = 0; i < filas.length; i++) {
+            const fila = filas[i] || [];
+            for (let j = 0; j < fila.length; j++) {
+                if (norm(fila[j] || '') === 'CLIENTE') return { header: i, col: j };
+            }
+        }
+        return null;
+    }
+    // Convierte una matriz de celdas en la lista (unica) de clientes.
+    function rxCargaParsearFilas(filas) {
+        const out = [];
+        const vistos = new Set();
+        const empujar = (s) => {
+            const c = rxCargaLimpiarCliente(s);
+            if (!c || c.length < 3) return;
+            const k = norm(c);
+            if (vistos.has(k)) return;
+            vistos.add(k); out.push(c);
+        };
+        const hdr = rxCargaColumnaCliente(filas);
+        if (hdr) {
+            for (let i = hdr.header + 1; i < filas.length; i++) empujar((filas[i] || [])[hdr.col] || '');
+        } else {
+            for (let i = 0; i < filas.length; i++) {
+                const fila = filas[i] || [];
+                let cand = '';
+                for (let j = 0; j < fila.length; j++) {
+                    const v = String(fila[j] || '').trim();
+                    if (v && !/^[\d.,\/-]+$/.test(v)) cand = v;
+                }
+                if (!cand) cand = String(fila[0] || '').trim();
+                empujar(cand);
+            }
+        }
+        return out;
+    }
+    // Texto pegado (columnas separadas por tabulador) -> clientes.
+    function rxCargaParsearTexto(texto) {
+        const filas = String(texto || '').split(/\r?\n/).map((l) => l.split('\t').map((c) => c.trim()));
+        return rxCargaParsearFilas(filas);
+    }
+    // Puntua la mejor geocerca para un cliente. Devuelve {zona, score}.
+    function rxCargaEmparejarCliente(cliente, zonas) {
+        let best = null, bestSc = 0;
+        const zs = zonas || [];
+        for (let i = 0; i < zs.length; i++) {
+            const n = zs[i] ? (zs[i].texto || zs[i].n || '') : '';
+            if (!n) continue;
+            const sc = fuzzyScore(cliente, n);
+            if (sc > bestSc) { bestSc = sc; best = zs[i]; }
+        }
+        return { zona: best, score: bestSc };
+    }
+    function rxCargaConfianza(score) {
+        if (score >= 800) return { etq: 'alta', clase: 'ok' };
+        if (score >= 400) return { etq: 'media', clase: 'warn' };
+        if (score > 0) return { etq: 'baja', clase: 'dim' };
+        return { etq: 'sin', clase: 'no' };
+    }
+    /* === END: rxCargaParse === */
+
+    // ---------------------------------------------------------------- xlsx (solo lectura)
+    function rxCargaColIndex(letras) {
+        let n = 0;
+        for (let i = 0; i < letras.length; i++) n = n * 26 + (letras.charCodeAt(i) - 64);
+        return n - 1;
+    }
+    async function rxCargaUnzip(buf) {
+        const dv = new DataView(buf), u8 = new Uint8Array(buf);
+        let eocd = -1;
+        const from = Math.max(0, u8.length - 66000);
+        for (let i = u8.length - 22; i >= from; i--) {
+            if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+        }
+        if (eocd < 0) return null;
+        const n = dv.getUint16(eocd + 10, true);
+        let off = dv.getUint32(eocd + 16, true);
+        const out = {};
+        const dec = new TextDecoder();
+        for (let k = 0; k < n && off + 46 <= u8.length; k++) {
+            if (dv.getUint32(off, true) !== 0x02014b50) break;
+            const method = dv.getUint16(off + 10, true);
+            const compSize = dv.getUint32(off + 20, true);
+            const nameLen = dv.getUint16(off + 28, true);
+            const extraLen = dv.getUint16(off + 30, true);
+            const commentLen = dv.getUint16(off + 32, true);
+            const localOff = dv.getUint32(off + 42, true);
+            const name = dec.decode(u8.subarray(off + 46, off + 46 + nameLen));
+            const lNameLen = dv.getUint16(localOff + 26, true);
+            const lExtraLen = dv.getUint16(localOff + 28, true);
+            const dataStart = localOff + 30 + lNameLen + lExtraLen;
+            out[name] = { method: method, data: u8.subarray(dataStart, dataStart + compSize) };
+            off += 46 + nameLen + extraLen + commentLen;
+        }
+        return out;
+    }
+    async function rxCargaInflate(entry) {
+        if (!entry) return null;
+        if (entry.method === 0) return new TextDecoder().decode(entry.data);
+        if (typeof DecompressionStream === 'undefined') return null;
+        try {
+            const stream = new Blob([entry.data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));
+            const buf = await new Response(stream).arrayBuffer();
+            return new TextDecoder().decode(buf);
+        } catch (_) { return null; }
+    }
+    function rxCargaSharedStrings(xml) {
+        const out = [];
+        if (!xml || typeof DOMParser === 'undefined') return out;
+        const doc = new DOMParser().parseFromString(xml, 'application/xml');
+        const sis = doc.getElementsByTagName('si');
+        for (let i = 0; i < sis.length; i++) {
+            const ts = sis[i].getElementsByTagName('t');
+            let s = '';
+            for (let j = 0; j < ts.length; j++) s += ts[j].textContent || '';
+            out.push(s);
+        }
+        return out;
+    }
+    function rxCargaSheetRows(xml, shared) {
+        const rows = [];
+        if (!xml || typeof DOMParser === 'undefined') return rows;
+        const doc = new DOMParser().parseFromString(xml, 'application/xml');
+        const rowEls = doc.getElementsByTagName('row');
+        for (let i = 0; i < rowEls.length; i++) {
+            const cells = rowEls[i].getElementsByTagName('c');
+            const fila = [];
+            for (let j = 0; j < cells.length; j++) {
+                const c = cells[j];
+                const ref = c.getAttribute('r') || '';
+                const idx = rxCargaColIndex(ref.replace(/[0-9]/g, ''));
+                const t = c.getAttribute('t');
+                const v = c.getElementsByTagName('v')[0];
+                let val = v ? (v.textContent || '') : '';
+                if (t === 's') val = shared[parseInt(val, 10)] || '';
+                if (idx >= 0) fila[idx] = val;
+            }
+            rows.push(fila);
+        }
+        return rows;
+    }
+    async function rxCargaLeerXlsx(buf) {
+        const files = await rxCargaUnzip(buf);
+        if (!files) return null;
+        const shared = rxCargaSharedStrings(await rxCargaInflate(files['xl/sharedStrings.xml']));
+        const hoja = Object.keys(files).filter((n) => /^xl\/worksheets\/sheet\d+\.xml$/.test(n)).sort()[0];
+        if (!hoja) return null;
+        return rxCargaSheetRows(await rxCargaInflate(files[hoja]), shared);
+    }
+
+    // ------------------------------------------------------------------- UI
+    let _carga = null;
+    function cargaModalEl() {
+        let el = byId('rondo-carga-modal');
+        if (el) return el;
+        el = makeEl('div', { id: 'rondo-carga-modal' });
+        document.body.appendChild(el);
+        el.addEventListener('pointerdown', (e) => { if (e.target === el) cerrarCarga(); });
+        return el;
+    }
+    function cerrarCarga() {
+        const el = byId('rondo-carga-modal');
+        if (el) el.classList.remove('abierto');
+        _carga = null;
+    }
+    function abrirCarga(eco) {
+        const vigiladas = (APP.unidades || []).filter(shouldWatch).map((u) => parseUnitName(u));
+        if (!vigiladas.length) {
+            adviceWarn('Sin unidades vigiladas', 'Vigila una unidad antes de asignarle una ruta.');
+            return;
+        }
+        const sel = eco || APP.cargaEco || (vigiladas[0].eco || vigiladas[0].clave);
+        _carga = { eco: sel, modo: 'optimo', engine: APP.config.autoRutaModo || 'osrm', filas: [], crudo: '', catalogo: null };
+        renderCarga();
+        cargaModalEl().classList.add('abierto');
+    }
+    // Catalogo de destinos: geocercas + municipios (OSM y zonas de riesgo).
+    function cargaCatalogo() {
+        const out = [];
+        const zs = (APP.zonas || []).slice().sort((a, b) => String(a.n || '').localeCompare(String(b.n || ''), 'es'));
+        for (let i = 0; i < zs.length; i++) {
+            const z = zs[i];
+            out.push({ tipo: 'geocerca', texto: z.n || ('Zona ' + z.id), sub: 'geocerca', coords: centroDeZona(z), ref: z });
+        }
+        const ms = (APP.municipios || []).concat(APP.municipiosRiesgo || []);
+        const vistos = new Set();
+        for (let i = 0; i < ms.length; i++) {
+            const m = ms[i];
+            if (!m || !m.nombre) continue;
+            const k = norm(m.nombre) + '|' + norm(m.estado || '');
+            if (vistos.has(k)) continue;
+            vistos.add(k);
+            out.push({ tipo: 'municipio', texto: m.nombre, sub: (m.estado || '') + ' \u00b7 municipio', coords: m.centro });
+        }
+        return out;
+    }
+    function renderCarga() {
+        const el = cargaModalEl();
+        if (!el || !_carga) return;
+        const vigiladas = (APP.unidades || []).filter(shouldWatch).map((u) => parseUnitName(u)).filter((i) => i.eco || i.clave);
+        const opcionesUnidad = vigiladas.map((i) => {
+            const eco = i.eco || i.clave;
+            return '<option value="' + esc(eco) + '"' + (eco === _carga.eco ? ' selected' : '') + '>' + esc(eco) + (i.placa ? ' \u00b7 ' + esc(i.placa) : '') + '</option>';
+        }).join('');
+        if (!_carga.catalogo) _carga.catalogo = cargaCatalogo();
+        const catalogo = _carga.catalogo;
+        const opcionesCatalogo = (sel) => '<option value="">\u2014 sin asignar \u2014</option>' + catalogo.map((it, k) =>
+            '<option value="' + k + '"' + (sel && it.texto === sel.texto && it.tipo === sel.tipo ? ' selected' : '') + '>' + esc(it.texto) + ' \u00b7 ' + esc(it.tipo) + '</option>').join('');
+        const filasHtml = _carga.filas.map((f, i) => {
+            const conf = rxCargaConfianza(f.score);
+            return '<div class="carga-row' + (f.incluir ? '' : ' off') + '" data-i="' + i + '">' +
+                '<label class="carga-check"><input type="checkbox" data-carga-fila="' + i + '"' + (f.incluir ? ' checked' : '') + '></label>' +
+                '<div class="carga-cliente"><b>' + esc(f.cliente) + '</b><small class="carga-conf carga-conf-' + conf.clase + '">' + conf.etq + '</small></div>' +
+                '<select class="carga-zona" data-carga-fila="' + i + '">' + opcionesCatalogo(f.item) + '</select>' +
+                '</div>';
+        }).join('') || '<div class="carga-vacio">Pega la lista de clientes o suelta el archivo (.xlsx, .csv, .txt) y pulsa <b>Emparejar</b>.</div>';
+        const nMatch = _carga.filas.filter((f) => f.item).length;
+        el.innerHTML =
+            '<div class="carga-card">' +
+            '<div class="carga-head"><span class="rondo-usym">' + UIS.route + '</span> Carga rapida de rutas' +
+            '<span style="flex:1"></span><button class="carga-mini" data-carga="cerrar"><span class="rondo-usym">' + UIS.close + '</span></button></div>' +
+            '<div class="carga-body">' +
+            '<div class="carga-rowline">' +
+            '<label>Unidad <select id="carga-unidad">' + opcionesUnidad + '</select></label>' +
+            '<label>Modo <select id="carga-modo">' +
+            '<option value="optimo"' + (_carga.modo === 'optimo' ? ' selected' : '') + '>Mejor ruta (circuito)</option>' +
+            '<option value="secuencial"' + (_carga.modo === 'secuencial' ? ' selected' : '') + '>Secuencial</option>' +
+            '</select></label>' +
+            '<label>Motor <select id="carga-engine">' +
+            '<option value="osrm"' + (_carga.engine === 'osrm' ? ' selected' : '') + '>OSRM</option>' +
+            '<option value="astar"' + (_carga.engine === 'astar' ? ' selected' : '') + '>A*</option>' +
+            '</select></label>' +
+            '</div>' +
+            '<textarea id="carga-texto" placeholder="Pega aqui los clientes (una linea o la tabla completa de Excel; detecta la columna Cliente).">' + esc(_carga.crudo || '') + '</textarea>' +
+            '<div class="carga-drop" id="carga-drop"><span class="rondo-usym">' + UIS.drop + '</span> Arrastra aqui el .xlsx / .csv / .txt (o usa el selector) <input type="file" id="carga-file" accept=".xlsx,.csv,.tsv,.txt" hidden></div>' +
+            '<div class="carga-actions">' +
+            '<button class="carga-btn" data-carga="file"><span class="rondo-usym">' + UIS.upload + '</span> Elegir archivo</button>' +
+            '<button class="carga-btn primary" data-carga="match"><span class="rondo-usym">' + UIS.check + '</span> Emparejar ' + (_carga.filas.length ? 'de nuevo' : 'clientes') + '</button>' +
+            '<span class="carga-resumen">' + (_carga.filas.length ? (_carga.filas.length + ' cliente(s) \u00b7 ' + nMatch + ' con geocerca') : '') + '</span>' +
+            '</div>' +
+            '<div class="carga-list">' + filasHtml + '</div>' +
+            '</div>' +
+            '<div class="carga-foot">' +
+            '<button class="carga-btn" data-carga="cerrar">Cancelar</button>' +
+            '<button class="carga-btn" data-carga="asignar">Solo asignar</button>' +
+            '<button class="carga-btn primary" data-carga="asignar-trazar"><span class="rondo-usym">' + UIS.route + '</span> Asignar y trazar</button>' +
+            '</div>' +
+            '</div>';
+        byId('carga-unidad').onchange = (e) => { if (_carga) _carga.eco = e.target.value; };
+        byId('carga-modo').onchange = (e) => { if (_carga) _carga.modo = e.target.value; };
+        byId('carga-engine').onchange = (e) => { if (_carga) _carga.engine = e.target.value; };
+        byId('carga-texto').oninput = (e) => { if (_carga) _carga.crudo = e.target.value; };
+        el.querySelectorAll('input[data-carga-fila]').forEach((b) => {
+            b.onchange = () => { const i = +b.dataset.cargaFila; if (_carga && _carga.filas[i]) _carga.filas[i].incluir = b.checked; renderCarga(); };
+        });
+        el.querySelectorAll('select.carga-zona').forEach((s) => {
+            s.onchange = () => {
+                const i = +s.dataset.cargaFila;
+                if (!_carga || !_carga.filas[i]) return;
+                const it = catalogo[+s.value] || null;
+                _carga.filas[i].item = it; _carga.filas[i].score = it ? 999 : 0;
+                renderCarga();
+            };
+        });
+        const drop = byId('carga-drop');
+        if (drop) {
+            drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+            drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+            drop.addEventListener('drop', (e) => {
+                e.preventDefault(); drop.classList.remove('over');
+                const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+                if (f) cargarArchivo(f);
+            });
+        }
+    }
+    async function cargarArchivo(file) {
+        if (!file || !_carga) return;
+        try {
+            let clientes = [];
+            if (/\.xlsx$/i.test(file.name)) {
+                const buf = await file.arrayBuffer();
+                const filas = await rxCargaLeerXlsx(buf);
+                if (!filas) { adviceWarn('No se pudo leer el Excel', 'Copia y pega la columna de clientes.'); return; }
+                clientes = rxCargaParsearFilas(filas);
+            } else {
+                clientes = rxCargaParsearTexto(await file.text());
+            }
+            if (!clientes.length) { adviceWarn('Sin clientes', 'No se reconocio ninguna fila de cliente.'); return; }
+            _carga.crudo = clientes.join('\n');
+            emparejarCarga();
+            adviceOk('Archivo cargado', clientes.length + ' cliente(s)');
+        } catch (e) {
+            adviceErr('Error leyendo el archivo', (e && e.message) || '');
+        }
+    }
+    function emparejarCarga() {
+        if (!_carga) return;
+        const texto = (byId('carga-texto') && byId('carga-texto').value) || _carga.crudo || '';
+        const clientes = rxCargaParsearTexto(texto);
+        _carga.crudo = texto;
+        _carga.catalogo = cargaCatalogo();
+        _carga.filas = clientes.map((c) => {
+            const m = rxCargaEmparejarCliente(c, _carga.catalogo);
+            return { cliente: c, item: m.zona, score: m.score, incluir: !!m.zona };
+        });
+        renderCarga();
+    }
+    function asignarCarga(trazar) {
+        if (!_carga) return;
+        const eco = _carga.eco;
+        const it = unitByEco(eco);
+        const clave = it ? it.info.clave : eco;
+        const paradas = _carga.filas
+            .filter((f) => f.incluir && f.item)
+            .map((f) => {
+                const item = f.item;
+                if (item.tipo === 'geocerca' && item.ref) return nuevaParada('geocerca', item.texto, centroDeZona(item.ref));
+                return nuevaParada(item.tipo === 'ciudad' ? 'municipio' : item.tipo, item.texto, item.coords || null);
+            });
+        if (!paradas.length) { adviceWarn('Sin paradas', 'Empareja al menos un cliente con una geocerca.'); return; }
+        const modo = _carga.modo === 'secuencial' ? 'secuencial' : 'optimo';
+        const plan = { modo: modo, circuito: modo === 'optimo', paradas: paradas };
+        APP.planes[clave] = plan;
+        APP.watchMap[eco] = planATexto(plan);
+        APP.cargaEco = eco;
+        if (APP.orden.indexOf(eco) < 0) APP.orden.push(eco);
+        guardarPlanes(); guardarLista(); guardarOrden();
+        const engine = _carga.engine === 'astar' ? 'astar' : 'osrm';
+        cerrarCarga();
+        pintarModalLista();
+        paintInfo();
+        adviceOk('Ruta asignada a ' + eco, paradas.length + ' parada(s) \u00b7 ' + (modo === 'optimo' ? 'mejor ruta' : 'secuencial'));
+        if (trazar) {
+            if (engine === 'astar' && !APP.config.overpass) adviceWarn('A* desactivado', 'Se usara OSRM; activa Overpass en Ajustes \u00b7 Rutas.');
+            planearRuta(eco, plan, null, (engine === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
+            if (APP.tab === 'rutas') paintRutas();
+        }
+    }
+    // Delegacion de clics (el boton y el modal se crean/inyectan dinamicamente).
+    document.addEventListener('click', (e) => {
+        const t = e.target;
+        if (!t || !t.closest) return;
+        if (t.closest('#rondo-carga-btn')) { e.preventDefault(); abrirCarga(); return; }
+        const acc = t.closest('[data-carga]');
+        if (!acc) return;
+        const a = acc.dataset.carga;
+        if (a === 'cerrar') cerrarCarga();
+        else if (a === 'file') { const f = byId('carga-file'); if (f) f.click(); }
+        else if (a === 'match') emparejarCarga();
+        else if (a === 'asignar') asignarCarga(false);
+        else if (a === 'asignar-trazar') asignarCarga(true);
+    });
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'carga-file' && e.target.files && e.target.files[0]) cargarArchivo(e.target.files[0]);
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        const el = byId('rondo-carga-modal');
+        if (el && el.classList.contains('abierto')) cerrarCarga();
+    });
     /* ====================== INIT ====================== */
     async function init() {
         // Idempotente: en modo hibrido el chunk ui y el bootstrap pueden
@@ -5408,3 +5831,205 @@
     }
     function log() { try { console.log.apply(console, ['[Rondo]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 
+    init();
+
+    /* ====================== RUTA EN EL MAPA DE LA PLATAFORMA ======================
+     * v6.0.4. Dibuja la ruta planificada de una unidad ENCIMA del mapa de la
+     * plataforma. El overlay es una capa vectorial, asi que funciona con
+     * cualquiera de los mapas base de la plataforma (WebGIS, Bing, OSM...).
+     *
+     * Es solo lectura: agrega una capa de dibujo y no toca nada de Wialon.
+     * Se intenta detectar el motor del mapa (Leaflet, OpenLayers, Mapbox o el
+     * WebGIS de Wialon) y, si no se puede, se ofrecen alternativas (Google
+     * Maps / exportar GeoJSON).
+     */
+    let _rxMapaLayer = null;   // capa/overlay activo
+    let _rxMapaMotor = null;   // 'leaflet' | 'openlayers' | 'mapbox'
+    let _rxMapaInst = null;    // instancia del mapa
+    let _rxMapaClave = null;   // ruta dibujada
+
+    function rxMapaClasificar(o) {
+        if (!o || typeof o !== 'object') return null;
+        try {
+            if (typeof o.addLayer === 'function' && o._container && typeof o.getCenter === 'function') return 'leaflet';
+            if (typeof o.getTargetElement === 'function' && typeof o.getView === 'function' && typeof o.addLayer === 'function') return 'openlayers';
+            if (typeof o.addSource === 'function' && typeof o.addLayer === 'function' && typeof o.getCanvas === 'function') return 'mapbox';
+            if (o.map && typeof o.map.addLayer === 'function') return 'wialon';
+        } catch (_) { /* noop */ }
+        return null;
+    }
+    // Busca una instancia de mapa: nombres tipicos, globals conocidos y, si no,
+    // un escaneo superficial del objeto global de la pagina.
+    function rxMapaCandidatos() {
+        const out = [];
+        const vistos = new Set();
+        const probar = (nombre, obj) => {
+            if (!obj || typeof obj !== 'object' || vistos.has(obj)) return;
+            const motor = rxMapaClasificar(obj);
+            if (motor) { vistos.add(obj); out.push({ nombre: nombre, motor: motor, obj: obj }); }
+        };
+        // Globals conocidos (Wialon WebGIS, Leaflet, OpenLayers, Mapbox).
+        try { probar('webgis', PAGE.webgis); } catch (_) { /* noop */ }
+        try { probar('map', PAGE.map); } catch (_) { /* noop */ }
+        try { probar('mapa', PAGE.mapa); } catch (_) { /* noop */ }
+        try { probar('leafletMap', PAGE.leafletMap); } catch (_) { /* noop */ }
+        try { probar('wialonMap', PAGE.wialonMap); } catch (_) { /* noop */ }
+        try { probar('gmap', PAGE.gmap); } catch (_) { /* noop */ }
+        try { probar('_map', PAGE._map); } catch (_) { /* noop */ }
+        try { if (PAGE.webgis && PAGE.webgis.map) probar('webgis.map', PAGE.webgis.map); } catch (_) { /* noop */ }
+        try { if (PAGE.L && PAGE.L.Map && PAGE.L.Map._instances) Object.keys(PAGE.L.Map._instances).forEach((k) => probar('L.Map#' + k, PAGE.L.Map._instances[k])); } catch (_) { /* noop */ }
+        // Escaneo superficial.
+        try {
+            let n = 0;
+            for (const k in PAGE) {
+                if (n > 4000 || out.length > 3) break;
+                n++;
+                let v = null;
+                try { v = PAGE[k]; } catch (_) { continue; }
+                probar(k, v);
+            }
+        } catch (_) { /* noop */ }
+        // Prefiere motores que sepamos dibujar.
+        const orden = { leaflet: 0, mapbox: 1, openlayers: 2, wialon: 3 };
+        out.sort((a, b) => (orden[a.motor] || 9) - (orden[b.motor] || 9));
+        return out;
+    }
+    function rxMapaDiagnostico() {
+        const c = rxMapaCandidatos();
+        try {
+            console.log('[Rondo] mapas detectados:', c.map((x) => x.nombre + ' (' + x.motor + ')'));
+            console.log('[Rondo] L:', !!PAGE.L, 'ol:', !!PAGE.ol, 'mapboxgl:', !!PAGE.mapboxgl, 'webgis:', !!PAGE.webgis);
+        } catch (_) { /* noop */ }
+        advice(c.length ? 'Mapa detectado' : 'Mapa no detectado',
+            c.length ? (c[0].nombre + ' \u00b7 ' + c[0].motor) : 'Revisa la consola (F12) para mas detalle.');
+        return c;
+    }
+    function rxMapaQuitar() {
+        try {
+            if (_rxMapaLayer) {
+                if (_rxMapaMotor === 'leaflet' && typeof _rxMapaLayer.remove === 'function') _rxMapaLayer.remove();
+                else if (_rxMapaMotor === 'openlayers' && _rxMapaInst && typeof _rxMapaInst.removeLayer === 'function') _rxMapaInst.removeLayer(_rxMapaLayer);
+                else if (_rxMapaMotor === 'mapbox' && _rxMapaInst) {
+                    if (_rxMapaInst.getLayer('rondo-ruta-line')) _rxMapaInst.removeLayer('rondo-ruta-line');
+                    if (_rxMapaInst.getLayer('rondo-ruta-pts')) _rxMapaInst.removeLayer('rondo-ruta-pts');
+                    if (_rxMapaInst.getSource('rondo-ruta')) _rxMapaInst.removeSource('rondo-ruta');
+                }
+            }
+        } catch (_) { /* noop */ }
+        _rxMapaLayer = null; _rxMapaMotor = null; _rxMapaInst = null; _rxMapaClave = null;
+    }
+    function rxMapaRutaActiva() { return !!_rxMapaLayer; }
+
+    function rxMapaDibujarLeaflet(map, L, r) {
+        const grp = L.layerGroup();
+        const pts = r.coords.map((c) => [c[1], c[0]]);
+        L.polyline(pts, { color: '#850D22', weight: 4, opacity: 0.9 }).addTo(grp);
+        if (r.origen) L.circleMarker([r.origen.lat, r.origen.lon], { radius: 6, color: '#2e7d32', fillColor: '#2e7d32', fillOpacity: 1 }).bindTooltip('Origen').addTo(grp);
+        (r.paradas || []).forEach((p, i) => {
+            if (!p.coords) return;
+            L.circleMarker([p.coords.lat, p.coords.lon], { radius: 5, color: '#1565c0', fillColor: '#1565c0', fillOpacity: 1 })
+                .bindTooltip((i + 1) + '. ' + (p.texto || '')).addTo(grp);
+        });
+        if (r.destino) L.circleMarker([r.destino.lat, r.destino.lon], { radius: 6, color: '#b71c1c', fillColor: '#b71c1c', fillOpacity: 1 }).bindTooltip('Destino').addTo(grp);
+        grp.addTo(map);
+        try { map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] }); } catch (_) { /* noop */ }
+        return grp;
+    }
+    function rxMapaDibujarMapbox(map, r) {
+        const src = { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: r.coords } } };
+        if (map.getSource('rondo-ruta')) map.removeSource('rondo-ruta');
+        map.addSource('rondo-ruta', src);
+        map.addLayer({ id: 'rondo-ruta-line', type: 'line', source: 'rondo-ruta', paint: { 'line-color': '#850D22', 'line-width': 4, 'line-opacity': 0.9 } });
+        const feat = (r.paradas || []).filter((p) => p.coords).map((p) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.coords.lon, p.coords.lat] } }));
+        feat.unshift({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [r.origen.lon, r.origen.lat] } });
+        map.addSource('rondo-ruta-pts', { type: 'geojson', data: { type: 'FeatureCollection', features: feat } });
+        map.addLayer({ id: 'rondo-ruta-pts', type: 'circle', source: 'rondo-ruta-pts', paint: { 'circle-radius': 5, 'circle-color': '#1565c0' } });
+        try {
+            const xs = r.coords.map((c) => c[0]), ys = r.coords.map((c) => c[1]);
+            map.fitBounds([[Math.min.apply(null, xs), Math.min.apply(null, ys)], [Math.max.apply(null, xs), Math.max.apply(null, ys)]], { padding: 40 });
+        } catch (_) { /* noop */ }
+        return true;
+    }
+    function rxMapaDibujarOL(map, ol, r) {
+        const geom = new ol.geom.LineString(r.coords);
+        if (ol.proj && ol.proj.fromLonLat) geom.transform('EPSG:4326', 'EPSG:3857');
+        const features = [new ol.Feature({ geometry: geom })];
+        (r.paradas || []).forEach((p) => {
+            if (!p.coords) return;
+            const g = new ol.geom.Point([p.coords.lon, p.coords.lat]);
+            if (ol.proj && ol.proj.fromLonLat) g.transform('EPSG:4326', 'EPSG:3857');
+            features.push(new ol.Feature({ geometry: g }));
+        });
+        const source = new ol.source.Vector({ features: features });
+        const layer = new ol.layer.Vector({ source: source, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#850D22', width: 4 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#1565c0' }) }) }) });
+        map.addLayer(layer);
+        try {
+            const ext = source.getExtent();
+            if (ext && map.getView) map.getView().fit(ext, { padding: [30, 30, 30, 30] });
+        } catch (_) { /* noop */ }
+        return layer;
+    }
+
+    function rxMapaDibujarRuta(eco) {
+        const it = unitByEco(eco);
+        const r = it ? rutaDe(it.info) : (APP.rutas[eco] || null);
+        if (!r || !r.coords || r.coords.length < 2) { adviceWarn('Sin ruta', 'No hay una ruta trazada para ' + eco + '.'); return false; }
+        const clave = (it && it.info.clave) || eco;
+        if (_rxMapaLayer && _rxMapaClave === clave) { rxMapaQuitar(); advice('Ruta quitada del mapa', eco); if (APP.tab === 'rutas') paintRutas(); return true; }
+        const cands = rxMapaCandidatos();
+        if (!cands.length) {
+            adviceWarn('Mapa no detectado', 'Usa "Google Maps" o exporta el GeoJSON. Abre la consola (F12) y pulsa el boton del mapa para diagnosticar.');
+            try { console.log('[Rondo] sin mapa detectado. L=', !!PAGE.L, 'ol=', !!PAGE.ol, 'mapboxgl=', !!PAGE.mapboxgl, 'webgis=', !!PAGE.webgis); } catch (_) { /* noop */ }
+            return false;
+        }
+        const c = cands[0];
+        rxMapaQuitar();
+        try {
+            if (c.motor === 'leaflet') {
+                const L = PAGE.L;
+                _rxMapaLayer = rxMapaDibujarLeaflet(c.obj, L, r);
+                _rxMapaMotor = 'leaflet'; _rxMapaInst = c.obj;
+            } else if (c.motor === 'mapbox') {
+                rxMapaDibujarMapbox(c.obj, r);
+                _rxMapaLayer = true; _rxMapaMotor = 'mapbox'; _rxMapaInst = c.obj;
+            } else if (c.motor === 'openlayers') {
+                _rxMapaLayer = rxMapaDibujarOL(c.obj, PAGE.ol, r);
+                _rxMapaMotor = 'openlayers'; _rxMapaInst = c.obj;
+            } else {
+                adviceWarn('Motor no soportado', 'Mapa "' + c.nombre + '". Exporta el GeoJSON.');
+                return false;
+            }
+            _rxMapaClave = clave;
+            adviceOk('Ruta dibujada en el mapa', eco + ' \u00b7 ' + Math.round((r.total || 0) / 1000) + ' km');
+            if (APP.tab === 'rutas') paintRutas();
+            return true;
+        } catch (e) {
+            adviceErr('No se pudo dibujar', (e && e.message) || '');
+            return false;
+        }
+    }
+    // Alternativa garantizada: abrir la ruta en Google Maps con paradas.
+    function rxRutaGoogleMaps(eco) {
+        const it = unitByEco(eco);
+        const r = it ? rutaDe(it.info) : (APP.rutas[eco] || null);
+        if (!r || !r.origen || !r.destino) { adviceWarn('Sin ruta', eco); return; }
+        const paradas = (r.paradas || []).map((p) => p.coords).filter(Boolean);
+        const o = r.origen, d = r.destino;
+        let url = 'https://www.google.com/maps/dir/?api=1&origin=' + o.lat + ',' + o.lon +
+            '&destination=' + d.lat + ',' + d.lon + '&travelmode=driving';
+        if (paradas.length > 1) {
+            const wp = paradas.slice(0, -1).map((p) => p.lat + ',' + p.lon).slice(0, 10).join('|');
+            if (wp) url += '&waypoints=' + encodeURIComponent(wp);
+        }
+        try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+    }
+    // Alternativa: abrir la ruta en OpenStreetMap (una parada como destino).
+    function rxRutaOSM(eco) {
+        const it = unitByEco(eco);
+        const r = it ? rutaDe(it.info) : (APP.rutas[eco] || null);
+        if (!r || !r.origen) { adviceWarn('Sin ruta', eco); return; }
+        const d = r.destino || r.origen;
+        const url = 'https://www.openstreetmap.org/directions?engine=fossgis_osrm_car&route=' +
+            r.origen.lat + ',' + r.origen.lon + ';' + d.lat + ',' + d.lon;
+        try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
+    }

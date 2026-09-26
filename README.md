@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.0.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.0.0.md)
-[![tests](https://img.shields.io/badge/tests-971%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-999%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -81,6 +81,12 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   **mejor ruta** (optimiza el orden y cierra el circuito en el origen). El
   editor de paradas tiene **busqueda difusa con sugerencias** de geocercas y
   municipios.
+- **Carga rapida de rutas (embarque)**: pega la lista de **clientes** (o suelta
+  el `.xlsx`/`.csv`), se emparejan con tus **geocercas y municipios** por
+  **busqueda difusa** y se asigna la ruta multipunto a la unidad elegida. Solo lectura.
+- **Ruta en el mapa**: dibuja la ruta planificada como **capa encima del mapa de
+  la plataforma** (WebGIS, Bing, OpenStreetMap...), con alternativa en **Google
+  Maps** u **OpenStreetMap**. Solo lectura.
 - **Municipios de OpenStreetMap**: se guarda su poligono/bbox y se usa como
   **tolerancia de desvio** (si la unidad sigue dentro del municipio de la ruta,
   no se marca desvio hasta un margen configurable).
@@ -350,11 +356,12 @@ node tests/caravana.test.js
 node tests/riesgo.test.js
 node tests/paradas.test.js
 node tests/geocercas.test.js
+node tests/carga.test.js
 node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**12 suites, ~971 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**13 suites, ~999 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

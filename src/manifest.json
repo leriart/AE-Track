@@ -185,7 +185,15 @@
       "chunk": "ui"
     },
     {
-      "file": "46-init.js",
+      "file": "46-carga-embarque.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "47-init.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "48-mapa-ruta.js",
       "chunk": "ui"
     }
   ]
