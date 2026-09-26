@@ -36,6 +36,7 @@ for (const s of lineas) {
 }
 const titulos = { feat: 'Novedades', fix: 'Correcciones', perf: 'Rendimiento', refactor: 'Refactor', docs: 'Documentacion', chore: 'Mantenimiento', otro: 'Otros' };
 let md = '# ' + version + '\n\nGenerado automaticamente a partir de los cambios.\n';
+if (!lineas.length) md += '\n- Mantenimiento interno y regeneracion de artefactos.\n';
 for (const k of Object.keys(grupos)) {
     if (!grupos[k].length) continue;
     md += '\n## ' + titulos[k] + '\n';
