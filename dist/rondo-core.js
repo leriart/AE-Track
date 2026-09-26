@@ -832,6 +832,12 @@
         // v5.15.2: velocidad suavizada por unidad (media exponencial) para
         // ETAs y estados mas estables, sin depender del ultimo reporte.
         velSuave: {},
+        // v6.0.6: cache de resolucion de paradas (texto -> tipo/coords) y
+        // control de reintentos del trazado automatico (2 automaticos + manual).
+        resolucionCache: {},
+        rutaIntentos: {},
+        rutaTrazando: false,
+        rutaRetryTimer: null,
         caravanaEco: '',
 
         // Riesgo: zonas de alto riesgo para flota, consultadas en cada arranque
@@ -1864,11 +1870,24 @@ function _extraerZonasDe(items) {
             id: 'osm:' + norm(nombre) + ':' + norm(estado),
             nombre: String(nombre),
             estado: String(estado || ''),
+            // v6.0.6: tipo/clase de OSM para distinguir un municipio/ciudad de
+            // una direccion cualquiera.
+            tipoOSM: String(r.addresstype || r.type || ''),
+            claseOSM: String(r.class || ''),
             centro,
             poligono,                                   // [[lon,lat],...] o null
             bbox: bb ? { minLat: bb[0], maxLat: bb[1], minLon: bb[2], maxLon: bb[3] } : null,
             fuente: 'osm'
         };
+    }
+    // v6.0.6: ¿el resultado parece un municipio/ciudad/entidad administrativa?
+    function esMunicipioOSM(m) {
+        if (!m) return false;
+        const t = String(m.tipoOSM || '').toLowerCase();
+        const c = String(m.claseOSM || '').toLowerCase();
+        if (c === 'boundary') return true;
+        return ['administrative', 'municipality', 'city', 'town', 'village',
+            'county', 'state_district', 'region', 'province', 'district'].indexOf(t) >= 0;
     }
     function buscarMunicipioLocal(texto) {
         const q = norm(texto || '');
@@ -1892,21 +1911,24 @@ function _extraerZonasDe(items) {
     }
     // Consulta (o recupera de cache) un municipio de OSM. Devuelve el objeto
     // normalizado con centro/poligono/bbox, o null si no se pudo resolver.
-    async function municipioOSM(texto, recargar) {
+    async function municipioOSM(texto, recargar, soloMunicipio) {
         const q = String(texto || '').trim();
         if (!q) return null;
         if (!recargar) {
             const local = buscarMunicipioLocal(q);
-            if (local && (local.poligono || local.bbox)) return local;
+            if (local && (local.poligono || local.bbox) && (!soloMunicipio || esMunicipioOSM(local))) return local;
         }
         const espera = 1100 - (Date.now() - APP.geoLast);
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=3&accept-language=es&q=' + encodeURIComponent(q);
+            const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=5&accept-language=es&q=' + encodeURIComponent(q);
             const d = await _rxFetchJson(url, {}, 15000);
             if (!Array.isArray(d) || !d.length) return null;
-            const cand = d.map(municipioDesdeNominatim).filter(Boolean);
+            let cand = d.map(municipioDesdeNominatim).filter(Boolean);
+            // Cuando se busca "deteccion automatica" solo aceptamos resultados
+            // que parezcan municipio/ciudad (no una calle/negocio cualquiera).
+            if (soloMunicipio) cand = cand.filter(esMunicipioOSM);
             if (!cand.length) return null;
             cand.sort((a, b) => (b.poligono ? 1 : 0) - (a.poligono ? 1 : 0));
             const m = cand[0];
@@ -2142,6 +2164,21 @@ function _extraerZonasDe(items) {
     function guardarPlanes() { writeSession(SS.planes, APP.planes); }
     // Resuelve las coordenadas de una parada (geocerca, municipio, coord o
     // lugar) y guarda en la misma parada la informacion util de la capa.
+    // v6.0.6: cache de resolucion texto -> coords/tipo para no repetir
+    // Nominatim con el mismo destino en varias unidades.
+    function _rxCacheResolucion(clave, p) {
+        if (!clave || !p || !p.coords) return;
+        if (!APP.resolucionCache) APP.resolucionCache = {};
+        APP.resolucionCache[clave] = {
+            tipo: p.tipo, lat: p.coords.lat, lon: p.coords.lon,
+            zonaId: p.zonaId || null, municipioId: p.municipioId || null, nombre: p.texto || ''
+        };
+    }
+    // Resuelve las coordenadas de una parada. Orden para texto sin prefijo:
+    //   1) municipio (OSM, solo si el resultado es municipio/ciudad)
+    //   2) geocerca (busqueda difusa, sin red)
+    //   3) lugar (Nominatim)
+    // Los prefijos explicitos (geo:, mun:, coord:) se respetan.
     async function resolverParada(p) {
         if (!p) return null;
         if (p.coords && p.coords.lat != null && p.coords.lon != null) return p;
@@ -2159,9 +2196,42 @@ function _extraerZonasDe(items) {
             p.coords = m.centro; p.municipioId = m.id; p.texto = m.nombre;
             return p;
         }
+        // Texto libre: autoclasificar.
+        const clave = norm(p.texto || '');
+        if (clave && APP.resolucionCache && APP.resolucionCache[clave]) {
+            const r = APP.resolucionCache[clave];
+            p.tipo = r.tipo; p.coords = { lat: r.lat, lon: r.lon };
+            if (r.zonaId) p.zonaId = r.zonaId;
+            if (r.municipioId) p.municipioId = r.municipioId;
+            if (r.nombre) p.texto = r.nombre;
+            return p;
+        }
+        // 1) Municipio/ciudad (OSM).
+        try {
+            const m = await municipioOSM(p.texto, false, true);
+            if (m && m.centro) {
+                p.tipo = 'municipio'; p.coords = m.centro; p.municipioId = m.id; p.texto = m.nombre;
+                _rxCacheResolucion(clave, p);
+                return p;
+            }
+        } catch (_) { /* sigue con geocerca */ }
+        // 2) Geocerca por nombre (difusa, sin red).
+        try {
+            const z = encontrarZona(p.texto);
+            if (z) {
+                const c = centroDeZona(z);
+                if (c) {
+                    p.tipo = 'geocerca'; p.coords = c; p.zonaId = z.id; p.texto = z.n || p.texto;
+                    _rxCacheResolucion(clave, p);
+                    return p;
+                }
+            }
+        } catch (_) { /* sigue con lugar */ }
+        // 3) Lugar/direccion (Nominatim).
         const c = await geocodificarLugar(p.texto);
         if (!c) return null;
-        p.coords = c;
+        p.tipo = 'lugar'; p.coords = c;
+        _rxCacheResolucion(clave, p);
         return p;
     }
     // Optimizador de orden de paradas. Mantiene las paradas fijadas en su
@@ -2394,8 +2464,8 @@ function _extraerZonasDe(items) {
     // Traza automaticamente la ruta de toda unidad vigilada que tenga destino
     // pero aun no tenga ruta (o cuya ruta apunte a un destino distinto).
     // Devuelve la cantidad de rutas que se programaron para calcular.
-    function autoTrazarRutasPendientes() {
-        if (!APP.config.autoRuta) return [];
+    function autoTrazarRutasPendientes(forzar) {
+        if (!APP.config.autoRuta && !forzar) return [];
         if (!APP.unidades || !APP.unidades.length) return [];
         const modo = (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm';
         if (modo === 'osrm' && !APP.config.osrm) return [];
@@ -2411,25 +2481,53 @@ function _extraerZonasDe(items) {
             if (!destino) continue;
             const r = rutaDe(info);
             if (r && r.destinoTexto === destino && r.modo === modo) continue;
-            pendientes.push({ eco, destino, modo });
+            // v6.0.6: tope de 2 intentos automaticos por unidad; el manual lo ignora.
+            const intentos = (APP.rutaIntentos && APP.rutaIntentos[info.clave]) || 0;
+            if (!forzar && intentos >= 2) continue;
+            pendientes.push({ eco, clave: info.clave, destino, modo });
         }
         return pendientes;
     }
     // Despacha las pendientes una por una para no saturar los servicios publicos.
-    async function autoTrazarRutas() {
-        const pendientes = autoTrazarRutasPendientes();
+    async function autoTrazarRutas(forzar) {
+        if (APP.rutaTrazando) return 0;
+        if (!APP.rutaIntentos) APP.rutaIntentos = {};
+        const pendientes = autoTrazarRutasPendientes(forzar);
         if (!pendientes.length) return 0;
+        APP.rutaTrazando = true;
         let ok = 0;
-        for (let i = 0; i < pendientes.length; i++) {
-            const p = pendientes[i];
-            try {
-                const r = await planearRuta(p.eco, p.destino, null, p.modo);
-                if (r) ok++;
-            } catch (_) { /* planearRuta ya muestra el error */ }
-            // Pausa entre peticiones para respetar el limite de Nominatim/OSRM.
-            if (i < pendientes.length - 1) await sleep(1200);
+        const fallos = [];
+        try {
+            for (let i = 0; i < pendientes.length; i++) {
+                const p = pendientes[i];
+                let r = null;
+                try { r = await planearRuta(p.eco, p.destino, null, p.modo); } catch (_) { r = null; }
+                if (r) { ok++; delete APP.rutaIntentos[p.clave]; }
+                else { APP.rutaIntentos[p.clave] = (APP.rutaIntentos[p.clave] || 0) + 1; fallos.push(p.eco); }
+                if (i < pendientes.length - 1) await sleep(1200);
+            }
+        } finally { APP.rutaTrazando = false; }
+        if (fallos.length && forzar) {
+            adviceWarn('Sin trazar', fallos.join(', ') + ' \u00b7 revisa el destino o la posicion de la unidad.');
         }
+        // Segunda pasada automatica (una sola vez): si aun quedan pendientes
+        // con intentos disponibles, reintenta en ~45 s.
+        if (!forzar && fallos.length) {
+            const quedan = autoTrazarRutasPendientes(false).length;
+            if (quedan && !APP.rutaRetryTimer) {
+                APP.rutaRetryTimer = setTimeout(() => { APP.rutaRetryTimer = null; autoTrazarRutas(); }, 45000);
+            }
+        }
+        if (APP.tab === 'rutas') paintRutas();
         return ok;
+    }
+    // Manual: reintenta todas las pendientes sin tope de intentos.
+    async function trazarRutasAhora() {
+        APP.rutaIntentos = {};
+        if (APP.rutaRetryTimer) { clearTimeout(APP.rutaRetryTimer); APP.rutaRetryTimer = null; }
+        const n = await autoTrazarRutas(true);
+        if (n) adviceOk('Rutas trazadas', n + ' ruta(s)');
+        else adviceWarn('Sin rutas pendientes', 'No hay destinos sin trazar (o no se pudieron resolver).');
     }
     // Tiempo estimado restante (segundos) usando la velocidad reportada o, en
     // su defecto, una velocidad prudencial de carretera. Devuelve null si no

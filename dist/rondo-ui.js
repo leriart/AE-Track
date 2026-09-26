@@ -97,6 +97,8 @@
             "#rondo-panel #rondo-version-chip[data-estado=\"unknown\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
             "#rondo-panel #rondo-version-chip[data-estado=\"error\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
             "#rondo-panel #rondo-version-chip[data-estado=\"stale\"]{color:var(--rondo-bad-fg,#b71c1c);border-color:rgba(183,28,28,.5);background:rgba(183,28,28,.12);animation:rondo-ver-pulse 1.6s ease-in-out infinite}\n" +
+            "#rondo-panel .rondo-rutas-bar{display:flex;align-items:center;gap:8px;padding:7px 9px;border-bottom:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-panel .rondo-rutas-pend{flex:1;min-width:0;font-size:11.5px;color:var(--rondo-warn-fg);font-weight:600}\n" +
             "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.45)}50%{box-shadow:0 0 0 5px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
@@ -1229,6 +1231,10 @@
              '<div id="rondo-lista-alertas"></div>' +
              '</div>' +
             '<div class="tabla" id="rondo-wrap-rutas" style="display:none">' +
+            '<div class="rondo-rutas-bar">' +
+            '<span class="rondo-rutas-pend" id="rondo-rutas-pend"></span>' +
+            '<button class="mini" id="rondo-rutas-trazar" title="Reintentar el trazado de todas las rutas pendientes (sin limite de intentos)"><span class="rondo-usym">' + UIS.refresh + '</span> Trazar pendientes</button>' +
+            '</div>' +
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
             '</div>' +
@@ -2967,8 +2973,11 @@
         if (!cont) return;
         const watched = (APP.unidades || []).filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const filas = watched.filter((x) => rutaDe(x.info));
+        const pendientes = watched.filter((x) => !rutaDe(x.info) && !!watchDest(x.info));
         const sinUnidad = Object.keys(APP.rutas || {}).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
-        if (!filas.length && !sinUnidad.length) {
+        const pendEl = byId('rondo-rutas-pend');
+        if (pendEl) pendEl.textContent = pendientes.length ? (pendientes.length + ' sin trazar') : '';
+        if (!filas.length && !sinUnidad.length && !pendientes.length) {
             setHtml(cont, emptyState(UIS.route, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
                 '<button class="mini rondo-vacio-acc" data-acc="tab-unidades"><span class="rondo-usym">' + UIS.panel + '</span> Ir a Unidades</button>'));
@@ -3014,7 +3023,23 @@
                 '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button>' +
                 '</div>';
         };
-        let html = filas.map((x) => tarjeta(x.info, x.st)).join('');
+        let html = pendientes.map((x) => {
+            const eco = x.info.clave;
+            const dest = watchDest(x.info);
+            const intentos = APP.rutaIntentos[eco] || 0;
+            return '<div class="alerta" style="border-left:4px solid var(--rondo-warn-fg)">' +
+                '<span class="ico rondo-usym" style="color:var(--rondo-warn-fg)">' + UIS.route + '</span>' +
+                '<div class="cuerpo"><b>' + esc(eco) + ' \u00b7 SIN TRAZAR</b>' +
+                '<span>' + esc(dest) + '</span>' +
+                '<div class="meta"><span class="regla">pendiente</span>' +
+                (intentos ? '<span>' + intentos + ' intento(s)</span>' : '') +
+                (intentos >= 2 ? '<span>usa Trazar pendientes</span>' : '') +
+                '</div></div>' +
+                '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
+                '<button class="mini rondo-ruta-trazar" data-eco="' + esc(eco) + '" title="Trazar ahora"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
+                '</div>';
+        }).join('');
+        html += filas.map((x) => tarjeta(x.info, x.st)).join('');
         sinUnidad.forEach((eco) => {
             const r = APP.rutas[eco];
             if (!r) return;
@@ -4260,6 +4285,8 @@
             abrirCfg();
         });
         byId('rondo-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
+        const rutasTrazar = byId('rondo-rutas-trazar');
+        if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
         byId('rondo-informe').addEventListener('click', exportInforme);
@@ -4274,6 +4301,15 @@
                         if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
                     }, { peligro: true, okText: 'Eliminar', icon: UIS.close });
                 } else if (b.classList.contains('rondo-plan-edit')) abrirEditorParadas(eco);
+                else if (b.classList.contains('rondo-ruta-trazar')) {
+                    const it = unitByEco(eco);
+                    const destino = it ? watchDest(it.info) : '';
+                    if (!destino) { adviceWarn('Sin destino', eco); }
+                    else {
+                        if (it) delete APP.rutaIntentos[it.info.clave];
+                        planearRuta(eco, destino, null, (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
+                    }
+                }
                 else if (b.classList.contains('rondo-ruta-mapa')) rxMapaDibujarRuta(eco);
                 else if (b.classList.contains('rondo-ruta-gmaps')) rxRutaGoogleMaps(eco);
                 else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
