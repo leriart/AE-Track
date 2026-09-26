@@ -87,6 +87,7 @@
             '<button class="primary" id="rpm-guardar-trazar"><span class="rondo-usym">' + UIS.route + '</span> Guardar y trazar</button>' +
             '</div>' +
             '</div>';
+        try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
         byId('rpm-x').onclick = cerrarEditorParadas;
         byId('rpm-cancelar').onclick = cerrarEditorParadas;
         byId('rpm-guardar').onclick = () => guardarEditorParadas(false);

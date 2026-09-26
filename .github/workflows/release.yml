@@ -54,7 +54,7 @@ jobs:
         run: |
           echo "${{ steps.ver.outputs.version }}" > VERSION
           node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
-          node scripts/build.mjs --mode=require --channel=main --version "${{ steps.ver.outputs.version }}" --out rondo.user.js
+          node scripts/build.mjs --mode=require --channel=release --version "${{ steps.ver.outputs.version }}" --out rondo.user.js
           node scripts/bump-readme.mjs "${{ steps.ver.outputs.version }}"
 
       - name: Pruebas

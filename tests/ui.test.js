@@ -782,5 +782,9 @@ ok('ruta en el mapa: dibujar, quitar y diagnostico', /function rxMapaDibujarRuta
 ok('ruta en Google Maps y OSM (fallback)', /function rxRutaGoogleMaps\(/.test(src) && /google\.com\/maps\/dir\//.test(src) && /function rxRutaOSM\(/.test(src));
 ok('botones de mapa por ruta', /rondo-ruta-mapa/.test(src) && /rondo-ruta-gmaps/.test(src));
 
+ok('detector de modulos desfasados (stale)', /APP\.update\.stale = \{/.test(src) && /estado === 'stale'/.test(src) && /data-estado=\\?"stale\\?"/.test(src));
+
+ok('autofill del navegador desactivado en la UI', /function rxMarcarInputAutofill\(/.test(src) && /setAttribute\('autocomplete'/.test(src) && /data-lpignore/.test(src) && /new-password/.test(src) && /rxBarridoAutofill/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

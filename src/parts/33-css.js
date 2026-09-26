@@ -95,6 +95,7 @@
             "#rondo-panel #rondo-version-chip[data-estado=\"checking\"]{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.5);background:rgba(var(--rondo-accent-rgb),.08)}\n" +
             "#rondo-panel #rondo-version-chip[data-estado=\"unknown\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
             "#rondo-panel #rondo-version-chip[data-estado=\"error\"]{color:var(--rondo-warn-fg,#f9a825);border-color:rgba(249,168,37,.5);background:rgba(249,168,37,.12)}\n" +
+            "#rondo-panel #rondo-version-chip[data-estado=\"stale\"]{color:var(--rondo-bad-fg,#b71c1c);border-color:rgba(183,28,28,.5);background:rgba(183,28,28,.12);animation:rondo-ver-pulse 1.6s ease-in-out infinite}\n" +
             "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.45)}50%{box-shadow:0 0 0 5px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +

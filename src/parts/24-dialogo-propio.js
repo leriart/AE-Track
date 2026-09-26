@@ -66,6 +66,7 @@
             '</div>';
         // Nombre accesible del dialogo (rol dialog ya lo pone ensureDialog).
         el.setAttribute('aria-labelledby', 'rondo-dlg-title');
+        try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
         el.classList.add('abierto');
         const okBtn = el.querySelector('.dlg-ok');
         const cancelBtn = el.querySelector('.dlg-cancel');
@@ -151,6 +152,7 @@
         if (_htmlMemo[key] === html) return false;
         _htmlMemo[key] = html;
         el.innerHTML = html;
+        try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
         return true;
     }
     function invalidarHtml(id) { delete _htmlMemo[id]; }
