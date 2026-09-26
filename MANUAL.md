@@ -514,8 +514,10 @@ En el editor puedes anadir paradas de varios tipos:
 - **Lugares o direcciones** (Nominatim);
 - **Coordenadas** `lat,lon`.
 
-Mientras escribes aparecen **sugerencias** de geocercas y municipios
-(busqueda difusa, sin acentos). Enter anade el texto como lugar.
+Mientras escribes aparecen **sugerencias**: primero tus **geocercas** y
+municipios guardados, y despues **resultados en linea de OpenStreetMap**
+(municipios, ciudades y direcciones). La busqueda es **difusa** (sin acentos y
+tolera errores). Enter anade el texto como lugar.
 
 Cada plan tiene un **modo**:
 
@@ -540,6 +542,23 @@ y `coord:` (coordenadas). Por ejemplo:
 ```
 eco=Monterrey | geo:CEDIS Norte | mun:Saltillo
 ```
+
+### Ver la ruta en el mapa
+
+En la pestana **Rutas** (y en el clic derecho de una unidad) hay acciones para
+ver la ruta:
+
+- **Dibujar en el mapa de la plataforma**: agrega la ruta como una **capa
+  vectorial encima** del mapa (WebGIS, Bing, OpenStreetMap...). Rondo detecta el
+  motor del mapa (Leaflet, OpenLayers, Mapbox o WebGIS) y dibuja la polilinea y
+  las paradas. Volver a pulsar la quita.
+- **Google Maps**: abre la ruta en Google Maps con las paradas como *waypoints*
+  (alternativa garantizada).
+- **OpenStreetMap**: abre el trayecto origen-destino en OSM.
+- **Diagnosticar mapa**: si el boton de dibujar no funciona, esto imprime en la
+  consola (F12) que motor de mapa detecto, para poder ajustarlo.
+
+El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
 
 ### Carga rapida de rutas (embarque)
 

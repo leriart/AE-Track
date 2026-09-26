@@ -82,8 +82,11 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   editor de paradas tiene **busqueda difusa con sugerencias** de geocercas y
   municipios.
 - **Carga rapida de rutas (embarque)**: pega la lista de **clientes** (o suelta
-  el `.xlsx`/`.csv`), se emparejan con tus **geocercas** por **busqueda difusa**
-  y se asigna la ruta multipunto a la unidad elegida. Solo lectura.
+  el `.xlsx`/`.csv`), se emparejan con tus **geocercas y municipios** por
+  **busqueda difusa** y se asigna la ruta multipunto a la unidad elegida. Solo lectura.
+- **Ruta en el mapa**: dibuja la ruta planificada como **capa encima del mapa de
+  la plataforma** (WebGIS, Bing, OpenStreetMap...), con alternativa en **Google
+  Maps** u **OpenStreetMap**. Solo lectura.
 - **Municipios de OpenStreetMap**: se guarda su poligono/bbox y se usa como
   **tolerancia de desvio** (si la unidad sigue dentro del municipio de la ruta,
   no se marca desvio hasta un margen configurable).

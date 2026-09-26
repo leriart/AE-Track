@@ -191,6 +191,10 @@
     {
       "file": "47-init.js",
       "chunk": "ui"
+    },
+    {
+      "file": "48-mapa-ruta.js",
+      "chunk": "ui"
     }
   ]
 }

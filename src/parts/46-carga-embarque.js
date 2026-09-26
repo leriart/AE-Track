@@ -62,7 +62,7 @@
         let best = null, bestSc = 0;
         const zs = zonas || [];
         for (let i = 0; i < zs.length; i++) {
-            const n = (zs[i] && zs[i].n) ? zs[i].n : '';
+            const n = zs[i] ? (zs[i].texto || zs[i].n || '') : '';
             if (!n) continue;
             const sc = fuzzyScore(cliente, n);
             if (sc > bestSc) { bestSc = sc; best = zs[i]; }
@@ -188,9 +188,29 @@
             return;
         }
         const sel = eco || APP.cargaEco || (vigiladas[0].eco || vigiladas[0].clave);
-        _carga = { eco: sel, modo: 'optimo', engine: APP.config.autoRutaModo || 'osrm', filas: [], crudo: '' };
+        _carga = { eco: sel, modo: 'optimo', engine: APP.config.autoRutaModo || 'osrm', filas: [], crudo: '', catalogo: null };
         renderCarga();
         cargaModalEl().classList.add('abierto');
+    }
+    // Catalogo de destinos: geocercas + municipios (OSM y zonas de riesgo).
+    function cargaCatalogo() {
+        const out = [];
+        const zs = (APP.zonas || []).slice().sort((a, b) => String(a.n || '').localeCompare(String(b.n || ''), 'es'));
+        for (let i = 0; i < zs.length; i++) {
+            const z = zs[i];
+            out.push({ tipo: 'geocerca', texto: z.n || ('Zona ' + z.id), sub: 'geocerca', coords: centroDeZona(z), ref: z });
+        }
+        const ms = (APP.municipios || []).concat(APP.municipiosRiesgo || []);
+        const vistos = new Set();
+        for (let i = 0; i < ms.length; i++) {
+            const m = ms[i];
+            if (!m || !m.nombre) continue;
+            const k = norm(m.nombre) + '|' + norm(m.estado || '');
+            if (vistos.has(k)) continue;
+            vistos.add(k);
+            out.push({ tipo: 'municipio', texto: m.nombre, sub: (m.estado || '') + ' \u00b7 municipio', coords: m.centro });
+        }
+        return out;
     }
     function renderCarga() {
         const el = cargaModalEl();
@@ -200,18 +220,19 @@
             const eco = i.eco || i.clave;
             return '<option value="' + esc(eco) + '"' + (eco === _carga.eco ? ' selected' : '') + '>' + esc(eco) + (i.placa ? ' \u00b7 ' + esc(i.placa) : '') + '</option>';
         }).join('');
-        const zonas = (APP.zonas || []).slice().sort((a, b) => String(a.n || '').localeCompare(String(b.n || ''), 'es'));
-        const opcionesZona = '<option value="">\u2014 sin asignar \u2014</option>' + zonas.map((z) => '<option value="' + esc(z.n || '') + '">' + esc(z.n || ('Zona ' + z.id)) + '</option>').join('');
+        if (!_carga.catalogo) _carga.catalogo = cargaCatalogo();
+        const catalogo = _carga.catalogo;
+        const opcionesCatalogo = (sel) => '<option value="">\u2014 sin asignar \u2014</option>' + catalogo.map((it, k) =>
+            '<option value="' + k + '"' + (sel && it.texto === sel.texto && it.tipo === sel.tipo ? ' selected' : '') + '>' + esc(it.texto) + ' \u00b7 ' + esc(it.tipo) + '</option>').join('');
         const filasHtml = _carga.filas.map((f, i) => {
             const conf = rxCargaConfianza(f.score);
-            const opciones = zonas.map((z) => '<option value="' + esc(z.n || '') + '"' + (f.zona && z.n === f.zona.n ? ' selected' : '') + '>' + esc(z.n || ('Zona ' + z.id)) + '</option>').join('');
             return '<div class="carga-row' + (f.incluir ? '' : ' off') + '" data-i="' + i + '">' +
                 '<label class="carga-check"><input type="checkbox" data-carga-fila="' + i + '"' + (f.incluir ? ' checked' : '') + '></label>' +
                 '<div class="carga-cliente"><b>' + esc(f.cliente) + '</b><small class="carga-conf carga-conf-' + conf.clase + '">' + conf.etq + '</small></div>' +
-                '<select class="carga-zona" data-carga-fila="' + i + '">' + opciones + '</select>' +
+                '<select class="carga-zona" data-carga-fila="' + i + '">' + opcionesCatalogo(f.item) + '</select>' +
                 '</div>';
         }).join('') || '<div class="carga-vacio">Pega la lista de clientes o suelta el archivo (.xlsx, .csv, .txt) y pulsa <b>Emparejar</b>.</div>';
-        const nMatch = _carga.filas.filter((f) => f.zona).length;
+        const nMatch = _carga.filas.filter((f) => f.item).length;
         el.innerHTML =
             '<div class="carga-card">' +
             '<div class="carga-head"><span class="rondo-usym">' + UIS.route + '</span> Carga rapida de rutas' +
@@ -254,8 +275,8 @@
             s.onchange = () => {
                 const i = +s.dataset.cargaFila;
                 if (!_carga || !_carga.filas[i]) return;
-                const z = (APP.zonas || []).find((x) => (x.n || '') === s.value) || null;
-                _carga.filas[i].zona = z; _carga.filas[i].score = z ? 999 : 0;
+                const it = catalogo[+s.value] || null;
+                _carga.filas[i].item = it; _carga.filas[i].score = it ? 999 : 0;
                 renderCarga();
             };
         });
@@ -295,9 +316,10 @@
         const texto = (byId('carga-texto') && byId('carga-texto').value) || _carga.crudo || '';
         const clientes = rxCargaParsearTexto(texto);
         _carga.crudo = texto;
+        _carga.catalogo = cargaCatalogo();
         _carga.filas = clientes.map((c) => {
-            const m = rxCargaEmparejarCliente(c, APP.zonas || []);
-            return { cliente: c, zona: m.zona, score: m.score, incluir: !!m.zona };
+            const m = rxCargaEmparejarCliente(c, _carga.catalogo);
+            return { cliente: c, item: m.zona, score: m.score, incluir: !!m.zona };
         });
         renderCarga();
     }
@@ -307,8 +329,12 @@
         const it = unitByEco(eco);
         const clave = it ? it.info.clave : eco;
         const paradas = _carga.filas
-            .filter((f) => f.incluir && f.zona)
-            .map((f) => nuevaParada('geocerca', f.zona.n || ('Zona ' + f.zona.id), centroDeZona(f.zona)));
+            .filter((f) => f.incluir && f.item)
+            .map((f) => {
+                const item = f.item;
+                if (item.tipo === 'geocerca' && item.ref) return nuevaParada('geocerca', item.texto, centroDeZona(item.ref));
+                return nuevaParada(item.tipo === 'ciudad' ? 'municipio' : item.tipo, item.texto, item.coords || null);
+            });
         if (!paradas.length) { adviceWarn('Sin paradas', 'Empareja al menos un cliente con una geocerca.'); return; }
         const modo = _carga.modo === 'secuencial' ? 'secuencial' : 'optimo';
         const plan = { modo: modo, circuito: modo === 'optimo', paradas: paradas };
