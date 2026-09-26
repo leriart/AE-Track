@@ -893,7 +893,7 @@ AJUSTES (engranaje del panel):
 
 ATAJOS: Alt+1..6 cambia de tab (Dashboard..Caravana), Alt+P y Alt+L muestran/ocultan el panel, Alt+H pliega la barra, Esc cierra dialogos.
 
-IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres y, si la pregunta menciona un economico, consulta por API su historial de 24 h y sus campos personalizados. El boton Ocultar (junto a Automatizar) oculta/muestra las ventanas de unidades abiertas sin cerrarlas.
+IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres y, si la pregunta menciona un economico, consulta por API su historial de 24 h y sus campos personalizados. El boton Ocultar (junto a Automatizar) oculta/muestra las ventanas de unidades abiertas sin cerrarlas; los botones + y - las agrandan o encogen. Los resultados de Analizar lote/flota se acotan al alto de la pantalla y hacen scroll.
 
 POPULAR: los avisos criticos abren la ventana de la unidad (si esta activado). Las ventanas de unidad se resaltan con un contorno del color de la severidad. El odometro y el limite de velocidad se editan con clic derecho sobre la unidad.`;
 
@@ -1553,7 +1553,7 @@ ta.value = '';
                 cancelText: 'Cerrar',
                 okText: 'Cerrar',
                 onOk: () => {},
-                ancho: 520
+                ancho: 760
             });
         } finally {
             setBusy(btn, false);
@@ -1606,7 +1606,7 @@ ta.value = '';
                 cancelText: 'Cerrar',
                 okText: 'Cerrar',
                 onOk: () => {},
-                ancho: 540
+                ancho: 780
             });
         } finally {
             setBusy(btn, false);
@@ -1985,6 +1985,10 @@ ta.value = '';
             '</div>';
         // Nombre accesible del dialogo (rol dialog ya lo pone ensureDialog).
         el.setAttribute('aria-labelledby', 'rondo-dlg-title');
+        // v6.0.10: ancho configurable por dialogo. Los resultados de IA son
+        // anchos y largos; se acotan a la pantalla y el cuerpo hace scroll.
+        if (opts.ancho) el.style.width = 'min(' + Math.max(320, Math.round(Number(opts.ancho) || 0)) + 'px,94vw)';
+        else el.style.width = '';
         try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
         el.classList.add('abierto');
         const okBtn = el.querySelector('.dlg-ok');
@@ -3852,6 +3856,55 @@ ta.value = '';
             }
         });
     }
+    // v6.0.10: botones +/- para agrandar o encoger las ventanas abiertas.
+    const RX_VENTANA_PASO = 80;
+    function rxDesplazarVentana(c, dx, dy) {
+        const cs = getComputedStyle(c);
+        const t = cs.transform;
+        if (t && t !== 'none' && t.indexOf('matrix') === 0) {
+            try {
+                const DMR = PAGE.DOMMatrixReadOnly || DOMMatrixReadOnly;
+                const m = new DMR(t);
+                c.style.transform = 'translate(' + (m.m41 + dx) + 'px,' + (m.m42 + dy) + 'px)';
+                return;
+            } catch (_) { /* fallback a left/top */ }
+        }
+        c.style.left = ((parseFloat(cs.left) || 0) + dx) + 'px';
+        c.style.top = ((parseFloat(cs.top) || 0) + dy) + 'px';
+    }
+    function rxAjustarVentanas(dir) {
+        const list = openWindows();
+        if (!list.length) { adviceWarn('Sin ventanas', 'No hay ventanas de unidades abiertas.'); return; }
+        const d = dir >= 0 ? 1 : -1;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let ajustadas = 0;
+        list.forEach((v) => {
+            const c = v.cont;
+            if (!c) return;
+            const r = c.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) return; // oculta o sin tamano
+            const w = Math.round(clamp(r.width + d * RX_VENTANA_PASO, 260, Math.max(260, vw - 20)));
+            const h = Math.round(clamp(r.height + d * RX_VENTANA_PASO, 170, Math.max(170, vh - 20)));
+            if (w === Math.round(r.width) && h === Math.round(r.height)) return;
+            c.style.width = w + 'px';
+            c.style.height = h + 'px';
+            // Reubica si se salio por abajo/derecha (asi no se pierde).
+            const r2 = c.getBoundingClientRect();
+            let nx = r2.left, ny = r2.top;
+            if (nx + w > vw - 4) nx = Math.max(4, vw - 4 - w);
+            if (ny + h > vh - 4) ny = Math.max(4, vh - 4 - h);
+            if (nx < 4) nx = 4;
+            if (ny < 4) ny = 4;
+            if (Math.abs(nx - r2.left) > 1 || Math.abs(ny - r2.top) > 1) rxDesplazarVentana(c, nx - r2.left, ny - r2.top);
+            ajustadas++;
+        });
+        // Avisa a los mapas (Leaflet) de que el contenedor cambio de tamano.
+        try {
+            const W = PAGE || window;
+            W.dispatchEvent(new (W.Event || Event)('resize'));
+        } catch (_) { /* noop */ }
+        if (ajustadas) advice(d >= 0 ? 'Ventanas mas grandes' : 'Ventanas mas pequenas', ajustadas + ' ventana(s)');
+    }
     // Cierre seguro en dos pasos: el primer clic "arma" el boton y el segundo
     // ejecuta el cierre. Asi un clic accidental no cierra todas las ventanas.
     function cerrarTodasSeguro(btn) {
@@ -4133,7 +4186,7 @@ ta.value = '';
     // v6.0.9: posicion y tamano del editor multipunto. Se conserva durante la
     // sesion para que el operador no tenga que recolocarlo cada vez.
     let _rpmWin = { dx: 0, dy: 0, w: null, h: null };
-    const RPM_WIN_KEY = 'rondo.api.s.rpmWin';
+    const RPM_WIN_KEY = 'rondo.api.s.rpmWin.v2';
     function rpmWinCargar() {
         try {
             const j = JSON.parse(sessionStorage.getItem(RPM_WIN_KEY) || 'null');
