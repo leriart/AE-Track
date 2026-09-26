@@ -1244,7 +1244,8 @@
             '<button id="rondo-unidades-menu" class="rondo-tool" data-tabs="unidades" title="Agregar unidades, destinos y rutas multipunto"><span class="rondo-usym">' + UIS.route + '</span> Unidades y rutas</button>' +
             '<button id="rondo-carga-btn" class="rondo-tool" data-tabs="unidades" title="Carga rapida: pega la lista de clientes del embarque y asigna la ruta a una unidad"><span class="rondo-usym">' + UIS.watch + '</span> Carga rapida</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
-            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar informe del dia"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
+            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+            '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
             '<button id="rondo-captura" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Capturar las ventanas abiertas"><span class="rondo-usym">' + UIS.expand + '</span></button>' +
@@ -4473,7 +4474,9 @@
         if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
-        byId('rondo-informe').addEventListener('click', exportInforme);
+        byId('rondo-informe').addEventListener('click', () => exportReportePDF());
+        const informeMd = byId('rondo-informe-md');
+        if (informeMd) informeMd.addEventListener('click', exportInforme);
         const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {
@@ -6250,6 +6253,10 @@
             inst.lineas[i] = { pts: pts, color: color, width: width, opacity: opacity, dyn: true };
             if (inst.svg) rxMMDibujar(inst, true);
         };
+        inst.setMarcas = (marcas) => {
+            inst.marcas = marcas || [];
+            if (inst.svg) rxMMDibujar(inst, false);
+        };
         inst.destruir = () => { try { cont.innerHTML = ''; } catch (_) { /* noop */ } };
         // Pan con arrastre.
         let drag = null;
@@ -6522,6 +6529,129 @@
         try { const m = municipioEn(lat, lon); municipio = (m && m.nombre) ? m.nombre : ''; } catch (_) { /* noop */ }
         return { zona: zona, municipio: municipio };
     }
+    // ---- Lugares de OpenStreetMap para las paradas ----
+    // Etiqueta de una parada: lugar de OSM > geocerca > municipio > coordenadas.
+    function rxReplayParadaEtiqueta(p) {
+        if (!p) return '';
+        if (p.lugar) return p.lugar + (p.categoria ? ' (' + p.categoria + ')' : '');
+        if (p.zona) return p.zona;
+        if (p.municipio) return p.municipio;
+        return (+p.lat).toFixed(4) + ',' + (+p.lon).toFixed(4);
+    }
+    function rxReplayParadaTooltip(p) {
+        const partes = [];
+        if (p.lugar) partes.push(p.lugar + (p.categoria ? ' (' + p.categoria + ')' : ''));
+        if (p.direccion && p.direccion !== p.lugar) partes.push(p.direccion);
+        if (p.zona) partes.push('geocerca: ' + p.zona);
+        if (p.municipio) partes.push('municipio: ' + p.municipio);
+        partes.push((+p.lat).toFixed(5) + ',' + (+p.lon).toFixed(5));
+        return partes.join(' \u00b7 ');
+    }
+    function rxReplayCatPOI(t) {
+        if (!t) return 'lugar';
+        if (t.shop) {
+            const map = { convenience: 'tienda de conveniencia', supermarket: 'supermercado', bakery: 'panaderia', butcher: 'carniceria', greengrocer: 'fruteria', clothes: 'ropa', hardware: 'ferreteria', car_repair: 'taller', tyres: 'llantera', pharmacy: 'farmacia', beverages: 'bebidas', department_store: 'tienda', variety_store: 'tienda', wholesale: 'mayoreo', doityourself: 'ferreteria', mall: 'plaza' };
+            return map[t.shop] || ('tienda de ' + t.shop);
+        }
+        if (t.amenity) {
+            const map = { fuel: 'gasolinera', restaurant: 'restaurante', fast_food: 'comida rapida', cafe: 'cafeteria', bank: 'banco', atm: 'cajero', pharmacy: 'farmacia', hospital: 'hospital', clinic: 'clinica', school: 'escuela', parking: 'estacionamiento', marketplace: 'mercado', toilets: 'sanitarios', place_of_worship: 'templo', police: 'policia' };
+            return map[t.amenity] || ('servicio de ' + t.amenity);
+        }
+        if (t.tourism) return 'turismo';
+        if (t.leisure) return 'ocio';
+        if (t.office) return 'oficina';
+        return 'lugar';
+    }
+    async function rxReplayPoiCerca(lat, lon, radio) {
+        const q = '[out:json][timeout:12];(' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["shop"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["amenity"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["tourism"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["leisure"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["office"];' +
+            ');out center 25;';
+        const res = await _rxFetchJson('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(q)
+        }, 12000);
+        const els = (res && res.elements) || [];
+        let mejor = null;
+        els.forEach((el) => {
+            const t = el.tags || {};
+            if (!t.name) return;
+            const y = (el.lat != null) ? el.lat : (el.center && el.center.lat);
+            const x = (el.lon != null) ? el.lon : (el.center && el.center.lon);
+            if (y == null || x == null) return;
+            const d = haversine(lat, lon, y, x);
+            if (d > radio) return;
+            if (!mejor || d < mejor.dist) mejor = { nombre: t.name, categoria: rxReplayCatPOI(t), direccion: '', dist: Math.round(d) };
+        });
+        return mejor;
+    }
+    async function rxReplayReversa(lat, lon) {
+        const espera = 1100 - (Date.now() - APP.geoLast);
+        if (espera > 0) await sleep(espera);
+        APP.geoLast = Date.now();
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=es&lat=' + lat + '&lon=' + lon;
+        const d = await _rxFetchJson(url, {}, 15000);
+        if (!d) return null;
+        const a = d.address || {};
+        const via = [a.road || a.pedestrian || a.footway, a.house_number].filter(Boolean).join(' ');
+        const colonia = a.suburb || a.neighbourhood || a.city_district || a.quarter || '';
+        const ciudad = a.city || a.town || a.village || a.municipality || a.county || '';
+        const direccion = [via, colonia, ciudad].filter(Boolean).join(', ');
+        const nombre = (d.name && d.name !== ciudad) ? d.name : '';
+        if (!nombre && !direccion) return null;
+        return { nombre: nombre, categoria: '', direccion: direccion, dist: null };
+    }
+    const _rxRepLugares = new Map(); // "lat,lon" -> lugar|null
+    async function rxReplayLugarOSM(lat, lon) {
+        if (lat == null || lon == null) return null;
+        const key = (+lat).toFixed(5) + ',' + (+lon).toFixed(5);
+        if (_rxRepLugares.has(key)) return _rxRepLugares.get(key);
+        let out = null;
+        if (APP.config && APP.config.overpass) {
+            try { out = await rxReplayPoiCerca(lat, lon, 90); } catch (_) { out = null; }
+        }
+        if (!out) {
+            try { out = await rxReplayReversa(lat, lon); } catch (_) { out = null; }
+        }
+        _rxRepLugares.set(key, out);
+        return out;
+    }
+    // Ubica las paradas con OSM en segundo plano y refresca la lista/mapa.
+    async function rxReplayUbicarParadas() {
+        const r = RX_REPLAY;
+        if (!r || !r.paradas || !r.paradas.length) return;
+        const pend = r.paradas.filter((p) => p.lugar === undefined);
+        if (!pend.length) return;
+        r.ubicando = true;
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        for (let i = 0; i < pend.length; i++) {
+            if (RX_REPLAY !== r) return;
+            const p = pend[i];
+            let lugar = null;
+            try { lugar = await rxReplayLugarOSM(p.lat, p.lon); } catch (_) { lugar = null; }
+            p.lugar = lugar ? (lugar.nombre || lugar.direccion || '') : '';
+            p.categoria = lugar ? (lugar.categoria || '') : '';
+            p.direccion = lugar ? (lugar.direccion || '') : '';
+            if (pars) {
+                const celda = pars.querySelector('.rondo-replay-par[data-idx="' + p.idx + '"] .par-lugar');
+                if (celda) { celda.textContent = rxReplayParadaEtiqueta(p); celda.title = rxReplayParadaTooltip(p); }
+            }
+        }
+        if (RX_REPLAY !== r) return;
+        r.ubicando = false;
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        if (r.mapa) {
+            const marcas = [];
+            r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
+            r.eventos.forEach((m) => marcas.push({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
+            r.mapa.setMarcas(marcas);
+        }
+    }
     function rxReplayAnalizar(msgs, info) {
         const eventos = [], paradas = [];
         const paradaMinS = Math.max(60, (Number(APP.config.paradaMin) || 15) * 60);
@@ -6624,15 +6754,16 @@
         const r = RX_REPLAY;
         if (!r) return '';
         if (!r.paradas.length) return '<div class="rondo-replay-hint">Sin paradas de mas de ' + (APP.config.paradaMin || 15) + ' min.</div>';
-        return r.paradas.map((p, i) =>
+        let html = r.paradas.map((p, i) =>
             '<div class="rondo-replay-par" data-idx="' + p.idx + '" data-idxfin="' + (p.idxFin == null ? p.idx : p.idxFin) + '">' +
             '<span class="par-idx">' + (i + 1) + '</span>' +
             '<span class="par-hora">' + rxReplayHHMM(p.t) + '</span>' +
             '<span class="par-dur">' + rxFmtDur(p.dur) + '</span>' +
-            '<span class="par-lugar" title="' + esc(p.zona || p.municipio || (p.lat.toFixed(4) + ',' + p.lon.toFixed(4))) + '">' +
-            esc(p.zona || p.municipio || (p.lat.toFixed(4) + ',' + p.lon.toFixed(4))) + '</span>' +
+            '<span class="par-lugar" title="' + esc(rxReplayParadaTooltip(p)) + '">' + esc(rxReplayParadaEtiqueta(p)) + '</span>' +
             '</div>'
         ).join('');
+        if (r.ubicando) html += '<div class="rondo-replay-hint">Ubicando las paradas con OpenStreetMap...</div>';
+        return html;
     }
     function rxReplayEventosHTML() {
         const r = RX_REPLAY;
@@ -6696,7 +6827,7 @@
         cont.innerHTML = '';
         const full = r.msgs.map((m) => ({ lat: m.lat, lon: m.lon }));
         const marcas = [];
-        r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + (p.zona ? ' \u00b7 ' + p.zona : '') }));
+        r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
         r.eventos.forEach((m) => marcas.push({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
         r.mapa = rxMiniMapa(cont, {
             lineas: [
@@ -6951,6 +7082,7 @@
                 truncado: msgs.length >= 10000
             };
             rxReplayPintar();
+            rxReplayUbicarParadas();
             adviceOk('Recorrido cargado', eco + ' \u00b7 ' + rxReplayHHMM(msgs[0].t) + '-' + rxReplayHHMM(msgs[msgs.length - 1].t) +
                 ' \u00b7 ' + Math.round(acum / 1000) + ' km \u00b7 ' + an.paradas.length + ' parada(s)' + (msgs.length >= 10000 ? ' (truncado)' : ''));
         } finally {
@@ -7049,4 +7181,231 @@
             if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();
             rxReplayIrA(+n.dataset.idx);
         });
+    }
+    /* ====================== REPORTE PDF (v6.0.13) ======================
+     * Genera un informe operativo completo y lo abre en el dialogo de
+     * impresion del navegador para guardarlo como PDF. Sin dependencias:
+     * se construye un documento HTML con CSS de impresion (A4, saltos de
+     * pagina, encabezados de tabla repetidos) y se imprime desde un iframe.
+     */
+    function rxInfResumenTexto(d) {
+        const total = d.watched.length;
+        const avisos = d.hoy.length;
+        const crit = d.porSev.critico || 0;
+        const alto = d.porSev.alto || 0;
+        const partes = [];
+        partes.push('De ' + total + ' unidad(es) en el alcance, ' + d.online.length + ' reportan en linea y ' + d.sinSenal.length + ' estan sin senal.');
+        if (d.zonasCargadas) partes.push(d.enZona.length + ' dentro de geocerca y ' + d.fueraZona.length + ' fuera (de las que reportan posicion).');
+        else partes.push('Las geocercas no estan cargadas, por lo que no se evaluo la pertenencia a zonas.');
+        partes.push('En el dia se registraron ' + avisos + ' aviso(s)' + (avisos ? ' (' + crit + ' critico(s), ' + alto + ' alto(s)).' : '.'));
+        if (d.moviendo.length || d.detenidas.length) partes.push(d.moviendo.length + ' en movimiento y ' + d.detenidas.length + ' detenidas.');
+        return partes.join(' ');
+    }
+    function rxInformeDatos() {
+        const now = new Date();
+        const ini = new Date(); ini.setHours(0, 0, 0, 0);
+        const toda = !!APP.config.watchAll;
+        const watched = (APP.unidades || []).filter((u) => { try { return toda || shouldWatch(u); } catch (_) { return false; } });
+        const filas = watched.map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const zonasCargadas = !!(APP.config.loadZones && (APP.zonas || []).length);
+        const conPos = filas.filter((x) => x.st.lat != null);
+        const enZona = zonasCargadas ? conPos.filter((x) => { try { return !!zoneAt(x.st.lat, x.st.lon); } catch (_) { return false; } }) : [];
+        const fueraZona = zonasCargadas ? conPos.filter((x) => enZona.indexOf(x) < 0) : [];
+        const hoy = (APP.historial || []).filter((a) => a.ts >= ini.getTime());
+        const porSev = {};
+        hoy.forEach((a) => { porSev[a.sev] = (porSev[a.sev] || 0) + 1; });
+        return {
+            now: now, ini: ini, toda: toda, watched: filas, zonasCargadas: zonasCargadas,
+            enZona: enZona, fueraZona: fueraZona, hoy: hoy, porSev: porSev,
+            online: filas.filter((x) => x.st.online),
+            moviendo: filas.filter((x) => x.st.online && x.st.vel > 3),
+            detenidas: filas.filter((x) => x.st.online && x.st.vel <= 3),
+            sinSenal: filas.filter((x) => !x.st.online)
+        };
+    }
+    function rxInfSevBadge(sev) {
+        const s = String(sev || '').toLowerCase();
+        const txt = s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
+        return '<span class="badge sev-' + esc(s || 'bajo') + '">' + esc(txt) + '</span>';
+    }
+    function rxInfTabla(cabeceras, filas) {
+        if (!filas.length) return '<p class="muted">Sin datos.</p>';
+        return '<table><thead><tr>' + cabeceras.map((h) => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' +
+            filas.map((f) => '<tr>' + f.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') +
+            '</tbody></table>';
+    }
+    function rxInformeHTML(resumenIA) {
+        const d = rxInformeDatos();
+        const fecha = d.now.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+        const hora = d.now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
+        const kpis = [
+            kpi(d.watched.length, 'Unidades'),
+            kpi(d.online.length, 'En linea'),
+            kpi(d.sinSenal.length, 'Sin senal'),
+            kpi(d.moviendo.length, 'En movimiento'),
+            kpi(d.detenidas.length, 'Detenidas'),
+            kpi(d.zonasCargadas ? d.enZona.length : '-', 'En geocerca'),
+            kpi(d.zonasCargadas ? d.fueraZona.length : '-', 'Fuera de geocerca'),
+            kpi(d.hoy.length, 'Avisos hoy')
+        ].join('');
+        const sevOrden = ['critico', 'alto', 'medio', 'bajo'].filter((s) => d.porSev[s]);
+        const sevResumen = sevOrden.length
+            ? sevOrden.map((s) => rxInfSevBadge(s) + ' ' + d.porSev[s]).join(' &nbsp; ')
+            : '<span class="muted">Sin avisos registrados hoy.</span>';
+
+        const filasUnidades = d.watched.map((x) => {
+            const info = x.info, st = x.st;
+            const zona = (st.lat != null) ? (zoneAt(st.lat, st.lon) || (d.zonasCargadas ? 'Fuera de geocerca' : '-')) : '-';
+            const r = rutaDe(info);
+            let rutaTxt = '-';
+            if (r) {
+                const er = estadoRuta(info, st) || {};
+                const pct = er.snap ? Math.round(er.snap.progreso * 100) : 0;
+                rutaTxt = (er.estado || 'EN RUTA') + (er.snap ? ' (' + pct + '%)' : '');
+            }
+            const odo = odometroDe(info);
+            return [
+                '<b>' + esc(info.eco || info.nombre) + '</b>',
+                esc(info.placa || '-'),
+                st.online ? 'En linea' : 'Sin senal',
+                esc(ageText(st.edadMin)),
+                Math.round(st.vel) + ' km/h',
+                esc(zona),
+                esc(rutaTxt),
+                odo ? Math.round((+odo.m || 0) / 1000) + ' km' : '-',
+                esc(String(limiteDe(info))) + ' km/h'
+            ];
+        });
+        const filasAvisos = d.hoy.slice(0, 250).map((a) => [
+            esc(new Date(a.ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })),
+            rxInfSevBadge(a.sev),
+            esc(a.regla || '-'),
+            esc(a.eco || '-'),
+            esc(a.titulo || '') + (a.detalle ? '<br><span class="muted">' + esc(a.detalle) + '</span>' : '')
+        ]);
+        const rutas = d.watched.filter((x) => rutaDe(x.info)).map((x) => {
+            const r = rutaDe(x.info);
+            const er = estadoRuta(x.info, x.st) || {};
+            const pct = er.snap ? Math.round(er.snap.progreso * 100) : 0;
+            const eta = er.snap ? calcularETA(er.snap, r, x.st.vel) : null;
+            return [
+                '<b>' + esc(x.info.eco || x.info.nombre) + '</b>',
+                esc(r.destinoTexto || '-'),
+                esc(er.estado || 'EN RUTA'),
+                pct + '%',
+                rxFmtDist(r.total),
+                eta != null ? rxFmtDur(eta) : '-',
+                er.desviado ? 'Si' : 'No'
+            ];
+        });
+        const riesgo = (APP.riesgo || []).slice(0, 120).map((z) => [
+            esc(z.municipio || z.nombre || '-'),
+            esc(z.estado || '-'),
+            String(z.score == null ? '-' : z.score),
+            z.radio_m ? Math.round(z.radio_m) + ' m' : '-'
+        ]);
+        const geocercas = (APP.zonas || []).slice(0, 200).map((z) => {
+            const nom = z.n || z.nombre || ('Zona ' + z.id);
+            let dentro = 0;
+            try { dentro = d.watched.filter((x) => x.st.lat != null && inZone(x.st.lat, x.st.lon, z)).length; } catch (_) { dentro = 0; }
+            const tipo = z.t === 3 ? 'Circulo' : (z.t === 2 ? 'Poligono' : (z.t === 1 ? 'Linea' : 'Zona'));
+            return [esc(nom), tipo, String(dentro)];
+        });
+        const sinSenal = d.sinSenal.map((x) => [
+            '<b>' + esc(x.info.eco || x.info.nombre) + '</b>',
+            esc(x.info.placa || '-'),
+            esc(ageText(x.st.edadMin)),
+            x.st.lat != null ? (esc(zoneAt(x.st.lat, x.st.lon) || 'Fuera de geocerca')) : '-'
+        ]);
+
+        const seccion = (titulo, contenido) => '<h2 class="seccion">' + esc(titulo) + '</h2>' + contenido;
+
+        return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
+            '<title>Reporte Rondo ' + esc(fecha) + '</title>' +
+            '<style>' +
+            '*{box-sizing:border-box}' +
+            'body{font:11px/1.45 "Segoe UI",system-ui,Arial,sans-serif;color:#1c2030;margin:0}' +
+            '@page{size:A4;margin:14mm 12mm 18mm}' +
+            'h1,h2,h3{margin:0}' +
+            '.cover{border-bottom:3px solid #850D22;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end}' +
+            '.brand{font-size:22px;font-weight:800;letter-spacing:.6px;color:#850D22;line-height:1.1}' +
+            '.brand small{display:block;font-size:11px;font-weight:600;color:#5a6072;letter-spacing:.3px}' +
+            '.meta{text-align:right;font-size:10px;color:#5a6072;line-height:1.5}' +
+            '.meta b{color:#1c2030}' +
+            '.kpis{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 16px}' +
+            '.kpi{flex:1 1 108px;border:1px solid #d9dce4;border-radius:8px;padding:8px 10px;background:#fafbfd}' +
+            '.kpi b{display:block;font-size:18px;color:#1c2030}' +
+            '.kpi span{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#5a6072}' +
+            'h2.seccion{font-size:12.5px;border-left:4px solid #850D22;padding-left:8px;margin:18px 0 8px;color:#1c2030;page-break-after:avoid}' +
+            'table{width:100%;border-collapse:collapse;font-size:10px;margin:0 0 6px}' +
+            'th,td{border:1px solid #d9dce4;padding:4px 6px;text-align:left;vertical-align:top}' +
+            'thead th{background:#eef1f6;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#3a4050}' +
+            'tbody tr:nth-child(even){background:#fafbfd}' +
+            'thead{display:table-header-group}tr{page-break-inside:avoid}' +
+            '.badge{display:inline-block;padding:0 6px;border-radius:8px;font-size:9px;font-weight:700;text-transform:uppercase;border:1px solid #ccc}' +
+            '.sev-critico{color:#b71c1c;border-color:#e7a3a3;background:#fdeaea}' +
+            '.sev-alto{color:#e65100;border-color:#f0c39a;background:#fdf1e6}' +
+            '.sev-medio{color:#8a6d00;border-color:#e6d79a;background:#fdf9e6}' +
+            '.sev-bajo{color:#1565c0;border-color:#a9c8e8;background:#eaf3fc}' +
+            '.muted{color:#6b7280}' +
+            'p{margin:0 0 8px;font-size:10.5px;line-height:1.5}' +
+            '.resumen{background:#f7f8fb;border:1px solid #e3e6ee;border-radius:8px;padding:10px 12px;margin:0 0 4px}' +
+            '.ia{border:1px solid #e3e6ee;border-left:4px solid #1565c0;border-radius:6px;padding:8px 10px;background:#f7f9fc}' +
+            '.pie{margin-top:20px;border-top:1px solid #d9dce4;padding-top:6px;font-size:8.5px;color:#8890a2;display:flex;justify-content:space-between}' +
+            '</style></head><body>' +
+            '<div class="cover">' +
+            '<div class="brand">Rondo<small>Vigilancia de flota</small></div>' +
+            '<div class="meta">Reporte operativo<b>' + esc(fecha) + ', ' + esc(hora) + '</b>' +
+            'Alcance: ' + esc(d.toda ? 'toda la flota' : 'unidades vigiladas') + '<br>' +
+            'Periodo de avisos: hoy (00:00 a ' + esc(hora) + ')</div>' +
+            '</div>' +
+            '<div class="kpis">' + kpis + '</div>' +
+            '<h2 class="seccion">Resumen ejecutivo</h2>' +
+            '<div class="resumen"><p>' + esc(rxInfResumenTexto(d)) + '</p><p style="margin:0">' + sevResumen + '</p></div>' +
+            (resumenIA ? '<h2 class="seccion">Analisis con IA</h2><div class="ia"><p>' + esc(resumenIA) + '</p></div>' : '') +
+            seccion('1. Unidades (' + d.watched.length + ')', rxInfTabla(['Eco', 'Placa', 'Estado', 'Ultimo reporte', 'Velocidad', 'Zona', 'Ruta', 'Odometro', 'Limite'], filasUnidades)) +
+            seccion('2. Avisos del dia (' + d.hoy.length + ')', rxInfTabla(['Hora', 'Severidad', 'Regla', 'Eco', 'Titulo y detalle'], filasAvisos)) +
+            seccion('3. Rutas activas (' + rutas.length + ')', rxInfTabla(['Eco', 'Destino', 'Estado', 'Progreso', 'Distancia', 'ETA', 'Desviado'], rutas)) +
+            seccion('4. Unidades sin senal (' + sinSenal.length + ')', rxInfTabla(['Eco', 'Placa', 'Ultimo reporte', 'Ultima zona'], sinSenal)) +
+            (d.zonasCargadas ? seccion('5. Geocercas (' + (APP.zonas || []).length + ')', rxInfTabla(['Geocerca', 'Tipo', 'Unidades dentro'], geocercas)) : '') +
+            ((APP.riesgo || []).length ? seccion((d.zonasCargadas ? '6' : '5') + '. Zonas de riesgo (' + APP.riesgo.length + ')', rxInfTabla(['Municipio', 'Estado', 'Score', 'Radio'], riesgo)) : '') +
+            '<div class="pie"><span>Rondo &middot; generado automaticamente</span><span>Documento de solo lectura: no modifica datos en la plataforma.</span></div>' +
+            '</body></html>';
+    }
+    function rxImprimirHTML(html) {
+        let fr = document.getElementById('rondo-print-frame');
+        if (fr && fr.parentNode) fr.parentNode.removeChild(fr);
+        fr = document.createElement('iframe');
+        fr.id = 'rondo-print-frame';
+        fr.setAttribute('style', 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none');
+        document.body.appendChild(fr);
+        try {
+            const doc = fr.contentWindow.document;
+            doc.open(); doc.write(html); doc.close();
+        } catch (_) {
+            adviceWarn('No se pudo preparar el reporte', 'Intenta de nuevo.');
+            try { fr.remove(); } catch (_) { /* noop */ }
+            return;
+        }
+        setTimeout(() => {
+            try { fr.contentWindow.focus(); fr.contentWindow.print(); }
+            catch (_) { adviceWarn('No se pudo imprimir', 'Permite la impresion/ventanas emergentes e intenta de nuevo.'); }
+            setTimeout(() => { try { fr.remove(); } catch (_) { /* noop */ } }, 60000);
+        }, 600);
+    }
+    async function exportReportePDF() {
+        const d = rxInformeDatos();
+        if (!d.watched.length) { adviceWarn('Sin unidades', 'No hay unidades en el alcance para el reporte.'); return; }
+        let resumenIA = '';
+        const quiereIA = !!(APP.config && APP.config.iaHabilitada && APP.config.iaApiKey && APP.config.iaResumenInforme);
+        if (quiereIA) {
+            advice('Generando reporte', 'Pidiendo el resumen a la IA...');
+            try {
+                const r = await aiResumenDia(d.hoy);
+                if (r && r.texto) resumenIA = String(r.texto).replace(/\s*\n\s*/g, ' ').trim();
+            } catch (_) { resumenIA = ''; }
+        }
+        rxImprimirHTML(rxInformeHTML(resumenIA));
+        advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
     }
