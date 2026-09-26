@@ -25,9 +25,9 @@ function ok(nombre, cond, extra) {
 // 1. node -c (syntax check) -- el modo mas rapido de detectar typos.
 try {
     execFileSync(process.execPath, ['-c', ARCHIVO], { stdio: ['ignore', 'pipe', 'pipe'] });
-    ok('rondo.user.js compila sin errores de sintaxis', true);
+    ok('bundle compila sin errores de sintaxis', true);
 } catch (e) {
-    ok('rondo.user.js compila sin errores de sintaxis', false, (e.stderr || e.stdout || e.message || '').toString().split('\n')[0]);
+    ok('bundle compila sin errores de sintaxis', false, (e.stderr || e.stdout || e.message || '').toString().split('\n')[0]);
 }
 
 // 2. @version y VER deben coincidir.

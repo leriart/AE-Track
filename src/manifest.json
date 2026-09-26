@@ -1,7 +1,7 @@
 {
   "parts": [
     {
-      "file": "00-bloque.js",
+      "file": "00-inicio.js",
       "chunk": "core"
     },
     {

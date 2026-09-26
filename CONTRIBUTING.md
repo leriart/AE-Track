@@ -44,6 +44,10 @@ suites no usan red ni navegador.
 - Un responsable lanza el workflow **Release** (manual) con la version; el
   workflow valida, construye, prueba, etiqueta y publica el release con assets,
   y actualiza `main`.
+- Promueve `dev` → `main` **mediante el release** (no con un merge directo): el
+  release regenera `dist/` y el bootstrap en canal estable. Si mergeas a `main`
+  sin release, el job `sincronizado` de CI quedara en rojo hasta el proximo
+  release (los artefactos de `dev` usan el canal dev).
 - El canal `dev` se regenera solo en cada push a `dev`.
 
 ## Estilo
