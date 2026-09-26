@@ -403,7 +403,7 @@ ok('defaults IA en bloque DEFAULTS', /iaHabilitada:\s*false/.test(src));
 ok('proveedor por defecto DeepSeek en DEFAULTS', /iaProveedor:\s*'deepseek'/.test(src));
 
 // v5.14: analisis en lote + resumen narrativo del informe.
-ok('version 5.15.1 en @UserScript', /@version\s+5\.15\.1/.test(src));
+ok('version 5.15.2 en @UserScript', /@version\s+5\.15\.2/.test(src));
 ok('funcion aiAnalizarLote existe', /async function aiAnalizarLote\(/.test(src));
 ok('funcion aiResumenDia existe', /async function aiResumenDia\(/.test(src));
 ok('prompt IA_SYSTEM_LOTE definido', /const IA_SYSTEM_LOTE = String\.raw/.test(src));
@@ -616,8 +616,8 @@ ok('MANUAL.md lista regla Aproximacion a zona de riesgo', /Aproximacion a zona d
 ok('MANUAL.md atajo Alt+7', /Alt.*\+.*7.*Chat IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 
 // v5.14.1: sistema de updates rehecho.
-ok('VER constante existe', /const VER = ['"]5\.15\.1['"]/.test(src));
-ok('@version 5.15.1 sincronizado con VER', /@version\s+5\.15\.1[\s\S]{0,50000}const VER = ['"]5\.15\.1['"]/.test(src));
+ok('VER constante existe', /const VER = ['"]5\.15\.2['"]/.test(src));
+ok('@version 5.15.2 sincronizado con VER', /@version\s+5\.15\.2[\s\S]{0,50000}const VER = ['"]5\.15\.2['"]/.test(src));
 ok('@connect raw.githubusercontent.com', /\/\/ @connect\s+raw\.githubusercontent\.com/.test(src));
 ok('@connect api.github.com', /\/\/ @connect\s+api\.github\.com/.test(src));
 ok('parseVersionHeader null-safe', /if \(!text \|\| typeof text !== 'string'\) return null/.test(src));
@@ -723,9 +723,11 @@ ok('ajustes: desvio municipio', /checkRow\('c-desvio-municipio'/.test(src) && /n
 ok('sin codigo de modo flotante', src.indexOf('placePanel') < 0 && src.indexOf('savePanelPos') < 0 && src.indexOf('panelMode') < 0);
 ok('sin CSS .dragging del panel', src.indexOf('#rondo-panel.dragging') < 0);
 
-// v5.15.1: lista de unidades sin parpadeo, menu contextual anclado y botones rapidos.
-ok('render incremental de tarjetas', /function renderCards\(/.test(src) && /body\._rondoCards/.test(src) && /_rondoInner/.test(src));
-ok('paintTabla usa renderCards', /renderCards\(body, cards\)/.test(src));
+// v5.15.2: lista de unidades sin parpadeo, menu contextual anclado y botones rapidos.
+ok('render incremental de tarjetas', /function renderLista\(/.test(src) && /function unidCardNode\(/.test(src) && /function unidCardUpdate\(/.test(src) && /_rondoItems/.test(src));
+ok('paintTabla usa renderLista', /renderLista\(body, lista,/.test(src));
+ok('estado vacio memoizado (no parpadea)', /body\._rondoVacio/.test(src));
+ok('tarjeta se actualiza en el sitio (sin reescribir innerHTML)', /r\.velNum\.textContent = velTxt/.test(src) && /r\.rutaFill\.style\.width = pct/.test(src));
 ok('botones rapidos por unidad', /class="u-quick"/.test(src) && /u-open/.test(src) && /u-route/.test(src) && /u-map/.test(src) && /u-watch/.test(src));
 ok('CSS de botones rapidos', /\.rondo-uni-card \.u-quick/.test(src));
 ok('menu contextual anula el transform base', /ctxEl\.style\.transform = 'none'/.test(src));
@@ -736,6 +738,18 @@ ok('click de botones rapidos por closest(button)', /u-route[\s\S]{0,400}abrirEdi
 ok('velocidad suavizada (EMA)', /velSuave: \{\}/.test(src) && /function velSuavizada\(/.test(src) && /pv \* 0\.65 \+ st\.vel \* 0\.35/.test(src));
 ok('area de geocerca: detecta poligono antes que circulo', /function _zonaEsCirculo\(/.test(src) && src.indexOf('if (z.t === 3 || (z.b && z.b.cen_x != null))') < 0);
 ok('area de geocerca: shoelace y linea', /formula del area \(shoelace\)/.test(src) && /longitud x ancho/.test(src));
+
+// v5.15.2: menus unificados de unidades/destinos/multipuntos y lista sin parpadeo.
+ok('modal de unidades unificado', /Unidades y rutas/.test(src) && /id="rondo-modal-add-plan"/.test(src) && /id="rondo-modal-count"/.test(src));
+ok('sintaxis de multipunto en el modal', /rondo-modal-sintaxis/.test(src) && /Tipos: <code>geo:<\/code>/.test(src));
+ok('resumen de paradas por fila (chips)', /function resumenPlanHTML\(/.test(src) && /rondo-dest-chip/.test(src) && /rondo-dest-modo/.test(src));
+ok('editor con motor seleccionable', /id="rpm-engine"/.test(src) && /_planEdit\.engine/.test(src));
+ok('editor con vaciar y contador de paradas', /id="rpm-vaciar"/.test(src) && /rpm-count/.test(src));
+ok('editor detecta coordenadas lat,lon', /if \(cm\) \{ tipo = 'coord'; coords = \{ lat: parseFloat\(cm\[1\]\)/.test(src));
+ok('sugerencias con iconos por tipo', /icoTipo = \(t\) =>/.test(src));
+ok('boton Unidades y rutas en herramientas', /id="rondo-unidades-menu"/.test(src));
+ok('menu contextual unificado (sin ruta-plan/ruta-astar sueltos)', src.indexOf("id: 'ruta-plan'") < 0 && src.indexOf("id: 'ruta-astar'") < 0 && src.indexOf("id: 'ruta-paradas'") >= 0);
+ok('tarjeta de unidad se actualiza por campos', /function unidCardNode\(/.test(src) && /function unidCardUpdate\(/.test(src) && src.indexOf('function renderCards(') < 0);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

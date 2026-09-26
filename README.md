@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.15.1-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.15.1.md)
-[![tests](https://img.shields.io/badge/tests-958%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.15.2-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.15.2.md)
+[![tests](https://img.shields.io/badge/tests-971%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -119,8 +119,10 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   (Unidades y Riesgo usan tarjetas responsivas).
 - **6 pestanas** con los mismos iconos que la plataforma AE-Track
   (Ant Design, SVG inline, sin fuente externa).
-- **Lista vigilada** editable con destinos, **perfiles de configuracion**,
-  **filtros**, **exportacion a CSV/Markdown/GeoJSON** y **respaldo JSON**.
+- **Lista vigilada** editable desde el menu unificado **Unidades y rutas**
+  (agregar, pegar, destinos/rutas multipunto, orden de ventanas), con
+  **perfiles de configuracion**, **filtros**, **exportacion a
+  CSV/Markdown/GeoJSON** y **respaldo JSON**.
 - **Dialogos y confirmaciones** coherentes con el estilo del panel, y
   **estado vacio util** con pista y accion en cada pestana.
 - **Atajos de teclado** para abrir/cerrar el panel y cambiar de pestana.
@@ -333,7 +335,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**12 suites, ~958 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**12 suites, ~971 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

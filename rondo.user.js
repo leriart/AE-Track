@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.15.1
+// @version      5.15.2
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Rutas multipunto (secuencial o mejor ruta), municipios de OpenStreetMap con tolerancia de desvio, busqueda difusa de geocercas/municipios, geocercas con KPIs y exportacion, y monitor de flota con IA. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -388,7 +388,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.15.1';
+    const VER = '5.15.2';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -780,7 +780,7 @@
         unlocked: false,
         consultaRestante: 0,
         stats: { erroresReglas: 0, astarCap: 0 },
-        // v5.15.1: velocidad suavizada por unidad (media exponencial) para
+        // v5.15.2: velocidad suavizada por unidad (media exponencial) para
         // ETAs y estados mas estables, sin depender del ultimo reporte.
         velSuave: {},
         caravanaEco: '',
@@ -1516,7 +1516,7 @@ function _extraerZonasDe(items) {
         const radio = (z.w != null) ? +z.w : ((z.r != null) ? +z.r : 0);
         const cenX = (z.c && z.c.x != null) ? +z.c.x : (b && b.cen_x != null ? +b.cen_x : null);
         const cenY = (z.c && z.c.y != null) ? +z.c.y : (b && b.cen_y != null ? +b.cen_y : null);
-        // v5.15.1: solo es circulo si NO hay poligono/polilinea con puntos.
+        // v5.15.2: solo es circulo si NO hay poligono/polilinea con puntos.
         // Antes cualquier zona con bounding box (b.cen_x) se trataba como
         // circulo, lo que daba areas y centros incorrectos en poligonos.
         const minimoPts = (z.t === 1) ? 2 : 3;
@@ -5892,7 +5892,7 @@ ta.value = '';
     }
     async function reglaDetenido(u, st, R, info, etq, ctx) {
         if (!APP.config.reglas.detenido) return;
-        // v5.15.1: umbral sobre la velocidad suavizada para que los picos de
+        // v5.15.2: umbral sobre la velocidad suavizada para que los picos de
         // ruido del GPS no reinicien el temporizador de detencion.
         if (st.online && velSuavizada(info, st) <= 1.5) {
             if (!R.detenidoDesde) {
@@ -6221,7 +6221,7 @@ ta.value = '';
     async function evaluateUnit(u, info, st, prev, ctx) {
         const clave = info.clave;
         const etq = (info.eco || info.placa || info.nombre || info.id || '');
-        // v5.15.1: media exponencial de velocidad (suaviza GPS y ETA).
+        // v5.15.2: media exponencial de velocidad (suaviza GPS y ETA).
         if (clave && Number.isFinite(st.vel)) {
             const pv = APP.velSuave[clave];
             APP.velSuave[clave] = (pv == null) ? st.vel : (pv * 0.65 + st.vel * 0.35);
@@ -6807,14 +6807,33 @@ ta.value = '';
         }
         return n;
     }
+    // Resumen legible del plan de una unidad para la lista (chips de paradas).
+    function resumenPlanHTML(eco) {
+        const it = unitByEco(eco);
+        let plan = it ? planDe(it.info) : null;
+        if (!plan) plan = APP.planes[eco] || null;
+        if (!plan || !plan.paradas || !plan.paradas.length) {
+            return '<span class="rondo-dest-vacio">sin destino</span>';
+        }
+        const paradas = plan.paradas;
+        const chips = paradas.slice(0, 3).map((p) => {
+            const pre = p.tipo === 'geocerca' ? 'geo:' : (p.tipo === 'municipio' ? 'mun:' : (p.tipo === 'coord' ? '' : ''));
+            return '<span class="rondo-dest-chip" title="' + esc(p.texto || '') + '">' + esc(pre + (p.texto || '')) + '</span>';
+        }).join('');
+        const mas = paradas.length > 3 ? '<span class="rondo-dest-mas" title="' + paradas.length + ' paradas">+' + (paradas.length - 3) + '</span>' : '';
+        const modo = plan.modo === 'optimo' ? '<span class="rondo-dest-modo" title="Mejor ruta (optimiza y cierra el circuito)">mejor ruta</span>' : '';
+        return chips + mas + modo;
+    }
     function pintarModalLista() {
         const body = byId('rondo-modal-lista');
         if (!body) return;
         sincronizarOrden();
         marcarModoOrden(APP.ordenModo || '');
         const ecos = APP.orden.slice();
+        const cnt = byId('rondo-modal-count');
+        if (cnt) cnt.textContent = ecos.length;
         if (!ecos.length) {
-            body.innerHTML = '<div class="lista-empty">Lista vacía. Pega abajo o añade uno.</div>';
+            body.innerHTML = '<div class="lista-empty">Lista vacía. Pega arriba o añade una unidad.</div>';
             return;
         }
         body.innerHTML = ecos.map((eco, i) => (
@@ -6822,8 +6841,8 @@ ta.value = '';
             '<span class="rondo-drag-handle" draggable="true" title="Arrastrar para cambiar el orden">⠿</span>' +
             '<span class="orden-num">' + (i + 1) + '</span>' +
             '<span class="eco">' + esc(eco) + '</span>' +
-            '<input type="text" class="rondo-dest" data-eco="' + esc(eco) + '" value="' + esc(APP.watchMap[eco] || '') + '" placeholder="destino | parada 2 | ...">' +
-            '<button class="mini rondo-plan-open" data-eco="' + esc(eco) + '" title="Editar paradas de la ruta (geocercas, municipios, lugares)"><span class="rondo-usym">' + UIS.route + '</span></button>' +
+            '<span class="rondo-dest-resumen">' + resumenPlanHTML(eco) + '</span>' +
+            '<button class="mini rondo-plan-open" data-eco="' + esc(eco) + '" title="Editar destinos y paradas (geocercas, municipios, lugares)"><span class="rondo-usym">' + UIS.route + '</span> Paradas</button>' +
             '<button class="rondo-del" data-eco="' + esc(eco) + '" draggable="false" title="Quitar de la lista"><span class="rondo-usym">' + UIS.close + '</span></button>' +
             '</div>'
         )).join('');
@@ -6887,7 +6906,7 @@ ta.value = '';
         if (el) el.classList.remove('abierto');
         _planEdit = null;
     }
-    function abrirEditorParadas(eco) {
+    function abrirEditorParadas(eco, engine) {
         const it = unitByEco(eco);
         const clave = it ? it.info.clave : eco;
         const plan = (it ? planDe(it.info) : null) || { modo: 'secuencial', circuito: false, paradas: [] };
@@ -6895,6 +6914,7 @@ ta.value = '';
             eco: eco, clave: clave,
             modo: plan.modo || 'secuencial',
             circuito: !!plan.circuito,
+            engine: (engine === 'astar' || engine === 'osrm') ? engine : (APP.config.autoRutaModo || 'osrm'),
             paradas: (plan.paradas || []).map((p) => Object.assign({}, p))
         };
         renderEditorParadas();
@@ -6916,10 +6936,12 @@ ta.value = '';
             '<button class="rpm-mini rpm-del" data-i="' + i + '" title="Quitar"><span class="rondo-usym">' + UIS.close + '</span></button>' +
             '</div>'
         )).join('') || '<div class="rpm-hint">Sin paradas. Anade geocercas, municipios o lugares abajo.</div>';
+        const engine = _planEdit.engine || 'osrm';
         el.innerHTML =
             '<div class="rpm-card">' +
-            '<div class="rpm-head"><span class="rondo-usym">' + UIS.route + '</span> <span class="rpm-eco">' + esc(_planEdit.eco) + '</span> &middot; Paradas de la ruta' +
-            '<span style="flex:1"></span><button class="rpm-mini" id="rpm-x"><span class="rondo-usym">' + UIS.close + '</span></button></div>' +
+            '<div class="rpm-head"><span class="rondo-usym">' + UIS.route + '</span> <span class="rpm-eco">' + esc(_planEdit.eco) + '</span> &middot; Ruta multipunto' +
+            '<span class="rpm-count">' + stops.length + (stops.length === 1 ? ' parada' : ' paradas') + '</span>' +
+            '<span style="flex:1"></span><button class="rpm-mini" id="rpm-x" title="Cerrar"><span class="rondo-usym">' + UIS.close + '</span></button></div>' +
             '<div class="rpm-body">' +
             '<div class="rpm-row">' +
             '<label class="rpm-lbl">Modo</label>' +
@@ -6927,21 +6949,30 @@ ta.value = '';
             '<option value="secuencial"' + (modo === 'secuencial' ? ' selected' : '') + '>Secuencial (en este orden)</option>' +
             '<option value="optimo"' + (modo === 'optimo' ? ' selected' : '') + '>Mejor ruta (optimiza y regresa a base)</option>' +
             '</select>' +
-            '<label class="rpm-lbl"><input type="checkbox" id="rpm-circuito"' + (_planEdit.circuito || modo === 'optimo' ? ' checked' : '') + (modo === 'optimo' ? ' disabled' : '') + '> Regresar al origen</label>' +
+            '<label class="rpm-lbl">Motor</label>' +
+            '<select id="rpm-engine">' +
+            '<option value="osrm"' + (engine === 'osrm' ? ' selected' : '') + '>OSRM (rapido)</option>' +
+            '<option value="astar"' + (engine === 'astar' ? ' selected' : '') + '>A* OSM (experimental)</option>' +
+            '</select>' +
             '</div>' +
-            '<div class="rpm-hint">En modo <b>mejor ruta</b> las paradas no fijadas se reordenan por cercania y el recorrido cierra en el origen. Usa <b>Fijar</b> para respetar el orden de una parada.</div>' +
+            '<div class="rpm-row">' +
+            '<label class="rpm-lbl"><input type="checkbox" id="rpm-circuito"' + (_planEdit.circuito || modo === 'optimo' ? ' checked' : '') + (modo === 'optimo' ? ' disabled' : '') + '> Regresar al origen</label>' +
+            '<span style="flex:1"></span>' +
+            '<button class="rpm-mini" id="rpm-vaciar" title="Quitar todas las paradas"><span class="rondo-usym">' + UIS.clear + '</span> Vaciar paradas</button>' +
+            '</div>' +
+            '<div class="rpm-hint">En modo <b>mejor ruta</b> las paradas no fijadas se reordenan por cercania y el recorrido cierra en el origen. Usa <b>Fijar</b> para respetar el orden de una parada. <b>A*</b> requiere activar Overpass y rutas de menos de ~150 km.</div>' +
             '<div class="rpm-stops">' + filas + '</div>' +
             '<div class="rpm-add">' +
-            '<input type="text" id="rpm-buscar" placeholder="Buscar geocerca, municipio o lugar..." autocomplete="off">' +
-            '<button class="rpm-mini" id="rpm-agregar" title="Anadir el texto como lugar">Anadir</button>' +
+            '<input type="text" id="rpm-buscar" placeholder="Buscar geocerca, municipio o lugar, o escribe lat,lon..." autocomplete="off">' +
+            '<button class="rpm-mini" id="rpm-agregar" title="Anadir el texto como lugar o coordenadas"><span class="rondo-usym">' + UIS.check + '</span> Anadir</button>' +
             '<div class="rpm-sug" id="rpm-sug"></div>' +
             '</div>' +
-            '<div class="rpm-hint">Escribe para ver sugerencias de <b>geocercas</b> y <b>municipios</b> (OpenStreetMap); Enter anade el texto como lugar.</div>' +
+            '<div class="rpm-hint">Escribe para ver sugerencias de <b>geocercas</b> y <b>municipios</b> (OpenStreetMap); Enter anade el texto como lugar y <code>lat,lon</code> como coordenadas.</div>' +
             '</div>' +
             '<div class="rpm-foot">' +
             '<button id="rpm-cancelar">Cancelar</button>' +
             '<button id="rpm-guardar">Solo guardar</button>' +
-            '<button class="primary" id="rpm-guardar-trazar">Guardar y trazar</button>' +
+            '<button class="primary" id="rpm-guardar-trazar"><span class="rondo-usym">' + UIS.route + '</span> Guardar y trazar</button>' +
             '</div>' +
             '</div>';
         byId('rpm-x').onclick = cerrarEditorParadas;
@@ -6954,8 +6985,15 @@ ta.value = '';
             if (modoEl.value === 'optimo') _planEdit.circuito = true;
             renderEditorParadas();
         };
+        const engineEl = byId('rpm-engine');
+        if (engineEl) engineEl.onchange = () => { _planEdit.engine = engineEl.value; };
         const circEl = byId('rpm-circuito');
         if (circEl) circEl.onchange = () => { _planEdit.circuito = circEl.checked; };
+        byId('rpm-vaciar').onclick = () => {
+            if (!_planEdit || !_planEdit.paradas.length) return;
+            _planEdit.paradas = [];
+            renderEditorParadas();
+        };
         el.querySelectorAll('.rpm-pin').forEach((b) => {
             b.onclick = () => { const i = +b.dataset.i; _planEdit.paradas[i].fijo = !_planEdit.paradas[i].fijo; renderEditorParadas(); };
         });
@@ -6974,11 +7012,13 @@ ta.value = '';
             const q = buscar.value.trim();
             if (!q) { sug.classList.remove('abierto'); sug.innerHTML = ''; return; }
             const items = catalogoParadas(q, 8);
+            const icoTipo = (t) => (t === 'geocerca') ? UIS.zone : (t === 'municipio' ? UIS.map : UIS.pin);
             let html = items.map((cand, k) =>
-                '<div class="rpm-sug-item" data-k="' + k + '"><span class="k">' + esc(cand.tipo) + '</span>' +
+                '<div class="rpm-sug-item" data-k="' + k + '"><span class="rondo-usym">' + icoTipo(cand.tipo) + '</span>' +
+                '<span class="k">' + esc(cand.tipo) + '</span>' +
                 '<span class="t">' + esc(cand.texto || '') + (cand.sub ? ' <span class="k">' + esc(cand.sub) + '</span>' : '') + '</span></div>'
             ).join('');
-            html += '<div class="rpm-sug-item" data-libre="1"><span class="k">lugar</span><span class="t">Buscar "' + esc(q) + '" en OpenStreetMap</span></div>';
+            html += '<div class="rpm-sug-item" data-libre="1"><span class="rondo-usym">' + UIS.pin + '</span><span class="k">lugar</span><span class="t">Buscar "' + esc(q) + '" en OpenStreetMap</span></div>';
             sug.innerHTML = html;
             sug.classList.add('abierto');
             sug.querySelectorAll('.rpm-sug-item').forEach((n) => {
@@ -7016,6 +7056,9 @@ ta.value = '';
     function agregarParadaEditor(tipo, texto, coords, extra) {
         if (!_planEdit) return;
         if (_planEdit.paradas.length >= 25) { adviceWarn('Maximo 25 paradas', 'Quita alguna antes de anadir otra.'); return; }
+        // Detecta "lat,lon" y lo trata como coordenadas (sin geocodificar).
+        const cm = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(String(texto || '').trim());
+        if (cm) { tipo = 'coord'; coords = { lat: parseFloat(cm[1]), lon: parseFloat(cm[2]) }; }
         const p = nuevaParada(tipo, texto, coords);
         if (extra && extra.zonaId) p.zonaId = extra.zonaId;
         if (extra && extra.municipioId) p.municipioId = extra.municipioId;
@@ -7041,8 +7084,9 @@ ta.value = '';
         pintarModalLista();
         paintInfo();
         if (trazar) {
-            const engine = (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm';
-            planearRuta(eco, plan, null, engine);
+            const engine = (_planEdit.engine === 'astar') ? 'astar' : 'osrm';
+            if (engine === 'astar' && !APP.config.overpass) adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas. Se usara OSRM.');
+            planearRuta(eco, plan, null, (engine === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
         } else if (APP.config.autoRuta) {
             autoTrazarRutas();
         }
@@ -7945,6 +7989,19 @@ ta.value = '';
             "#rondo-config button.cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:8px 14px;cursor:pointer;font:600 12px var(--rondo-font);transition:background .15s,transform .12s}\n" +
             "#rondo-config button.cancel:hover{background:var(--rondo-bg);transform:translateY(-1px)}\n" +
             "#rondo-modal textarea{width:100%;height:160px;resize:none;padding:10px;border-radius:6px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);box-sizing:border-box;font:12px monospace}\n" +
+            // v5.15.2: modal de unidades/destinos unificado.
+            "#rondo-modal .rondo-modal-intro{font-size:11.5px;color:var(--rondo-fg-dim);margin:-4px 0 8px;line-height:1.4}\n" +
+            "#rondo-modal .rondo-modal-sintaxis{font-size:10.5px;color:var(--rondo-fg-mute);flex:1;min-width:120px;line-height:1.3}\n" +
+            "#rondo-modal .rondo-modal-sintaxis code,#rondo-modal .rondo-modal-hint code{background:var(--rondo-bg-strong);padding:0 3px;border-radius:3px}\n" +
+            "#rondo-modal .rondo-modal-sec{display:flex;align-items:center;gap:5px;margin:8px 14px 0;font-size:11px;font-weight:700;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.3px}\n" +
+            "#rondo-modal .rondo-modal-sec .rondo-count{margin-left:auto}\n" +
+            "#rondo-modal .rondo-modal-hint{font-size:11px;color:var(--rondo-fg-dim);margin:4px 14px 0;line-height:1.35}\n" +
+            "#rondo-modal-lista .lista-row .rondo-dest-resumen{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:3px;align-items:center;overflow:hidden}\n" +
+            "#rondo-modal-lista .rondo-dest-chip{font:600 10.5px var(--rondo-font);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg);border-radius:8px;padding:1px 6px;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-modal-lista .rondo-dest-mas{font:700 10px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg-strong);border-radius:8px;padding:1px 5px}\n" +
+            "#rondo-modal-lista .rondo-dest-modo{font:700 9.5px var(--rondo-font);color:var(--rondo-accent-2);border:1px solid rgba(var(--rondo-accent-rgb),.5);border-radius:8px;padding:1px 5px;text-transform:uppercase;letter-spacing:.3px}\n" +
+            "#rondo-modal-lista .rondo-dest-vacio{font-size:11px;color:var(--rondo-fg-mute);font-style:italic}\n" +
+            "#rondo-modal-lista .lista-row{flex-wrap:wrap}\n" +
             "#rondo-modal h3{margin:0;text-align:center;font-size:13px;color:var(--rondo-fg)}\n" +
             "#rondo-modal button.accbtn{background:var(--rondo-accent-grad);color:#fff;border:none;border-radius:var(--rondo-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--rondo-font);transition:transform .12s,box-shadow .15s,filter .15s}\n" +
             "#rondo-modal button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--rondo-accent-rgb),.4);filter:brightness(1.05)}\n" +
@@ -8193,6 +8250,8 @@ ta.value = '';
             "#rondo-plan-modal .rpm-card{width:min(580px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font)}\n" +
             "#rondo-plan-modal .rpm-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700}\n" +
             "#rondo-plan-modal .rpm-head .rpm-eco{color:var(--rondo-accent-2)}\n" +
+            "#rondo-plan-modal .rpm-head .rpm-count{margin-left:8px;font-size:10.5px;font-weight:600;color:var(--rondo-fg-dim);background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:1px 7px}\n" +
+            "#rondo-plan-modal .rpm-sug-item .rondo-usym{font-size:13px;color:var(--rondo-accent-2);flex:0 0 auto}\n" +
             "#rondo-plan-modal .rpm-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}\n" +
             "#rondo-plan-modal .rpm-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}\n" +
             "#rondo-plan-modal label.rpm-lbl{font-size:11.5px;color:var(--rondo-fg-dim);font-weight:600}\n" +
@@ -8319,6 +8378,7 @@ ta.value = '';
             '<option value="alfabetico">Alfabético A-Z</option>' +
             '<option value="invertir">Invertir orden</option>' +
             '</select>' +
+            '<button id="rondo-unidades-menu" class="rondo-tool" data-tabs="unidades" title="Agregar unidades, destinos y rutas multipunto"><span class="rondo-usym">' + UIS.route + '</span> Unidades y rutas</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
             '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar informe del dia"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
@@ -8563,12 +8623,13 @@ ta.value = '';
 
         modalEl = makeEl('div', { id: 'rondo-modal' });
         modalEl.innerHTML = (
-            '<h3>Lista de unidades</h3>' +
-            '<p style="font-size:11.5px;color:var(--rondo-fg-dim);margin:-4px 0 8px">Una sola lista para abrir ventanas, registrar destinos y filtrar las alertas. Pega <code>eco</code> o <code>eco=destino</code> por línea.</p>' +
-            '<textarea id="rondo-txt" placeholder="eco por línea, o eco=destino&#10;4381&#10;4132=Monterrey"></textarea>' +
+            '<h3><span class="rondo-usym">' + UIS.route + '</span> Unidades y rutas</h3>' +
+            '<p class="rondo-modal-intro">Una sola lista para vigilar unidades, abrir ventanas y asignar <b>destinos o rutas multipunto</b> (geocercas, municipios, lugares o coordenadas).</p>' +
+            '<textarea id="rondo-txt" placeholder="Pega una unidad por linea:&#10;4381&#10;4132=Monterrey&#10;4201=geo:CEDIS Norte | mun:Saltillo | coord:25.68,-100.31"></textarea>' +
             '<div class="rondo-modal-actions">' +
-            '<button class="mini" id="rondo-modal-parse">⇭ Pegar a la lista</button>' +
-            '<button class="mini" id="rondo-modal-clear-txt">⌫ Limpiar área</button>' +
+            '<button class="mini" id="rondo-modal-parse"><span class="rondo-usym">' + UIS.down + '</span> Pegar a la lista</button>' +
+            '<button class="mini" id="rondo-modal-clear-txt"><span class="rondo-usym">' + UIS.clear + '</span> Limpiar area</button>' +
+            '<span class="rondo-modal-sintaxis">Tipos: <code>geo:</code> geocerca · <code>mun:</code> municipio · <code>coord:</code> coordenadas. Separa paradas con <code>|</code>.</span>' +
             '</div>' +
             '<div class="rondo-order-tools">' +
             '<span class="etq">Orden de las ventanas:</span>' +
@@ -8578,19 +8639,20 @@ ta.value = '';
             '<button class="mini" id="rondo-orden-alfabetico" title="Orden alfabetico">A-Z</button>' +
             '<button class="mini" id="rondo-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
             '</div>' +
+            '<div class="rondo-modal-sec"><span class="rondo-usym sm">' + UIS.watch + '</span> Unidades en la lista<span class="rondo-count" id="rondo-modal-count">0</span></div>' +
             '<div id="rondo-modal-lista-wrap">' +
                 '<div id="rondo-modal-lista"></div>' +
             '</div>' +
-            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:4px 14px 0">Arrastra el asa ⠿ de cada unidad para cambiar el orden con el que se acomodan las ventanas.</p>' +
+            '<p class="rondo-modal-hint">Arrastra el asa ⠿ para cambiar el orden de las ventanas. Pulsa <b>Paradas</b> en una unidad para anadir destinos o una ruta multipunto.</p>' +
             '<div class="rondo-modal-add">' +
                 '<input type="text" id="rondo-modal-new-eco" placeholder="eco (ej. 4381)">' +
-                '<input type="text" id="rondo-modal-new-dest" placeholder="destino (opcional)">' +
-                '<button class="accbtn" id="rondo-modal-add">+ Añadir</button>' +
+                '<button class="mini" id="rondo-modal-add"><span class="rondo-usym">' + UIS.check + '</span> Anadir</button>' +
+                '<button class="accbtn" id="rondo-modal-add-plan"><span class="rondo-usym">' + UIS.route + '</span> Anadir con paradas</button>' +
             '</div>' +
             '<div class="rondo-acciones">' +
             '<button class="cancel" id="rondo-cancelar">Cancelar</button>' +
-            '<button class="mini" id="rondo-modal-vaciar" style="background:#b71c1c;color:#fff">⌫ Vaciar lista</button>' +
-            '<button class="accbtn" id="rondo-ejecutar">▶ Ejecutar (abrir ventanas)</button>' +
+            '<button class="mini" id="rondo-modal-vaciar" style="background:#b71c1c;color:#fff"><span class="rondo-usym">' + UIS.clear + '</span> Vaciar lista</button>' +
+            '<button class="accbtn" id="rondo-ejecutar"><span class="rondo-usym">' + UIS.panel + '</span> Ejecutar (abrir ventanas)</button>' +
             '</div>'
         );
 
@@ -9460,39 +9522,28 @@ ta.value = '';
             dir.title = APP.sortDir === 'desc' ? 'Orden descendente (clic para ascendente)' : 'Orden ascendente (clic para descendente)';
         }
     }
-    // Render incremental de tarjetas: reutiliza los nodos existentes y solo
-    // reescribe el contenido de las tarjetas que cambiaron. Evita el parpadeo
-    // (la animacion de entrada solo corre en tarjetas nuevas) y conserva el
-    // scroll y el foco del usuario.
-    function renderCards(cont, cards) {
-        const mapa = cont._rondoCards || (cont._rondoCards = new Map());
+    // Render incremental de listas: reutiliza los nodos existentes y actualiza
+    // sus campos EN EL SITIO (sin reescribir innerHTML), de modo que no se
+    // reinician animaciones/transiciones ni se pierde el scroll ni el foco.
+    function renderLista(cont, items, claveDe, crear, actualizar) {
+        const mapa = cont._rondoItems || (cont._rondoItems = new Map());
         invalidarHtml(cont.id);
+        cont._rondoVacio = null;
         const nodos = [];
-        for (let i = 0; i < cards.length; i++) {
-            const c = cards[i];
-            let n = mapa.get(c.eco);
-            if (!n) {
-                n = document.createElement('div');
-                n.dataset.eco = c.eco;
-                n.className = c.clase;
-                n.innerHTML = c.inner;
-                n._rondoClase = c.clase;
-                n._rondoInner = c.inner;
-                mapa.set(c.eco, n);
-            } else {
-                if (n._rondoClase !== c.clase) { n.className = c.clase; n._rondoClase = c.clase; }
-                if (n._rondoInner !== c.inner) { n.innerHTML = c.inner; n._rondoInner = c.inner; }
-            }
+        for (let i = 0; i < items.length; i++) {
+            const it = items[i];
+            const k = claveDe(it);
+            let n = mapa.get(k);
+            if (!n) { n = crear(it); mapa.set(k, n); }
+            actualizar(n, it);
             nodos.push(n);
         }
-        const vigentes = new Set(cards.map((c) => c.eco));
+        const vigentes = new Set(items.map(claveDe));
         mapa.forEach((n, k) => {
             if (vigentes.has(k)) return;
             if (n.parentNode) n.parentNode.removeChild(n);
             mapa.delete(k);
         });
-        // Quita cualquier hijo que no sea una tarjeta vigente (p.ej. el
-        // bloque de estado vacio cuando se pasa de lista vacia a tarjetas).
         const setNodos = new Set(nodos);
         Array.prototype.slice.call(cont.children).forEach((ch) => {
             if (!setNodos.has(ch)) cont.removeChild(ch);
@@ -9505,6 +9556,138 @@ ta.value = '';
         }
         if (!igual) {
             for (let i = 0; i < nodos.length; i++) cont.appendChild(nodos[i]);
+        }
+    }
+    // Crea el esqueleto de una tarjeta de unidad y cachea las referencias a
+    // los nodos que cambian con frecuencia.
+    function unidCardNode() {
+        const n = document.createElement('div');
+        n.className = 'rondo-uni-card fila';
+        n.innerHTML =
+            '<label class="u-check" title="Seleccionar la unidad">' +
+            '<input type="checkbox" class="rondo-sel">' +
+            '</label>' +
+            '<div class="u-body">' +
+            '<div class="u-head">' +
+            '<span class="u-eco"><span class="rondo-usym u-eco-watch" title="En lista vigilada" style="display:none">' + UIS.watch + '</span><span class="u-eco-txt"></span></span>' +
+            '<span class="u-placa"></span>' +
+            '<span class="rondo-pill u-estado"><span class="rondo-usym u-estado-ico"></span><span class="u-estado-txt"></span></span>' +
+            '<span class="u-vel"><span class="u-vel-num"></span><small class="u-vel-lim" style="display:none"></small><em>km/h</em></span>' +
+            '<span class="u-quick">' +
+            '<button class="mini u-open" title="Abrir ventana de la unidad"><span class="rondo-usym">' + UIS.panel + '</span></button>' +
+            '<button class="mini u-route" title="Paradas y ruta"><span class="rondo-usym">' + UIS.route + '</span></button>' +
+            '<button class="mini u-map" title="Ver en OpenStreetMap"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
+            '<button class="mini u-watch" title="Anadir a la lista vigilada"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
+            '<button class="mini u-sil rondo-sil" title="Silenciar unidad"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
+            '</span>' +
+            '</div>' +
+            '<div class="u-meta">' +
+            '<span class="u-tag"><span class="rondo-usym">' + UIS.clock + '</span><span class="u-v-edad"></span></span>' +
+            '<span class="u-tag u-t-zona" style="display:none"><span class="rondo-usym">' + UIS.zone + '</span><span class="u-v-zona"></span></span>' +
+            '<span class="u-tag u-t-coords" style="display:none"><span class="rondo-usym">' + UIS.info + '</span><span class="u-v-coords"></span></span>' +
+            '<span class="u-tag"><span class="rondo-usym">' + UIS.pin + '</span><span class="u-v-km"></span></span>' +
+            '</div>' +
+            '<div class="u-ruta">' +
+            '<span class="rondo-pill u-ruta-pill">SIN RUTA</span>' +
+            '<div class="u-ruta-bar" style="display:none"><div class="u-ruta-fill" style="width:0%"></div></div>' +
+            '<span class="u-ruta-meta" style="display:none"></span>' +
+            '</div>' +
+            '</div>';
+        const q = (s) => n.querySelector(s);
+        n._ref = {
+            check: q('.rondo-sel'),
+            ecoWatch: q('.u-eco-watch'), ecoTxt: q('.u-eco-txt'), placa: q('.u-placa'),
+            estado: q('.u-estado'), estadoIco: q('.u-estado-ico'), estadoTxt: q('.u-estado-txt'),
+            vel: q('.u-vel'), velNum: q('.u-vel-num'), velLim: q('.u-vel-lim'),
+            btnWatch: q('.u-watch'), btnSil: q('.u-sil'), silIco: q('.u-sil .rondo-usym'),
+            tZona: q('.u-t-zona'), vZona: q('.u-v-zona'),
+            tCoords: q('.u-t-coords'), vCoords: q('.u-v-coords'),
+            vEdad: q('.u-v-edad'), vKm: q('.u-v-km'),
+            rutaPill: q('.u-ruta-pill'), rutaBar: q('.u-ruta-bar'),
+            rutaFill: q('.u-ruta-fill'), rutaMeta: q('.u-ruta-meta')
+        };
+        return n;
+    }
+    // Actualiza los campos de una tarjeta de unidad sin recrear el DOM.
+    function unidCardUpdate(n, x) {
+        const info = x.info, st = x.st, zona = x.zona;
+        const r = n._ref;
+        const eco = info.eco || '';
+        const clave = info.clave;
+        const sel = APP.seleccion.has(info.eco) || APP.seleccion.has(info.placa);
+        const sil = APP.dismissed.has(clave);
+        const vig = isWatched(info);
+        const clase = st.estado === 'offline' ? 'off' : (st.estado === 'detenida' ? 'det' : 'on');
+        const nuevaClase = 'rondo-uni-card fila ' + clase + (sel ? ' sel-row' : '');
+        if (n.className !== nuevaClase) n.className = nuevaClase;
+        n.dataset.eco = eco;
+        if (r.check.dataset.eco !== eco) r.check.dataset.eco = eco;
+        if (r.check.dataset.placa !== (info.placa || '')) r.check.dataset.placa = info.placa || '';
+        if (r.check.checked !== sel) r.check.checked = sel;
+        if (n._estadoKey !== clase) {
+            n._estadoKey = clase;
+            r.estadoIco.innerHTML = st.estado === 'offline' ? UIS.offline : (st.estado === 'detenida' ? UIS.stopped : UIS.moving);
+        }
+        r.estado.className = 'rondo-pill u-estado ' + clase;
+        const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
+        if (r.estadoTxt.textContent !== txt) r.estadoTxt.textContent = txt;
+        if (r.ecoWatch.style.display !== (vig ? '' : 'none')) r.ecoWatch.style.display = vig ? '' : 'none';
+        const ecoTxt = eco || '-';
+        if (r.ecoTxt.textContent !== ecoTxt) r.ecoTxt.textContent = ecoTxt;
+        const placa = info.placa || '';
+        if (r.placa.textContent !== placa) r.placa.textContent = placa;
+        const lim = limiteDe(info);
+        const excede = st.online && st.vel > lim;
+        const velTxt = String(Math.round(st.vel));
+        if (r.velNum.textContent !== velTxt) r.velNum.textContent = velTxt;
+        const limTxt = (lim !== APP.config.velMax) ? '/' + lim : '';
+        if (r.velLim.textContent !== limTxt) r.velLim.textContent = limTxt;
+        if (r.velLim.style.display !== (limTxt ? '' : 'none')) r.velLim.style.display = limTxt ? '' : 'none';
+        r.vel.classList.toggle('excede', excede);
+        const velTitle = (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h');
+        if (r.vel.title !== velTitle) r.vel.title = velTitle;
+        if (n._vig !== vig) {
+            n._vig = vig;
+            r.btnWatch.classList.toggle('on', vig);
+            r.btnWatch.title = vig ? 'Quitar de la lista vigilada' : 'Anadir a la lista vigilada';
+        }
+        if (n._sil !== sil) {
+            n._sil = sil;
+            r.silIco.innerHTML = sil ? UIS.mute : UIS.alertas;
+            r.btnSil.classList.toggle('on', sil);
+            r.btnSil.title = sil ? 'Reactivar avisos' : 'Silenciar unidad';
+        }
+        const edad = ageText(st.edadMin);
+        if (r.vEdad.textContent !== edad) r.vEdad.textContent = edad;
+        const zonaTxt = zona || '';
+        if (r.vZona.textContent !== zonaTxt) r.vZona.textContent = zonaTxt;
+        if (r.tZona.style.display !== (zonaTxt ? '' : 'none')) r.tZona.style.display = zonaTxt ? '' : 'none';
+        const coords = (APP.config.mostrarCoords && st.lat != null) ? st.lat.toFixed(3) + ', ' + st.lon.toFixed(3) : '';
+        if (r.vCoords.textContent !== coords) r.vCoords.textContent = coords;
+        if (r.tCoords.style.display !== (coords ? '' : 'none')) r.tCoords.style.display = coords ? '' : 'none';
+        const odo = odometroDe(info);
+        const kmTxt = (odo ? Math.round(odo.m / 100) / 10 : 0).toFixed(1) + ' km';
+        if (r.vKm.textContent !== kmTxt) r.vKm.textContent = kmTxt;
+        // Ruta: pill, barra de progreso (con su transicion) y ETA.
+        const er = estadoRuta(info, st);
+        if (r.rutaPill.textContent !== er.estado) r.rutaPill.textContent = er.estado;
+        r.rutaPill.className = 'rondo-pill u-ruta-pill ' + rutaClasePill(er.estado);
+        if (er.snap) {
+            const pct = Math.round(er.snap.progreso * 100);
+            const etaSeg = calcularETA(er.snap, er.ruta, velSuavizada(info, st));
+            const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min' : '-';
+            if (r.rutaBar.style.display) r.rutaBar.style.display = '';
+            r.rutaFill.style.width = pct + '%';
+            const meta = pct + '% · ' + etaTxt;
+            if (r.rutaMeta.textContent !== meta) r.rutaMeta.textContent = meta;
+            if (r.rutaMeta.style.display) r.rutaMeta.style.display = '';
+        } else if (watchDest(info)) {
+            if (r.rutaBar.style.display !== 'none') r.rutaBar.style.display = 'none';
+            if (r.rutaMeta.textContent !== 'trazando...') r.rutaMeta.textContent = 'trazando...';
+            if (r.rutaMeta.style.display) r.rutaMeta.style.display = '';
+        } else {
+            if (r.rutaBar.style.display !== 'none') r.rutaBar.style.display = 'none';
+            if (r.rutaMeta.style.display !== 'none') r.rutaMeta.style.display = 'none';
         }
     }
     function paintTabla() {
@@ -9546,72 +9729,20 @@ ta.value = '';
             return a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
         });
         if (!lista.length) {
-            body._rondoCards = new Map();
-            invalidarHtml(body.id);
+            body._rondoItems = new Map();
             const vacio = emptyState(UIS.panel, LANG.sinUni,
                 'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
                 '<button class="mini rondo-vacio-acc" data-acc="abrir-lista"><span class="rondo-usym">' + UIS.gear + '</span> Abrir lista de unidades</button>');
-            body.innerHTML = '<div class="rondo-uni-empty">' + vacio + '</div>';
+            const html = '<div class="rondo-uni-empty">' + vacio + '</div>';
+            // Solo se escribe si cambio: antes se reescribia cada segundo y el
+            // estado vacio tambien parpadeaba.
+            if (body._rondoVacio !== html) {
+                body._rondoVacio = html;
+                invalidarHtml(body.id);
+                body.innerHTML = html;
+            }
         } else {
-            const cards = lista.map(({ info, st, zona }) => {
-                const clave = info.clave;
-                const sel = APP.seleccion.has(info.eco) || APP.seleccion.has(info.placa);
-                const sil = APP.dismissed.has(clave);
-                const vig = isWatched(info);
-                const clase = st.estado === 'offline' ? 'off' : (st.estado === 'detenida' ? 'det' : 'on');
-                const ic = st.estado === 'offline' ? UIS.offline : (st.estado === 'detenida' ? UIS.stopped : UIS.moving);
-                const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
-                const coords = (APP.config.mostrarCoords && st.lat != null)
-                    ? st.lat.toFixed(3) + ', ' + st.lon.toFixed(3) : '';
-                const lim = limiteDe(info);
-                const excede = st.online && st.vel > lim;
-                const velTitle = (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h');
-                const odo = odometroDe(info);
-                const km = odo ? Math.round(odo.m / 100) / 10 : 0;
-                // Estado de ruta con progreso y ETA (velocidad suavizada).
-                const er = estadoRuta(info, st);
-                let rutaHtml = '<span class="rondo-pill ' + rutaClasePill(er.estado) + '">' + esc(er.estado) + '</span>';
-                if (er.snap) {
-                    const pct = Math.round(er.snap.progreso * 100);
-                    const etaSeg = calcularETA(er.snap, er.ruta, velSuavizada(info, st));
-                    const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min' : '-';
-                    rutaHtml += '<div class="u-ruta-bar"><div class="u-ruta-fill" style="width:' + pct + '%"></div></div>' +
-                        '<span class="u-ruta-meta">' + pct + '% · ' + etaTxt + '</span>';
-                } else if (watchDest(info)) {
-                    rutaHtml += '<span class="u-ruta-meta">trazando...</span>';
-                }
-                // Sub-linea de metadatos: ultimo reporte, zona, odometro, coords.
-                const metas = [];
-                metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.clock + '</span>' + esc(ageText(st.edadMin)) + '</span>');
-                if (zona) metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.zone + '</span>' + esc(zona) + '</span>');
-                if (coords) metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.info + '</span>' + coords + '</span>');
-                metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.pin + '</span>' + km.toFixed(1) + ' km</span>');
-                const inner =
-                    '<label class="u-check" title="Seleccionar la unidad">' +
-                    '<input type="checkbox" class="rondo-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
-                    '</label>' +
-                    '<div class="u-body">' +
-                    '<div class="u-head">' +
-                    '<span class="u-eco">' + (vig ? '<span class="rondo-usym" title="En lista vigilada">' + UIS.watch + '</span>' : '') + esc(info.eco || '-') + '</span>' +
-                    '<span class="u-placa">' + esc(info.placa || '') + '</span>' +
-                    '<span class="rondo-pill ' + clase + '"><span class="rondo-usym">' + ic + '</span>' + txt + '</span>' +
-                    '<span class="u-vel' + (excede ? ' excede' : '') + '" title="' + velTitle + '">' + Math.round(st.vel) +
-                    (lim !== APP.config.velMax ? '<small>/' + lim + '</small>' : '') + '<em>km/h</em></span>' +
-                    '<span class="u-quick">' +
-                    '<button class="mini u-open" data-eco="' + esc(info.eco) + '" title="Abrir ventana de la unidad"><span class="rondo-usym">' + UIS.panel + '</span></button>' +
-                    '<button class="mini u-route" data-eco="' + esc(info.eco) + '" title="Paradas y ruta"><span class="rondo-usym">' + UIS.route + '</span></button>' +
-                    '<button class="mini u-map" data-eco="' + esc(info.eco) + '" title="Ver en OpenStreetMap"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
-                    '<button class="mini u-watch' + (vig ? ' on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (vig ? 'Quitar de la lista vigilada' : 'Anadir a la lista vigilada') + '"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
-                    '<button class="mini u-sil rondo-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar avisos' : 'Silenciar unidad') + '">' +
-                    '<span class="rondo-usym">' + (sil ? UIS.mute : UIS.alertas) + '</span></button>' +
-                    '</span>' +
-                    '</div>' +
-                    '<div class="u-meta">' + metas.join('') + '</div>' +
-                    '<div class="u-ruta">' + rutaHtml + '</div>' +
-                    '</div>';
-                return { eco: info.eco, clase: 'rondo-uni-card fila ' + clase + (sel ? ' sel-row' : ''), inner: inner };
-            });
-            renderCards(body, cards);
+            renderLista(body, lista, (x) => x.info.clave || x.info.eco, unidCardNode, unidCardUpdate);
         }
         const aviso = byId('rondo-sel-vacio');
         if (aviso) {
@@ -11175,7 +11306,6 @@ ta.value = '';
             modalEl.style.display = 'none';
             const ta = byId('rondo-txt'); if (ta) ta.value = '';
             const ni = byId('rondo-modal-new-eco'); if (ni) ni.value = '';
-            const nd = byId('rondo-modal-new-dest'); if (nd) nd.value = '';
         });
         byId('rondo-modal-parse').addEventListener('click', () => {
             const ta = byId('rondo-txt');
@@ -11197,17 +11327,26 @@ ta.value = '';
         });
         byId('rondo-modal-add').addEventListener('click', () => {
             const ne = byId('rondo-modal-new-eco');
-            const nd = byId('rondo-modal-new-dest');
             const eco = ne ? ne.value.trim() : '';
-            const destino = nd ? nd.value.trim() : '';
-            if (!eco) return;
-            agregarALista(eco, destino);
+            if (!eco) { if (ne) ne.focus(); return; }
+            agregarALista(eco, '');
             if (ne) ne.value = '';
-            if (nd) nd.value = '';
             pintarModalLista();
             paintInfo();
             if (ne) ne.focus();
         });
+        byId('rondo-modal-add-plan').addEventListener('click', () => {
+            const ne = byId('rondo-modal-new-eco');
+            const eco = ne ? ne.value.trim() : '';
+            if (!eco) { if (ne) ne.focus(); return; }
+            agregarALista(eco, '');
+            if (ne) ne.value = '';
+            pintarModalLista();
+            paintInfo();
+            abrirEditorParadas(eco);
+        });
+        const unidadesMenu = byId('rondo-unidades-menu');
+        if (unidadesMenu) unidadesMenu.addEventListener('click', () => abrirModalLista(''));
         byId('rondo-modal-vaciar').addEventListener('click', () => {
             rondoConfirm('Vaciar la lista', 'Se quitaran todas las unidades de la lista vigilada. Esta accion no se puede deshacer.', () => {
                 APP.watchMap = {};
@@ -11231,35 +11370,10 @@ ta.value = '';
                 paintInfo();
             }
         });
-        // Cola de destinos editados por el usuario para planear su ruta con un
-        // debounce (asi no se lanza una peticion a OSRM por cada pulsacion).
-        const _destinoDebounce = new Map();
-        document.getElementById('rondo-modal-lista').addEventListener('input', (e) => {
-            if (!e.target.classList || !e.target.classList.contains('rondo-dest')) return;
-            const eco = e.target.dataset.eco;
-            const destino = e.target.value.trim();
-            if (APP.watchMap[eco] !== undefined) {
-                APP.watchMap[eco] = destino;
-                // Al escribir a mano, descarta el plan estructurado previo para
-                // que el texto editable sea la fuente del plan.
-                const it0 = unitByEco(eco);
-                if (it0 && APP.planes[it0.info.clave]) { delete APP.planes[it0.info.clave]; guardarPlanes(); }
-                guardarLista();
-                paintInfo();
-                if (APP.config.autoRuta && destino) {
-                    if (_destinoDebounce.has(eco)) clearTimeout(_destinoDebounce.get(eco));
-                    _destinoDebounce.set(eco, setTimeout(() => {
-                        _destinoDebounce.delete(eco);
-                        const it = unitByEco(eco);
-                        if (!it) return;
-                        const r = rutaDe(it.info);
-                        if (r && r.destinoTexto === destino) return;
-                        planearRuta(eco, destino, null,
-                            (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
-                    }, 1500));
-                }
-            }
-        });
+        // Nota (v5.15.2): los destinos y multipuntos se editan en el editor
+        // unificado "Paradas" de cada fila (abrirEditorParadas), no en un
+        // input en linea. Pegar texto sigue soportando "eco=destino" y
+        // "eco=A | B | C".
         byId('rondo-ejecutar').addEventListener('click', async () => {
             const ta = byId('rondo-txt');
             const texto = ta ? ta.value : '';
@@ -11541,9 +11655,7 @@ ta.value = '';
                 { id: 'lista', icon: UIS.watch, label: enLista ? 'Quitar de lista vigilada' : 'Añadir a lista vigilada' },
                 { id: 'limite', icon: UIS.speed, label: 'Límite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
-                { id: 'ruta-plan', icon: UIS.route, label: 'Planear ruta (OSRM)' },
-                { id: 'ruta-astar', icon: UIS.route, label: 'Planear ruta (A*)' },
-                { id: 'ruta-paradas', icon: UIS.watch, label: 'Editar paradas (multipunto)' },
+                { id: 'ruta-paradas', icon: UIS.route, label: 'Destinos y paradas (multipunto)…' },
                 { id: 'ruta-geo', icon: UIS.export, label: 'Exportar ruta GeoJSON' },
                 { id: 'ruta-del', icon: UIS.close, label: 'Eliminar ruta' },
                 { id: 'traza-geo', icon: UIS.csv, label: 'Exportar traza GeoJSON' },
@@ -11580,16 +11692,8 @@ ta.value = '';
                     setLimite(eco, val);
                     adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }, { type: 'number', icon: UIS.speed, okText: 'Guardar' });
-            } else if (acc === 'ruta-plan' || acc === 'ruta-astar') {
-                if (acc === 'ruta-astar' && !APP.config.overpass) {
-                    adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas');
-                } else {
-                    rondoPrompt('Planear ruta', 'Destino de ' + eco + ': un lugar, una dirección o "lat,lon".', '', (dest) => {
-                        if (dest && dest.trim()) planearRuta(eco, dest.trim(), null, acc === 'ruta-astar' ? 'astar' : 'osrm');
-                    }, { icon: UIS.route, okText: 'Calcular', placeholder: 'Monterrey, NL  ·  o  25.68,-100.31' });
-                }
-            } else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
-            else if (acc === 'ruta-paradas') abrirEditorParadas(eco);
+            } else if (acc === 'ruta-paradas') abrirEditorParadas(eco);
+            else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
             else if (acc === 'ruta-del') {
                 rondoConfirm('Eliminar ruta', 'Se eliminara la ruta planificada de ' + eco + '.', () => {
                     if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);

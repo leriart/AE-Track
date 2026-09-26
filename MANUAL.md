@@ -153,18 +153,42 @@ En la parte superior del panel:
   el estado de la flota como para resolver dudas del propio Rondo. Ver
   [Chat con la IA](#chat-con-la-ia).
 
-## Vigilar unidades (lista vigilada)
+## Vigilar unidades, destinos y rutas (menu unificado)
 
-Pulsa **Automatizar Unidades** en la barra. Se abre la lista, donde puedes:
+Pulsa **Automatizar Unidades** en la barra (o **Unidades y rutas** en la barra
+de herramientas de la pestana Unidades). Se abre el menu **Unidades y rutas**,
+que reune todo en una sola pantalla:
 
-- Pegar varias unidades a la vez, una por linea, con el formato `eco` o
-  `eco=destino`.
-- Anadir una unidad con sus campos de economico y destino, y el boton **+ Anadir**.
-- Editar el destino de cada unidad (se usa para la regla de destino y para
-  validar si una geocerca es la esperada).
-- Quitar unidades con la x, o vaciar la lista completa.
-- Pulsar **Ejecutar (abrir ventanas)** para abrir y acomodar las ventanas de las
-  unidades de la lista.
+- **Pegar varias unidades** a la vez, una por linea, con el formato `eco`,
+  `eco=destino` o `eco=A | B | C`. Puedes indicar el tipo con los prefijos
+  `geo:` (geocerca), `mun:` (municipio) y `coord:` (coordenadas). Ejemplos:
+  ```
+  4381
+  4132=Monterrey
+  4201=geo:CEDIS Norte | mun:Saltillo | coord:25.68,-100.31
+  ```
+- **Anadir** una unidad por su economico (boton **Anadir**).
+- **Anadir con paradas**: agrega la unidad y abre el editor de destinos.
+- Cada fila muestra un **resumen de sus paradas** en etiquetas (`geo:…`,
+  `mun:…`, `+N`, `mejor ruta`) y el boton **Paradas** para editarlas.
+- Quitar unidades con la x, o **Vaciar lista**.
+- **Ejecutar (abrir ventanas)** abre y acomoda las ventanas de las unidades.
+
+### Editor de destinos y rutas multipunto
+
+El editor (boton **Paradas**, o clic derecho &gt; **Destinos y paradas
+(multipunto)…**) permite construir la ruta de una unidad:
+
+- **Modo**: **Secuencial** (en el orden indicado) o **Mejor ruta** (reordena
+  por cercania y cierra el circuito en el origen).
+- **Motor**: OSRM o A* sobre OSM.
+- **Regresar al origen**: cierra el circuito.
+- Anade paradas con el buscador: **geocercas**, **municipios** (OpenStreetMap)
+  o lugares; escribe `lat,lon` para una coordenada. Mientras escribes aparecen
+  **sugerencias** con su tipo.
+- Reordena con las flechas, **Fija** una parada para conservar su posicion o
+  quitala con la x. **Vaciar paradas** las borra todas.
+- **Guardar y trazar** calcula la ruta y la sigue en la pestana Rutas.
 
 ### Orden de las ventanas
 
@@ -479,9 +503,9 @@ y, opcionalmente, datos de Overpass para calcular con el algoritmo A*.
 
 Cada unidad puede tener una ruta con **varias paradas**. Abre el editor con:
 
-- el boton de ruta (⚑) de la fila en **Automatizar Unidades**;
+- el boton **Paradas** de la fila en el menu **Unidades y rutas**;
 - el boton **Editar paradas** en la pestana **Rutas**;
-- el clic derecho sobre la unidad &gt; **Editar paradas (multipunto)**.
+- el clic derecho sobre la unidad &gt; **Destinos y paradas (multipunto)…**.
 
 En el editor puedes anadir paradas de varios tipos:
 
@@ -720,8 +744,8 @@ Sobre una unidad en la pestana Unidades:
 - Aplicar verificacion.
 - Anadir o quitar de la lista vigilada.
 - Limite de velocidad.
-- Planear ruta (OSRM), planear ruta (A*), **editar paradas (multipunto)**,
-  exportar ruta GeoJSON, eliminar ruta, exportar traza GeoJSON.
+- **Destinos y paradas (multipunto)…**, exportar ruta GeoJSON, eliminar ruta,
+  exportar traza GeoJSON.
 - Analizar viaje (historial), exportar viaje GeoJSON.
 - Reiniciar odometro.
 - Ver en OpenStreetMap, ver en Google Maps.
