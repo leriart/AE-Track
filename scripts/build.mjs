@@ -88,9 +88,11 @@ if (modo === 'bundle') {
 } else {
     // Chunks: scope compartido (el gestor concatena los @require con el script).
     const core = conVersion(prelude + "'use strict';\n" + porChunk.core.join(''));
+    // El chunk ui NO llama a init(): lo llama el bootstrap una sola vez.
+    const uiBody = porChunk.ui.join('').replace(/\n[ \t]*init\(\);[ \t]*\n*$/, '\n');
     escribir(distDir + '/rondo-core.js', core);
     escribir(distDir + '/rondo-engine.js', conVersion("'use strict';\n" + porChunk.engine.join('')));
-    escribir(distDir + '/rondo-ui.js', conVersion("'use strict';\n" + porChunk.ui.join('')));
+    escribir(distDir + '/rondo-ui.js', conVersion("'use strict';\n" + uiBody));
 
     const requires = ['core', 'engine', 'ui']
         .map((c) => '// @require      ' + urlChunk(c)).join('\n');
