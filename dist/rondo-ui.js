@@ -124,6 +124,9 @@
             "#rondo-panel .rondo-ruta-card .rr-meta{display:flex;flex-wrap:wrap;gap:5px}\n" +
             "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
             "#rondo-panel .rondo-ruta-card .rr-mini{height:150px;margin-top:2px}\n" +
+            "#rondo-lista-rutas{position:relative}\n" +
+            "#rondo-lista-rutas .rr-mini-abs{position:absolute;left:0;top:0;z-index:1}\n" +
+            "#rondo-lista-rutas .rr-mini-abs.rondo-mm{position:absolute}\n" +
             // v6.0.11: replay del dia.
             "#rondo-panel .rondo-replay-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}\n" +
             "#rondo-panel .rondo-replay-bar .filtro{min-width:0;width:100%;box-sizing:border-box}\n" +
@@ -3151,6 +3154,7 @@
             setHtml(cont, emptyState(UIS.route, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
                 '<button class="mini rondo-vacio-acc" data-acc="tab-unidades"><span class="rondo-usym">' + UIS.panel + '</span> Ir a Unidades</button>'));
+            try { rxRutasMiniSync([]); } catch (_) { /* noop */ }
             return;
         }
         const tarjeta = (info, st) => {
@@ -6148,7 +6152,7 @@
         inst.ox = cx - W / 2;
         inst.oy = cy - H / 2;
     }
-    function rxMMTiles(inst) {
+    function rxMMTilesHTML(inst, lazy) {
         const z = inst.z;
         const n = Math.pow(2, z);
         const x0 = Math.floor(inst.ox / 256), x1 = Math.floor((inst.ox + inst.W) / 256);
@@ -6161,10 +6165,13 @@
                 const left = tx * 256 - inst.ox;
                 const top = ty * 256 - inst.oy;
                 html += '<img class="rondo-mm-tile" src="https://tile.openstreetmap.org/' + z + '/' + wx + '/' + ty + '.png"' +
-                    ' style="left:' + left + 'px;top:' + top + 'px" alt="" draggable="false" loading="lazy">';
+                    ' style="left:' + left + 'px;top:' + top + 'px" alt="" draggable="false"' + (lazy === false ? '' : ' loading="lazy"') + '>';
             }
         }
-        inst.capaTiles.innerHTML = html;
+        return html;
+    }
+    function rxMMTiles(inst) {
+        inst.capaTiles.innerHTML = rxMMTilesHTML(inst);
     }
     function rxMMLineaHTML(inst, ln) {
         if (!ln || !ln.pts || ln.pts.length < 2) return '';
@@ -6192,6 +6199,11 @@
             html += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (m.radio || 5) +
                 '" fill="' + (m.color || '#1565c0') + '" stroke="#fff" stroke-width="1.5">' +
                 (m.txt ? '<title>' + esc(m.txt) + '</title>' : '') + '</circle>';
+            if (m.num != null) {
+                html += '<text x="' + (q[0] + 7).toFixed(1) + '" y="' + (q[1] + 3.5).toFixed(1) + '" font-size="10" font-weight="700"' +
+                    ' fill="#1c2030" stroke="#fff" stroke-width="2.5" paint-order="stroke" style="font-family:system-ui,Arial,sans-serif">' +
+                    esc(String(m.num)) + '</text>';
+            }
         });
         return html;
     }
@@ -6292,6 +6304,27 @@
         inst.encuadrar();
         return inst;
     }
+    // Mini-mapa estatico en HTML (tiles + SVG) para incrustar en el reporte PDF.
+    // Los tiles son <img> normales: el navegador los carga y los imprime.
+    function rxMiniMapaHTML(cfg, W, H) {
+        const o = cfg || {};
+        const inst = {
+            W: Math.max(160, W || 680), H: Math.max(120, H || 300), z: 16, ox: 0, oy: 0,
+            lineas: o.lineas || [], marcas: o.marcas || [], pos: o.pos || null
+        };
+        rxMMFit(inst);
+        let svg = '';
+        (inst.lineas || []).forEach((ln) => { svg += rxMMLineaHTML(inst, ln); });
+        svg += rxMMMarcasHTML(inst);
+        if (inst.pos) {
+            const q = rxMMPt(inst, inst.pos.lat, inst.pos.lon);
+            svg += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#850D22" stroke="#fff" stroke-width="2"/>';
+        }
+        return '<div class="rondo-mm-print" style="width:' + inst.W + 'px;height:' + inst.H + 'px">' +
+            rxMMTilesHTML(inst, false) +
+            '<svg width="' + inst.W + '" height="' + inst.H + '" viewBox="0 0 ' + inst.W + ' ' + inst.H + '">' + svg + '</svg>' +
+            '</div>';
+    }
     // Lineas y marcadores de una ruta (trazo resaltado con halo).
     function rxRutaLineasMarcas(r) {
         const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95, glow: true }];
@@ -6303,11 +6336,15 @@
         if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 6, txt: 'Destino' });
         return { lineas: lineas, marcas: marcas };
     }
-    // Mini-mapas embebidos en las tarjetas de la pestana Rutas. Se conservan
-    // entre repintados (el panel se repinta cada segundo): el nodo del mapa se
-    // re-anexa al nuevo placeholder en vez de recrearlo.
-    const _rxRutaMini = new Map(); // eco -> { inst, key }
+    // Mini-mapas de las tarjetas de la pestana Rutas. Para que no parpadeen ni
+    // se reencuadren, NO van dentro del HTML que se repinta cada segundo: se
+    // crean una vez como capa absoluta dentro de la lista y solo se reposicionan
+    // sobre su hueco (.rr-mini) en cada repintado.
+    const _rxRutaMini = new Map(); // eco -> { inst, hold, key, w, h }
     function rxRutasMiniSync(filas) {
+        const list = byId('rondo-lista-rutas');
+        if (!list) return;
+        const listRect = list.getBoundingClientRect();
         const vistos = new Set();
         (filas || []).forEach((x) => {
             const info = x && x.info ? x.info : x;
@@ -6322,17 +6359,37 @@
             const er = (typeof estadoRuta === 'function') ? estadoRuta(info, st) : { snap: null };
             const s = er.snap || null;
             const key = (r.creada || 0) + ':' + eco + ':' + r.coords.length;
+            const phRect = ph.getBoundingClientRect();
+            const w = Math.max(120, Math.round(phRect.width || 300));
+            const h = Math.max(90, Math.round(phRect.height || 150));
+            const left = Math.round(phRect.left - listRect.left);
+            const top = Math.round(phRect.top - listRect.top);
             let ent = _rxRutaMini.get(eco);
             if (!ent || ent.key !== key) {
-                if (ent) { try { ent.inst.destruir(); } catch (_) { /* noop */ } }
+                if (ent) {
+                    try { ent.inst.destruir(); } catch (_) { /* noop */ }
+                    if (ent.hold && ent.hold.parentNode) ent.hold.parentNode.removeChild(ent.hold);
+                }
+                const hold = document.createElement('div');
+                hold.className = 'rr-mini-abs';
+                hold.style.left = left + 'px'; hold.style.top = top + 'px';
+                hold.style.width = w + 'px'; hold.style.height = h + 'px';
+                list.appendChild(hold);
                 const lm = rxRutaLineasMarcas(r);
                 lm.lineas.push({ pts: [], dyn: true });
                 const pos = (st && st.lat != null) ? { lat: st.lat, lon: st.lon } : null;
-                ent = { inst: rxMiniMapa(ph, { lineas: lm.lineas, marcas: lm.marcas, pos: pos }), key: key };
+                ent = { inst: rxMiniMapa(hold, { lineas: lm.lineas, marcas: lm.marcas, pos: pos }), hold: hold, key: key, w: w, h: h };
                 _rxRutaMini.set(eco, ent);
-            } else if (ent.inst.cont.parentNode !== ph) {
-                // El repintado recreo la tarjeta: re-anexa el mini-mapa (conserva tiles).
-                try { ph.appendChild(ent.inst.cont); ent.inst.medir(); ent.inst.render(); } catch (_) { /* noop */ }
+            } else {
+                // El repintado vacio la lista: re-inserta la capa (conserva tiles y paneo).
+                if (ent.hold.parentNode !== list) list.appendChild(ent.hold);
+                if (ent.hold.style.left !== (left + 'px')) ent.hold.style.left = left + 'px';
+                if (ent.hold.style.top !== (top + 'px')) ent.hold.style.top = top + 'px';
+                if (ent.w !== w || ent.h !== h) {
+                    ent.hold.style.width = w + 'px'; ent.hold.style.height = h + 'px';
+                    ent.w = w; ent.h = h;
+                    try { ent.inst.medir(); ent.inst.render(); } catch (_) { /* noop */ }
+                }
             }
             if (s && st && st.lat != null) {
                 const idx = clamp((s.idx || 0) + 1, 0, r.coords.length - 1);
@@ -6350,6 +6407,7 @@
         _rxRutaMini.forEach((ent, eco) => {
             if (vistos.has(eco)) return;
             try { ent.inst.destruir(); } catch (_) { /* noop */ }
+            if (ent.hold && ent.hold.parentNode) ent.hold.parentNode.removeChild(ent.hold);
             _rxRutaMini.delete(eco);
         });
     }
@@ -7266,7 +7324,12 @@
             'p{margin:0 0 8px;font-size:10.5px;line-height:1.5}' +
             '.resumen{background:#f7f8fb;border:1px solid #e3e6ee;border-radius:8px;padding:10px 12px;margin:0 0 4px}' +
             '.ia{border:1px solid #e3e6ee;border-left:4px solid #1565c0;border-radius:6px;padding:8px 10px;background:#f7f9fc}' +
-            '.pie{margin-top:20px;border-top:1px solid #d9dce4;padding-top:6px;font-size:8.5px;color:#8890a2;display:flex;justify-content:space-between}';
+            '.pie{margin-top:20px;border-top:1px solid #d9dce4;padding-top:6px;font-size:8.5px;color:#8890a2;display:flex;justify-content:space-between}' +
+            '.rondo-mm-print{position:relative;overflow:hidden;background:#eef1f6;border:1px solid #d9dce4;border-radius:6px;margin:4px 0 10px}' +
+            '.rondo-mm-print .rondo-mm-tile{position:absolute;width:256px;height:256px}' +
+            '.rondo-mm-print svg{position:absolute;left:0;top:0}' +
+            '.mapa-leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:9.5px;color:#5a6072;margin:0 0 10px}' +
+            '.mapa-leyenda i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}';
     }
     function rxInfCabecera(titulo, subtitulo, meta) {
         return '<div class="cover">' +
@@ -7277,7 +7340,7 @@
     function rxInfPie() {
         return '<div class="pie"><span>Rondo &middot; generado automaticamente</span><span>Documento de solo lectura: no modifica datos en la plataforma.</span></div>';
     }
-    function rxInformeHTML(resumenIA) {
+    function rxInformeHTML() {
         const d = rxInformeDatos();
         const fecha = d.now.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
         const hora = d.now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
@@ -7374,7 +7437,6 @@
             '<div class="kpis">' + kpis + '</div>' +
             '<h2 class="seccion">Resumen ejecutivo</h2>' +
             '<div class="resumen"><p>' + esc(rxInfResumenTexto(d)) + '</p><p style="margin:0">' + sevResumen + '</p></div>' +
-            (resumenIA ? '<h2 class="seccion">Analisis con IA</h2><div class="ia"><p>' + esc(resumenIA) + '</p></div>' : '') +
             seccion('1. Unidades (' + d.watched.length + ')', rxInfTabla(['Eco', 'Placa', 'Estado', 'Ultimo reporte', 'Velocidad', 'Zona', 'Ruta', 'Odometro', 'Limite'], filasUnidades)) +
             seccion('2. Avisos del dia (' + d.hoy.length + ')', rxInfTabla(['Hora', 'Severidad', 'Regla', 'Eco', 'Titulo y detalle'], filasAvisos)) +
             seccion('3. Rutas activas (' + rutas.length + ')', rxInfTabla(['Eco', 'Destino', 'Estado', 'Progreso', 'Distancia', 'ETA', 'Desviado'], rutas)) +
@@ -7418,6 +7480,21 @@
             esc(e2.txt),
             (+e2.lat).toFixed(5) + ',' + (+e2.lon).toFixed(5)
         ]);
+        // Mapa del recorrido con los puntos marcados (tiles de OSM + trazo SVG).
+        const marcasMapa = [];
+        (r.paradas || []).forEach((p, i) => marcasMapa.push({ lat: p.lat, lon: p.lon, color: '#7d8595', radio: 6, num: i + 1, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
+        (r.eventos || []).forEach((e2) => marcasMapa.push({ lat: e2.lat, lon: e2.lon, color: rxReplayColor(e2.tipo), radio: 5, txt: rxReplayHHMM(e2.t) + ' \u00b7 ' + e2.txt }));
+        const mapa = rxMiniMapaHTML({
+            lineas: [{ pts: (r.msgs || []).map((m) => ({ lat: m.lat, lon: m.lon })), color: '#850D22', width: 4, opacity: 0.95, glow: true }],
+            marcas: marcasMapa
+        }, 680, 300);
+        const leyenda = '<div class="mapa-leyenda">' +
+            '<span><i style="background:#850D22"></i>Recorrido</span>' +
+            '<span><i style="background:#7d8595"></i>Parada (numerada)</span>' +
+            '<span><i style="background:#1565c0"></i>Geocerca</span>' +
+            '<span><i style="background:#b71c1c"></i>Exceso</span>' +
+            '<span><i style="background:#e65100"></i>Desvio</span>' +
+            '<span class="muted">Mapa: OpenStreetMap</span></div>';
         const seccion = (titulo, contenido) => '<h2 class="seccion">' + esc(titulo) + '</h2>' + contenido;
         return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
             '<title>Recorrido ' + esc(r.eco) + ' ' + esc(fecha) + '</title>' +
@@ -7425,8 +7502,9 @@
             rxInfCabecera('Rondo', 'Recorrido de la unidad',
                 'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(fecha) + ' &middot; ' + esc(rango) + '<br>Documento de solo lectura') +
             '<div class="kpis">' + kpis + '</div>' +
-            seccion('1. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
-            seccion('2. Eventos (' + filasEventos.length + ')', rxInfTabla(['Hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
+            seccion('1. Mapa del recorrido', mapa + leyenda) +
+            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
+            seccion('3. Eventos (' + filasEventos.length + ')', rxInfTabla(['Hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
             (r.truncado ? '<p class="muted">Nota: el historial se trunco al limite de mensajes; el resumen puede ser parcial.</p>' : '') +
             rxInfPie() +
             '</body></html>';
@@ -7443,32 +7521,34 @@
         fr.id = 'rondo-print-frame';
         fr.setAttribute('style', 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none');
         document.body.appendChild(fr);
+        let doc = null;
         try {
-            const doc = fr.contentWindow.document;
+            doc = fr.contentWindow.document;
             doc.open(); doc.write(html); doc.close();
         } catch (_) {
             adviceWarn('No se pudo preparar el reporte', 'Intenta de nuevo.');
             try { fr.remove(); } catch (_) { /* noop */ }
             return;
         }
-        setTimeout(() => {
-            try { fr.contentWindow.focus(); fr.contentWindow.print(); }
-            catch (_) { adviceWarn('No se pudo imprimir', 'Permite la impresion/ventanas emergentes e intenta de nuevo.'); }
-            setTimeout(() => { try { fr.remove(); } catch (_) { /* noop */ } }, 60000);
-        }, 600);
+        // Espera a que carguen los tiles del mapa antes de imprimir.
+        const pendientes = () => {
+            try { return Array.prototype.filter.call(doc.images || [], (i) => !i.complete).length; }
+            catch (_) { return 0; }
+        };
+        const t0 = Date.now();
+        const listo = () => {
+            if (pendientes() && (Date.now() - t0) < 5000) { setTimeout(listo, 150); return; }
+            setTimeout(() => {
+                try { fr.contentWindow.focus(); fr.contentWindow.print(); }
+                catch (_) { adviceWarn('No se pudo imprimir', 'Permite la impresion/ventanas emergentes e intenta de nuevo.'); }
+                setTimeout(() => { try { fr.remove(); } catch (_) { /* noop */ } }, 60000);
+            }, 250);
+        };
+        setTimeout(listo, 400);
     }
-    async function exportReportePDF() {
+    function exportReportePDF() {
         const d = rxInformeDatos();
         if (!d.watched.length) { adviceWarn('Sin unidades', 'No hay unidades en el alcance para el reporte.'); return; }
-        let resumenIA = '';
-        const quiereIA = !!(APP.config && APP.config.iaHabilitada && APP.config.iaApiKey && APP.config.iaResumenInforme);
-        if (quiereIA) {
-            advice('Generando reporte', 'Pidiendo el resumen a la IA...');
-            try {
-                const r = await aiResumenDia(d.hoy);
-                if (r && r.texto) resumenIA = String(r.texto).replace(/\s*\n\s*/g, ' ').trim();
-            } catch (_) { resumenIA = ''; }
-        }
-        rxImprimirHTML(rxInformeHTML(resumenIA));
+        rxImprimirHTML(rxInformeHTML());
         advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
     }
