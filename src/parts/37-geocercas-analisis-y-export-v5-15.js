@@ -346,8 +346,11 @@
         if (!cont) return;
         const watched = (APP.unidades || []).filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const filas = watched.filter((x) => rutaDe(x.info));
+        const pendientes = watched.filter((x) => !rutaDe(x.info) && !!watchDest(x.info));
         const sinUnidad = Object.keys(APP.rutas || {}).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
-        if (!filas.length && !sinUnidad.length) {
+        const pendEl = byId('rondo-rutas-pend');
+        if (pendEl) pendEl.textContent = pendientes.length ? (pendientes.length + ' sin trazar') : '';
+        if (!filas.length && !sinUnidad.length && !pendientes.length) {
             setHtml(cont, emptyState(UIS.route, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
                 '<button class="mini rondo-vacio-acc" data-acc="tab-unidades"><span class="rondo-usym">' + UIS.panel + '</span> Ir a Unidades</button>'));
@@ -393,7 +396,23 @@
                 '<button class="mini rondo-ruta-del" data-eco="' + esc(eco) + '" title="Eliminar ruta"><span class="rondo-usym">' + UIS.close + '</span></button>' +
                 '</div>';
         };
-        let html = filas.map((x) => tarjeta(x.info, x.st)).join('');
+        let html = pendientes.map((x) => {
+            const eco = x.info.clave;
+            const dest = watchDest(x.info);
+            const intentos = APP.rutaIntentos[eco] || 0;
+            return '<div class="alerta" style="border-left:4px solid var(--rondo-warn-fg)">' +
+                '<span class="ico rondo-usym" style="color:var(--rondo-warn-fg)">' + UIS.route + '</span>' +
+                '<div class="cuerpo"><b>' + esc(eco) + ' \u00b7 SIN TRAZAR</b>' +
+                '<span>' + esc(dest) + '</span>' +
+                '<div class="meta"><span class="regla">pendiente</span>' +
+                (intentos ? '<span>' + intentos + ' intento(s)</span>' : '') +
+                (intentos >= 2 ? '<span>usa Trazar pendientes</span>' : '') +
+                '</div></div>' +
+                '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
+                '<button class="mini rondo-ruta-trazar" data-eco="' + esc(eco) + '" title="Trazar ahora"><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
+                '</div>';
+        }).join('');
+        html += filas.map((x) => tarjeta(x.info, x.st)).join('');
         sinUnidad.forEach((eco) => {
             const r = APP.rutas[eco];
             if (!r) return;

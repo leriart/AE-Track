@@ -786,5 +786,11 @@ ok('detector de modulos desfasados (stale)', /APP\.update\.stale = \{/.test(src)
 
 ok('autofill del navegador desactivado en la UI', /function rxMarcarInputAutofill\(/.test(src) && /setAttribute\('autocomplete'/.test(src) && /data-lpignore/.test(src) && /new-password/.test(src) && /rxBarridoAutofill/.test(src));
 
+// v6.0.6: autodeteccion de tipo de parada y reintentos de trazado.
+ok('municipio: clasificacion OSM', /function esMunicipioOSM\(/.test(src) && /soloMunicipio/.test(src) && /tipoOSM/.test(src));
+ok('resolucion municipio -> geocerca -> lugar', /_rxCacheResolucion/.test(src) && /resolucionCache/.test(src) && /1\) Municipio\/ciudad/.test(src) && /2\) Geocerca por nombre/.test(src));
+ok('trazado: 2 intentos automaticos + manual', /rutaIntentos/.test(src) && /intentos >= 2/.test(src) && /function trazarRutasAhora\(/.test(src));
+ok('rutas pendientes visibles y boton', /rondo-rutas-trazar/.test(src) && /rondo-ruta-trazar/.test(src) && /SIN TRAZAR/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

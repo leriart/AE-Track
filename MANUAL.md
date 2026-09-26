@@ -611,7 +611,9 @@ Rondo hace tres cosas automaticamente con sus algoritmos:
   con DBSCAN sobre los puntos de baja velocidad.
 - **Destino**: traza la ruta desde el punto de partida hacia el destino
   guardado (`eco=destino` en la lista vigilada). Si es un texto, se
-  geocodifica con Nominatim; si son coordenadas, se usan directamente.
+  **autodetecta el tipo** en este orden: **municipio/ciudad** (OpenStreetMap),
+  **geocerca** (por nombre, busqueda difusa) y, si no, **lugar/direccion**
+  (Nominatim). Si son coordenadas, se usan directamente.
 - **Regreso**: detecta cuando la unidad vuelve al punto de partida tras
   haber llegado al destino, ya sea por la misma ruta o por un camino
   alterno, y lo refleja en la columna **Ruta** y en el analisis de viaje.
@@ -623,9 +625,14 @@ Comportamiento:
 - Si cambias el destino en la lista, se recalcula (con un pequeno debounce
   para no lanzar peticiones en cada pulsacion).
 - Al iniciar el script, se traza cualquier ruta pendiente.
-- Si el destino no se puede geocodificar, aparece un aviso y la unidad
-  queda con la marca "trazando..." en la columna Ruta hasta que se
-  corrija.
+- **Reintentos**: si una ruta no se puede trazar (aun no hay posicion, el
+  destino no se resolvio, etc.) Rondo **reintenta automaticamente 2 veces**
+  (la segunda ~45 s despues) y luego se detiene. En la pestana **Rutas** las
+  unidades con destino pero sin trazar aparecen como **SIN TRAZAR**, con un
+  boton **Trazar ahora** por unidad y un boton **Trazar pendientes** en la
+  cabecera para reintentar sin limite cuando tu quieras.
+- Si el destino no se puede resolver, aparece un aviso y la unidad
+  queda marcada como pendiente hasta que se corrija.
 - El modo por defecto es **OSRM** (rapido). Puedes cambiar a **A* sobre
   OSM** en Ajustes > Rutas si necesitas rutas peatonales o mas detalle
   en grafos locales (experimental, requiere activar Overpass).

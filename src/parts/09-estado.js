@@ -56,6 +56,12 @@
         // v5.15.2: velocidad suavizada por unidad (media exponencial) para
         // ETAs y estados mas estables, sin depender del ultimo reporte.
         velSuave: {},
+        // v6.0.6: cache de resolucion de paradas (texto -> tipo/coords) y
+        // control de reintentos del trazado automatico (2 automaticos + manual).
+        resolucionCache: {},
+        rutaIntentos: {},
+        rutaTrazando: false,
+        rutaRetryTimer: null,
         caravanaEco: '',
 
         // Riesgo: zonas de alto riesgo para flota, consultadas en cada arranque

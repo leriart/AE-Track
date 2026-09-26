@@ -178,6 +178,10 @@
              '<div id="rondo-lista-alertas"></div>' +
              '</div>' +
             '<div class="tabla" id="rondo-wrap-rutas" style="display:none">' +
+            '<div class="rondo-rutas-bar">' +
+            '<span class="rondo-rutas-pend" id="rondo-rutas-pend"></span>' +
+            '<button class="mini" id="rondo-rutas-trazar" title="Reintentar el trazado de todas las rutas pendientes (sin limite de intentos)"><span class="rondo-usym">' + UIS.refresh + '</span> Trazar pendientes</button>' +
+            '</div>' +
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
             '</div>' +

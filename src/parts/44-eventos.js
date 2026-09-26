@@ -128,6 +128,8 @@
             abrirCfg();
         });
         byId('rondo-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
+        const rutasTrazar = byId('rondo-rutas-trazar');
+        if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
         byId('rondo-informe').addEventListener('click', exportInforme);
@@ -142,6 +144,15 @@
                         if (eliminarRuta(eco)) adviceOk('Ruta eliminada', eco); else adviceWarn('Sin ruta', eco);
                     }, { peligro: true, okText: 'Eliminar', icon: UIS.close });
                 } else if (b.classList.contains('rondo-plan-edit')) abrirEditorParadas(eco);
+                else if (b.classList.contains('rondo-ruta-trazar')) {
+                    const it = unitByEco(eco);
+                    const destino = it ? watchDest(it.info) : '';
+                    if (!destino) { adviceWarn('Sin destino', eco); }
+                    else {
+                        if (it) delete APP.rutaIntentos[it.info.clave];
+                        planearRuta(eco, destino, null, (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
+                    }
+                }
                 else if (b.classList.contains('rondo-ruta-mapa')) rxMapaDibujarRuta(eco);
                 else if (b.classList.contains('rondo-ruta-gmaps')) rxRutaGoogleMaps(eco);
                 else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);

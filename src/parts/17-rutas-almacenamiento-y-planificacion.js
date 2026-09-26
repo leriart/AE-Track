@@ -140,8 +140,8 @@
     // Traza automaticamente la ruta de toda unidad vigilada que tenga destino
     // pero aun no tenga ruta (o cuya ruta apunte a un destino distinto).
     // Devuelve la cantidad de rutas que se programaron para calcular.
-    function autoTrazarRutasPendientes() {
-        if (!APP.config.autoRuta) return [];
+    function autoTrazarRutasPendientes(forzar) {
+        if (!APP.config.autoRuta && !forzar) return [];
         if (!APP.unidades || !APP.unidades.length) return [];
         const modo = (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm';
         if (modo === 'osrm' && !APP.config.osrm) return [];
@@ -157,25 +157,53 @@
             if (!destino) continue;
             const r = rutaDe(info);
             if (r && r.destinoTexto === destino && r.modo === modo) continue;
-            pendientes.push({ eco, destino, modo });
+            // v6.0.6: tope de 2 intentos automaticos por unidad; el manual lo ignora.
+            const intentos = (APP.rutaIntentos && APP.rutaIntentos[info.clave]) || 0;
+            if (!forzar && intentos >= 2) continue;
+            pendientes.push({ eco, clave: info.clave, destino, modo });
         }
         return pendientes;
     }
     // Despacha las pendientes una por una para no saturar los servicios publicos.
-    async function autoTrazarRutas() {
-        const pendientes = autoTrazarRutasPendientes();
+    async function autoTrazarRutas(forzar) {
+        if (APP.rutaTrazando) return 0;
+        if (!APP.rutaIntentos) APP.rutaIntentos = {};
+        const pendientes = autoTrazarRutasPendientes(forzar);
         if (!pendientes.length) return 0;
+        APP.rutaTrazando = true;
         let ok = 0;
-        for (let i = 0; i < pendientes.length; i++) {
-            const p = pendientes[i];
-            try {
-                const r = await planearRuta(p.eco, p.destino, null, p.modo);
-                if (r) ok++;
-            } catch (_) { /* planearRuta ya muestra el error */ }
-            // Pausa entre peticiones para respetar el limite de Nominatim/OSRM.
-            if (i < pendientes.length - 1) await sleep(1200);
+        const fallos = [];
+        try {
+            for (let i = 0; i < pendientes.length; i++) {
+                const p = pendientes[i];
+                let r = null;
+                try { r = await planearRuta(p.eco, p.destino, null, p.modo); } catch (_) { r = null; }
+                if (r) { ok++; delete APP.rutaIntentos[p.clave]; }
+                else { APP.rutaIntentos[p.clave] = (APP.rutaIntentos[p.clave] || 0) + 1; fallos.push(p.eco); }
+                if (i < pendientes.length - 1) await sleep(1200);
+            }
+        } finally { APP.rutaTrazando = false; }
+        if (fallos.length && forzar) {
+            adviceWarn('Sin trazar', fallos.join(', ') + ' \u00b7 revisa el destino o la posicion de la unidad.');
         }
+        // Segunda pasada automatica (una sola vez): si aun quedan pendientes
+        // con intentos disponibles, reintenta en ~45 s.
+        if (!forzar && fallos.length) {
+            const quedan = autoTrazarRutasPendientes(false).length;
+            if (quedan && !APP.rutaRetryTimer) {
+                APP.rutaRetryTimer = setTimeout(() => { APP.rutaRetryTimer = null; autoTrazarRutas(); }, 45000);
+            }
+        }
+        if (APP.tab === 'rutas') paintRutas();
         return ok;
+    }
+    // Manual: reintenta todas las pendientes sin tope de intentos.
+    async function trazarRutasAhora() {
+        APP.rutaIntentos = {};
+        if (APP.rutaRetryTimer) { clearTimeout(APP.rutaRetryTimer); APP.rutaRetryTimer = null; }
+        const n = await autoTrazarRutas(true);
+        if (n) adviceOk('Rutas trazadas', n + ' ruta(s)');
+        else adviceWarn('Sin rutas pendientes', 'No hay destinos sin trazar (o no se pudieron resolver).');
     }
     // Tiempo estimado restante (segundos) usando la velocidad reportada o, en
     // su defecto, una velocidad prudencial de carretera. Devuelve null si no

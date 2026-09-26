@@ -91,10 +91,11 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   **tolerancia de desvio** (si la unidad sigue dentro del municipio de la ruta,
   no se marca desvio hasta un margen configurable).
 - **Trazado automatico** al asignar un destino en la lista vigilada: cuando
-  una unidad tiene `eco=destino`, Rondo calcula la ruta en background y
-  actualiza una columna "Ruta" con estado (EN RUTA / LLEGO / DESV),
-  progreso y ETA. Con varias paradas indica ademas la **parada actual** y la
-  **siguiente**.
+  una unidad tiene `eco=destino`, Rondo **autodetecta** si el texto es un
+  **municipio/ciudad**, una **geocerca** o un **lugar** y calcula la ruta en
+  background, con una columna "Ruta" (EN RUTA / LLEGO / DESV), progreso, ETA
+  y la **parada actual/siguiente**. Reintenta **2 veces** automaticamente y
+  luego ofrece **Trazar pendientes** (y "Trazar ahora" por unidad).
 - **Deteccion de desvios, giros en U y retornos** con alertas propias, mas
   llegada a cada parada y **regreso a base** al completar el circuito.
 - **Modo caravana**: unidades (vigiladas o no) cerca de una unidad "lider"
