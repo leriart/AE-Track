@@ -799,5 +799,7 @@ ok('tarjeta de rutas rediseñada', /class="rondo-ruta-card/.test(src) && /rr-hea
 
 ok('ruta en ventanas de vehiculos', /function rxMapaVentanasToggle\(/.test(src) && /function rxMapaVentanasSync\(/.test(src) && /openWindows\(\)/.test(src) && /rondo-rutas-ventanas/.test(src));
 
+ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
