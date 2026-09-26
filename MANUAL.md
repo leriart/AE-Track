@@ -105,6 +105,10 @@ oculta la barra: **oculta o vuelve a mostrar las ventanas de unidades abiertas**
 sin cerrarlas. Mientras estan ocultas, el boton dice **Mostrar** y las ventanas
 nuevas que se abran se ocultan solas.
 
+A su lado, los botones **+** y **-** **agrandan o encogen** todas las ventanas
+de unidades abiertas en pasos, reubicandolas si hiciera falta para que no se
+salgan de la pantalla.
+
 Ademas, **al hacer clic fuera del panel** la barra se oculta automaticamente y
 deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
 **Ventanas** ("Ocultar la barra lateral al hacer clic fuera").
@@ -193,9 +197,11 @@ El editor (boton **Paradas**, o clic derecho &gt; **Destinos y paradas
 - Reordena con las flechas, **arrastrando** el asa (⠿) de cada parada o con los
   botones subir/bajar. **Fija** una parada para conservar su posicion o quitala
   con la x. **Vaciar paradas** las borra todas.
-- La ventana del editor se puede **mover** (arrastra el encabezado) y
-  **redimensionar** (esquina inferior derecha). Recuerda su posicion y tamano
-  durante la sesion, para que no estorbe mientras revisas el mapa.
+- La ventana del editor es **amplia** y se **ajusta al contenido**: crece con
+  las paradas hasta el alto de la pantalla y, si hay mas, la lista hace scroll;
+  nunca se sale de la pantalla. Ademas se puede **mover** (arrastra el
+  encabezado) y **redimensionar** (esquina inferior derecha), y recuerda su
+  posicion y tamano durante la sesion.
 - En el buscador, usa las **flechas arriba/abajo** para recorrer las sugerencias
   y **Enter** para elegir la resaltada; si no hay ninguna resaltada, Enter anade
   el texto como lugar. **Esc** cierra el desplegable.
@@ -480,6 +486,8 @@ Estado de la flota:
 ### Notas
 
 - El chat respeta el **limite diario de llamadas** de Ajustes > IA.
+- Las ventanas de **Analizar lote** y **Analizar flota** se acotan al alto de la
+  pantalla y hacen scroll si el resultado es largo, para que no se desborden.
 - Cada turno envia los ultimos 20 mensajes del historial mas el contexto.
 - La IA **no inventa** datos que no esten en el contexto: si preguntas
   por algo que no tiene (por ejemplo, el historial de un dia anterior),

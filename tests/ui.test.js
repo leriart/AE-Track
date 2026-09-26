@@ -815,5 +815,12 @@ ok('IA: historial y propiedades de la unidad', /function iaFetchUnidadHistorial\
 ok('IA: reporte del dia opcional del servidor', /function iaFetchReporteDia\(/.test(src) && /function iaFetchReportTemplates\(/.test(src) && /report\/exec_report/.test(src) && /iaReporteServidor/.test(src));
 ok('IA: catalogo de municipios y geocercas completas', /municipiosCatalogo/.test(src) && /municipiosRiesgoCatalogo/.test(src) && /iaContextoAPI/.test(src));
 
+// v6.0.10: editor mas grande dimensionado por contenido; dialogos de IA
+// acotados a la pantalla; botones +/- para redimensionar ventanas.
+ok('editor multipunto mas grande y ajustado a la pantalla', /width:min\(1120px,96vw\)/.test(src) && /max-height:92vh/.test(src) && /rpmWin\.v2/.test(src));
+ok('dialogo acotado a la pantalla con cuerpo desplazable', /#rondo-dialog\{[^}]*max-height:90vh/.test(src) && /\.dlg-body\{[^}]*overflow-y:auto/.test(src) && /el\.style\.width = 'min\('/.test(src));
+ok('resultados de IA con ancho propio', /ancho: 760/.test(src) && /ancho: 780/.test(src));
+ok('botones +/- para redimensionar ventanas', /id="rondo-sb-mas"/.test(src) && /id="rondo-sb-menos"/.test(src) && /function rxAjustarVentanas\(/.test(src) && /RX_VENTANA_PASO/.test(src) && /mas: \[/.test(src) && /menos: \[/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

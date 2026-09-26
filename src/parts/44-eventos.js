@@ -108,6 +108,8 @@
         byId('rondo-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
         byId('rondo-sb-panel').addEventListener('click', alternarVentanas);
         pintarBotonVentanas();
+        byId('rondo-sb-mas').addEventListener('click', () => rxAjustarVentanas(1));
+        byId('rondo-sb-menos').addEventListener('click', () => rxAjustarVentanas(-1));
         // Clic fuera del panel en modo barra lateral: se oculta.
         document.addEventListener('pointerdown', (e) => {
             if (!APP.config.ocultarAlClicFuera) return;

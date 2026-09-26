@@ -10,7 +10,7 @@
     // v6.0.9: posicion y tamano del editor multipunto. Se conserva durante la
     // sesion para que el operador no tenga que recolocarlo cada vez.
     let _rpmWin = { dx: 0, dy: 0, w: null, h: null };
-    const RPM_WIN_KEY = 'rondo.api.s.rpmWin';
+    const RPM_WIN_KEY = 'rondo.api.s.rpmWin.v2';
     function rpmWinCargar() {
         try {
             const j = JSON.parse(sessionStorage.getItem(RPM_WIN_KEY) || 'null');
