@@ -156,6 +156,22 @@
             "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
             "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
+            "#rondo-panel .rondo-replay-buscar{position:relative;flex:1;min-width:150px}\n" +
+            "#rondo-panel .rondo-replay-buscar input{width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-sug{position:absolute;top:100%;left:0;right:0;z-index:6;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border);border-radius:8px;margin-top:3px;max-height:220px;overflow:auto;box-shadow:0 12px 30px rgba(0,0,0,.4);display:none}\n" +
+            "#rondo-panel .rondo-replay-sug.abierto{display:block}\n" +
+            "#rondo-panel .rondo-replay-sug-item{padding:6px 9px;cursor:pointer;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .rondo-replay-sug-item:last-child{border-bottom:none}\n" +
+            "#rondo-panel .rondo-replay-sug-item:hover,#rondo-panel .rondo-replay-sug-item.sel{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-panel .rondo-replay-sug-item .su-eco{font-weight:700;color:var(--rondo-fg);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-sug-item .su-sub{flex:1;min-width:0;color:var(--rondo-fg-dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-quick{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-replay-quick .rq-lbl{font-size:11px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-chart{height:70px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;overflow:hidden;margin:8px 0;cursor:crosshair}\n" +
+            "#rondo-panel .rondo-replay-chart svg{width:100%;height:100%;display:block}\n" +
+            "#rondo-panel .rondo-replay-leyenda{display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--rondo-fg-dim);margin-bottom:6px}\n" +
+            "#rondo-panel .rondo-replay-leyenda .lg{display:inline-flex;align-items:center;gap:4px}\n" +
+            "#rondo-panel .rondo-replay-leyenda .lg i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
             "#rondo-panel .rondo-replay-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
             // v6.0.11: mini-mapa propio (global: se usa en el panel y en el dialogo de ruta).
             ".rondo-minimapa{height:min(64vh,560px);border-radius:10px;overflow:hidden}\n" +
@@ -1336,10 +1352,23 @@
              // v6.0.11: tab de replay. Reproduce el recorrido de un dia.
              '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
              '<div class="rondo-replay-bar">' +
-             '<select id="rondo-replay-eco" class="filtro" style="flex:1" title="Unidad a reproducir"></select>' +
+             '<div class="rondo-replay-buscar">' +
+             '<input type="text" id="rondo-replay-buscar" class="filtro" placeholder="Buscar unidad (eco, placa, nombre)..." autocomplete="off" spellcheck="false" title="Buscar la unidad a reproducir">' +
+             '<input type="hidden" id="rondo-replay-eco">' +
+             '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
+             '</div>' +
              '<input type="date" id="rondo-replay-fecha" class="filtro" title="Dia a reproducir">' +
-             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido del dia"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora desde" value="00:00">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora hasta" value="23:59">' +
+             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
              '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '</div>' +
+             '<div class="rondo-replay-quick">' +
+             '<span class="rq-lbl">Rango:</span>' +
+             '<button class="mini" data-rango="hoy">Hoy</button>' +
+             '<button class="mini" data-rango="ayer">Ayer</button>' +
+             '<button class="mini" data-rango="dia">Turno dia</button>' +
+             '<button class="mini" data-rango="noche">Turno noche</button>' +
              '</div>' +
              '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
              '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
@@ -1353,6 +1382,8 @@
              '</select>' +
              '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
              '</div>' +
+             '<div class="rondo-replay-chart" id="rondo-replay-chart" title="Velocidad en el tiempo; clic para saltar"><div class="rondo-replay-vacio">Perfil de velocidad</div></div>' +
+             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
              '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
              '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
              '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
@@ -2070,7 +2101,7 @@
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
         else if (name === 'caravana') paintCaravana();
-        else if (name === 'replay') { rxReplayPoblarSelect(); rxReplayPintar(); }
+        else if (name === 'replay') { rxReplayPintar(); }
         else if (name === 'chat') pintarChat();
         else if (name === 'zonas') { aplicarZonasVista(); paintGeocercas(); paintRiesgo(); }
         paintCounters();
@@ -6362,16 +6393,18 @@
         try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
     }
     /* ====================== REPLAY DEL DIA (v6.0.12) ======================
-     * Reproduce el recorrido de una unidad en un dia. Solo lectura: pide el
-     * historial con messages/load_interval y lo dibuja en el mini-mapa propio
-     * de Rondo (tiles de OSM), sin depender del mapa de la plataforma.
+     * Reproduce el recorrido de una unidad en un dia o en un rango de horas.
+     * Solo lectura: pide el historial con messages/load_interval y lo dibuja en
+     * el mini-mapa propio de Rondo (tiles de OSM), sin depender del mapa de la
+     * plataforma.
      *
-     * Analiza y muestra: resumen del dia, paradas (con zona/municipio),
-     * entradas/salidas de geocerca, excesos de velocidad y desvios respecto a
-     * una ruta planificada. Permite exportar el recorrido (GeoJSON) y las
-     * paradas (CSV).
+     * Incluye: buscador de unidades, rango por dia y horas, resumen del tramo,
+     * perfil de velocidad, paradas (zona/municipio), eventos (geocercas,
+     * excesos, desvios) y exportacion (GeoJSON del recorrido, CSV de paradas).
      */
     let RX_REPLAY = null;
+    let _rxRepSug = [];
+    let _rxRepSugIdx = -1;
 
     function rxReplayHHMM(t) {
         try { return new Date((Number(t) || 0) * 1000).toLocaleTimeString().slice(0, 5); } catch (_) { return '--:--'; }
@@ -6382,13 +6415,17 @@
         const dd = String(d.getDate()).padStart(2, '0');
         return d.getFullYear() + '-' + mm + '-' + dd;
     }
-    function rxReplayRango(fecha) {
-        const d = new Date(String(fecha || rxReplayFechaHoy()) + 'T00:00:00');
-        const desde = Math.floor(d.getTime() / 1000);
-        const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-        const esHoy = d.getTime() === hoy.getTime();
-        const hasta = esHoy ? Math.floor(Date.now() / 1000) : desde + 86399;
-        return { desde: desde, hasta: hasta, esHoy: esHoy };
+    function rxReplayRango(fecha, h1, h2) {
+        const f = String(fecha || rxReplayFechaHoy());
+        const t1 = /^\d{1,2}:\d{2}$/.test(h1) ? h1 : '00:00';
+        const t2 = /^\d{1,2}:\d{2}$/.test(h2) ? h2 : '23:59';
+        let desde = Math.floor(new Date(f + 'T' + t1 + ':00').getTime() / 1000);
+        let hasta = Math.floor(new Date(f + 'T' + t2 + ':59').getTime() / 1000);
+        const ahora = Math.floor(Date.now() / 1000);
+        if (!isFinite(desde)) desde = ahora - 86400;
+        if (!isFinite(hasta)) hasta = ahora;
+        if (hasta > ahora) hasta = ahora;
+        return { desde: desde, hasta: hasta };
     }
     function rxReplayColor(tipo) {
         return { parada: '#7d8595', exceso: '#b71c1c', zona: '#1565c0', desvio: '#e65100' }[tipo] || '#888';
@@ -6402,31 +6439,87 @@
             setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) { /* noop */ } }, 1500);
         } catch (_) { adviceWarn('No se pudo exportar', nombre); }
     }
-    function rxReplayPoblarSelect() {
-        const sel = byId('rondo-replay-eco');
-        if (!sel) return;
-        const prev = sel.value || APP.replayEco || '';
-        const vistos = new Set();
-        const opciones = [];
+    // ---- Buscador de unidades (combobox) ----
+    function rxReplayUnidades() {
+        const out = [], vistos = new Set();
         const push = (u) => {
             let info; try { info = parseUnitName(u); } catch (_) { return; }
             const eco = info.eco || info.clave;
             if (!eco || vistos.has(eco)) return;
             vistos.add(eco);
-            opciones.push('<option value="' + esc(eco) + '">' + esc(eco + (info.placa ? ' \u00b7 ' + info.placa : '')) + '</option>');
+            out.push({ eco: eco, placa: info.placa || '', nombre: info.nombre || '', etq: eco + (info.placa ? ' \u00b7 ' + info.placa : '') });
         };
         (APP.unidades || []).forEach((u) => { try { if (shouldWatch(u)) push(u); } catch (_) { /* noop */ } });
         (APP.unidades || []).forEach(push);
-        sel.innerHTML = opciones.join('') || '<option value="">(sin unidades)</option>';
-        if (prev && Array.prototype.some.call(sel.options, (o) => o.value === prev)) sel.value = prev;
+        return out;
     }
+    function rxReplayFiltrar(q) {
+        const cat = rxReplayUnidades();
+        const t = String(q || '').trim();
+        if (!t) return cat.slice(0, 40);
+        const sc = cat.map((u) => ({ u: u, s: fuzzyScore(t, u.eco + ' ' + u.placa + ' ' + u.nombre) }))
+            .filter((x) => x.s > 0)
+            .sort((a, b) => b.s - a.s)
+            .slice(0, 30)
+            .map((x) => x.u);
+        // Si escribieron un economico exacto y no aparecio, lo agregamos.
+        const m = /^0*(\d{3,5})\b/.exec(t);
+        if (m && !sc.some((u) => u.eco === m[1])) {
+            const exacto = cat.filter((u) => u.eco === m[1])[0];
+            if (exacto) sc.unshift(exacto);
+        }
+        return sc;
+    }
+    function rxReplaySugResaltar() {
+        const box = byId('rondo-replay-sug');
+        if (!box) return;
+        box.querySelectorAll('.rondo-replay-sug-item').forEach((n) => n.classList.toggle('sel', +n.dataset.i === _rxRepSugIdx));
+        const sel = box.querySelector('.rondo-replay-sug-item.sel');
+        if (sel && sel.scrollIntoView) { try { sel.scrollIntoView({ block: 'nearest' }); } catch (_) { /* noop */ } }
+    }
+    function rxReplaySugRender() {
+        const inp = byId('rondo-replay-buscar');
+        const box = byId('rondo-replay-sug');
+        if (!inp || !box) return;
+        _rxRepSug = rxReplayFiltrar(inp.value);
+        if (!_rxRepSug.length) { box.classList.remove('abierto'); box.innerHTML = ''; return; }
+        if (_rxRepSugIdx >= _rxRepSug.length) _rxRepSugIdx = _rxRepSug.length - 1;
+        box.innerHTML = _rxRepSug.map((u, i) =>
+            '<div class="rondo-replay-sug-item' + (i === _rxRepSugIdx ? ' sel' : '') + '" data-i="' + i + '">' +
+            '<span class="su-eco">' + esc(u.eco) + '</span>' +
+            '<span class="su-sub">' + esc([u.placa, u.nombre].filter(Boolean).join(' \u00b7 ')) + '</span>' +
+            '</div>').join('');
+        box.classList.add('abierto');
+        box.querySelectorAll('.rondo-replay-sug-item').forEach((n) => {
+            n.onclick = () => rxReplayElegir(+n.dataset.i);
+            n.onmouseenter = () => { _rxRepSugIdx = +n.dataset.i; rxReplaySugResaltar(); };
+        });
+    }
+    function rxReplayCerrarSug() {
+        const box = byId('rondo-replay-sug');
+        if (box) { box.classList.remove('abierto'); box.innerHTML = ''; }
+        _rxRepSugIdx = -1;
+    }
+    function rxReplayElegir(i) {
+        const u = _rxRepSug[i];
+        if (!u) return;
+        rxReplaySetUnidad(u.eco, u.etq);
+    }
+    function rxReplaySetUnidad(eco, etq) {
+        APP.replayEco = eco || '';
+        const hid = byId('rondo-replay-eco');
+        if (hid) hid.value = APP.replayEco;
+        const inp = byId('rondo-replay-buscar');
+        if (inp) inp.value = etq || eco || '';
+        rxReplayCerrarSug();
+    }
+    // ---- Analisis del recorrido ----
     function rxReplayDetalleParada(lat, lon, zonas) {
         let zona = '', municipio = '';
         try { if (zonas && lat != null) zona = zoneAt(lat, lon) || ''; } catch (_) { /* noop */ }
         try { const m = municipioEn(lat, lon); municipio = (m && m.nombre) ? m.nombre : ''; } catch (_) { /* noop */ }
         return { zona: zona, municipio: municipio };
     }
-    // Analiza un recorrido: paradas, eventos (zona/exceso/desvio) y resumen.
     function rxReplayAnalizar(msgs, info) {
         const eventos = [], paradas = [];
         const paradaMinS = Math.max(60, (Number(APP.config.paradaMin) || 15) * 60);
@@ -6472,7 +6565,6 @@
         const ult = msgs[msgs.length - 1];
         if (enParadaDesde != null && ult) cerrarParada(ult.t, msgs.length - 1);
         cerrarExceso(msgs.length - 1);
-        // Desvio respecto a la ruta planificada (muestreado, ruta acotada).
         try {
             const ruta = info ? rutaDe(info) : null;
             if (ruta && ruta.coords && ruta.coords.length >= 2 && ruta.coords.length <= 4000) {
@@ -6517,10 +6609,12 @@
         if (!r || !r.resumen) return '';
         const s = r.resumen;
         return '<span class="rr-chip"><b>' + esc(r.eco) + '</b></span>' +
+            '<span class="rr-chip">' + rxReplayHHMM(s.inicio) + '-' + rxReplayHHMM(s.fin) + '</span>' +
             '<span class="rr-chip">' + rxFmtDist(s.distM) + '</span>' +
             '<span class="rr-chip">' + rxFmtDur(s.durSeg) + '</span>' +
             '<span class="rr-chip">' + s.paradas + ' parada(s)</span>' +
-            '<span class="rr-chip">detenido ' + rxFmtDur(s.detenidoSeg) + '</span>' +
+            '<span class="rr-chip">mov ' + rxFmtDur(s.moviendoSeg) + '</span>' +
+            '<span class="rr-chip">det ' + rxFmtDur(s.detenidoSeg) + '</span>' +
             '<span class="rr-chip">max ' + s.velMax + ' km/h</span>' +
             (s.excesos ? '<span class="rr-chip">' + s.excesos + ' exceso(s)</span>' : '');
     }
@@ -6550,7 +6644,48 @@
             '</div>'
         ).join('');
     }
-    // Crea (o recrea) el mini-mapa del replay con el recorrido completo.
+    // ---- Perfil de velocidad ----
+    function rxReplayChartHTML() {
+        const r = RX_REPLAY;
+        if (!r || !r.msgs.length) return '<div class="rondo-replay-vacio">Perfil de velocidad</div>';
+        const W = 1000, H = 100;
+        const t0 = r.msgs[0].t, t1 = r.msgs[r.msgs.length - 1].t;
+        const dur = Math.max(1, t1 - t0);
+        const vmax = Math.max(10, r.resumen.velMax);
+        const paso = Math.max(1, Math.ceil(r.msgs.length / 500));
+        let d = '';
+        for (let i = 0; i < r.msgs.length; i += paso) {
+            const m = r.msgs[i];
+            const x = ((m.t - t0) / dur) * W;
+            const y = H - (Math.min(m.s, vmax) / vmax * (H - 8)) - 4;
+            d += (d ? ' ' : '') + x.toFixed(1) + ',' + y.toFixed(1);
+        }
+        const last = r.msgs[r.msgs.length - 1];
+        d += ' ' + W + ',' + (H - (Math.min(last.s, vmax) / vmax * (H - 8)) - 4).toFixed(1);
+        let mx = '';
+        r.paradas.forEach((p) => { mx += '<circle cx="' + (((p.t - t0) / dur) * W).toFixed(1) + '" cy="' + (H - 3) + '" r="2.5" fill="#7d8595"/>'; });
+        r.eventos.forEach((e2) => { mx += '<circle cx="' + (((e2.t - t0) / dur) * W).toFixed(1) + '" cy="' + (H - 8) + '" r="2.5" fill="' + rxReplayColor(e2.tipo) + '"/>'; });
+        return '<svg id="rondo-replay-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" class="rondo-replay-chart-svg">' +
+            '<polyline fill="none" stroke="var(--rondo-accent-2)" stroke-width="2" vector-effect="non-scaling-stroke" points="' + d + '"/>' +
+            mx +
+            '<line id="rondo-replay-chart-cur" x1="0" y1="0" x2="0" y2="' + H + '" stroke="var(--rondo-accent)" stroke-width="2" vector-effect="non-scaling-stroke"/>' +
+            '</svg>';
+    }
+    function rxReplayChartRender() {
+        const cont = byId('rondo-replay-chart');
+        if (cont) cont.innerHTML = rxReplayChartHTML();
+    }
+    function rxReplayChartCursor() {
+        const r = RX_REPLAY;
+        const cur = byId('rondo-replay-chart-cur');
+        if (!r || !cur) return;
+        const t0 = r.msgs[0].t, t1 = r.msgs[r.msgs.length - 1].t;
+        const dur = Math.max(1, t1 - t0);
+        const x = ((r.msgs[r.idx].t - t0) / dur) * 1000;
+        cur.setAttribute('x1', x.toFixed(1));
+        cur.setAttribute('x2', x.toFixed(1));
+    }
+    // ---- Mini-mapa ----
     function rxReplayMapaCrear() {
         const r = RX_REPLAY;
         const cont = byId('rondo-replay-mapa');
@@ -6605,6 +6740,7 @@
             r.mapa.setPos(m.lat, m.lon);
             rxReplayMarcarViajado();
         }
+        rxReplayChartCursor();
         const evs = byId('rondo-replay-eventos');
         if (evs) evs.querySelectorAll('.rondo-replay-ev').forEach((n) => n.classList.toggle('activo', +n.dataset.idx === r.idx));
         const pars = byId('rondo-replay-paradas');
@@ -6621,6 +6757,7 @@
         if (pars) pars.innerHTML = rxReplayParadasHTML();
         const evs = byId('rondo-replay-eventos');
         if (evs) evs.innerHTML = rxReplayEventosHTML();
+        rxReplayChartRender();
         if (r) rxReplayMapaCrear();
         else {
             const cont = byId('rondo-replay-mapa');
@@ -6676,12 +6813,37 @@
         r.vt = r.msgs[r.idx].t;
         rxReplayActualizar();
     }
+    function rxReplayIrAFraccion(frac) {
+        const r = RX_REPLAY;
+        if (!r) return;
+        const t0 = r.msgs[0].t, t1 = r.msgs[r.msgs.length - 1].t;
+        const t = t0 + clamp(frac, 0, 1) * Math.max(1, t1 - t0);
+        let lo = 0, hi = r.msgs.length - 1, idx = 0;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (r.msgs[mid].t <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        if (r.playing) rxReplayPausar();
+        rxReplayIrA(idx);
+    }
+    function rxReplayRangoRapido(kind) {
+        const f = byId('rondo-replay-fecha');
+        const d = byId('rondo-replay-desde');
+        const h = byId('rondo-replay-hasta');
+        const set = (fecha, h1, h2) => { if (f) f.value = fecha; if (d) d.value = h1; if (h) h.value = h2; };
+        const hoy = rxReplayFechaHoy();
+        const ayer = (() => { const x = new Date(); x.setDate(x.getDate() - 1); const mm = String(x.getMonth() + 1).padStart(2, '0'); const dd = String(x.getDate()).padStart(2, '0'); return x.getFullYear() + '-' + mm + '-' + dd; })();
+        if (kind === 'ayer') set(ayer, '00:00', '23:59');
+        else if (kind === 'dia') set(f && f.value ? f.value : hoy, '06:00', '18:00');
+        else if (kind === 'noche') set(f && f.value ? f.value : hoy, '18:00', '23:59');
+        else set(hoy, '00:00', '23:59');
+    }
     function rxReplayExportarGeoJSON() {
         const r = RX_REPLAY;
         if (!r) { adviceWarn('Sin recorrido', 'Carga un recorrido primero.'); return; }
         const features = [{
             type: 'Feature',
-            properties: { eco: r.eco, fecha: r.fecha, km: Math.round(r.resumen.distM / 1000), inicio: new Date(r.resumen.inicio * 1000).toISOString(), fin: new Date(r.resumen.fin * 1000).toISOString() },
+            properties: { eco: r.eco, desde: new Date(r.resumen.inicio * 1000).toISOString(), hasta: new Date(r.resumen.fin * 1000).toISOString(), km: Math.round(r.resumen.distM / 1000) },
             geometry: { type: 'LineString', coordinates: r.msgs.map((m) => [+m.lon.toFixed(6), +m.lat.toFixed(6)]) }
         }];
         r.paradas.forEach((p, i) => features.push({
@@ -6715,6 +6877,8 @@
         RX_REPLAY = null;
         const cont = byId('rondo-replay-mapa');
         if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
+        const chart = byId('rondo-replay-chart');
+        if (chart) chart.innerHTML = '<div class="rondo-replay-vacio">Perfil de velocidad</div>';
         const info = byId('rondo-replay-info');
         if (info) info.innerHTML = '';
         const resumen = byId('rondo-replay-resumen');
@@ -6729,14 +6893,23 @@
         if (pb) pb.textContent = 'Play';
     }
     async function rxReplayCargar() {
-        const sel = byId('rondo-replay-eco');
-        const eco = sel ? sel.value : '';
-        if (!eco) { adviceWarn('Sin unidad', 'Elige una unidad para reproducir su dia.'); return; }
+        let eco = APP.replayEco || '';
+        if (!eco) {
+            const inp = byId('rondo-replay-buscar');
+            const t = inp ? inp.value.trim() : '';
+            if (t) { const cand = rxReplayFiltrar(t)[0]; if (cand) eco = cand.eco; }
+        }
+        if (!eco) { adviceWarn('Sin unidad', 'Busca y elige una unidad para reproducir.'); return; }
         const it = unitByEco(eco);
         if (!it) { adviceWarn('Unidad no encontrada', eco); return; }
+        const ucat = rxReplayUnidades().filter((x) => x.eco === eco)[0];
+        rxReplaySetUnidad(eco, ucat ? ucat.etq : eco);
         const fechaEl = byId('rondo-replay-fecha');
+        const h1 = byId('rondo-replay-desde');
+        const h2 = byId('rondo-replay-hasta');
         const fecha = (fechaEl && fechaEl.value) || rxReplayFechaHoy();
-        const rango = rxReplayRango(fecha);
+        const rango = rxReplayRango(fecha, h1 ? h1.value : '', h2 ? h2.value : '');
+        if (rango.hasta <= rango.desde) { adviceWarn('Rango invalido', 'La hora "hasta" debe ser mayor que "desde".'); return; }
         const btn = byId('rondo-replay-cargar');
         if (btn) setBusy(btn, true);
         try {
@@ -6756,7 +6929,7 @@
                 .sort((a, b) => a.t - b.t);
             if (!msgs.length) {
                 rxReplayLimpiar();
-                advice('Sin recorrido', 'No hay mensajes con posicion de ' + eco + ' para ' + fecha + '.');
+                advice('Sin recorrido', 'No hay mensajes con posicion de ' + eco + ' en ese rango.');
                 return;
             }
             let acum = 0;
@@ -6770,6 +6943,7 @@
             if (RX_REPLAY && RX_REPLAY._timer) clearInterval(RX_REPLAY._timer);
             RX_REPLAY = {
                 eco: eco, clave: it.info.clave, info: it.info, fecha: fecha,
+                desde: rango.desde, hasta: rango.hasta,
                 msgs: msgs, paradas: an.paradas, eventos: an.eventos, resumen: an.resumen,
                 idx: 0, vt: msgs[0].t, factor: 300, playing: false, _timer: null, _tick: 0,
                 truncado: msgs.length >= 10000
@@ -6782,10 +6956,8 @@
         }
     }
     function rxReplayAbrirUnidad(eco) {
-        rxReplayPoblarSelect();
-        const sel = byId('rondo-replay-eco');
-        if (sel && eco) sel.value = eco;
-        APP.replayEco = eco || (sel ? sel.value : '');
+        const u = rxReplayUnidades().filter((x) => x.eco === eco)[0];
+        rxReplaySetUnidad(eco, u ? u.etq : eco);
         const f = byId('rondo-replay-fecha');
         if (f && !f.value) f.value = rxReplayFechaHoy();
         setTab('replay');
@@ -6794,8 +6966,39 @@
     function bindReplay() {
         const f = byId('rondo-replay-fecha');
         if (f && !f.value) f.value = rxReplayFechaHoy();
-        const sel = byId('rondo-replay-eco');
-        if (sel) sel.addEventListener('change', () => { APP.replayEco = sel.value || ''; });
+        const inp = byId('rondo-replay-buscar');
+        if (inp) {
+            inp.addEventListener('input', () => { _rxRepSugIdx = -1; rxReplaySugRender(); });
+            inp.addEventListener('focus', () => rxReplaySugRender());
+            inp.addEventListener('keydown', (e) => {
+                const abierto = byId('rondo-replay-sug') && byId('rondo-replay-sug').classList.contains('abierto');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (!abierto) { rxReplaySugRender(); return; }
+                    if (_rxRepSug.length) { _rxRepSugIdx = (_rxRepSugIdx + 1) % _rxRepSug.length; rxReplaySugResaltar(); }
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (abierto && _rxRepSug.length) { _rxRepSugIdx = (_rxRepSugIdx - 1 + _rxRepSug.length) % _rxRepSug.length; rxReplaySugResaltar(); }
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    if (abierto) { e.stopPropagation(); rxReplayCerrarSug(); }
+                    return;
+                }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (abierto && _rxRepSugIdx >= 0) { rxReplayElegir(_rxRepSugIdx); rxReplayCargar(); return; }
+                    if (_rxRepSug.length) { rxReplayElegir(0); rxReplayCargar(); return; }
+                    rxReplayCargar();
+                }
+            });
+        }
+        document.addEventListener('click', (e) => {
+            const wrap = e.target.closest && e.target.closest('.rondo-replay-buscar');
+            if (!wrap) rxReplayCerrarSug();
+        });
         const cargar = byId('rondo-replay-cargar');
         if (cargar) cargar.addEventListener('click', () => rxReplayCargar());
         const play = byId('rondo-replay-play');
@@ -6815,6 +7018,21 @@
         if (geo) geo.addEventListener('click', () => rxReplayExportarGeoJSON());
         const csv = byId('rondo-replay-csv');
         if (csv) csv.addEventListener('click', () => rxReplayExportarParadasCSV());
+        // Rangos rapidos.
+        document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((b) => {
+            b.addEventListener('click', () => {
+                document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((x) => x.classList.remove('activo'));
+                b.classList.add('activo');
+                rxReplayRangoRapido(b.dataset.rango);
+                rxReplayCargar();
+            });
+        });
+        // Perfil de velocidad: clic para saltar.
+        const chart = byId('rondo-replay-chart');
+        if (chart) chart.addEventListener('click', (e) => {
+            const rect = chart.getBoundingClientRect();
+            rxReplayIrAFraccion((e.clientX - rect.left) / Math.max(1, rect.width));
+        });
         const paradas = byId('rondo-replay-paradas');
         if (paradas) paradas.addEventListener('click', (e) => {
             const n = e.target.closest && e.target.closest('.rondo-replay-par');
