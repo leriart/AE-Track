@@ -494,7 +494,7 @@
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
             numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..7</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..7</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>?</b> ayuda · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Barra lateral</h4>' +
@@ -681,6 +681,7 @@
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar la barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>L</kbd>: mostrar u ocultar la barra lateral (atajo alternativo).</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
+            '<li><kbd>?</kbd>: abrir esta ayuda rapida.</li>' +
             '<li><kbd>Esc</kbd>: cerrar ventanas emergentes.</li>' +
             '</ul>' +
             '<h4>Datos y privacidad</h4>' +
@@ -714,7 +715,29 @@
             // panelEl aun no esta en el DOM: se consulta sobre el propio nodo.
             const tabsEl = panelEl.querySelector('#rondo-tabs');
             if (tabsEl) tabsEl.setAttribute('role', 'tablist');
-            panelEl.querySelectorAll('#rondo-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
+            panelEl.querySelectorAll('#rondo-tabs .tab').forEach((t) => {
+                t.setAttribute('role', 'tab');
+                // El contador (un numero) seria el unico texto visible para el
+                // lector de pantalla; el title describe mejor la pestana.
+                if (t.title) t.setAttribute('aria-label', t.title);
+                const wrap = t.dataset.tab ? panelEl.querySelector('#rondo-wrap-' + t.dataset.tab) : null;
+                if (wrap) {
+                    t.setAttribute('aria-controls', 'rondo-wrap-' + t.dataset.tab);
+                    wrap.setAttribute('role', 'tabpanel');
+                }
+            });
+            // Botones de solo icono: los lectores de pantalla no siempre leen
+            // el title, asi que se copia a aria-label cuando el boton no tiene
+            // texto visible (para no pisar la etiqueta de los botones de texto).
+            [barraEl, panelEl, modalEl, cfgWinEl, ayudaEl].forEach((root) => {
+                root.querySelectorAll('button[title]').forEach((b) => {
+                    if (b.getAttribute('aria-label')) return;
+                    const txt = (b.textContent || '').trim();
+                    if (!/[A-Za-z0-9]/.test(txt)) b.setAttribute('aria-label', b.title);
+                });
+            });
+            if (ctxEl) ctxEl.setAttribute('role', 'menu');
+            if (railEl) railEl.setAttribute('aria-label', 'Mostrar el panel');
         } catch (_) { /* noop */ }
 
         document.body.appendChild(barraEl);

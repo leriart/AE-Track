@@ -11,28 +11,44 @@
     }
 
     function writeJSON(key, value) {
-        try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* noop */ }
+        try { localStorage.setItem(key, JSON.stringify(value)); }
+        catch (e) {
+            // Cuota llena o almacenamiento bloqueado: el dato NO persiste.
+            // Avisar una sola vez para no inundar la consola en cada guardado
+            // (el caso tipico es guardar la config repetidamente y perderla).
+            if (!writeJSON._avisado) {
+                writeJSON._avisado = true;
+                try { console.warn('[Rondo] no se pudo guardar en localStorage (' + key + '):', (e && e.message) || e); } catch (_) { /* noop */ }
+            }
+        }
     }
 
     // sessionStorage por pestaña. Migra desde LS la primera vez para no perder
     // los datos guardados en versiones anteriores.
     function readSession(key, fallback, legacyKey) {
+        // 1) Intento en sessionStorage. Si el JSON esta corrupto caemos al
+        //    legado: es mas probable recuperar el dato global que rendirnos.
         try {
             const raw = sessionStorage.getItem(key);
             if (raw != null) {
                 const v = JSON.parse(raw);
                 if (v != null) return v;
             }
-            if (legacyKey) {
-                // Copia la lista antigua (global) a esta pestaña la primera vez.
+        } catch (_) { /* storage bloqueado o JSON corrupto: probar legado */ }
+        if (legacyKey) {
+            // Copia la lista antigua (global) a esta pestaña la primera vez.
+            // No borramos la clave global: otras pestanas aun pueden migrar.
+            try {
                 const legacy = localStorage.getItem(legacyKey);
                 if (legacy != null) {
                     const parsed = JSON.parse(legacy);
-                    sessionStorage.setItem(key, JSON.stringify(parsed));
-                    return parsed;
+                    if (parsed != null) {
+                        sessionStorage.setItem(key, JSON.stringify(parsed));
+                        return parsed;
+                    }
                 }
-            }
-        } catch (_) { /* noop */ }
+            } catch (_) { /* noop */ }
+        }
         return fallback;
     }
     function writeSession(key, value) {
@@ -70,9 +86,19 @@
         }[ch]));
     }
 
+    // Cache acotada de normalizacion. norm() se llama en bucles (busqueda
+    // difusa, municipios, comparacion de paradas) sobre los mismos textos una
+    // y otra vez. Si crece demasiado se vacia para no retener memoria.
+    const NORM_CACHE = new Map();
     function norm(s) {
-        return String(s == null ? '' : s).normalize('NFKD')
+        const t = (s == null) ? '' : String(s);
+        const hit = NORM_CACHE.get(t);
+        if (hit !== undefined) return hit;
+        const out = t.normalize('NFKD')
             .replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+        if (NORM_CACHE.size >= 2000) NORM_CACHE.clear();
+        NORM_CACHE.set(t, out);
+        return out;
     }
 
     function pickSeverity(level) {

@@ -1,7 +1,10 @@
     /* ====================== MENU CONTEXTUAL ====================== */
     function showMenu(x, y, options, anchor) {
-        ctxEl.innerHTML = options.map((o) =>
-            o.sep ? '<div class="sep"></div>' : '<div class="op" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="rondo-usym">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
+        if (!ctxEl) return;
+        const ops = Array.isArray(options) ? options : [];
+        ctxEl.setAttribute('role', 'menu');
+        ctxEl.innerHTML = ops.map((o) =>
+            o.sep ? '<div class="sep" role="separator"></div>' : '<div class="op" role="menuitem" tabindex="-1" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="rondo-usym">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
         ).join('');
         ctxEl.style.display = 'flex';
         // La regla base de #rondo-contexto lo centra con translate(-50%,-50%);
@@ -27,11 +30,34 @@
         top = clamp(top, m, Math.max(m, vh - r.height - m));
         ctxEl.style.left = left + 'px';
         ctxEl.style.top = top + 'px';
-        ctxEl._options = options;
+        ctxEl._options = ops;
     }
-    function hideMenu() { ctxEl.style.display = 'none'; ctxEl._target = null; }
+    function hideMenu() { if (!ctxEl) return; ctxEl.style.display = 'none'; ctxEl._target = null; }
+    // Navegacion por teclado dentro del menu: flechas, Inicio/Fin y
+    // Enter/Espacio. El menu se abre tambien con la tecla de menu contextual
+    // del teclado, asi que debe poder recorrerse sin raton.
+    function rxMoverFocoMenu(delta) {
+        if (!ctxEl) return;
+        const ops = Array.prototype.slice.call(ctxEl.querySelectorAll('.op'));
+        if (!ops.length) return;
+        let i = ops.indexOf(document.activeElement);
+        if (i < 0) i = delta > 0 ? -1 : ops.length;
+        i = (i + delta + ops.length) % ops.length;
+        ops[i].focus();
+    }
+    document.addEventListener('keydown', (e) => {
+        if (!ctxEl || ctxEl.style.display !== 'flex') return;
+        if (e.key === 'ArrowDown') { rxMoverFocoMenu(1); e.preventDefault(); return; }
+        if (e.key === 'ArrowUp') { rxMoverFocoMenu(-1); e.preventDefault(); return; }
+        if (e.key === 'Home') { const o = ctxEl.querySelector('.op'); if (o) o.focus(); e.preventDefault(); return; }
+        if (e.key === 'End') { const ops = ctxEl.querySelectorAll('.op'); if (ops.length) ops[ops.length - 1].focus(); e.preventDefault(); return; }
+        if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.classList.contains('op')) {
+            e.preventDefault();
+            document.activeElement.click();
+        }
+    });
     document.addEventListener('click', (e) => {
-        if (ctxEl.style.display !== 'none' && !ctxEl.contains(e.target)) hideMenu();
+        if (ctxEl && ctxEl.style.display !== 'none' && !ctxEl.contains(e.target)) hideMenu();
     });
     function copyToClipboard(text) {
         try { return navigator.clipboard.writeText(String(text || '')); } catch (_) {

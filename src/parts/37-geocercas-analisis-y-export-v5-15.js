@@ -76,13 +76,17 @@
         const c = centroDeZona(z);
         if (_zonaEsCirculo(z, pts)) return c ? { type: 'Point', coordinates: [c.lon, c.lat] } : null;
         if (Array.isArray(pts) && pts.length >= 3) {
+            // Descarta puntos sin coordenadas validas: un GeoJSON con NaN es
+            // invalido y algunos visores lo rechazan entero.
             const ring = pts.map((a) => {
-                const la = (a && a.y != null) ? +a.y : +a[1];
-                const lo = (a && a.x != null) ? +a.x : +a[0];
+                const la = (a && a.y != null) ? +a.y : (Array.isArray(a) ? +a[1] : NaN);
+                const lo = (a && a.x != null) ? +a.x : (Array.isArray(a) ? +a[0] : NaN);
                 return [lo, la];
-            });
-            if (ring.length && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) ring.push(ring[0]);
-            return { type: 'Polygon', coordinates: [ring] };
+            }).filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+            if (ring.length >= 3) {
+                if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) ring.push(ring[0]);
+                return { type: 'Polygon', coordinates: [ring] };
+            }
         }
         if (z.b && z.b.min_x != null && z.b.max_x != null && z.b.min_y != null && z.b.max_y != null) {
             const ring = [
@@ -94,9 +98,10 @@
         return c ? { type: 'Point', coordinates: [c.lon, c.lat] } : null;
     }
     function zonasStats(unidades) {
+        const zonas = APP.zonas || [];
         let ocupadas = 0, base = 0, carga = 0, areaM2 = 0;
-        for (let i = 0; i < APP.zonas.length; i++) {
-            const z = APP.zonas[i];
+        for (let i = 0; i < zonas.length; i++) {
+            const z = zonas[i];
             const rol = zonaRol(z);
             if (rol === 'base') base++;
             else if (rol === 'carga') carga++;
@@ -108,14 +113,14 @@
             }
             if (occ) ocupadas++;
         }
-        return { total: APP.zonas.length, ocupadas, base, carga, areaM2 };
+        return { total: zonas.length, ocupadas, base, carga, areaM2 };
     }
     function geocercasSubsetVisible() {
         // Devuelve las geocercas segun el filtro/rol actuales (para export).
         const f = (APP.geoFiltro || '').toLowerCase();
         const rol = APP.geoRol || 'todas';
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
-        return APP.zonas.filter((z) => {
+        return (APP.zonas || []).filter((z) => {
             const r = zonaRol(z);
             if (rol !== 'todas' && rol !== r && !(rol === 'ocupadas' && unidades.some((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)))) return false;
             if (f) {
@@ -128,17 +133,17 @@
     function exportarGeocercasCSV() {
         const items = geocercasSubsetVisible();
         if (!items.length) { adviceWarn('Sin geocercas', 'Nada que exportar con los filtros actuales'); return; }
-        const escCsv = (c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"';
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
         const filas = [['nombre', 'rol', 'area_km2', 'lat', 'lon', 'unidades']];
         for (let i = 0; i < items.length; i++) {
             const z = items[i];
             const c = centroDeZona(z) || {};
             const ecos = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)).map((u) => u.info.eco);
-            filas.push([z.n || ('Zona ' + z.id), zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3), c.lat, c.lon, ecos.join(' ')]);
+            filas.push([z.n || ('Zona ' + z.id), zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3),
+                c.lat == null ? '' : c.lat, c.lon == null ? '' : c.lon, ecos.join(' ')]);
         }
-        const csv = filas.map((r) => r.map(escCsv).join(',')).join('\n');
-        const a = makeEl('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })) });
+        const csv = filas.map((r) => r.map(rxCsvCelda).join(',')).join('\n');
+        const a = makeEl('a', { href: URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })) });
         a.download = 'rondo_geocercas_' + new Date().toISOString().slice(0, 10) + '.csv';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
@@ -202,7 +207,8 @@
     function paintGeocercas() {
         const body = byId('rondo-body-zonas');
         const countEl = byId('rondo-geo-count');
-        const total = APP.zonas.length;
+        const zonas = APP.zonas || [];
+        const total = zonas.length;
         if (countEl) countEl.textContent = total;
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
         const stats = zonasStats(unidades);
@@ -235,7 +241,7 @@
         }
         const f = (APP.geoFiltro || '').toLowerCase();
         const rol = APP.geoRol || 'todas';
-        let lista = APP.zonas.map((z) => {
+        let lista = zonas.map((z) => {
             const dentro = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z));
             const ecos = dentro.map((u) => u.info.eco).filter(Boolean);
             return { z: z, ecos: ecos, rol: zonaRol(z), area: zonaAreaM2(z) };
@@ -303,7 +309,7 @@
     function paintViajes() {
         const cont = byId('rondo-lista-viajes');
         if (!cont) return;
-        const ecos = Object.keys(APP.viajes);
+        const ecos = Object.keys(APP.viajes || {});
         if (!ecos.length) {
             setHtml(cont, emptyState(UIS.clock, 'Sin viajes analizados',
                 'Clic derecho en una unidad &gt; <b>Analizar viaje</b> para detectar el punto de partida (parada de mas de '
@@ -338,9 +344,9 @@
         paintViajes();
         const cont = byId('rondo-lista-rutas');
         if (!cont) return;
-        const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const watched = (APP.unidades || []).filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const filas = watched.filter((x) => rutaDe(x.info));
-        const sinUnidad = Object.keys(APP.rutas).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
+        const sinUnidad = Object.keys(APP.rutas || {}).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
         if (!filas.length && !sinUnidad.length) {
             setHtml(cont, emptyState(UIS.route, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',

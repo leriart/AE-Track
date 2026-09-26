@@ -1,6 +1,10 @@
     /* ====================== NOMBRE + ESTADO ====================== */
+    // Parsea nombre/id de una unidad. Nunca revienta con una entrada
+    // incompleta: se llama en bucles sobre toda la flota y una unidad
+    // corrupta no debe detener el refresco ni el analisis.
     function parseUnitName(u) {
-        const nombre = u.nm || String(u.id);
+        const src = (u && typeof u === 'object') ? u : {};
+        const nombre = String(src.nm || String(src.id == null ? '' : src.id)).trim();
         let eco = '';
         const mEco = nombre.match(/\.\s*0*(\d{3,5})(?!\d)/);
         if (mEco) eco = mEco[1];
@@ -11,21 +15,28 @@
         let placa = '';
         const mPlaca = nombre.match(/\b([A-Z]{2,4}[-\s]?\d{2,4}[A-Z]{0,3})\b/);
         if (mPlaca) placa = mPlaca[1];
-        return { id: u.id, nombre, eco, placa, clave: eco || placa || String(u.id) };
+        return { id: src.id, nombre, eco, placa, clave: eco || placa || String(src.id) };
     }
     function unitState(u) {
-        const pos = u.pos || {};
-        const lmsg = u.lmsg || {};
-        const t = pos.t || lmsg.t || 0;
+        const src = (u && typeof u === 'object') ? u : {};
+        const pos = src.pos || {};
+        const lmsg = src.lmsg || {};
+        // t suele venir en segundos (Wialon), pero algunos payloads lo
+        // mandan en milisegundos: normalizamos para que edadMin no se
+        // dispare a decadas y la unidad figure siempre offline.
+        let t = Number(pos.t || lmsg.t || 0);
+        if (!isFinite(t) || t <= 0) t = 0;
+        else if (t > 1e12) t = Math.round(t / 1000);
         const edadMin = t ? (Date.now() / 1000 - t) / 60 : Infinity;
         const online = edadMin < APP.config.offlineMin;
-        const vel = pos.s || 0;
+        const vel = Number(pos.s) || 0;
         const estado = !online ? 'offline' : (vel > 3 ? 'moviendo' : 'detenida');
+        const lat = (pos.y != null && isFinite(+pos.y)) ? +pos.y : null;
+        const lon = (pos.x != null && isFinite(+pos.x)) ? +pos.x : null;
         return {
             t, edadMin, online, vel, estado,
-            lat: (pos.y != null) ? pos.y : null,
-            lon: (pos.x != null) ? pos.x : null,
-            curso: pos.c || 0, sat: pos.sc || 0
+            lat, lon,
+            curso: Number(pos.c) || 0, sat: Number(pos.sc) || 0
         };
     }
     function isWatched(info) {

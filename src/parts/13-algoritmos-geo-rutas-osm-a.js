@@ -3,6 +3,31 @@
     // Umbral (km) por debajo del cual la proyeccion equirectangular local
     // tiene precision suficiente y es mas barata que la geodesica esferica.
     const DIST_LOCAL_UMBRAL_KM = 1;
+    // Tope de grafos OSM en memoria (cajas distintas). Con mas se descartan
+    // los mas antiguos en lugar de vaciar todo el cache.
+    const RX_GRAFO_CACHE_MAX = 5;
+    // Cache de geocodificacion directa (texto -> coordenadas) para no repetir
+    // la misma consulta a Nominatim dentro de la sesion.
+    const RX_GEOCODE_CACHE = new Map();
+
+    // fetch + JSON con timeout. Nominatim/OSRM/Overpass pueden colgarse o
+    // devolver HTML de error; centralizar el parseo y el corte por tiempo
+    // evita promesas que nunca resuelven y detecta respuestas no-JSON.
+    async function _rxFetchJson(url, opts, timeoutMs) {
+        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), Math.max(2000, timeoutMs || 20000)) : null;
+        try {
+            const opciones = Object.assign({}, opts || {});
+            if (ctrl) opciones.signal = ctrl.signal;
+            const res = await fetch(url, opciones);
+            if (!res || !res.ok) throw new Error('HTTP ' + ((res && res.status) || 0));
+            const txt = await res.text();
+            if (!txt) return null;
+            return JSON.parse(txt);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
     function rad(d) { return d * Math.PI / 180; }
     function grad(r) { return r * 180 / Math.PI; }
     function haversine(lat1, lon1, lat2, lon2) {
@@ -91,13 +116,13 @@
     function precomputarRuta(coords) {
         const acum = [0];
         let total = 0;
+        if (!coords || !coords.length) return { acum, total };
         for (let i = 1; i < coords.length; i++) {
             total += haversine(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
             acum.push(total);
         }
         return { acum, total };
     }
-    // Proyecta un punto sobre la polilinea de una ruta y calcula progreso y rumbo.
     // Proyecta un punto sobre la polilinea de una ruta. Si se pasa memo
     // (objeto { idx }), prueba primero ese segmento y sus vecinos (idx-1, idx,
     // idx+1); si el mejor candidato esta a menos de MEMO_UMBRAL_M (1 km),
@@ -241,14 +266,19 @@
     // por cada par consecutivo, que usamos para situar cada parada.
     async function osrmRouteMulti(puntos) {
         if (!puntos || puntos.length < 2) throw new Error('OSRM: faltan puntos');
+        for (let i = 0; i < puntos.length; i++) {
+            const p = puntos[i];
+            if (!p || !isFinite(p.lat) || !isFinite(p.lon)) throw new Error('OSRM: coordenada invalida');
+        }
         const coords = puntos.map((p) => p.lon + ',' + p.lat).join(';');
         const url = 'https://router.project-osrm.org/route/v1/driving/' + coords +
             '?overview=full&geometries=geojson&alternatives=false&steps=false';
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
-        const d = await res.json();
-        if (!d.routes || !d.routes.length) throw new Error('OSRM sin ruta');
+        const d = await _rxFetchJson(url, {}, 25000);
+        if (!d || !d.routes || !d.routes.length) throw new Error('OSRM sin ruta');
         const r = d.routes[0];
+        if (!r || !r.geometry || !Array.isArray(r.geometry.coordinates) || !r.geometry.coordinates.length) {
+            throw new Error('OSRM sin geometria');
+        }
         return {
             coords: r.geometry.coordinates, distancia: r.distance, duracion: r.duration,
             legs: r.legs || [], modo: 'osrm'
@@ -274,17 +304,19 @@
 
     // Overpass (OpenStreetMap): descarga el grafo vial de una caja y lo cachea.
     async function overpassGrafo(minLat, minLon, maxLat, maxLon) {
+        if (!isFinite(minLat) || !isFinite(minLon) || !isFinite(maxLat) || !isFinite(maxLon)) {
+            throw new Error('Overpass: bbox invalida');
+        }
         const clave = [minLat, minLon, maxLat, maxLon].map((v) => v.toFixed(2)).join(',');
         if (APP.grafoCache[clave]) return APP.grafoCache[clave];
         const q = '[out:json][timeout:30];way["highway"~"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|service|living_street"](' +
             minLat + ',' + minLon + ',' + maxLat + ',' + maxLon + ');(._;>;);out body;';
-        const res = await fetch('https://overpass-api.de/api/interpreter', {
+        const d = await _rxFetchJson('https://overpass-api.de/api/interpreter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'data=' + encodeURIComponent(q)
-        });
-        if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
-        const d = await res.json();
+        }, 35000);
+        if (!d) throw new Error('Overpass sin datos');
         const nodos = new Map();
         const tagsPorWay = new Map(); // wayId -> tags
         (d.elements || []).forEach((el) => {
@@ -315,8 +347,13 @@
             }
         });
         const grafo = { nodos, ady };
+        // Cache FIFO acotada: al superar el tope se descartan las cajas mas
+        // antiguas. Antes, al sexto grafo se vaciaba el cache completo y se
+        // repetian descargas de Overpass.
         const claves = Object.keys(APP.grafoCache);
-        if (claves.length > 5) claves.forEach((k) => { delete APP.grafoCache[k]; });
+        while (claves.length >= RX_GRAFO_CACHE_MAX) {
+            delete APP.grafoCache[claves.shift()];
+        }
         APP.grafoCache[clave] = grafo;
         return grafo;
     }
@@ -326,6 +363,12 @@
         const v = String(tags.oneway || '').toLowerCase();
         if (v === 'yes' || v === 'true' || v === '1') return 1;
         if (v === '-1' || v === 'reverse') return -1;
+        if (v === 'no' || v === 'false' || v === '0') return 0;
+        // Sin `oneway` explicito, una rotonda/circular es de un solo sentido
+        // por definicion de OSM. Antes quedaban bidireccionales y A* podia
+        // entrar por el carril contrario.
+        const j = String(tags.junction || '').toLowerCase();
+        if (j === 'roundabout' || j === 'circular') return 1;
         return 0;
     }
     function parseMaxspeed(tags) {
@@ -354,6 +397,10 @@
     }
     // Ruta con A* sobre el grafo vial de OpenStreetMap.
     async function astarRoute(origen, destino) {
+        if (!origen || !destino || !isFinite(origen.lat) || !isFinite(origen.lon)
+            || !isFinite(destino.lat) || !isFinite(destino.lon)) {
+            throw new Error('A*: coordenadas invalidas');
+        }
         const spanLat = Math.abs(origen.lat - destino.lat);
         const spanLon = Math.abs(origen.lon - destino.lon);
         if (spanLat > 1.5 || spanLon > 1.5) throw new Error('Ruta demasiado larga para A* (límite ~150 km)');
@@ -373,14 +420,25 @@
     }
 
     async function geocodificarLugar(texto) {
+        const q = String(texto || '').trim();
+        if (!q) return null;
+        const k = q.toLowerCase();
+        if (RX_GEOCODE_CACHE.has(k)) return RX_GEOCODE_CACHE.get(k);
         const espera = 1100 - (Date.now() - APP.geoLast);
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(texto));
-            const d = await res.json();
-            if (!d || !d.length) return null;
-            return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(q), {}, 15000);
+            let out = null;
+            if (Array.isArray(d) && d.length) {
+                const lat = parseFloat(d[0].lat), lon = parseFloat(d[0].lon);
+                if (isFinite(lat) && isFinite(lon)) out = { lat, lon };
+            }
+            RX_GEOCODE_CACHE.set(k, out);
+            if (RX_GEOCODE_CACHE.size > 200) {
+                RX_GEOCODE_CACHE.delete(RX_GEOCODE_CACHE.keys().next().value);
+            }
+            return out;
         } catch (_) { return null; }
     }
 

@@ -80,7 +80,7 @@
             // Throttle: no mas de una vez por minuto.
             if (ahora - _lastFocusCheck < 60000) return;
             _lastFocusCheck = ahora;
-            if ((APP.update && APP.update.state !== 'checking') || true) {
+            if (!APP.update || APP.update.state !== 'checking') {
                 comprobarActualizacion();
             }
         };

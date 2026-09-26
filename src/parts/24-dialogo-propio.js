@@ -15,6 +15,21 @@
         return dlgEl;
     }
     function dialogoAbierto() { return !!(dlgEl && dlgEl.classList.contains('abierto')); }
+    // Trampa de foco: Tab/Shift+Tab ciclan solo dentro del dialogo abierto
+    // (accesibilidad: el foco no debe escapar al contenido de atras).
+    function rxDialogoTrapTab(e) {
+        if (e.key !== 'Tab') return;
+        const el = e.currentTarget;
+        const nodos = el.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])');
+        const vis = Array.prototype.filter.call(nodos, (n) => !n.disabled && n.getClientRects().length > 0);
+        if (!vis.length) return;
+        const primero = vis[0];
+        const ultimo = vis[vis.length - 1];
+        const activo = document.activeElement;
+        if (e.shiftKey && activo === primero) { e.preventDefault(); ultimo.focus(); }
+        else if (!e.shiftKey && activo === ultimo) { e.preventDefault(); primero.focus(); }
+        else if (!el.contains(activo)) { e.preventDefault(); primero.focus(); }
+    }
     function cerrarDialogo() {
         if (!dlgEl) return;
         dlgEl.classList.remove('abierto');
@@ -39,16 +54,18 @@
         const showCancel = opts.cancel !== false && cancelText !== okText;
         el.innerHTML =
             '<div class="dlg-head"><span class="rondo-usym">' + (opts.icon || UIS.info) + '</span>' +
-            '<span>' + esc(opts.titulo) + '</span></div>' +
+            '<span id="rondo-dlg-title">' + esc(opts.titulo) + '</span></div>' +
             '<div class="dlg-body">' +
             (opts.html || '') +
             (opts.input ? '<input id="' + inputId + '" type="' + (inp.type || 'text') + '" placeholder="' +
                 esc(inp.placeholder || '') + '" value="' + esc(inp.value == null ? '' : inp.value) + '">' : '') +
             '</div>' +
             '<div class="dlg-foot">' +
-            (showCancel ? '<button class="dlg-cancel">' + cancelText + '</button>' : '') +
-            '<button class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + okText + '</button>' +
+            (showCancel ? '<button type="button" class="dlg-cancel">' + cancelText + '</button>' : '') +
+            '<button type="button" class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + okText + '</button>' +
             '</div>';
+        // Nombre accesible del dialogo (rol dialog ya lo pone ensureDialog).
+        el.setAttribute('aria-labelledby', 'rondo-dlg-title');
         el.classList.add('abierto');
         const okBtn = el.querySelector('.dlg-ok');
         const cancelBtn = el.querySelector('.dlg-cancel');
@@ -61,6 +78,11 @@
             if (opts.onOk) opts.onOk(val);
         });
         if (cancelBtn) cancelBtn.addEventListener('click', cerrarDialogo);
+        // El listener vive en el elemento persistente: se registra una vez.
+        if (!el._rondoTrap) {
+            el._rondoTrap = true;
+            el.addEventListener('keydown', rxDialogoTrapTab);
+        }
         if (inpEl) inpEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }
         });
@@ -77,7 +99,9 @@
         abrirDialogo({
             icon: o.icon || UIS.warn,
             titulo: titulo,
-            html: '<p>' + esc(mensaje) + '</p>',
+            // o.html permite HTML confiable (p. ej. negritas de la IA); por
+            // defecto el mensaje se escapa para no inyectar HTML.
+            html: o.html ? '<p>' + mensaje + '</p>' : '<p>' + esc(mensaje) + '</p>',
             okText: o.okText || 'Confirmar',
             peligro: !!o.peligro,
             onOk: onOk

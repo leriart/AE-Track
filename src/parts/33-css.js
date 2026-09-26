@@ -277,8 +277,10 @@
             "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send:hover:not(:disabled){filter:brightness(1.1)}\n" +
             "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send:disabled{opacity:.4;cursor:not-allowed}\n" +
             "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send .rondo-usym{font-size:14px}\n" +
-            // Cuando la tab de chat esta oculta, su contenido tambien.
-            "#rondo-panel .tab-ia[style*=\"display: none\"] + #rondo-tabs-content #rondo-wrap-chat,html:not(.ia-chat) #rondo-wrap-chat{display:none}\n" +
+            // La visibilidad de #rondo-wrap-chat la decide setTab() (display ''
+            // o 'none') y la tab la oculta paintTabsChat() si no hay IA. Se
+            // retiro un selector que dependia de una clase en <html> que nunca
+            // se aplicaba.
             "#rondo-panel .rondo-cv-card{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:8px 10px;display:flex;flex-direction:column;gap:4px}\n" +
             "#rondo-panel .rondo-cv-card.lider{border-color:var(--rondo-accent-2);box-shadow:0 0 0 1px rgba(var(--rondo-accent-rgb),.25)}\n" +
             "#rondo-panel .rondo-cv-card .cv-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}\n" +
@@ -718,7 +720,7 @@
             "#rondo-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--rondo-border-soft);display:flex;align-items:center;gap:8px}\n" +
             "#rondo-contexto .op .rondo-usym{color:var(--rondo-accent-2);font-size:1.15em}\n" +
             "#rondo-contexto .op:last-child{border-bottom:none}\n" +
-            "#rondo-contexto .op:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-contexto .op:hover,#rondo-contexto .op:focus{background:var(--rondo-bg-strong)}\n" +
             "#rondo-contexto .sep{height:1px;background:var(--rondo-border-soft);margin:2px 0}\n" +
             ".rondo-acciones{display:flex;justify-content:space-between;gap:8px}\n" +
             "#rondo-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--rondo-bad);color:#fff;padding:6px 16px;\n" +

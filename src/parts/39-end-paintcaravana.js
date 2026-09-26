@@ -297,7 +297,7 @@
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();
         if (APP.tab === 'rutas') paintRutas();
-        if (APP.tab === 'geocercas') paintGeocercas();
+        if (APP.tab === 'zonas' && APP.zonasVista !== 'riesgo') paintGeocercas();
         if (APP.tab === 'caravana') paintCaravana();
         // Riesgo NO se repinta cada segundo para evitar parpadeo: solo se
         // re-pinta cuando cambian los datos, los filtros o se carga el dataset.

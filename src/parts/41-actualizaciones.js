@@ -334,10 +334,11 @@
                     if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeSession(SS.limites, APP.limites); }
                     if (d.rutas && typeof d.rutas === 'object') { APP.rutas = d.rutas; guardarRutas(); }
                     if (d.planes && typeof d.planes === 'object') { APP.planes = d.planes; guardarPlanes(); }
-                    if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
-                    applyBar(); applyTheme();
+                    if (d.panelSize && typeof d.panelSize === 'object') { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
+                    applyBar(); applyTheme(); aplicarModoPanel(); restartTimers();
                     refresh();
                     paintIASwitch();
+                    paintTabsChat();
                     paintAlertas();
                     adviceOk('Configuración importada');
                 } catch (e) {

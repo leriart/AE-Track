@@ -1,9 +1,16 @@
     /* ====================== CSV + BACKUP ====================== */
+    // Escapa una celda CSV y neutraliza formulas (=, +, @, tab, CR) que una
+    // hoja de calculo podria ejecutar (CSV injection). Los numeros negativos
+    // no se tocan: '-' no entra en la lista.
+    function rxCsvCelda(c) {
+        let s = String(c == null ? '' : c);
+        if (/^[=+@\t\r]/.test(s)) s = "'" + s;
+        return '"' + s.replace(/"/g, '""') + '"';
+    }
     function downloadCSV(filas, nombre) {
-        const escCsv = (c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"';
-        const csv = filas.map((f) => f.map(escCsv).join(',')).join('\n');
+        const csv = (filas || []).map((f) => (f || []).map(rxCsvCelda).join(',')).join('\n');
         const a = makeEl('a', { href: URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })) });
-        a.download = nombre + '_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+        a.download = (nombre || 'rondo') + '_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -11,7 +18,7 @@
     }
     function exportUnits() {
         const filas = [['Eco', 'Placa', 'Nombre', 'ID', 'Estado', 'Ultimo(min)', 'km/h', 'Lat', 'Lon', 'Zona', 'Silenciada', 'Vigilada']];
-        APP.unidades.filter(shouldWatch).forEach((u) => {
+        (APP.unidades || []).filter(shouldWatch).forEach((u) => {
             const info = parseUnitName(u), st = unitState(u);
             filas.push([info.eco, info.placa, info.nombre, info.id, st.estado,
                 isFinite(st.edadMin) ? st.edadMin.toFixed(1) : '', Math.round(st.vel),
@@ -24,7 +31,7 @@
     }
     function exportAlertas() {
         const filas = [['Fecha', 'Severidad', 'Regla', 'Titulo', 'Detalle', 'Eco']];
-        APP.historial.forEach((a) => filas.push([
+        (APP.historial || []).forEach((a) => filas.push([
             new Date(a.ts).toLocaleString(), a.sev, a.regla, a.titulo, a.detalle, a.eco
         ]));
         downloadCSV(filas, 'wialon_bitacora');
@@ -32,7 +39,7 @@
     function exportInforme() {
         const inicio = new Date();
         inicio.setHours(0, 0, 0, 0);
-        const hoy = APP.historial.filter((a) => a.ts >= inicio.getTime());
+        const hoy = (APP.historial || []).filter((a) => a.ts >= inicio.getTime());
         const cuenta = (lista, campo) => lista.reduce((acc, a) => {
             const k = a[campo] || '—';
             acc[k] = (acc[k] || 0) + 1;
@@ -41,7 +48,7 @@
         const porSev = cuenta(hoy, 'sev');
         const porRegla = cuenta(hoy, 'regla');
         const porEco = cuenta(hoy.filter((a) => a.eco), 'eco');
-        const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const watched = (APP.unidades || []).filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const off = watched.filter((x) => !x.st.online);
 
         const lineas = [];
@@ -76,8 +83,8 @@
         else lineas.push('- Todas reportando.');
         lineas.push('');
         lineas.push('## Ultimos avisos');
-        if (APP.historial.length) {
-            APP.historial.slice(0, 25).forEach((a) => lineas.push(
+        if ((APP.historial || []).length) {
+            (APP.historial || []).slice(0, 25).forEach((a) => lineas.push(
                 '- [' + new Date(a.ts).toLocaleString() + '] ' + a.titulo + (a.detalle ? ' · ' + a.detalle : '')
             ));
         } else {

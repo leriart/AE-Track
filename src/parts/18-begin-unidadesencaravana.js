@@ -32,7 +32,11 @@
             const distDirecta = haversine(stLider.lat, stLider.lon, st.lat, st.lon);
             let enRuta = false, contrario = false, snap = null;
             if (rutaLider) {
-                snap = snapRuta(st.lat, st.lon, rutaLider, { idx: 0 });
+                // Arranca la busqueda en el segmento donde va el lider: los
+                // acompanantes rondan su eje, asi snapRuta evita el escaneo
+                // completo de la polilinea por cada unidad (era el coste
+                // dominante de la caravana en cada refresco).
+                snap = snapRuta(st.lat, st.lon, rutaLider, { idx: snapLider ? snapLider.idx : 0 });
                 if (snap && snap.dist <= lateralM) {
                     enRuta = true;
                     if (st.vel > 3 && snap.rumbo != null && st.curso != null) {

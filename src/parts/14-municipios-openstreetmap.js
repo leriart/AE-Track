@@ -29,6 +29,9 @@
         const esCirculo = (z.t === 3) || ((!Array.isArray(pts) || pts.length < minimoPts) && cenX != null && cenY != null && radio > 0);
         if (esCirculo && cenX != null && cenY != null) return { lat: cenY, lon: cenX };
         if (Array.isArray(pts) && pts.length) {
+            const cenArea = _rxCentroideAnillo(pts);
+            if (cenArea) return cenArea;
+            // Fallback: promedio de vertices (poligono degenerado o abierto).
             let sLat = 0, sLon = 0, n = 0;
             for (let i = 0; i < pts.length; i++) {
                 const a = pts[i];
@@ -44,6 +47,54 @@
             return { lat: (+b.min_y + +b.max_y) / 2, lon: (+b.min_x + +b.max_x) / 2 };
         }
         return null;
+    }
+    // Normaliza un anillo a puntos {x:lon, y:lat} descartando entradas rotas.
+    // (Definido despues de centroDeZona: las declaraciones de funcion se
+    // hoistean, y asi el bloque de pruebas que arranca en centroDeZona las
+    // incluye.)
+    function _rxPuntosAnillo(anillo) {
+        const out = [];
+        for (let i = 0; i < (Array.isArray(anillo) ? anillo.length : 0); i++) {
+            const a = anillo[i];
+            const y = (a && a.y != null) ? +a.y : (Array.isArray(a) ? +a[1] : NaN);
+            const x = (a && a.x != null) ? +a.x : (Array.isArray(a) ? +a[0] : NaN);
+            if (!isFinite(x) || !isFinite(y)) continue;
+            out.push({ x, y });
+        }
+        return out;
+    }
+    // Centroide del area de un anillo (shoelace proyectado a metros). A
+    // diferencia del promedio de vertices, no se escapa en poligonos concavos.
+    // Devuelve null si el anillo es degenerado (area ~0).
+    function _rxCentroideAnillo(anillo) {
+        const pts = _rxPuntosAnillo(anillo);
+        if (pts.length < 3) return null;
+        const lat0 = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const mx = 111320 * Math.cos(lat0 * Math.PI / 180), my = 110540;
+        let area2 = 0, cx = 0, cy = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i], b = pts[(i + 1) % pts.length];
+            const xi = a.x * mx, yi = a.y * my;
+            const xj = b.x * mx, yj = b.y * my;
+            const cruz = xi * yj - xj * yi;
+            area2 += cruz;
+            cx += (xi + xj) * cruz;
+            cy += (yi + yj) * cruz;
+        }
+        if (Math.abs(area2) < 1e-9) return null;
+        return { lat: (cy / (3 * area2)) / my, lon: (cx / (3 * area2)) / mx };
+    }
+    // Area firmada de un anillo (grados^2); sirve para comparar tamanos.
+    function _rxAreaAnillo(anillo) {
+        if (!Array.isArray(anillo) || anillo.length < 3) return 0;
+        let a = 0;
+        for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+            const xi = +anillo[i][0], yi = +anillo[i][1];
+            const xj = +anillo[j][0], yj = +anillo[j][1];
+            if (!isFinite(xi) || !isFinite(yi) || !isFinite(xj) || !isFinite(yj)) continue;
+            a += xj * yi - xi * yj;
+        }
+        return Math.abs(a / 2);
     }
     // Punto-en-poligono (ray casting) con anillo en orden GeoJSON [[lon,lat],...].
     function puntoEnPoligono(lat, lon, anillo) {
@@ -70,10 +121,14 @@
         if (!geojson) return null;
         if (geojson.type === 'Polygon' && geojson.coordinates && geojson.coordinates[0]) return geojson.coordinates[0];
         if (geojson.type === 'MultiPolygon' && geojson.coordinates && geojson.coordinates.length) {
-            let mejor = null;
+            // Elegir la isla de mayor area (no la de mas vertices): un anillo
+            // costero muy detallado podia ganarle al cuerpo principal.
+            let mejor = null, mejorArea = -1;
             for (let i = 0; i < geojson.coordinates.length; i++) {
                 const r = geojson.coordinates[i] && geojson.coordinates[i][0];
-                if (r && (!mejor || r.length > mejor.length)) mejor = r;
+                if (!r) continue;
+                const area = _rxAreaAnillo(r);
+                if (area > mejorArea) { mejorArea = area; mejor = r; }
             }
             return mejor;
         }
@@ -90,12 +145,21 @@
         const poligono = anillo ? simplificarAnillo(anillo, 600) : null;
         let centro = null;
         if (poligono && poligono.length) {
-            let sLat = 0, sLon = 0;
-            for (let i = 0; i < poligono.length; i++) { sLon += +poligono[i][0]; sLat += +poligono[i][1]; }
-            centro = { lat: sLat / poligono.length, lon: sLon / poligono.length };
-        } else if (r.lat != null && r.lon != null) {
+            centro = _rxCentroideAnillo(poligono);
+            if (!centro) {
+                let sLat = 0, sLon = 0, n = 0;
+                for (let i = 0; i < poligono.length; i++) {
+                    const la = +poligono[i][1], lo = +poligono[i][0];
+                    if (!isFinite(la) || !isFinite(lo)) continue;
+                    sLat += la; sLon += lo; n++;
+                }
+                if (n) centro = { lat: sLat / n, lon: sLon / n };
+            }
+        }
+        if (!centro && isFinite(+r.lat) && isFinite(+r.lon)) {
             centro = { lat: +r.lat, lon: +r.lon };
-        } else if (bb) {
+        }
+        if (!centro && bb) {
             centro = { lat: (bb[0] + bb[1]) / 2, lon: (bb[2] + bb[3]) / 2 };
         }
         if (!centro) return null;
@@ -143,9 +207,8 @@
         APP.geoLast = Date.now();
         try {
             const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=3&accept-language=es&q=' + encodeURIComponent(q);
-            const res = await fetch(url);
-            const d = await res.json();
-            if (!d || !d.length) return null;
+            const d = await _rxFetchJson(url, {}, 15000);
+            if (!Array.isArray(d) || !d.length) return null;
             const cand = d.map(municipioDesdeNominatim).filter(Boolean);
             if (!cand.length) return null;
             cand.sort((a, b) => (b.poligono ? 1 : 0) - (a.poligono ? 1 : 0));
@@ -165,6 +228,11 @@
             const m = todos[i];
             if (!m) continue;
             if (m.poligono && m.poligono.length) {
+                // Descarte rapido por bbox antes de recorrer el poligono: el
+                // ray-casting con cientos de vertices es caro y municipioEn se
+                // llama por cada punto muestreado de cada ruta.
+                const bb = m.bbox;
+                if (bb && (lat < bb.minLat || lat > bb.maxLat || lon < bb.minLon || lon > bb.maxLon)) continue;
                 if (puntoEnPoligono(lat, lon, m.poligono)) return m;
             } else if (m.bbox) {
                 if (lat >= m.bbox.minLat && lat <= m.bbox.maxLat && lon >= m.bbox.minLon && lon <= m.bbox.maxLon) return m;

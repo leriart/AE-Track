@@ -84,10 +84,13 @@ function _extraerZonasDe(items) {
         const out = [];
         // `coll` puede ser un array, un objeto {id: zona} o un STRING JSON
         // (algunas versiones de Wialon devuelven `zl` serializado).
-        const addColl = (coll, rid) => {
+        const addColl = (coll, rid, depth) => {
             if (!coll) return 0;
+            // Guarda contra un string JSON que se anida sobre si mismo
+            // (JSON.parse devuelve otro string): evita recursion infinita.
+            if (depth > 4) return 0;
             if (typeof coll === 'string') {
-                try { return addColl(JSON.parse(coll), rid); } catch (_) { return 0; }
+                try { return addColl(JSON.parse(coll), rid, (depth || 0) + 1); } catch (_) { return 0; }
             }
             let n = 0;
             const push = (z) => {
@@ -145,7 +148,11 @@ function _extraerZonasDe(items) {
             try {
                 const col = zs.map((z) => z.id).filter((x) => x != null);
                 const r = await remoteCall('resource/get_zone_data', { itemId: rid, col: col, flags: 0x1F });
-                datos = Array.isArray(r) ? r : ((r && (r.items || r.zones)) || null);
+                const crudo = Array.isArray(r) ? r : ((r && (r.items || r.zones)) || null);
+                // La respuesta puede ser un array o un mapa {id: zona};
+                // normalizamos a array para poder recorrerla con forEach.
+                if (Array.isArray(crudo)) datos = crudo;
+                else if (crudo && typeof crudo === 'object') datos = Object.keys(crudo).map((k) => crudo[k]);
             } catch (_) { datos = null; }
             if (!datos) continue;
             const porId = new Map();

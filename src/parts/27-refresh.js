@@ -9,13 +9,23 @@
                 try { APP.zonas = await fetchZones(); } catch (_) { APP.zonas = []; }
             }
             APP.consultaRestante = 40;
+            // Presupuesto de geocodificacion inversa por refresco: los avisos
+            // con contexto de municipio (detenido, destino) no deben encadenar
+            // llamadas a Nominatim para toda la flota y retrasar el refresco.
+            APP.geoRestante = 8;
             const ubicaciones = {};
             const nuevas = {};
+            // El recorrido se calcula una sola vez (antes se llamaba a
+            // shouldWatch/unitState dos veces por unidad y por refresco).
+            const watched = [];
+            let onNow = 0;
             for (let i = 0; i < unidades.length; i++) {
                 const u = unidades[i];
                 if (!shouldWatch(u)) continue;
+                watched.push(u);
                 const info = parseUnitName(u);
                 const st = unitState(u);
+                if (st.online) onNow++;
                 registrarTraza(info, st);
                 const prev = APP.memo[info.clave];
                 const ctx = {
@@ -34,8 +44,6 @@
             APP.memo = nuevas;
             writeSession(SS.memo, APP.memo);
 
-            const watched = unidades.filter(shouldWatch);
-            const onNow = watched.filter((u) => unitState(u).online).length;
             APP.kpi.online = APP.kpi.online.concat(onNow).slice(-180);
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);
             writeSession(SS.kpi, APP.kpi);

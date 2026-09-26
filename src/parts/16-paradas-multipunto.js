@@ -1,8 +1,9 @@
     /* ====================== PARADAS MULTIPUNTO ======================
      * v5.15. Un plan de ruta es una lista ordenada de paradas con un modo:
      *   - 'secuencial': se visitan en el orden dado.
-     *   - 'optimo': el optimizador reordena las paradas no fijadas y, si la
-     *     opcion circuito esta activa, cierra el recorrido volviendo al origen.
+     *   - 'optimo': el optimizador reordena las paradas no fijadas. En la UI
+     *     "mejor ruta" implica circuito (vuelve al origen); aqui el cierre lo
+     *     decide el parametro `circuito` que reciba el optimizador.
      * Cada parada tiene { id, tipo, texto, coords, fijo }. El texto muestra
      * una pista del tipo: "geo:", "mun:" o "coord:" (el resto es libre).
      */

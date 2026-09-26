@@ -278,8 +278,10 @@
             "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send:hover:not(:disabled){filter:brightness(1.1)}\n" +
             "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send:disabled{opacity:.4;cursor:not-allowed}\n" +
             "#rondo-panel .rondo-chat-input-bar button#rondo-chat-send .rondo-usym{font-size:14px}\n" +
-            // Cuando la tab de chat esta oculta, su contenido tambien.
-            "#rondo-panel .tab-ia[style*=\"display: none\"] + #rondo-tabs-content #rondo-wrap-chat,html:not(.ia-chat) #rondo-wrap-chat{display:none}\n" +
+            // La visibilidad de #rondo-wrap-chat la decide setTab() (display ''
+            // o 'none') y la tab la oculta paintTabsChat() si no hay IA. Se
+            // retiro un selector que dependia de una clase en <html> que nunca
+            // se aplicaba.
             "#rondo-panel .rondo-cv-card{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:8px 10px;display:flex;flex-direction:column;gap:4px}\n" +
             "#rondo-panel .rondo-cv-card.lider{border-color:var(--rondo-accent-2);box-shadow:0 0 0 1px rgba(var(--rondo-accent-rgb),.25)}\n" +
             "#rondo-panel .rondo-cv-card .cv-head{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700}\n" +
@@ -719,7 +721,7 @@
             "#rondo-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--rondo-border-soft);display:flex;align-items:center;gap:8px}\n" +
             "#rondo-contexto .op .rondo-usym{color:var(--rondo-accent-2);font-size:1.15em}\n" +
             "#rondo-contexto .op:last-child{border-bottom:none}\n" +
-            "#rondo-contexto .op:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-contexto .op:hover,#rondo-contexto .op:focus{background:var(--rondo-bg-strong)}\n" +
             "#rondo-contexto .sep{height:1px;background:var(--rondo-border-soft);margin:2px 0}\n" +
             ".rondo-acciones{display:flex;justify-content:space-between;gap:8px}\n" +
             "#rondo-aviso{position:fixed;top:5px;left:50%;transform:translateX(-50%);background:var(--rondo-bad);color:#fff;padding:6px 16px;\n" +
@@ -1498,7 +1500,7 @@
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
             numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..7</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>Esc</b> cierra el dialogo superior</span>' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..7</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>?</b> ayuda · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Barra lateral</h4>' +
@@ -1685,6 +1687,7 @@
             '<li><kbd>Alt</kbd>+<kbd>P</kbd>: mostrar u ocultar la barra lateral.</li>' +
             '<li><kbd>Alt</kbd>+<kbd>L</kbd>: mostrar u ocultar la barra lateral (atajo alternativo).</li>' +
             '<li><kbd>Alt</kbd>+<kbd>H</kbd>: plegar la barra de botones.</li>' +
+            '<li><kbd>?</kbd>: abrir esta ayuda rapida.</li>' +
             '<li><kbd>Esc</kbd>: cerrar ventanas emergentes.</li>' +
             '</ul>' +
             '<h4>Datos y privacidad</h4>' +
@@ -1718,7 +1721,29 @@
             // panelEl aun no esta en el DOM: se consulta sobre el propio nodo.
             const tabsEl = panelEl.querySelector('#rondo-tabs');
             if (tabsEl) tabsEl.setAttribute('role', 'tablist');
-            panelEl.querySelectorAll('#rondo-tabs .tab').forEach((t) => t.setAttribute('role', 'tab'));
+            panelEl.querySelectorAll('#rondo-tabs .tab').forEach((t) => {
+                t.setAttribute('role', 'tab');
+                // El contador (un numero) seria el unico texto visible para el
+                // lector de pantalla; el title describe mejor la pestana.
+                if (t.title) t.setAttribute('aria-label', t.title);
+                const wrap = t.dataset.tab ? panelEl.querySelector('#rondo-wrap-' + t.dataset.tab) : null;
+                if (wrap) {
+                    t.setAttribute('aria-controls', 'rondo-wrap-' + t.dataset.tab);
+                    wrap.setAttribute('role', 'tabpanel');
+                }
+            });
+            // Botones de solo icono: los lectores de pantalla no siempre leen
+            // el title, asi que se copia a aria-label cuando el boton no tiene
+            // texto visible (para no pisar la etiqueta de los botones de texto).
+            [barraEl, panelEl, modalEl, cfgWinEl, ayudaEl].forEach((root) => {
+                root.querySelectorAll('button[title]').forEach((b) => {
+                    if (b.getAttribute('aria-label')) return;
+                    const txt = (b.textContent || '').trim();
+                    if (!/[A-Za-z0-9]/.test(txt)) b.setAttribute('aria-label', b.title);
+                });
+            });
+            if (ctxEl) ctxEl.setAttribute('role', 'menu');
+            if (railEl) railEl.setAttribute('aria-label', 'Mostrar el panel');
         } catch (_) { /* noop */ }
 
         document.body.appendChild(barraEl);
@@ -1916,7 +1941,7 @@
         if (cTot) cTot.textContent = watched.length;
         if (cAl) cAl.textContent = APP.historial.length;
         if (cRu) cRu.textContent = Object.keys(APP.rutas).length;
-        if (cZn) cZn.textContent = APP.zonas.length;
+        if (cZn) cZn.textContent = (APP.zonas || []).length;
         const cCv = byId('rondo-c-cv');
         if (cCv) cCv.textContent = APP.caravanaEco ? countCaravana() : 0;
     }
@@ -1945,6 +1970,17 @@
         b.title = nmActivo()
             ? 'No molestar hasta ' + new Date(APP.noMolestar.hasta).toLocaleTimeString().slice(0, 5)
             : 'criticos: ' + criticos + ' · sin señal: ' + off + ' · detenidas: ' + det;
+    }
+    // Igual que setHtml, pero conserva la posicion de scroll del propio
+    // contenedor cuando se reescribe. Las listas del Dashboard se repintan
+    // cada segundo; sin esto, quien habia bajado en la lista volvia arriba
+    // en cada refresco.
+    function rxSetHtmlKeepScroll(el, html) {
+        if (!el) return false;
+        const top = el.scrollTop, left = el.scrollLeft;
+        const cambio = setHtml(el, html);
+        if (cambio && (top || left)) { el.scrollTop = top; el.scrollLeft = left; }
+        return cambio;
     }
     // Lista "Requieren atención": unidades sin señal, con exceso, desviadas,
     // detenidas o con ruta nueva sin trazar, ordenadas por prioridad. Cada fila
@@ -1985,7 +2021,7 @@
         items.sort((a, b) => b.peso - a.peso);
         const top = items.slice(0, 5);
         if (!top.length) {
-            setHtml(cont, '<div style="padding:8px;color:var(--rondo-fg-mute)">Todo en orden: ninguna unidad requiere atención.</div>');
+            rxSetHtmlKeepScroll(cont, '<div style="padding:8px;color:var(--rondo-fg-mute)">Todo en orden: ninguna unidad requiere atención.</div>');
             return;
         }
         const meta = {
@@ -1995,7 +2031,7 @@
             det: { col: 'var(--rondo-accent-2)', ic: UIS.stopped },
             'ruta-pend': { col: 'var(--rondo-warn-fg)', ic: UIS.route }
         };
-        setHtml(cont, top.map((it) => {
+        rxSetHtmlKeepScroll(cont, top.map((it) => {
             const mm = meta[it.tipo] || meta.det;
             return '<div class="alerta rondo-atencion-item" data-eco="' + esc(it.eco) + '" style="border-left:3px solid ' + mm.col + ';cursor:pointer" title="Abrir la ventana de ' + esc(it.eco) + '">' +
                 '<span class="ico rondo-usym" style="color:' + mm.col + '">' + mm.ic + '</span>' +
@@ -2026,7 +2062,7 @@
         kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-zonas', enZona.size);
-        kv('rondo-kpi-zonas-pct', APP.zonas.length ? 'de ' + APP.zonas.length : '');
+        kv('rondo-kpi-zonas-pct', (APP.zonas || []).length ? 'de ' + APP.zonas.length : '');
         kv('rondo-kpi-aho', aho);
         kv('rondo-kpi-criticos', critAho ? critAho + ' criticas' : '');
 
@@ -2053,7 +2089,7 @@
         const recientes = byId('rondo-kpi-recientes');
         if (recientes) {
             const items = APP.historial.slice(0, 6);
-            setHtml(recientes, items.length
+            rxSetHtmlKeepScroll(recientes, items.length
                 ? items.slice(0, 4).map((a) => (
                     '<div class="alerta" style="border-left:3px solid ' + (COL[a.sev] || '#555') + '">' +
                     '<span class="ico rondo-usym" style="color:' + (COL[a.sev] || '#777') + '">' + (SEV_UIS[a.sev] || UIS.info) + '</span>' +
@@ -2109,7 +2145,7 @@
         items.sort((a, b) => b.dentro.length - a.dentro.length);
         const top = items.slice(0, 6);
         if (countEl) countEl.textContent = items.length;
-        setHtml(cont, top.length
+        rxSetHtmlKeepScroll(cont, top.length
             ? top.map((it) =>
                 '<div class="rondo-geo-dash" data-zona="' + esc(it.z.n || '') + '">' +
                 '<span class="ico rondo-usym">' + UIS.zone + '</span>' +
@@ -2144,7 +2180,7 @@
         items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
         const top = items.slice(0, 6);
         if (countEl) countEl.textContent = items.length;
-        setHtml(cont, top.length
+        rxSetHtmlKeepScroll(cont, top.length
             ? top.map((it) => {
                 const etaTxt = (it.etaSeg != null && isFinite(it.etaSeg)) ? (Math.round(it.etaSeg / 60) + ' min') : '\u2014';
                 return '<div class="rondo-ruta-dash" data-eco="' + esc(it.eco) + '">' +
@@ -2619,13 +2655,17 @@
         const c = centroDeZona(z);
         if (_zonaEsCirculo(z, pts)) return c ? { type: 'Point', coordinates: [c.lon, c.lat] } : null;
         if (Array.isArray(pts) && pts.length >= 3) {
+            // Descarta puntos sin coordenadas validas: un GeoJSON con NaN es
+            // invalido y algunos visores lo rechazan entero.
             const ring = pts.map((a) => {
-                const la = (a && a.y != null) ? +a.y : +a[1];
-                const lo = (a && a.x != null) ? +a.x : +a[0];
+                const la = (a && a.y != null) ? +a.y : (Array.isArray(a) ? +a[1] : NaN);
+                const lo = (a && a.x != null) ? +a.x : (Array.isArray(a) ? +a[0] : NaN);
                 return [lo, la];
-            });
-            if (ring.length && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) ring.push(ring[0]);
-            return { type: 'Polygon', coordinates: [ring] };
+            }).filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+            if (ring.length >= 3) {
+                if (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) ring.push(ring[0]);
+                return { type: 'Polygon', coordinates: [ring] };
+            }
         }
         if (z.b && z.b.min_x != null && z.b.max_x != null && z.b.min_y != null && z.b.max_y != null) {
             const ring = [
@@ -2637,9 +2677,10 @@
         return c ? { type: 'Point', coordinates: [c.lon, c.lat] } : null;
     }
     function zonasStats(unidades) {
+        const zonas = APP.zonas || [];
         let ocupadas = 0, base = 0, carga = 0, areaM2 = 0;
-        for (let i = 0; i < APP.zonas.length; i++) {
-            const z = APP.zonas[i];
+        for (let i = 0; i < zonas.length; i++) {
+            const z = zonas[i];
             const rol = zonaRol(z);
             if (rol === 'base') base++;
             else if (rol === 'carga') carga++;
@@ -2651,14 +2692,14 @@
             }
             if (occ) ocupadas++;
         }
-        return { total: APP.zonas.length, ocupadas, base, carga, areaM2 };
+        return { total: zonas.length, ocupadas, base, carga, areaM2 };
     }
     function geocercasSubsetVisible() {
         // Devuelve las geocercas segun el filtro/rol actuales (para export).
         const f = (APP.geoFiltro || '').toLowerCase();
         const rol = APP.geoRol || 'todas';
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
-        return APP.zonas.filter((z) => {
+        return (APP.zonas || []).filter((z) => {
             const r = zonaRol(z);
             if (rol !== 'todas' && rol !== r && !(rol === 'ocupadas' && unidades.some((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)))) return false;
             if (f) {
@@ -2671,17 +2712,17 @@
     function exportarGeocercasCSV() {
         const items = geocercasSubsetVisible();
         if (!items.length) { adviceWarn('Sin geocercas', 'Nada que exportar con los filtros actuales'); return; }
-        const escCsv = (c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"';
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
         const filas = [['nombre', 'rol', 'area_km2', 'lat', 'lon', 'unidades']];
         for (let i = 0; i < items.length; i++) {
             const z = items[i];
             const c = centroDeZona(z) || {};
             const ecos = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)).map((u) => u.info.eco);
-            filas.push([z.n || ('Zona ' + z.id), zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3), c.lat, c.lon, ecos.join(' ')]);
+            filas.push([z.n || ('Zona ' + z.id), zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3),
+                c.lat == null ? '' : c.lat, c.lon == null ? '' : c.lon, ecos.join(' ')]);
         }
-        const csv = filas.map((r) => r.map(escCsv).join(',')).join('\n');
-        const a = makeEl('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })) });
+        const csv = filas.map((r) => r.map(rxCsvCelda).join(',')).join('\n');
+        const a = makeEl('a', { href: URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })) });
         a.download = 'rondo_geocercas_' + new Date().toISOString().slice(0, 10) + '.csv';
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(a.href);
@@ -2745,7 +2786,8 @@
     function paintGeocercas() {
         const body = byId('rondo-body-zonas');
         const countEl = byId('rondo-geo-count');
-        const total = APP.zonas.length;
+        const zonas = APP.zonas || [];
+        const total = zonas.length;
         if (countEl) countEl.textContent = total;
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
         const stats = zonasStats(unidades);
@@ -2778,7 +2820,7 @@
         }
         const f = (APP.geoFiltro || '').toLowerCase();
         const rol = APP.geoRol || 'todas';
-        let lista = APP.zonas.map((z) => {
+        let lista = zonas.map((z) => {
             const dentro = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z));
             const ecos = dentro.map((u) => u.info.eco).filter(Boolean);
             return { z: z, ecos: ecos, rol: zonaRol(z), area: zonaAreaM2(z) };
@@ -2846,7 +2888,7 @@
     function paintViajes() {
         const cont = byId('rondo-lista-viajes');
         if (!cont) return;
-        const ecos = Object.keys(APP.viajes);
+        const ecos = Object.keys(APP.viajes || {});
         if (!ecos.length) {
             setHtml(cont, emptyState(UIS.clock, 'Sin viajes analizados',
                 'Clic derecho en una unidad &gt; <b>Analizar viaje</b> para detectar el punto de partida (parada de mas de '
@@ -2881,9 +2923,9 @@
         paintViajes();
         const cont = byId('rondo-lista-rutas');
         if (!cont) return;
-        const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const watched = (APP.unidades || []).filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const filas = watched.filter((x) => rutaDe(x.info));
-        const sinUnidad = Object.keys(APP.rutas).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
+        const sinUnidad = Object.keys(APP.rutas || {}).filter((eco) => !watched.some((x) => x.info.clave === eco || x.info.eco === eco));
         if (!filas.length && !sinUnidad.length) {
             setHtml(cont, emptyState(UIS.route, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
@@ -3365,7 +3407,7 @@
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();
         if (APP.tab === 'rutas') paintRutas();
-        if (APP.tab === 'geocercas') paintGeocercas();
+        if (APP.tab === 'zonas' && APP.zonasVista !== 'riesgo') paintGeocercas();
         if (APP.tab === 'caravana') paintCaravana();
         // Riesgo NO se repinta cada segundo para evitar parpadeo: solo se
         // re-pinta cuando cambian los datos, los filtros o se carga el dataset.
@@ -3376,11 +3418,18 @@
     }, 1000);
 
     /* ====================== CSV + BACKUP ====================== */
+    // Escapa una celda CSV y neutraliza formulas (=, +, @, tab, CR) que una
+    // hoja de calculo podria ejecutar (CSV injection). Los numeros negativos
+    // no se tocan: '-' no entra en la lista.
+    function rxCsvCelda(c) {
+        let s = String(c == null ? '' : c);
+        if (/^[=+@\t\r]/.test(s)) s = "'" + s;
+        return '"' + s.replace(/"/g, '""') + '"';
+    }
     function downloadCSV(filas, nombre) {
-        const escCsv = (c) => '"' + String(c == null ? '' : c).replace(/"/g, '""') + '"';
-        const csv = filas.map((f) => f.map(escCsv).join(',')).join('\n');
+        const csv = (filas || []).map((f) => (f || []).map(rxCsvCelda).join(',')).join('\n');
         const a = makeEl('a', { href: URL.createObjectURL(new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })) });
-        a.download = nombre + '_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
+        a.download = (nombre || 'rondo') + '_' + new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-') + '.csv';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -3388,7 +3437,7 @@
     }
     function exportUnits() {
         const filas = [['Eco', 'Placa', 'Nombre', 'ID', 'Estado', 'Ultimo(min)', 'km/h', 'Lat', 'Lon', 'Zona', 'Silenciada', 'Vigilada']];
-        APP.unidades.filter(shouldWatch).forEach((u) => {
+        (APP.unidades || []).filter(shouldWatch).forEach((u) => {
             const info = parseUnitName(u), st = unitState(u);
             filas.push([info.eco, info.placa, info.nombre, info.id, st.estado,
                 isFinite(st.edadMin) ? st.edadMin.toFixed(1) : '', Math.round(st.vel),
@@ -3401,7 +3450,7 @@
     }
     function exportAlertas() {
         const filas = [['Fecha', 'Severidad', 'Regla', 'Titulo', 'Detalle', 'Eco']];
-        APP.historial.forEach((a) => filas.push([
+        (APP.historial || []).forEach((a) => filas.push([
             new Date(a.ts).toLocaleString(), a.sev, a.regla, a.titulo, a.detalle, a.eco
         ]));
         downloadCSV(filas, 'wialon_bitacora');
@@ -3409,7 +3458,7 @@
     function exportInforme() {
         const inicio = new Date();
         inicio.setHours(0, 0, 0, 0);
-        const hoy = APP.historial.filter((a) => a.ts >= inicio.getTime());
+        const hoy = (APP.historial || []).filter((a) => a.ts >= inicio.getTime());
         const cuenta = (lista, campo) => lista.reduce((acc, a) => {
             const k = a[campo] || '—';
             acc[k] = (acc[k] || 0) + 1;
@@ -3418,7 +3467,7 @@
         const porSev = cuenta(hoy, 'sev');
         const porRegla = cuenta(hoy, 'regla');
         const porEco = cuenta(hoy.filter((a) => a.eco), 'eco');
-        const watched = APP.unidades.filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const watched = (APP.unidades || []).filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const off = watched.filter((x) => !x.st.online);
 
         const lineas = [];
@@ -3453,8 +3502,8 @@
         else lineas.push('- Todas reportando.');
         lineas.push('');
         lineas.push('## Ultimos avisos');
-        if (APP.historial.length) {
-            APP.historial.slice(0, 25).forEach((a) => lineas.push(
+        if ((APP.historial || []).length) {
+            (APP.historial || []).slice(0, 25).forEach((a) => lineas.push(
                 '- [' + new Date(a.ts).toLocaleString() + '] ' + a.titulo + (a.detalle ? ' · ' + a.detalle : '')
             ));
         } else {
@@ -3832,10 +3881,11 @@
                     if (d.limites && typeof d.limites === 'object') { APP.limites = d.limites; writeSession(SS.limites, APP.limites); }
                     if (d.rutas && typeof d.rutas === 'object') { APP.rutas = d.rutas; guardarRutas(); }
                     if (d.planes && typeof d.planes === 'object') { APP.planes = d.planes; guardarPlanes(); }
-                    if (d.panelSize) { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
-                    applyBar(); applyTheme();
+                    if (d.panelSize && typeof d.panelSize === 'object') { APP.panelSize = d.panelSize; writeJSON(LS.panelsize, APP.panelSize); }
+                    applyBar(); applyTheme(); aplicarModoPanel(); restartTimers();
                     refresh();
                     paintIASwitch();
+                    paintTabsChat();
                     paintAlertas();
                     adviceOk('Configuración importada');
                 } catch (e) {
@@ -3909,8 +3959,11 @@
 
     /* ====================== MENU CONTEXTUAL ====================== */
     function showMenu(x, y, options, anchor) {
-        ctxEl.innerHTML = options.map((o) =>
-            o.sep ? '<div class="sep"></div>' : '<div class="op" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="rondo-usym">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
+        if (!ctxEl) return;
+        const ops = Array.isArray(options) ? options : [];
+        ctxEl.setAttribute('role', 'menu');
+        ctxEl.innerHTML = ops.map((o) =>
+            o.sep ? '<div class="sep" role="separator"></div>' : '<div class="op" role="menuitem" tabindex="-1" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="rondo-usym">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
         ).join('');
         ctxEl.style.display = 'flex';
         // La regla base de #rondo-contexto lo centra con translate(-50%,-50%);
@@ -3936,11 +3989,34 @@
         top = clamp(top, m, Math.max(m, vh - r.height - m));
         ctxEl.style.left = left + 'px';
         ctxEl.style.top = top + 'px';
-        ctxEl._options = options;
+        ctxEl._options = ops;
     }
-    function hideMenu() { ctxEl.style.display = 'none'; ctxEl._target = null; }
+    function hideMenu() { if (!ctxEl) return; ctxEl.style.display = 'none'; ctxEl._target = null; }
+    // Navegacion por teclado dentro del menu: flechas, Inicio/Fin y
+    // Enter/Espacio. El menu se abre tambien con la tecla de menu contextual
+    // del teclado, asi que debe poder recorrerse sin raton.
+    function rxMoverFocoMenu(delta) {
+        if (!ctxEl) return;
+        const ops = Array.prototype.slice.call(ctxEl.querySelectorAll('.op'));
+        if (!ops.length) return;
+        let i = ops.indexOf(document.activeElement);
+        if (i < 0) i = delta > 0 ? -1 : ops.length;
+        i = (i + delta + ops.length) % ops.length;
+        ops[i].focus();
+    }
+    document.addEventListener('keydown', (e) => {
+        if (!ctxEl || ctxEl.style.display !== 'flex') return;
+        if (e.key === 'ArrowDown') { rxMoverFocoMenu(1); e.preventDefault(); return; }
+        if (e.key === 'ArrowUp') { rxMoverFocoMenu(-1); e.preventDefault(); return; }
+        if (e.key === 'Home') { const o = ctxEl.querySelector('.op'); if (o) o.focus(); e.preventDefault(); return; }
+        if (e.key === 'End') { const ops = ctxEl.querySelectorAll('.op'); if (ops.length) ops[ops.length - 1].focus(); e.preventDefault(); return; }
+        if ((e.key === 'Enter' || e.key === ' ') && document.activeElement && document.activeElement.classList.contains('op')) {
+            e.preventDefault();
+            document.activeElement.click();
+        }
+    });
     document.addEventListener('click', (e) => {
-        if (ctxEl.style.display !== 'none' && !ctxEl.contains(e.target)) hideMenu();
+        if (ctxEl && ctxEl.style.display !== 'none' && !ctxEl.contains(e.target)) hideMenu();
     });
     function copyToClipboard(text) {
         try { return navigator.clipboard.writeText(String(text || '')); } catch (_) {
@@ -3956,6 +4032,8 @@
     /* ====================== TECLAS ====================== */
     function bindKeys() {
         document.addEventListener('keydown', (e) => {
+            const tgt = e.target;
+            const enCampo = !!(tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable));
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
                 // v5.14.8: Alt+7 = Chat IA (solo si la IA esta configurada).
                 const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana', '7': 'chat' };
@@ -3980,11 +4058,18 @@
                     e.preventDefault(); return;
                 }
             }
+            // '?' abre la ayuda rapida (salvo si el foco esta en un campo de
+            // texto, para no impedir escribir el signo).
+            if (e.key === '?' && !enCampo) {
+                if (ayudaEl) ayudaEl.style.display = 'flex';
+                e.preventDefault();
+                return;
+            }
             if (e.key === 'Escape') {
                 // Cierra solo el dialogo superior: primero el flotante, luego
                 // el menu contextual, y por ultimo las ventanas modales.
                 if (dialogoAbierto()) { cerrarDialogo(); return; }
-                if (ctxEl && ctxEl.style.display === 'flex') { ctxEl.style.display = 'none'; return; }
+                if (ctxEl && ctxEl.style.display === 'flex') { hideMenu(); return; }
                 const planM = byId('rondo-plan-modal');
                 if (planM && planM.classList.contains('abierto')) { cerrarEditorParadas(); return; }
                 const ventanas = [modalEl, cfgWinEl, ayudaEl];
@@ -4173,7 +4258,6 @@
             APP.filtro = e.target.value;
             if (APP.tab === 'alertas') paintAlertas();
             else if (APP.tab === 'unidades') paintTabla();
-            else if (APP.tab === 'geocercas') paintGeocercas();
         });
         const selEst = byId('rondo-filtro-estado');
         if (selEst) {
@@ -4380,7 +4464,10 @@
             ctxEl._target = { eco };
         });
         ctxEl.addEventListener('click', (e) => {
-            const acc = e.target.dataset && e.target.dataset.acc;
+            // El clic puede caer en el icono SVG dentro de la opcion: subimos
+            // al .op para leer su data-acc (antes, pulsar el icono no hacia nada).
+            const op = e.target.closest && e.target.closest('.op');
+            const acc = op ? op.dataset.acc : (e.target.dataset && e.target.dataset.acc);
             if (!acc || !ctxEl._target) return;
             const eco = ctxEl._target.eco;
             if (acc === 'open') openUnitWindow(eco);
@@ -5311,7 +5398,7 @@
             // Throttle: no mas de una vez por minuto.
             if (ahora - _lastFocusCheck < 60000) return;
             _lastFocusCheck = ahora;
-            if ((APP.update && APP.update.state !== 'checking') || true) {
+            if (!APP.update || APP.update.state !== 'checking') {
                 comprobarActualizacion();
             }
         };

@@ -21,7 +21,7 @@
         if (theme === 'claro') document.body.setAttribute('data-rondo-theme', 'claro');
         else document.body.removeAttribute('data-rondo-theme');
         const ti = document.querySelector('#rondo-tema .rondo-usym');
-        if (ti) ti.innerHTML = (theme === 'claro') ? UIS.theme : UIS.theme;
+        if (ti) ti.innerHTML = UIS.theme;
         const btnTema = byId('rondo-tema');
         if (btnTema) btnTema.title = 'Tema: ' + theme;
         if (c.acento) {

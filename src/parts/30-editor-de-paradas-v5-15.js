@@ -170,6 +170,13 @@
         // Detecta "lat,lon" y lo trata como coordenadas (sin geocodificar).
         const cm = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(String(texto || '').trim());
         if (cm) { tipo = 'coord'; coords = { lat: parseFloat(cm[1]), lon: parseFloat(cm[2]) }; }
+        // Rango valido: una coordenada imposible deja la parada "sin ubicar"
+        // para siempre y hace fallar el trazado. Mejor avisar y no agregarla.
+        if (coords && coords.lat != null && coords.lon != null &&
+            (coords.lat < -90 || coords.lat > 90 || coords.lon < -180 || coords.lon > 180)) {
+            adviceWarn('Coordenadas invalidas', 'Latitud entre -90 y 90, longitud entre -180 y 180.');
+            return;
+        }
         const p = nuevaParada(tipo, texto, coords);
         if (extra && extra.zonaId) p.zonaId = extra.zonaId;
         if (extra && extra.municipioId) p.municipioId = extra.municipioId;
@@ -180,6 +187,9 @@
         if (!_planEdit) return;
         const clave = _planEdit.clave, eco = _planEdit.eco;
         const modo = _planEdit.modo === 'optimo' ? 'optimo' : 'secuencial';
+        // El motor se captura ANTES de cerrar el editor: cerrarEditorParadas()
+        // pone _planEdit = null y luego no se puede leer _planEdit.engine.
+        const engine = (_planEdit.engine === 'astar') ? 'astar' : 'osrm';
         const plan = {
             modo: modo,
             circuito: (modo === 'optimo') ? true : !!_planEdit.circuito,
@@ -195,7 +205,6 @@
         pintarModalLista();
         paintInfo();
         if (trazar) {
-            const engine = (_planEdit.engine === 'astar') ? 'astar' : 'osrm';
             if (engine === 'astar' && !APP.config.overpass) adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas. Se usara OSRM.');
             planearRuta(eco, plan, null, (engine === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
         } else if (APP.config.autoRuta) {

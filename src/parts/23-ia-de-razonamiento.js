@@ -80,6 +80,7 @@ Reglas de razonamiento:
 - "Velocidad excedida" en zona escolar / hospital / pueblo es critico.
 - "Detenido en zona no prevista" en un punto conocido de carga/descarga es normal; si es en un lote aislado o cerca de un deshuesadero, es sospechoso.
 - Hora del dia importa: 2-5 AM en un lugar aislado y sospechoso suele ser critico.
+- No inventes datos: usa solo el contexto JSON recibido; si un campo no viene, no lo afirmes ni supongas su valor.
 
 Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma EXACTA:
 {
@@ -196,11 +197,16 @@ Reglas:
     async function aiContexto(alert) {
         const eco = String(alert.eco || '');
         const unidades = APP.unidades || [];
-        const u = unidades.find((x) => parseUnitName(x).eco === eco || parseUnitName(x).clave === alert.clave);
+        // Exige coincidencia real de eco o clave: con eco vacio, antes se
+        // asociaba a la primera unidad sin economico.
+        const u = unidades.find((x) => {
+            const ix = parseUnitName(x);
+            return (eco && ix.eco === eco) || (alert.clave && ix.clave === alert.clave);
+        });
         const info = u ? parseUnitName(u) : { eco, placa: '', nombre: eco };
         const st = u ? unitState(u) : { lat: null, lon: null, vel: 0, edadMin: 0, online: false, estado: 'desconocido' };
         const pos = (st.lat != null && st.lon != null)
-            ? { lat: +st.lat.toFixed(6), lon: +st.lon.toFixed(6), ts: u && u.pos ? u.pos.t : null }
+            ? { lat: +(+st.lat).toFixed(6), lon: +(+st.lon).toFixed(6), ts: u && u.pos ? u.pos.t : null }
             : null;
         // Geocerca actual (si la unidad esta dentro). Usa inZone (poligono/circulo).
         const geocercaActual = (function () {
@@ -252,7 +258,8 @@ Reglas:
     // Pide a Overpass POIs alrededor de un punto. Devuelve [{nombre, tipo, dist_m}].
     // Timeout corto: si falla, devolvemos lista vacia (la IA no se bloquea).
     async function aiOverpassPois(lat, lon, radioM) {
-        if (!lat || !lon || !radioM) return [];
+        // lat/lon 0 son coordenadas validas: solo descartamos null/undefined.
+        if (lat == null || lon == null || !radioM) return [];
         const radio = Math.max(50, Math.min(2000, +radioM || 250));
         const q = '[out:json][timeout:10];(' +
             'node["amenity"~"workshop|fuel|parking|car_wash|nightclub|bar|driving_school|place_of_worship|grave_yard|prison|courthouse|police"](around:' + radio + ',' + lat + ',' + lon + ');' +
@@ -300,6 +307,13 @@ Reglas:
         const cfg = APP.config || {};
         if (!cfg.iaHabilitada) return { error: 'IA deshabilitada. Activala en Ajustes > IA.' };
         if (!cfg.iaApiKey) return { error: 'Falta la API key. Pegala en Ajustes > IA.' };
+        // El analisis de una sola alerta tambien consume cuota: respeta el
+        // tope diario igual que lote, patrones, flota y chat.
+        if (iaLimiteExcedido()) {
+            const hoy = iaContadorHoy();
+            return { error: 'Limite diario de IA alcanzado (' + (hoy.llamadas || 0) + '/' +
+                (+cfg.iaLimiteDiario || 200) + '). Sube "Limite diario" en Ajustes > IA o espera a manana.' };
+        }
         const prov = IA_PROVEEDORES[cfg.iaProveedor];
         if (!prov) return { error: 'Proveedor IA desconocido: ' + cfg.iaProveedor };
         // El endpoint puede sobreescribirse en la UI (campo "Endpoint").
@@ -337,6 +351,8 @@ Reglas:
             body: JSON.stringify(body),
             timeoutMs: ms
         });
+        // Contabiliza la llamada (OK o error) para el tope diario.
+        iaContadorSumar(res && !res.red && res.ok);
         if (res.red) {
             // Sin respuesta del servidor: red caida, CORS o URL mal.
             const gm = !!gmXhr();
@@ -372,14 +388,11 @@ Reglas:
         try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
         const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!txt) return { error: 'Sin contenido en la respuesta de ' + prov.nombre, raw: data };
-        // El modelo a veces envuelve el JSON en ```json ... ```. Lo limpiamos.
-        const limpio = String(txt).replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
-        try {
-            const j = JSON.parse(limpio);
-            return j;
-        } catch (e) {
-            return { error: 'La IA no devolvio JSON parseable', raw: String(txt).slice(0, 500) };
-        }
+        // El modelo a veces envuelve el JSON en ```json ... ``` o lo mezcla
+        // con prosa. rxParseJSON tolera ambos casos y comas finales.
+        const j = rxParseJSON(String(txt));
+        if (j !== null && typeof j === 'object') return j;
+        return { error: 'La IA no devolvio JSON parseable', raw: String(txt).slice(0, 500) };
     }
 
     // Pipeline principal: junta contexto y llama al proveedor.
@@ -533,8 +546,48 @@ Reglas:
                 return { patrones: reparado.patrones || [], sugerencias: reparado.sugerencias || [] };
             }
         }
+        // aiLlamarProveedorPrompt devuelve {texto} cuando no logra parsear
+        // el JSON; antes el fallback de arriba quedaba inalcanzable y la UI
+        // decia "sin patrones" aunque el modelo si los hubiera dado.
+        if (r && !r.error && !Array.isArray(r.patrones) && !Array.isArray(r.sugerencias) && (r.texto || r.raw)) {
+            const reparado = extraerPatronesDeTexto(String(r.texto || r.raw || ''));
+            if (reparado) {
+                const out = {
+                    patrones: reparado.patrones || [],
+                    sugerencias: reparado.sugerencias || [],
+                    reparadoDeTexto: true
+                };
+                iaCacheSet(cacheKey, out);
+                return out;
+            }
+        }
         if (r && !r.error) iaCacheSet(cacheKey, r);
         return r;
+    }
+    // Extrae el primer objeto/array JSON de una respuesta de IA aunque
+    // venga con prosa, bloques markdown o comas finales. Devuelve el valor
+    // parseado o null. Es la unica pieza que decide si una respuesta es
+    // JSON estructurado; el texto libre (resumenes) se maneja aparte.
+    function rxParseJSON(texto) {
+        if (texto == null) return null;
+        let s = String(texto).trim();
+        if (!s) return null;
+        // 1) Bloque markdown ```json ... ``` en cualquier posicion.
+        const fence = s.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
+        if (fence && fence[1]) s = fence[1].trim();
+        // 2) Intento directo.
+        try { return JSON.parse(s); } catch (_) { /* seguimos */ }
+        // 3) Recorte al primer {/[ y al ultimo }/].
+        const ini = s.search(/[\{\[]/);
+        const fin = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'));
+        if (ini >= 0 && fin > ini) s = s.slice(ini, fin + 1);
+        try { return JSON.parse(s); } catch (_) { /* seguimos */ }
+        // 4) Ultimo intento: comas finales y comillas tipograficas.
+        const suave = s
+            .replace(/,\s*([\}\]])/g, '$1')
+            .replace(/[\u201c\u201d]/g, '"')
+            .replace(/[\u2018\u2019]/g, "'");
+        try { return JSON.parse(suave); } catch (_) { return null; }
     }
     // v5.14.2: fallback regex cuando el proveedor devuelve texto libre
     // en vez de JSON estricto. Busca "parametro": "X", "valor_sugerido": Y.
@@ -645,7 +698,9 @@ Reglas:
     function aplicarSugerenciaIA(s) {
         if (!s || !s.parametro) return;
         const cf = APP.config || {};
-        if (!(s.parametro in cf)) {
+        // hasOwnProperty (no `in`) para no aceptar claves heredadas como
+        // "__proto__" o "constructor" que la IA pudiera devolver.
+        if (!Object.prototype.hasOwnProperty.call(cf, s.parametro)) {
             adviceErr('Parametro desconocido', s.parametro + ' no existe en la configuracion de Rondo.');
             return;
         }
@@ -736,16 +791,11 @@ Reglas:
         try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
         const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!txt) return { error: 'Sin contenido en la respuesta de ' + prov.nombre, raw: data };
-        const limpio = String(txt).replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
-        // Detecta si la respuesta es JSON (lote) o texto libre (resumen).
-        if (limpio.charAt(0) === '{' || limpio.charAt(0) === '[') {
-            try {
-                return JSON.parse(limpio);
-            } catch (_) {
-                // No era JSON valido: caemos a texto crudo.
-                return { texto: String(txt).slice(0, 2000) };
-            }
-        }
+        // Parseo tolerante (markdown, prosa alrededor, comas finales).
+        const j = rxParseJSON(String(txt));
+        if (j !== null && typeof j === 'object') return j;
+        // No era JSON: texto libre (resumen narrativo) o respuesta que no
+        // pudimos interpretar. Devolvemos el texto para que la UI decida.
         return { texto: String(txt).slice(0, 4000) };
     }
 
@@ -884,7 +934,12 @@ Reglas:
             const raw = sessionStorage.getItem(CHAT_KEY);
             if (!raw) return;
             const j = JSON.parse(raw);
-            if (j && Array.isArray(j.mensajes)) CHAT.mensajes = j.mensajes;
+            // Descarta entradas corruptas o con roles invalidos (una version
+            // antigua pudo guardar algo que la API no acepta).
+            if (j && Array.isArray(j.mensajes)) {
+                CHAT.mensajes = j.mensajes.filter((m) => m && typeof m.text === 'string' &&
+                    (m.role === 'user' || m.role === 'ia' || m.role === 'error' || m.role === 'system'));
+            }
         } catch (_) { /* noop */ }
     }
     function guardarChat() {
@@ -1189,10 +1244,13 @@ function chatMsgHTML(m) {
             return { error: 'Limite diario alcanzado (' + (hoy.llamadas || 0) + '/' +
                 (+cfg.iaLimiteDiario || 200) + ')' };
         }
+        // Filtra los mensajes de error locales: la API solo acepta roles
+        // system/user/assistant y el chat se rompia tras el primer fallo.
+        const validos = (Array.isArray(mensajes) ? mensajes : []).filter((m) => m && m.role !== 'error');
         const messages = [
             { role: 'system', content: CHAT_SYS + '\n\nContexto actual de la flota:\n' +
                 JSON.stringify(chatContextoFlota(), null, 0) },
-            ...mensajes.map((m) => ({ role: m.role === 'ia' ? 'assistant' : m.role, content: m.text || '' }))
+            ...validos.map((m) => ({ role: m.role === 'ia' ? 'assistant' : m.role, content: m.text || '' }))
         ];
         const body = {
             model: modelo,
@@ -1529,7 +1587,7 @@ ta.value = '';
                         '</li>').join('') + '</ol></div>' : '') +
                 (sugerencias.length ? '<div style="margin:0 0 6px"><b>Sugerencias de ajuste:</b><ul style="margin:4px 0 0 0;padding:0;list-style:none">' +
                     sugerencias.map((s, idx) => {
-                        const aplicable = s.parametro && (s.parametro in (APP.config || {}));
+                        const aplicable = !!s.parametro && Object.prototype.hasOwnProperty.call(APP.config || {}, s.parametro);
                         return '<li style="margin-bottom:8px;padding:6px 8px;border:1px solid var(--rondo-border-soft);border-radius:6px;background:var(--rondo-bg-soft)">' +
                             '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
                             '<div><b>' + esc(s.parametro || '?') + '</b>: ' +
@@ -1565,7 +1623,7 @@ ta.value = '';
                                 'Cambiar ' + s.parametro + ' de <b>' + antes + '</b> a <b>' + s.valor_sugerido + '</b>?<br><br>' +
                                 '<span style="color:var(--rondo-fg-dim);font-size:11.5px">' + esc(s.motivo || '') + '</span>',
                                 () => aplicarSugerenciaIA(s),
-                                { okText: 'Aplicar', icon: UIS.check }
+                                { okText: 'Aplicar', icon: UIS.check, html: true }
                             );
                         });
                     });
@@ -1701,6 +1759,14 @@ ta.value = '';
         if (APP.tab === 'dash') paintKPI();
         paintStateBadge();
     }
+    // Resuelve el icono de un toast: acepta un SVG ya listo (el que pasa
+    // advice con UIS.*) o la CLAVE guardada en el historial (p. ej.
+    // 'riesgo', 'critico'), que antes se pintaba como texto literal.
+    function rxIconoToast(item) {
+        const ic = item && item.icono;
+        if (typeof ic === 'string' && ic.charAt(0) === '<') return ic;
+        return (ic && UIS[ic]) || (item && SEV_UIS[item.sev]) || UIS.info;
+    }
     function toast(item) {
         const cont = byId('rondo-toasts');
         if (!cont) return;
@@ -1708,17 +1774,20 @@ ta.value = '';
         card.style.borderLeftColor = COL[item.sev] || '#555';
         const color = COL[item.sev] || '#777';
         card.innerHTML =
-            '<span class="ico rondo-usym" style="color:' + color + '">' + item.icono + '</span>' +
+            '<span class="ico rondo-usym" style="color:' + color + '">' + rxIconoToast(item) + '</span>' +
             '<div class="cuerpo"><b>' + esc(item.titulo) + '</b>' +
             (item.detalle ? '<span>' + esc(item.detalle) + '</span>' : '') +
             '</div><span class="hora">' + new Date(item.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
             '<button class="mini" data-acc="x">×</button>';
         card.querySelector('[data-acc="x"]').addEventListener('click', () => { if (card.parentNode) card.parentNode.removeChild(card); });
         cont.appendChild(card);
+        // Fallback numerico: un toastSeg invalido no debe auto-cerrar el
+        // aviso al instante (setTimeout NaN => 0).
+        const ms = (Number(APP.config.toastSeg) || 12) * 1000;
         setTimeout(() => {
             card.classList.add('sale');
             setTimeout(() => { if (card.parentNode) card.parentNode.removeChild(card); }, 400);
-        }, APP.config.toastSeg * 1000);
+        }, ms);
         while (cont.children.length > 6) cont.removeChild(cont.firstChild);
     }
     // Toasts informativos con severidad opcional: 'info' (default), 'ok',

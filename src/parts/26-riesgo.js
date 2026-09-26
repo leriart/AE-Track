@@ -70,7 +70,11 @@
             lat = +z.centro[0]; lon = +z.centro[1];
         } else {
             if (z.lat != null) lat = +z.lat;
-            if (z.lon != null || z.lng != null || z.long != null) lon = +(z.lon || z.lng || z.long);
+            // OJO: usar != null (no ||) para no descartar lon = 0 (meridiano
+            // de Greenwich) ni confundirlo con una columna ausente.
+            if (z.lon != null) lon = +z.lon;
+            else if (z.lng != null) lon = +z.lng;
+            else if (z.long != null) lon = +z.long;
         }
         if (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) return null;
         if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
@@ -207,10 +211,8 @@
             if (!b.estado && iEstado >= 0) b.estado = row[iEstado] || '';
             if (!b.municipio && iMun >= 0) b.municipio = row[iMun] || '';
         }
-        if (!defaultRadio) {
-            // Si no se encontro columna de radio, lo estimamos:
-            // score >= 70 -> 4.5 km, 50-70 -> 2.2 km, 30-50 -> 1.4 km, >0 -> 0.5 km.
-        }
+        // Si no hay columna de radio se deriva del score mas abajo (en el
+        // bucle de salida), no hace falta estimarlo aqui.
         const out = [];
         // Acumula total de delitos por bucket para derivar score si falta.
         for (const b of buckets.values()) {
@@ -329,8 +331,18 @@
             const z = APP.riesgo[i];
             if (!z || !z.centro || !Array.isArray(z.centro)) continue;
             if (!(z.radio_m > 0)) continue;
-            if (typeof z.score !== 'number' || z.score < minScore) continue;
+            if (typeof z.score !== 'number' || !isFinite(z.score) || z.score < minScore) continue;
             const radioKm = (z.radio_m * mul) / 1000;
+            // Prefiltro barato por bounding box antes del haversine: con
+            // datasets grandes (miles de zonas) y una llamada por unidad y
+            // refresco, evita calcular distancias de zonas lejanas. El margen
+            // es conservador (nunca descarta una zona que pueda contener el
+            // punto), asi que el resultado es identico al de antes.
+            const margenLat = radioKm / 110.5 + 0.001;
+            if (Math.abs(lat - z.centro[0]) > margenLat) continue;
+            const cosLat = Math.cos(Math.max(Math.abs(lat), Math.abs(z.centro[0])) * Math.PI / 180);
+            const margenLon = (cosLat > 1e-6) ? (radioKm / (111.32 * cosLat) + 0.001) : 180;
+            if (Math.abs(lon - z.centro[1]) > margenLon) continue;
             const distKm = haversine(lat, lon, z.centro[0], z.centro[1]);
             if (distKm <= radioKm) {
                 if (!mejor || z.score > mejor.score) {
@@ -751,7 +763,9 @@
         const lat = (st.lat != null) ? st.lat : prev.lat;
         const lon = (st.lon != null) ? st.lon : prev.lon;
         if (lat == null || lon == null) return;
-        const z = puntoEnZonaDeRiesgo(lat, lon);
+        // Reutiliza la zona ya buscada en evaluateUnit para esta transicion
+        // (undefined = no se calculo antes; null = no habia zona).
+        const z = (R._zRiesgoOffline !== undefined) ? R._zRiesgoOffline : puntoEnZonaDeRiesgo(lat, lon);
         if (!z) return;
         if (R.riesgoSinSenalAlerta) return;
         R.riesgoSinSenalAlerta = true;
@@ -814,9 +828,8 @@
             }
         }
         if (!candidata) return;
-        // Distancia previa: usamos el mismo prev.lat/prev.lon del tick anterior.
-        const distPrevKm = haversine(prev.lat, prev.lon, candidata.centro ? candidata.centro[0] : candidata.estado, candidata.centro ? candidata.centro[1] : 0);
-        // Mejor: recalcular con la zona completa para no perder precision.
+        // Distancia previa: se recalcula con la zona completa (no con el
+        // resumen `candidata`, que no lleva centro) para no perder precision.
         const zObj = APP.riesgo.find((z) => z && z.id === candidata.id);
         let distPrev = Infinity;
         if (zObj && zObj.centro) {
@@ -863,6 +876,10 @@
     async function reglaOffline(st, prev, R, info, etq) {
         if (!APP.config.reglas.offline) return;
         if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
+            // Si la transicion cae en zona de riesgo, el aviso critico de
+            // reglaRiesgoSinSenal ya da el contexto; no se duplica con el
+            // generico "SIN SENAL" en el mismo tick.
+            if (R._zRiesgoOffline) return;
             pushAlert({
                 regla: 'offline', sev: 'alto', clave: info.clave, eco: info.eco,
                 titulo: 'SIN SENAL · ' + etq,
@@ -908,7 +925,12 @@
             const m = (Date.now() / 1000 - R.detenidoDesde) / 60;
             if (m >= APP.config.stopMin && !isBase(R.zona)) {
                 let ctxTxt = ctx.ubicaciones[info.clave];
-                if (ctxTxt == null && ctx.quotaGeo) {
+                // Presupuesto de geocodificacion por refresco (ver refresh):
+                // evita que muchas detenciones simultaneas encadenen llamadas
+                // a Nominatim y alarguen el refresco por encima del poll.
+                const geoOk = (APP.geoRestante == null) || (APP.geoRestante > 0);
+                if (ctxTxt == null && ctx.quotaGeo && geoOk) {
+                    if (APP.geoRestante != null) APP.geoRestante--;
                     const g = await reverseGeocode(st.lat, st.lon);
                     ctx.ubicaciones[info.clave] = ctxTxt = g ? (g.texto || g.ciudad || '') : '';
                 }
@@ -1060,6 +1082,10 @@
         // primera parada del plan.
         const primera = plan.paradas[0].texto || '';
         if (!primera) return;
+        // Sin presupuesto de geocodificacion en este refresco: se reintenta en
+        // el siguiente tick en vez de bloquear la cola de unidades.
+        if (APP.geoRestante != null && APP.geoRestante <= 0) return;
+        if (APP.geoRestante != null) APP.geoRestante--;
         const geo = await reverseGeocode(st.lat, st.lon);
         const ciudad = geo ? geo.ciudad : '';
         const enDestino = !!(ciudad && (norm(ciudad).indexOf(norm(primera)) >= 0 || norm(primera).indexOf(norm(ciudad)) >= 0));
@@ -1254,6 +1280,18 @@
             desvioTolerado: false
         };
         try {
+            // Transicion a offline: se busca una sola vez si la ultima
+            // posicion cae en zona de riesgo. reglaOffline usa el resultado
+            // para no duplicar el aviso y reglaRiesgoSinSenal lo reutiliza.
+            if (prev && prev.estado !== 'offline' && st.estado === 'offline' &&
+                st.edadMin >= APP.config.offlineMin) {
+                const latT = (st.lat != null) ? st.lat : prev.lat;
+                const lonT = (st.lon != null) ? st.lon : prev.lon;
+                R._zRiesgoOffline = (APP.config.reglas.riesgoSinSenal &&
+                    APP.riesgo && APP.riesgo.length && latT != null && lonT != null)
+                    ? puntoEnZonaDeRiesgo(latT, lonT)
+                    : null;
+            }
             await reglaOffline(st, prev, R, info, etq);
             // Si la unidad vuelve a reportar, rearma la alerta de desconexion
             // aunque la regla general este desactivada.
@@ -1278,6 +1316,8 @@
             APP.stats.erroresReglas = (APP.stats.erroresReglas || 0) + 1;
             if (APP.unlocked) console.warn('[Rondo] regla', clave, e && e.message);
         }
+        // Campo interno de un solo tick: no debe persistirse en el memo.
+        delete R._zRiesgoOffline;
         return R;
     }
 

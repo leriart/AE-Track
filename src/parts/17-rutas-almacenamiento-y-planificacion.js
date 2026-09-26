@@ -46,6 +46,9 @@
             }
         }
         if (!plan.paradas.length) { adviceErr('Sin paradas', 'Anade al menos un destino'); return null; }
+        // Valida el tope antes de resolver o consultar historial: asi una lista
+        // enorme no dispara decenas de peticiones a Nominatim para acabar en error.
+        if (plan.paradas.length > 25) { adviceErr('Demasiadas paradas', 'Maximo 25 paradas por ruta'); return null; }
         const circuito = (plan.modo === 'optimo') ? true : !!plan.circuito;
         let origen = origenOv || null;
         // Cuando el trazado automatico esta activo, siempre intentamos
@@ -76,7 +79,6 @@
         if (plan.modo === 'optimo') {
             paradas = ordenarParadasOptimo(resueltas, origen, circuito);
         }
-        if (paradas.length > 25) { adviceErr('Demasiadas paradas', 'Maximo 25 paradas por ruta'); return null; }
         plan.paradas = paradas;
         APP.planes[clave] = plan;
         guardarPlanes();

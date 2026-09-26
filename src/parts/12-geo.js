@@ -81,20 +81,25 @@
     }
     async function reverseGeocode(lat, lon) {
         if (!APP.config.geocode || lat == null || lon == null) return null;
-        const key = lat.toFixed(3) + ',' + lon.toFixed(3);
+        const y = Number(lat), x = Number(lon);
+        if (!isFinite(y) || !isFinite(x)) return null;
+        const key = y.toFixed(3) + ',' + x.toFixed(3);
         if (APP.geoCache[key]) return APP.geoCache[key];
         const espera = 1100 - (Date.now() - APP.geoLast);
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const res = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + lat + '&lon=' + lon);
-            const d = await res.json();
-            const a = d.address || {};
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + y + '&lon=' + x, {}, 15000);
+            const a = (d && d.address) || {};
             const detalle = a.road || a.pedestrian || a.suburb || a.village || a.hamlet || '';
             const ciudad = a.city || a.town || a.municipality || a.county || a.state || '';
             const info = { texto: [detalle, ciudad].filter(Boolean).join(', '), ciudad };
-            APP.geoCache[key] = info;
-            writeSession(SS.geo, APP.geoCache);
+            // No cachear direcciones vacias: una respuesta rara o un fallo
+            // puntual del servicio no debe fijar "sin direccion" en la sesion.
+            if (info.texto) {
+                APP.geoCache[key] = info;
+                writeSession(SS.geo, APP.geoCache);
+            }
             return info;
         } catch (_) { return null; }
     }

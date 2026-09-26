@@ -10,7 +10,15 @@
    ============================================================================ */
 
 'use strict';
-
+    /* ============================== SECTOR BASE ==============================
+     * Contexto/peticiones, migracion, iconos, idioma, version, almacenamiento,
+     * valores por defecto, utilidades, estado (APP), helpers de DOM y API de
+     * Wialon.
+     *
+     * Todo el script comparte un UNICO ambito (los @require se concatenan),
+     * asi que estos identificadores estan disponibles para el resto de partes.
+     * No renombrar ni eliminar sin revisar quien los usa.
+     * ====================================================================== */
     /* ====================== CONTEXTO Y PETICIONES ======================
      * Desde la 5.12.2 el script declara @grant GM_xmlhttpRequest para poder
      * llamar a las APIs de IA (que no mandan cabeceras CORS) sin que el
@@ -37,8 +45,13 @@
         return null;
     }
     // Peticion HTTP unificada. Devuelve Promise<{ok, status, texto, red?}>.
-    // `red:true` marca fallo de red/CORS (sin respuesta del servidor).
+    // `red:true` marca fallo de red/CORS (sin respuesta del servidor) y
+    // `timeout:true` distingue el corte por tiempo del resto de fallos.
     function httpRequest(opts) {
+        const url = opts && opts.url;
+        // Sin URL no hay peticion posible. Resolver como fallo en vez de
+        // dejar que `opts.url` lance y rompa el `await` del llamador.
+        if (!url) return Promise.resolve({ ok: false, status: 0, texto: 'URL vacia', red: true });
         const metodo = (opts && opts.method) || 'GET';
         const headers = (opts && opts.headers) || {};
         const body = opts && opts.body;
@@ -46,34 +59,64 @@
         const gm = gmXhr();
         if (gm) {
             return new Promise((resolve) => {
+                let listo = false;
+                let safety = null;
+                // Resolucion unica: el callback del gestor y el temporizador
+                // de seguridad pueden competir; gana el primero y el timer
+                // se limpia para no dejar trabajo colgando.
+                const terminar = (res) => {
+                    if (listo) return;
+                    listo = true;
+                    if (safety) clearTimeout(safety);
+                    resolve(res);
+                };
+                // Red de seguridad: si el gestor no soporta la opcion
+                // `timeout` no dispara ontimeout y la promesa quedaria
+                // pendiente para siempre. Preferimos resolver como timeout.
+                try {
+                    safety = setTimeout(() => terminar({ ok: false, status: 0, texto: '', red: true, timeout: true }), timeoutMs + 2000);
+                } catch (_) { safety = null; }
                 try {
                     gm({
                         method: metodo,
-                        url: opts.url,
+                        url: url,
                         headers: headers,
                         data: body,
                         timeout: timeoutMs,
-                        onload: (r) => resolve({
+                        onload: (r) => terminar({
                             ok: r.status >= 200 && r.status < 300,
                             status: r.status,
                             texto: r.responseText || ''
                         }),
-                        onerror: () => resolve({ ok: false, status: 0, texto: '', red: true }),
-                        ontimeout: () => resolve({ ok: false, status: 0, texto: '', red: true, timeout: true })
+                        onerror: () => terminar({ ok: false, status: 0, texto: '', red: true }),
+                        ontimeout: () => terminar({ ok: false, status: 0, texto: '', red: true, timeout: true })
                     });
                 } catch (e) {
-                    resolve({ ok: false, status: 0, texto: String((e && e.message) || e), red: true });
+                    terminar({ ok: false, status: 0, texto: String((e && e.message) || e), red: true });
                 }
             });
         }
+        if (typeof fetch !== 'function') {
+            return Promise.resolve({ ok: false, status: 0, texto: 'fetch no disponible', red: true });
+        }
         const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-        return fetch(opts.url, {
-            method: metodo,
-            headers: headers,
-            body: body,
-            signal: ctrl ? ctrl.signal : undefined
-        }).then((r) => r.text().then((t) => {
+        let peticion;
+        try {
+            // fetch() lanza SINCRONAMENTE ante una URL malformada o un scheme
+            // no soportado. Sin este try/catch el throw escaparia de
+            // httpRequest y romperia a quien hace `await httpRequest(...)`.
+            peticion = fetch(url, {
+                method: metodo,
+                headers: headers,
+                body: body,
+                signal: ctrl ? ctrl.signal : undefined
+            });
+        } catch (e) {
+            if (timer) clearTimeout(timer);
+            return Promise.resolve({ ok: false, status: 0, texto: String((e && e.message) || e), red: true });
+        }
+        return peticion.then((r) => r.text().then((t) => {
             if (timer) clearTimeout(timer);
             return { ok: r.ok, status: r.status, texto: t };
         })).catch((e) => {
@@ -619,28 +662,44 @@
     }
 
     function writeJSON(key, value) {
-        try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* noop */ }
+        try { localStorage.setItem(key, JSON.stringify(value)); }
+        catch (e) {
+            // Cuota llena o almacenamiento bloqueado: el dato NO persiste.
+            // Avisar una sola vez para no inundar la consola en cada guardado
+            // (el caso tipico es guardar la config repetidamente y perderla).
+            if (!writeJSON._avisado) {
+                writeJSON._avisado = true;
+                try { console.warn('[Rondo] no se pudo guardar en localStorage (' + key + '):', (e && e.message) || e); } catch (_) { /* noop */ }
+            }
+        }
     }
 
     // sessionStorage por pestaña. Migra desde LS la primera vez para no perder
     // los datos guardados en versiones anteriores.
     function readSession(key, fallback, legacyKey) {
+        // 1) Intento en sessionStorage. Si el JSON esta corrupto caemos al
+        //    legado: es mas probable recuperar el dato global que rendirnos.
         try {
             const raw = sessionStorage.getItem(key);
             if (raw != null) {
                 const v = JSON.parse(raw);
                 if (v != null) return v;
             }
-            if (legacyKey) {
-                // Copia la lista antigua (global) a esta pestaña la primera vez.
+        } catch (_) { /* storage bloqueado o JSON corrupto: probar legado */ }
+        if (legacyKey) {
+            // Copia la lista antigua (global) a esta pestaña la primera vez.
+            // No borramos la clave global: otras pestanas aun pueden migrar.
+            try {
                 const legacy = localStorage.getItem(legacyKey);
                 if (legacy != null) {
                     const parsed = JSON.parse(legacy);
-                    sessionStorage.setItem(key, JSON.stringify(parsed));
-                    return parsed;
+                    if (parsed != null) {
+                        sessionStorage.setItem(key, JSON.stringify(parsed));
+                        return parsed;
+                    }
                 }
-            }
-        } catch (_) { /* noop */ }
+            } catch (_) { /* noop */ }
+        }
         return fallback;
     }
     function writeSession(key, value) {
@@ -678,9 +737,19 @@
         }[ch]));
     }
 
+    // Cache acotada de normalizacion. norm() se llama en bucles (busqueda
+    // difusa, municipios, comparacion de paradas) sobre los mismos textos una
+    // y otra vez. Si crece demasiado se vacia para no retener memoria.
+    const NORM_CACHE = new Map();
     function norm(s) {
-        return String(s == null ? '' : s).normalize('NFKD')
+        const t = (s == null) ? '' : String(s);
+        const hit = NORM_CACHE.get(t);
+        if (hit !== undefined) return hit;
+        const out = t.normalize('NFKD')
             .replace(/[\u0300-\u036f]/g, '').toUpperCase().trim();
+        if (NORM_CACHE.size >= 2000) NORM_CACHE.clear();
+        NORM_CACHE.set(t, out);
+        return out;
     }
 
     function pickSeverity(level) {
@@ -785,13 +854,16 @@
         const n = document.createElement(tag);
         if (props) Object.assign(n, props);
         if (styles) Object.assign(n.style, styles);
-        if (children && children.length) {
-            for (let i = 0; i < children.length; i++) {
-                const c = children[i];
-                if (c == null) continue;
-                if (typeof c === 'string') n.appendChild(document.createTextNode(c));
-                else n.appendChild(c);
-            }
+        // Acepta un array de hijos o uno solo, y descarta null/undefined/false.
+        // Convertir numeros a texto evita que appendChild reciba algo que no
+        // es un Node (lo que lanzaba antes de crear el elemento).
+        const lista = (children == null) ? []
+            : (Array.isArray(children) ? children : [children]);
+        for (let i = 0; i < lista.length; i++) {
+            const c = lista[i];
+            if (c == null || c === false) continue;
+            if (typeof c === 'string' || typeof c === 'number') n.appendChild(document.createTextNode(String(c)));
+            else n.appendChild(c);
         }
         return n;
     }
@@ -882,10 +954,13 @@ function _extraerZonasDe(items) {
         const out = [];
         // `coll` puede ser un array, un objeto {id: zona} o un STRING JSON
         // (algunas versiones de Wialon devuelven `zl` serializado).
-        const addColl = (coll, rid) => {
+        const addColl = (coll, rid, depth) => {
             if (!coll) return 0;
+            // Guarda contra un string JSON que se anida sobre si mismo
+            // (JSON.parse devuelve otro string): evita recursion infinita.
+            if (depth > 4) return 0;
             if (typeof coll === 'string') {
-                try { return addColl(JSON.parse(coll), rid); } catch (_) { return 0; }
+                try { return addColl(JSON.parse(coll), rid, (depth || 0) + 1); } catch (_) { return 0; }
             }
             let n = 0;
             const push = (z) => {
@@ -943,7 +1018,11 @@ function _extraerZonasDe(items) {
             try {
                 const col = zs.map((z) => z.id).filter((x) => x != null);
                 const r = await remoteCall('resource/get_zone_data', { itemId: rid, col: col, flags: 0x1F });
-                datos = Array.isArray(r) ? r : ((r && (r.items || r.zones)) || null);
+                const crudo = Array.isArray(r) ? r : ((r && (r.items || r.zones)) || null);
+                // La respuesta puede ser un array o un mapa {id: zona};
+                // normalizamos a array para poder recorrerla con forEach.
+                if (Array.isArray(crudo)) datos = crudo;
+                else if (crudo && typeof crudo === 'object') datos = Object.keys(crudo).map((k) => crudo[k]);
             } catch (_) { datos = null; }
             if (!datos) continue;
             const porId = new Map();
@@ -1056,20 +1135,25 @@ function _extraerZonasDe(items) {
     }
     async function reverseGeocode(lat, lon) {
         if (!APP.config.geocode || lat == null || lon == null) return null;
-        const key = lat.toFixed(3) + ',' + lon.toFixed(3);
+        const y = Number(lat), x = Number(lon);
+        if (!isFinite(y) || !isFinite(x)) return null;
+        const key = y.toFixed(3) + ',' + x.toFixed(3);
         if (APP.geoCache[key]) return APP.geoCache[key];
         const espera = 1100 - (Date.now() - APP.geoLast);
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const res = await fetch('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + lat + '&lon=' + lon);
-            const d = await res.json();
-            const a = d.address || {};
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + y + '&lon=' + x, {}, 15000);
+            const a = (d && d.address) || {};
             const detalle = a.road || a.pedestrian || a.suburb || a.village || a.hamlet || '';
             const ciudad = a.city || a.town || a.municipality || a.county || a.state || '';
             const info = { texto: [detalle, ciudad].filter(Boolean).join(', '), ciudad };
-            APP.geoCache[key] = info;
-            writeSession(SS.geo, APP.geoCache);
+            // No cachear direcciones vacias: una respuesta rara o un fallo
+            // puntual del servicio no debe fijar "sin direccion" en la sesion.
+            if (info.texto) {
+                APP.geoCache[key] = info;
+                writeSession(SS.geo, APP.geoCache);
+            }
             return info;
         } catch (_) { return null; }
     }
@@ -1079,6 +1163,31 @@ function _extraerZonasDe(items) {
     // Umbral (km) por debajo del cual la proyeccion equirectangular local
     // tiene precision suficiente y es mas barata que la geodesica esferica.
     const DIST_LOCAL_UMBRAL_KM = 1;
+    // Tope de grafos OSM en memoria (cajas distintas). Con mas se descartan
+    // los mas antiguos en lugar de vaciar todo el cache.
+    const RX_GRAFO_CACHE_MAX = 5;
+    // Cache de geocodificacion directa (texto -> coordenadas) para no repetir
+    // la misma consulta a Nominatim dentro de la sesion.
+    const RX_GEOCODE_CACHE = new Map();
+
+    // fetch + JSON con timeout. Nominatim/OSRM/Overpass pueden colgarse o
+    // devolver HTML de error; centralizar el parseo y el corte por tiempo
+    // evita promesas que nunca resuelven y detecta respuestas no-JSON.
+    async function _rxFetchJson(url, opts, timeoutMs) {
+        const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        const timer = ctrl ? setTimeout(() => ctrl.abort(), Math.max(2000, timeoutMs || 20000)) : null;
+        try {
+            const opciones = Object.assign({}, opts || {});
+            if (ctrl) opciones.signal = ctrl.signal;
+            const res = await fetch(url, opciones);
+            if (!res || !res.ok) throw new Error('HTTP ' + ((res && res.status) || 0));
+            const txt = await res.text();
+            if (!txt) return null;
+            return JSON.parse(txt);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
     function rad(d) { return d * Math.PI / 180; }
     function grad(r) { return r * 180 / Math.PI; }
     function haversine(lat1, lon1, lat2, lon2) {
@@ -1167,13 +1276,13 @@ function _extraerZonasDe(items) {
     function precomputarRuta(coords) {
         const acum = [0];
         let total = 0;
+        if (!coords || !coords.length) return { acum, total };
         for (let i = 1; i < coords.length; i++) {
             total += haversine(coords[i - 1][1], coords[i - 1][0], coords[i][1], coords[i][0]);
             acum.push(total);
         }
         return { acum, total };
     }
-    // Proyecta un punto sobre la polilinea de una ruta y calcula progreso y rumbo.
     // Proyecta un punto sobre la polilinea de una ruta. Si se pasa memo
     // (objeto { idx }), prueba primero ese segmento y sus vecinos (idx-1, idx,
     // idx+1); si el mejor candidato esta a menos de MEMO_UMBRAL_M (1 km),
@@ -1317,14 +1426,19 @@ function _extraerZonasDe(items) {
     // por cada par consecutivo, que usamos para situar cada parada.
     async function osrmRouteMulti(puntos) {
         if (!puntos || puntos.length < 2) throw new Error('OSRM: faltan puntos');
+        for (let i = 0; i < puntos.length; i++) {
+            const p = puntos[i];
+            if (!p || !isFinite(p.lat) || !isFinite(p.lon)) throw new Error('OSRM: coordenada invalida');
+        }
         const coords = puntos.map((p) => p.lon + ',' + p.lat).join(';');
         const url = 'https://router.project-osrm.org/route/v1/driving/' + coords +
             '?overview=full&geometries=geojson&alternatives=false&steps=false';
-        const res = await fetch(url);
-        if (!res.ok) throw new Error('OSRM HTTP ' + res.status);
-        const d = await res.json();
-        if (!d.routes || !d.routes.length) throw new Error('OSRM sin ruta');
+        const d = await _rxFetchJson(url, {}, 25000);
+        if (!d || !d.routes || !d.routes.length) throw new Error('OSRM sin ruta');
         const r = d.routes[0];
+        if (!r || !r.geometry || !Array.isArray(r.geometry.coordinates) || !r.geometry.coordinates.length) {
+            throw new Error('OSRM sin geometria');
+        }
         return {
             coords: r.geometry.coordinates, distancia: r.distance, duracion: r.duration,
             legs: r.legs || [], modo: 'osrm'
@@ -1350,17 +1464,19 @@ function _extraerZonasDe(items) {
 
     // Overpass (OpenStreetMap): descarga el grafo vial de una caja y lo cachea.
     async function overpassGrafo(minLat, minLon, maxLat, maxLon) {
+        if (!isFinite(minLat) || !isFinite(minLon) || !isFinite(maxLat) || !isFinite(maxLon)) {
+            throw new Error('Overpass: bbox invalida');
+        }
         const clave = [minLat, minLon, maxLat, maxLon].map((v) => v.toFixed(2)).join(',');
         if (APP.grafoCache[clave]) return APP.grafoCache[clave];
         const q = '[out:json][timeout:30];way["highway"~"motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|service|living_street"](' +
             minLat + ',' + minLon + ',' + maxLat + ',' + maxLon + ');(._;>;);out body;';
-        const res = await fetch('https://overpass-api.de/api/interpreter', {
+        const d = await _rxFetchJson('https://overpass-api.de/api/interpreter', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: 'data=' + encodeURIComponent(q)
-        });
-        if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
-        const d = await res.json();
+        }, 35000);
+        if (!d) throw new Error('Overpass sin datos');
         const nodos = new Map();
         const tagsPorWay = new Map(); // wayId -> tags
         (d.elements || []).forEach((el) => {
@@ -1391,8 +1507,13 @@ function _extraerZonasDe(items) {
             }
         });
         const grafo = { nodos, ady };
+        // Cache FIFO acotada: al superar el tope se descartan las cajas mas
+        // antiguas. Antes, al sexto grafo se vaciaba el cache completo y se
+        // repetian descargas de Overpass.
         const claves = Object.keys(APP.grafoCache);
-        if (claves.length > 5) claves.forEach((k) => { delete APP.grafoCache[k]; });
+        while (claves.length >= RX_GRAFO_CACHE_MAX) {
+            delete APP.grafoCache[claves.shift()];
+        }
         APP.grafoCache[clave] = grafo;
         return grafo;
     }
@@ -1402,6 +1523,12 @@ function _extraerZonasDe(items) {
         const v = String(tags.oneway || '').toLowerCase();
         if (v === 'yes' || v === 'true' || v === '1') return 1;
         if (v === '-1' || v === 'reverse') return -1;
+        if (v === 'no' || v === 'false' || v === '0') return 0;
+        // Sin `oneway` explicito, una rotonda/circular es de un solo sentido
+        // por definicion de OSM. Antes quedaban bidireccionales y A* podia
+        // entrar por el carril contrario.
+        const j = String(tags.junction || '').toLowerCase();
+        if (j === 'roundabout' || j === 'circular') return 1;
         return 0;
     }
     function parseMaxspeed(tags) {
@@ -1430,6 +1557,10 @@ function _extraerZonasDe(items) {
     }
     // Ruta con A* sobre el grafo vial de OpenStreetMap.
     async function astarRoute(origen, destino) {
+        if (!origen || !destino || !isFinite(origen.lat) || !isFinite(origen.lon)
+            || !isFinite(destino.lat) || !isFinite(destino.lon)) {
+            throw new Error('A*: coordenadas invalidas');
+        }
         const spanLat = Math.abs(origen.lat - destino.lat);
         const spanLon = Math.abs(origen.lon - destino.lon);
         if (spanLat > 1.5 || spanLon > 1.5) throw new Error('Ruta demasiado larga para A* (límite ~150 km)');
@@ -1449,14 +1580,25 @@ function _extraerZonasDe(items) {
     }
 
     async function geocodificarLugar(texto) {
+        const q = String(texto || '').trim();
+        if (!q) return null;
+        const k = q.toLowerCase();
+        if (RX_GEOCODE_CACHE.has(k)) return RX_GEOCODE_CACHE.get(k);
         const espera = 1100 - (Date.now() - APP.geoLast);
         if (espera > 0) await sleep(espera);
         APP.geoLast = Date.now();
         try {
-            const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(texto));
-            const d = await res.json();
-            if (!d || !d.length) return null;
-            return { lat: parseFloat(d[0].lat), lon: parseFloat(d[0].lon) };
+            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/search?format=json&limit=1&accept-language=es&q=' + encodeURIComponent(q), {}, 15000);
+            let out = null;
+            if (Array.isArray(d) && d.length) {
+                const lat = parseFloat(d[0].lat), lon = parseFloat(d[0].lon);
+                if (isFinite(lat) && isFinite(lon)) out = { lat, lon };
+            }
+            RX_GEOCODE_CACHE.set(k, out);
+            if (RX_GEOCODE_CACHE.size > 200) {
+                RX_GEOCODE_CACHE.delete(RX_GEOCODE_CACHE.keys().next().value);
+            }
+            return out;
         } catch (_) { return null; }
     }
 
@@ -1491,6 +1633,9 @@ function _extraerZonasDe(items) {
         const esCirculo = (z.t === 3) || ((!Array.isArray(pts) || pts.length < minimoPts) && cenX != null && cenY != null && radio > 0);
         if (esCirculo && cenX != null && cenY != null) return { lat: cenY, lon: cenX };
         if (Array.isArray(pts) && pts.length) {
+            const cenArea = _rxCentroideAnillo(pts);
+            if (cenArea) return cenArea;
+            // Fallback: promedio de vertices (poligono degenerado o abierto).
             let sLat = 0, sLon = 0, n = 0;
             for (let i = 0; i < pts.length; i++) {
                 const a = pts[i];
@@ -1506,6 +1651,54 @@ function _extraerZonasDe(items) {
             return { lat: (+b.min_y + +b.max_y) / 2, lon: (+b.min_x + +b.max_x) / 2 };
         }
         return null;
+    }
+    // Normaliza un anillo a puntos {x:lon, y:lat} descartando entradas rotas.
+    // (Definido despues de centroDeZona: las declaraciones de funcion se
+    // hoistean, y asi el bloque de pruebas que arranca en centroDeZona las
+    // incluye.)
+    function _rxPuntosAnillo(anillo) {
+        const out = [];
+        for (let i = 0; i < (Array.isArray(anillo) ? anillo.length : 0); i++) {
+            const a = anillo[i];
+            const y = (a && a.y != null) ? +a.y : (Array.isArray(a) ? +a[1] : NaN);
+            const x = (a && a.x != null) ? +a.x : (Array.isArray(a) ? +a[0] : NaN);
+            if (!isFinite(x) || !isFinite(y)) continue;
+            out.push({ x, y });
+        }
+        return out;
+    }
+    // Centroide del area de un anillo (shoelace proyectado a metros). A
+    // diferencia del promedio de vertices, no se escapa en poligonos concavos.
+    // Devuelve null si el anillo es degenerado (area ~0).
+    function _rxCentroideAnillo(anillo) {
+        const pts = _rxPuntosAnillo(anillo);
+        if (pts.length < 3) return null;
+        const lat0 = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+        const mx = 111320 * Math.cos(lat0 * Math.PI / 180), my = 110540;
+        let area2 = 0, cx = 0, cy = 0;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i], b = pts[(i + 1) % pts.length];
+            const xi = a.x * mx, yi = a.y * my;
+            const xj = b.x * mx, yj = b.y * my;
+            const cruz = xi * yj - xj * yi;
+            area2 += cruz;
+            cx += (xi + xj) * cruz;
+            cy += (yi + yj) * cruz;
+        }
+        if (Math.abs(area2) < 1e-9) return null;
+        return { lat: (cy / (3 * area2)) / my, lon: (cx / (3 * area2)) / mx };
+    }
+    // Area firmada de un anillo (grados^2); sirve para comparar tamanos.
+    function _rxAreaAnillo(anillo) {
+        if (!Array.isArray(anillo) || anillo.length < 3) return 0;
+        let a = 0;
+        for (let i = 0, j = anillo.length - 1; i < anillo.length; j = i++) {
+            const xi = +anillo[i][0], yi = +anillo[i][1];
+            const xj = +anillo[j][0], yj = +anillo[j][1];
+            if (!isFinite(xi) || !isFinite(yi) || !isFinite(xj) || !isFinite(yj)) continue;
+            a += xj * yi - xi * yj;
+        }
+        return Math.abs(a / 2);
     }
     // Punto-en-poligono (ray casting) con anillo en orden GeoJSON [[lon,lat],...].
     function puntoEnPoligono(lat, lon, anillo) {
@@ -1532,10 +1725,14 @@ function _extraerZonasDe(items) {
         if (!geojson) return null;
         if (geojson.type === 'Polygon' && geojson.coordinates && geojson.coordinates[0]) return geojson.coordinates[0];
         if (geojson.type === 'MultiPolygon' && geojson.coordinates && geojson.coordinates.length) {
-            let mejor = null;
+            // Elegir la isla de mayor area (no la de mas vertices): un anillo
+            // costero muy detallado podia ganarle al cuerpo principal.
+            let mejor = null, mejorArea = -1;
             for (let i = 0; i < geojson.coordinates.length; i++) {
                 const r = geojson.coordinates[i] && geojson.coordinates[i][0];
-                if (r && (!mejor || r.length > mejor.length)) mejor = r;
+                if (!r) continue;
+                const area = _rxAreaAnillo(r);
+                if (area > mejorArea) { mejorArea = area; mejor = r; }
             }
             return mejor;
         }
@@ -1552,12 +1749,21 @@ function _extraerZonasDe(items) {
         const poligono = anillo ? simplificarAnillo(anillo, 600) : null;
         let centro = null;
         if (poligono && poligono.length) {
-            let sLat = 0, sLon = 0;
-            for (let i = 0; i < poligono.length; i++) { sLon += +poligono[i][0]; sLat += +poligono[i][1]; }
-            centro = { lat: sLat / poligono.length, lon: sLon / poligono.length };
-        } else if (r.lat != null && r.lon != null) {
+            centro = _rxCentroideAnillo(poligono);
+            if (!centro) {
+                let sLat = 0, sLon = 0, n = 0;
+                for (let i = 0; i < poligono.length; i++) {
+                    const la = +poligono[i][1], lo = +poligono[i][0];
+                    if (!isFinite(la) || !isFinite(lo)) continue;
+                    sLat += la; sLon += lo; n++;
+                }
+                if (n) centro = { lat: sLat / n, lon: sLon / n };
+            }
+        }
+        if (!centro && isFinite(+r.lat) && isFinite(+r.lon)) {
             centro = { lat: +r.lat, lon: +r.lon };
-        } else if (bb) {
+        }
+        if (!centro && bb) {
             centro = { lat: (bb[0] + bb[1]) / 2, lon: (bb[2] + bb[3]) / 2 };
         }
         if (!centro) return null;
@@ -1605,9 +1811,8 @@ function _extraerZonasDe(items) {
         APP.geoLast = Date.now();
         try {
             const url = 'https://nominatim.openstreetmap.org/search?format=jsonv2&polygon_geojson=1&addressdetails=1&limit=3&accept-language=es&q=' + encodeURIComponent(q);
-            const res = await fetch(url);
-            const d = await res.json();
-            if (!d || !d.length) return null;
+            const d = await _rxFetchJson(url, {}, 15000);
+            if (!Array.isArray(d) || !d.length) return null;
             const cand = d.map(municipioDesdeNominatim).filter(Boolean);
             if (!cand.length) return null;
             cand.sort((a, b) => (b.poligono ? 1 : 0) - (a.poligono ? 1 : 0));
@@ -1627,6 +1832,11 @@ function _extraerZonasDe(items) {
             const m = todos[i];
             if (!m) continue;
             if (m.poligono && m.poligono.length) {
+                // Descarte rapido por bbox antes de recorrer el poligono: el
+                // ray-casting con cientos de vertices es caro y municipioEn se
+                // llama por cada punto muestreado de cada ruta.
+                const bb = m.bbox;
+                if (bb && (lat < bb.minLat || lat > bb.maxLat || lon < bb.minLon || lon > bb.maxLon)) continue;
                 if (puntoEnPoligono(lat, lon, m.poligono)) return m;
             } else if (m.bbox) {
                 if (lat >= m.bbox.minLat && lat <= m.bbox.maxLat && lon >= m.bbox.minLon && lon <= m.bbox.maxLon) return m;
@@ -1752,8 +1962,9 @@ function _extraerZonasDe(items) {
     /* ====================== PARADAS MULTIPUNTO ======================
      * v5.15. Un plan de ruta es una lista ordenada de paradas con un modo:
      *   - 'secuencial': se visitan en el orden dado.
-     *   - 'optimo': el optimizador reordena las paradas no fijadas y, si la
-     *     opcion circuito esta activa, cierra el recorrido volviendo al origen.
+     *   - 'optimo': el optimizador reordena las paradas no fijadas. En la UI
+     *     "mejor ruta" implica circuito (vuelve al origen); aqui el cierre lo
+     *     decide el parametro `circuito` que reciba el optimizador.
      * Cada parada tiene { id, tipo, texto, coords, fijo }. El texto muestra
      * una pista del tipo: "geo:", "mun:" o "coord:" (el resto es libre).
      */
@@ -1961,6 +2172,9 @@ function _extraerZonasDe(items) {
             }
         }
         if (!plan.paradas.length) { adviceErr('Sin paradas', 'Anade al menos un destino'); return null; }
+        // Valida el tope antes de resolver o consultar historial: asi una lista
+        // enorme no dispara decenas de peticiones a Nominatim para acabar en error.
+        if (plan.paradas.length > 25) { adviceErr('Demasiadas paradas', 'Maximo 25 paradas por ruta'); return null; }
         const circuito = (plan.modo === 'optimo') ? true : !!plan.circuito;
         let origen = origenOv || null;
         // Cuando el trazado automatico esta activo, siempre intentamos
@@ -1991,7 +2205,6 @@ function _extraerZonasDe(items) {
         if (plan.modo === 'optimo') {
             paradas = ordenarParadasOptimo(resueltas, origen, circuito);
         }
-        if (paradas.length > 25) { adviceErr('Demasiadas paradas', 'Maximo 25 paradas por ruta'); return null; }
         plan.paradas = paradas;
         APP.planes[clave] = plan;
         guardarPlanes();
@@ -2165,7 +2378,11 @@ function _extraerZonasDe(items) {
             const distDirecta = haversine(stLider.lat, stLider.lon, st.lat, st.lon);
             let enRuta = false, contrario = false, snap = null;
             if (rutaLider) {
-                snap = snapRuta(st.lat, st.lon, rutaLider, { idx: 0 });
+                // Arranca la busqueda en el segmento donde va el lider: los
+                // acompanantes rondan su eje, asi snapRuta evita el escaneo
+                // completo de la polilinea por cada unidad (era el coste
+                // dominante de la caravana en cada refresco).
+                snap = snapRuta(st.lat, st.lon, rutaLider, { idx: snapLider ? snapLider.idx : 0 });
                 if (snap && snap.dist <= lateralM) {
                     enRuta = true;
                     if (st.vel > 3 && snap.rumbo != null && st.curso != null) {
@@ -2327,6 +2544,9 @@ function _extraerZonasDe(items) {
             const vecinos = vecinosCercanos(puntos, i, eps, cellDeg, grid);
             if (vecinos.length < minN) continue;
             const cluster = [i];
+            // Set de pertenencia para no volver a recorrer el cluster
+            // (indexOf convertia la expansion en O(n^2) con muchos puntos).
+            const enCluster = new Set([i]);
             const cola = vecinos.slice();
             while (cola.length) {
                 const k = cola.pop();
@@ -2337,7 +2557,7 @@ function _extraerZonasDe(items) {
                         for (let q = 0; q < n2.length; q++) cola.push(n2[q]);
                     }
                 }
-                if (cluster.indexOf(k) < 0) cluster.push(k);
+                if (!enCluster.has(k)) { enCluster.add(k); cluster.push(k); }
             }
             clusters.push(cluster);
         }
@@ -2346,9 +2566,15 @@ function _extraerZonasDe(items) {
     function vecinosCercanos(puntos, i, eps, cellDeg, grid) {
         const cx = Math.floor(puntos[i].lat / cellDeg);
         const cy = Math.floor(puntos[i].lon / cellDeg);
+        // La celda esta en grados, pero eps en metros. Los grados de longitud
+        // "miden menos" al alejarse del ecuador: a 60 grados una celda de 80 m
+        // de latitud ocupa ~2 celdas de longitud. Ampliamos el rango para no
+        // perder vecinos reales (el radio se evalua igual con haversine).
+        const cosLat = Math.max(0.2, Math.cos(puntos[i].lat * Math.PI / 180));
+        const rangoLon = Math.max(1, Math.ceil(1 / cosLat));
         const out = [];
         for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
+            for (let dy = -rangoLon; dy <= rangoLon; dy++) {
                 const cell = grid.get((cx + dx) + ',' + (cy + dy));
                 if (!cell) continue;
                 for (let m = 0; m < cell.length; m++) {
@@ -2490,8 +2716,12 @@ function _extraerZonasDe(items) {
     }
 
     /* ====================== NOMBRE + ESTADO ====================== */
+    // Parsea nombre/id de una unidad. Nunca revienta con una entrada
+    // incompleta: se llama en bucles sobre toda la flota y una unidad
+    // corrupta no debe detener el refresco ni el analisis.
     function parseUnitName(u) {
-        const nombre = u.nm || String(u.id);
+        const src = (u && typeof u === 'object') ? u : {};
+        const nombre = String(src.nm || String(src.id == null ? '' : src.id)).trim();
         let eco = '';
         const mEco = nombre.match(/\.\s*0*(\d{3,5})(?!\d)/);
         if (mEco) eco = mEco[1];
@@ -2502,21 +2732,28 @@ function _extraerZonasDe(items) {
         let placa = '';
         const mPlaca = nombre.match(/\b([A-Z]{2,4}[-\s]?\d{2,4}[A-Z]{0,3})\b/);
         if (mPlaca) placa = mPlaca[1];
-        return { id: u.id, nombre, eco, placa, clave: eco || placa || String(u.id) };
+        return { id: src.id, nombre, eco, placa, clave: eco || placa || String(src.id) };
     }
     function unitState(u) {
-        const pos = u.pos || {};
-        const lmsg = u.lmsg || {};
-        const t = pos.t || lmsg.t || 0;
+        const src = (u && typeof u === 'object') ? u : {};
+        const pos = src.pos || {};
+        const lmsg = src.lmsg || {};
+        // t suele venir en segundos (Wialon), pero algunos payloads lo
+        // mandan en milisegundos: normalizamos para que edadMin no se
+        // dispare a decadas y la unidad figure siempre offline.
+        let t = Number(pos.t || lmsg.t || 0);
+        if (!isFinite(t) || t <= 0) t = 0;
+        else if (t > 1e12) t = Math.round(t / 1000);
         const edadMin = t ? (Date.now() / 1000 - t) / 60 : Infinity;
         const online = edadMin < APP.config.offlineMin;
-        const vel = pos.s || 0;
+        const vel = Number(pos.s) || 0;
         const estado = !online ? 'offline' : (vel > 3 ? 'moviendo' : 'detenida');
+        const lat = (pos.y != null && isFinite(+pos.y)) ? +pos.y : null;
+        const lon = (pos.x != null && isFinite(+pos.x)) ? +pos.x : null;
         return {
             t, edadMin, online, vel, estado,
-            lat: (pos.y != null) ? pos.y : null,
-            lon: (pos.x != null) ? pos.x : null,
-            curso: pos.c || 0, sat: pos.sc || 0
+            lat, lon,
+            curso: Number(pos.c) || 0, sat: Number(pos.sc) || 0
         };
     }
     function isWatched(info) {
@@ -2788,7 +3025,12 @@ function _extraerZonasDe(items) {
         let url;
         try { url = U.createObjectURL(new B([bytes], { type: mime || 'audio/mpeg' })); }
         catch (e) { _ttsLastErr = 'blob: ' + (e && e.message || e); if (onError) onError(); return false; }
-        return _ttsPlayUrl(url, onEnd, onError);
+        // Libera el object URL al terminar (o fallar) para no acumular
+        // blobs en memoria durante sesiones largas.
+        const liberar = () => { try { U.revokeObjectURL(url); } catch (_) { /* noop */ } };
+        const fin = () => { liberar(); if (onEnd) onEnd(); };
+        const err = () => { liberar(); if (onError) onError(); };
+        return _ttsPlayUrl(url, fin, err);
     }
     // Reproduce una URL remota: cache -> GM+Web Audio -> blob -> directo.
     function _ttsPlay(url, onEnd, onError) {
@@ -2850,6 +3092,7 @@ function _extraerZonasDe(items) {
             // Si el navegador no tiene Web Speech API o no hay voces, cae a
             // online. NO hay watchdog (esperar causaba eco y retardo).
             if (speakWeb(txt)) return true;
+            _ttsLastErr = '';
             return speakOnline(txt);
         }
         return speakOnline(txt);

@@ -176,7 +176,6 @@
             APP.filtro = e.target.value;
             if (APP.tab === 'alertas') paintAlertas();
             else if (APP.tab === 'unidades') paintTabla();
-            else if (APP.tab === 'geocercas') paintGeocercas();
         });
         const selEst = byId('rondo-filtro-estado');
         if (selEst) {
@@ -383,7 +382,10 @@
             ctxEl._target = { eco };
         });
         ctxEl.addEventListener('click', (e) => {
-            const acc = e.target.dataset && e.target.dataset.acc;
+            // El clic puede caer en el icono SVG dentro de la opcion: subimos
+            // al .op para leer su data-acc (antes, pulsar el icono no hacia nada).
+            const op = e.target.closest && e.target.closest('.op');
+            const acc = op ? op.dataset.acc : (e.target.dataset && e.target.dataset.acc);
             if (!acc || !ctxEl._target) return;
             const eco = ctxEl._target.eco;
             if (acc === 'open') openUnitWindow(eco);

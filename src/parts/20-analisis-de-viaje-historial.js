@@ -74,6 +74,9 @@
             const vecinos = vecinosCercanos(puntos, i, eps, cellDeg, grid);
             if (vecinos.length < minN) continue;
             const cluster = [i];
+            // Set de pertenencia para no volver a recorrer el cluster
+            // (indexOf convertia la expansion en O(n^2) con muchos puntos).
+            const enCluster = new Set([i]);
             const cola = vecinos.slice();
             while (cola.length) {
                 const k = cola.pop();
@@ -84,7 +87,7 @@
                         for (let q = 0; q < n2.length; q++) cola.push(n2[q]);
                     }
                 }
-                if (cluster.indexOf(k) < 0) cluster.push(k);
+                if (!enCluster.has(k)) { enCluster.add(k); cluster.push(k); }
             }
             clusters.push(cluster);
         }
@@ -93,9 +96,15 @@
     function vecinosCercanos(puntos, i, eps, cellDeg, grid) {
         const cx = Math.floor(puntos[i].lat / cellDeg);
         const cy = Math.floor(puntos[i].lon / cellDeg);
+        // La celda esta en grados, pero eps en metros. Los grados de longitud
+        // "miden menos" al alejarse del ecuador: a 60 grados una celda de 80 m
+        // de latitud ocupa ~2 celdas de longitud. Ampliamos el rango para no
+        // perder vecinos reales (el radio se evalua igual con haversine).
+        const cosLat = Math.max(0.2, Math.cos(puntos[i].lat * Math.PI / 180));
+        const rangoLon = Math.max(1, Math.ceil(1 / cosLat));
         const out = [];
         for (let dx = -1; dx <= 1; dx++) {
-            for (let dy = -1; dy <= 1; dy++) {
+            for (let dy = -rangoLon; dy <= rangoLon; dy++) {
                 const cell = grid.get((cx + dx) + ',' + (cy + dy));
                 if (!cell) continue;
                 for (let m = 0; m < cell.length; m++) {

@@ -138,7 +138,12 @@
         let url;
         try { url = U.createObjectURL(new B([bytes], { type: mime || 'audio/mpeg' })); }
         catch (e) { _ttsLastErr = 'blob: ' + (e && e.message || e); if (onError) onError(); return false; }
-        return _ttsPlayUrl(url, onEnd, onError);
+        // Libera el object URL al terminar (o fallar) para no acumular
+        // blobs en memoria durante sesiones largas.
+        const liberar = () => { try { U.revokeObjectURL(url); } catch (_) { /* noop */ } };
+        const fin = () => { liberar(); if (onEnd) onEnd(); };
+        const err = () => { liberar(); if (onError) onError(); };
+        return _ttsPlayUrl(url, fin, err);
     }
     // Reproduce una URL remota: cache -> GM+Web Audio -> blob -> directo.
     function _ttsPlay(url, onEnd, onError) {
@@ -200,6 +205,7 @@
             // Si el navegador no tiene Web Speech API o no hay voces, cae a
             // online. NO hay watchdog (esperar causaba eco y retardo).
             if (speakWeb(txt)) return true;
+            _ttsLastErr = '';
             return speakOnline(txt);
         }
         return speakOnline(txt);

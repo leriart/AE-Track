@@ -58,7 +58,7 @@
         if (cTot) cTot.textContent = watched.length;
         if (cAl) cAl.textContent = APP.historial.length;
         if (cRu) cRu.textContent = Object.keys(APP.rutas).length;
-        if (cZn) cZn.textContent = APP.zonas.length;
+        if (cZn) cZn.textContent = (APP.zonas || []).length;
         const cCv = byId('rondo-c-cv');
         if (cCv) cCv.textContent = APP.caravanaEco ? countCaravana() : 0;
     }
@@ -87,6 +87,17 @@
         b.title = nmActivo()
             ? 'No molestar hasta ' + new Date(APP.noMolestar.hasta).toLocaleTimeString().slice(0, 5)
             : 'criticos: ' + criticos + ' · sin señal: ' + off + ' · detenidas: ' + det;
+    }
+    // Igual que setHtml, pero conserva la posicion de scroll del propio
+    // contenedor cuando se reescribe. Las listas del Dashboard se repintan
+    // cada segundo; sin esto, quien habia bajado en la lista volvia arriba
+    // en cada refresco.
+    function rxSetHtmlKeepScroll(el, html) {
+        if (!el) return false;
+        const top = el.scrollTop, left = el.scrollLeft;
+        const cambio = setHtml(el, html);
+        if (cambio && (top || left)) { el.scrollTop = top; el.scrollLeft = left; }
+        return cambio;
     }
     // Lista "Requieren atención": unidades sin señal, con exceso, desviadas,
     // detenidas o con ruta nueva sin trazar, ordenadas por prioridad. Cada fila
@@ -127,7 +138,7 @@
         items.sort((a, b) => b.peso - a.peso);
         const top = items.slice(0, 5);
         if (!top.length) {
-            setHtml(cont, '<div style="padding:8px;color:var(--rondo-fg-mute)">Todo en orden: ninguna unidad requiere atención.</div>');
+            rxSetHtmlKeepScroll(cont, '<div style="padding:8px;color:var(--rondo-fg-mute)">Todo en orden: ninguna unidad requiere atención.</div>');
             return;
         }
         const meta = {
@@ -137,7 +148,7 @@
             det: { col: 'var(--rondo-accent-2)', ic: UIS.stopped },
             'ruta-pend': { col: 'var(--rondo-warn-fg)', ic: UIS.route }
         };
-        setHtml(cont, top.map((it) => {
+        rxSetHtmlKeepScroll(cont, top.map((it) => {
             const mm = meta[it.tipo] || meta.det;
             return '<div class="alerta rondo-atencion-item" data-eco="' + esc(it.eco) + '" style="border-left:3px solid ' + mm.col + ';cursor:pointer" title="Abrir la ventana de ' + esc(it.eco) + '">' +
                 '<span class="ico rondo-usym" style="color:' + mm.col + '">' + mm.ic + '</span>' +
@@ -168,7 +179,7 @@
         kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-zonas', enZona.size);
-        kv('rondo-kpi-zonas-pct', APP.zonas.length ? 'de ' + APP.zonas.length : '');
+        kv('rondo-kpi-zonas-pct', (APP.zonas || []).length ? 'de ' + APP.zonas.length : '');
         kv('rondo-kpi-aho', aho);
         kv('rondo-kpi-criticos', critAho ? critAho + ' criticas' : '');
 
@@ -195,7 +206,7 @@
         const recientes = byId('rondo-kpi-recientes');
         if (recientes) {
             const items = APP.historial.slice(0, 6);
-            setHtml(recientes, items.length
+            rxSetHtmlKeepScroll(recientes, items.length
                 ? items.slice(0, 4).map((a) => (
                     '<div class="alerta" style="border-left:3px solid ' + (COL[a.sev] || '#555') + '">' +
                     '<span class="ico rondo-usym" style="color:' + (COL[a.sev] || '#777') + '">' + (SEV_UIS[a.sev] || UIS.info) + '</span>' +
@@ -251,7 +262,7 @@
         items.sort((a, b) => b.dentro.length - a.dentro.length);
         const top = items.slice(0, 6);
         if (countEl) countEl.textContent = items.length;
-        setHtml(cont, top.length
+        rxSetHtmlKeepScroll(cont, top.length
             ? top.map((it) =>
                 '<div class="rondo-geo-dash" data-zona="' + esc(it.z.n || '') + '">' +
                 '<span class="ico rondo-usym">' + UIS.zone + '</span>' +
@@ -286,7 +297,7 @@
         items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
         const top = items.slice(0, 6);
         if (countEl) countEl.textContent = items.length;
-        setHtml(cont, top.length
+        rxSetHtmlKeepScroll(cont, top.length
             ? top.map((it) => {
                 const etaTxt = (it.etaSeg != null && isFinite(it.etaSeg)) ? (Math.round(it.etaSeg / 60) + ' min') : '\u2014';
                 return '<div class="rondo-ruta-dash" data-eco="' + esc(it.eco) + '">' +

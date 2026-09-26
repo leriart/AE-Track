@@ -81,6 +81,7 @@ Reglas de razonamiento:
 - "Velocidad excedida" en zona escolar / hospital / pueblo es critico.
 - "Detenido en zona no prevista" en un punto conocido de carga/descarga es normal; si es en un lote aislado o cerca de un deshuesadero, es sospechoso.
 - Hora del dia importa: 2-5 AM en un lugar aislado y sospechoso suele ser critico.
+- No inventes datos: usa solo el contexto JSON recibido; si un campo no viene, no lo afirmes ni supongas su valor.
 
 Devuelve EXCLUSIVAMENTE un objeto JSON (sin markdown, sin prosa) con esta forma EXACTA:
 {
@@ -197,11 +198,16 @@ Reglas:
     async function aiContexto(alert) {
         const eco = String(alert.eco || '');
         const unidades = APP.unidades || [];
-        const u = unidades.find((x) => parseUnitName(x).eco === eco || parseUnitName(x).clave === alert.clave);
+        // Exige coincidencia real de eco o clave: con eco vacio, antes se
+        // asociaba a la primera unidad sin economico.
+        const u = unidades.find((x) => {
+            const ix = parseUnitName(x);
+            return (eco && ix.eco === eco) || (alert.clave && ix.clave === alert.clave);
+        });
         const info = u ? parseUnitName(u) : { eco, placa: '', nombre: eco };
         const st = u ? unitState(u) : { lat: null, lon: null, vel: 0, edadMin: 0, online: false, estado: 'desconocido' };
         const pos = (st.lat != null && st.lon != null)
-            ? { lat: +st.lat.toFixed(6), lon: +st.lon.toFixed(6), ts: u && u.pos ? u.pos.t : null }
+            ? { lat: +(+st.lat).toFixed(6), lon: +(+st.lon).toFixed(6), ts: u && u.pos ? u.pos.t : null }
             : null;
         // Geocerca actual (si la unidad esta dentro). Usa inZone (poligono/circulo).
         const geocercaActual = (function () {
@@ -253,7 +259,8 @@ Reglas:
     // Pide a Overpass POIs alrededor de un punto. Devuelve [{nombre, tipo, dist_m}].
     // Timeout corto: si falla, devolvemos lista vacia (la IA no se bloquea).
     async function aiOverpassPois(lat, lon, radioM) {
-        if (!lat || !lon || !radioM) return [];
+        // lat/lon 0 son coordenadas validas: solo descartamos null/undefined.
+        if (lat == null || lon == null || !radioM) return [];
         const radio = Math.max(50, Math.min(2000, +radioM || 250));
         const q = '[out:json][timeout:10];(' +
             'node["amenity"~"workshop|fuel|parking|car_wash|nightclub|bar|driving_school|place_of_worship|grave_yard|prison|courthouse|police"](around:' + radio + ',' + lat + ',' + lon + ');' +
@@ -301,6 +308,13 @@ Reglas:
         const cfg = APP.config || {};
         if (!cfg.iaHabilitada) return { error: 'IA deshabilitada. Activala en Ajustes > IA.' };
         if (!cfg.iaApiKey) return { error: 'Falta la API key. Pegala en Ajustes > IA.' };
+        // El analisis de una sola alerta tambien consume cuota: respeta el
+        // tope diario igual que lote, patrones, flota y chat.
+        if (iaLimiteExcedido()) {
+            const hoy = iaContadorHoy();
+            return { error: 'Limite diario de IA alcanzado (' + (hoy.llamadas || 0) + '/' +
+                (+cfg.iaLimiteDiario || 200) + '). Sube "Limite diario" en Ajustes > IA o espera a manana.' };
+        }
         const prov = IA_PROVEEDORES[cfg.iaProveedor];
         if (!prov) return { error: 'Proveedor IA desconocido: ' + cfg.iaProveedor };
         // El endpoint puede sobreescribirse en la UI (campo "Endpoint").
@@ -338,6 +352,8 @@ Reglas:
             body: JSON.stringify(body),
             timeoutMs: ms
         });
+        // Contabiliza la llamada (OK o error) para el tope diario.
+        iaContadorSumar(res && !res.red && res.ok);
         if (res.red) {
             // Sin respuesta del servidor: red caida, CORS o URL mal.
             const gm = !!gmXhr();
@@ -373,14 +389,11 @@ Reglas:
         try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
         const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!txt) return { error: 'Sin contenido en la respuesta de ' + prov.nombre, raw: data };
-        // El modelo a veces envuelve el JSON en ```json ... ```. Lo limpiamos.
-        const limpio = String(txt).replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
-        try {
-            const j = JSON.parse(limpio);
-            return j;
-        } catch (e) {
-            return { error: 'La IA no devolvio JSON parseable', raw: String(txt).slice(0, 500) };
-        }
+        // El modelo a veces envuelve el JSON en ```json ... ``` o lo mezcla
+        // con prosa. rxParseJSON tolera ambos casos y comas finales.
+        const j = rxParseJSON(String(txt));
+        if (j !== null && typeof j === 'object') return j;
+        return { error: 'La IA no devolvio JSON parseable', raw: String(txt).slice(0, 500) };
     }
 
     // Pipeline principal: junta contexto y llama al proveedor.
@@ -534,8 +547,48 @@ Reglas:
                 return { patrones: reparado.patrones || [], sugerencias: reparado.sugerencias || [] };
             }
         }
+        // aiLlamarProveedorPrompt devuelve {texto} cuando no logra parsear
+        // el JSON; antes el fallback de arriba quedaba inalcanzable y la UI
+        // decia "sin patrones" aunque el modelo si los hubiera dado.
+        if (r && !r.error && !Array.isArray(r.patrones) && !Array.isArray(r.sugerencias) && (r.texto || r.raw)) {
+            const reparado = extraerPatronesDeTexto(String(r.texto || r.raw || ''));
+            if (reparado) {
+                const out = {
+                    patrones: reparado.patrones || [],
+                    sugerencias: reparado.sugerencias || [],
+                    reparadoDeTexto: true
+                };
+                iaCacheSet(cacheKey, out);
+                return out;
+            }
+        }
         if (r && !r.error) iaCacheSet(cacheKey, r);
         return r;
+    }
+    // Extrae el primer objeto/array JSON de una respuesta de IA aunque
+    // venga con prosa, bloques markdown o comas finales. Devuelve el valor
+    // parseado o null. Es la unica pieza que decide si una respuesta es
+    // JSON estructurado; el texto libre (resumenes) se maneja aparte.
+    function rxParseJSON(texto) {
+        if (texto == null) return null;
+        let s = String(texto).trim();
+        if (!s) return null;
+        // 1) Bloque markdown ```json ... ``` en cualquier posicion.
+        const fence = s.match(/```(?:json|JSON)?\s*([\s\S]*?)```/);
+        if (fence && fence[1]) s = fence[1].trim();
+        // 2) Intento directo.
+        try { return JSON.parse(s); } catch (_) { /* seguimos */ }
+        // 3) Recorte al primer {/[ y al ultimo }/].
+        const ini = s.search(/[\{\[]/);
+        const fin = Math.max(s.lastIndexOf('}'), s.lastIndexOf(']'));
+        if (ini >= 0 && fin > ini) s = s.slice(ini, fin + 1);
+        try { return JSON.parse(s); } catch (_) { /* seguimos */ }
+        // 4) Ultimo intento: comas finales y comillas tipograficas.
+        const suave = s
+            .replace(/,\s*([\}\]])/g, '$1')
+            .replace(/[\u201c\u201d]/g, '"')
+            .replace(/[\u2018\u2019]/g, "'");
+        try { return JSON.parse(suave); } catch (_) { return null; }
     }
     // v5.14.2: fallback regex cuando el proveedor devuelve texto libre
     // en vez de JSON estricto. Busca "parametro": "X", "valor_sugerido": Y.
@@ -646,7 +699,9 @@ Reglas:
     function aplicarSugerenciaIA(s) {
         if (!s || !s.parametro) return;
         const cf = APP.config || {};
-        if (!(s.parametro in cf)) {
+        // hasOwnProperty (no `in`) para no aceptar claves heredadas como
+        // "__proto__" o "constructor" que la IA pudiera devolver.
+        if (!Object.prototype.hasOwnProperty.call(cf, s.parametro)) {
             adviceErr('Parametro desconocido', s.parametro + ' no existe en la configuracion de Rondo.');
             return;
         }
@@ -737,16 +792,11 @@ Reglas:
         try { data = JSON.parse(res.texto || '{}'); } catch (e) { return { error: 'Respuesta no-JSON de ' + prov.nombre }; }
         const txt = data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content;
         if (!txt) return { error: 'Sin contenido en la respuesta de ' + prov.nombre, raw: data };
-        const limpio = String(txt).replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
-        // Detecta si la respuesta es JSON (lote) o texto libre (resumen).
-        if (limpio.charAt(0) === '{' || limpio.charAt(0) === '[') {
-            try {
-                return JSON.parse(limpio);
-            } catch (_) {
-                // No era JSON valido: caemos a texto crudo.
-                return { texto: String(txt).slice(0, 2000) };
-            }
-        }
+        // Parseo tolerante (markdown, prosa alrededor, comas finales).
+        const j = rxParseJSON(String(txt));
+        if (j !== null && typeof j === 'object') return j;
+        // No era JSON: texto libre (resumen narrativo) o respuesta que no
+        // pudimos interpretar. Devolvemos el texto para que la UI decida.
         return { texto: String(txt).slice(0, 4000) };
     }
 
@@ -885,7 +935,12 @@ Reglas:
             const raw = sessionStorage.getItem(CHAT_KEY);
             if (!raw) return;
             const j = JSON.parse(raw);
-            if (j && Array.isArray(j.mensajes)) CHAT.mensajes = j.mensajes;
+            // Descarta entradas corruptas o con roles invalidos (una version
+            // antigua pudo guardar algo que la API no acepta).
+            if (j && Array.isArray(j.mensajes)) {
+                CHAT.mensajes = j.mensajes.filter((m) => m && typeof m.text === 'string' &&
+                    (m.role === 'user' || m.role === 'ia' || m.role === 'error' || m.role === 'system'));
+            }
         } catch (_) { /* noop */ }
     }
     function guardarChat() {
@@ -1190,10 +1245,13 @@ function chatMsgHTML(m) {
             return { error: 'Limite diario alcanzado (' + (hoy.llamadas || 0) + '/' +
                 (+cfg.iaLimiteDiario || 200) + ')' };
         }
+        // Filtra los mensajes de error locales: la API solo acepta roles
+        // system/user/assistant y el chat se rompia tras el primer fallo.
+        const validos = (Array.isArray(mensajes) ? mensajes : []).filter((m) => m && m.role !== 'error');
         const messages = [
             { role: 'system', content: CHAT_SYS + '\n\nContexto actual de la flota:\n' +
                 JSON.stringify(chatContextoFlota(), null, 0) },
-            ...mensajes.map((m) => ({ role: m.role === 'ia' ? 'assistant' : m.role, content: m.text || '' }))
+            ...validos.map((m) => ({ role: m.role === 'ia' ? 'assistant' : m.role, content: m.text || '' }))
         ];
         const body = {
             model: modelo,
@@ -1530,7 +1588,7 @@ ta.value = '';
                         '</li>').join('') + '</ol></div>' : '') +
                 (sugerencias.length ? '<div style="margin:0 0 6px"><b>Sugerencias de ajuste:</b><ul style="margin:4px 0 0 0;padding:0;list-style:none">' +
                     sugerencias.map((s, idx) => {
-                        const aplicable = s.parametro && (s.parametro in (APP.config || {}));
+                        const aplicable = !!s.parametro && Object.prototype.hasOwnProperty.call(APP.config || {}, s.parametro);
                         return '<li style="margin-bottom:8px;padding:6px 8px;border:1px solid var(--rondo-border-soft);border-radius:6px;background:var(--rondo-bg-soft)">' +
                             '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">' +
                             '<div><b>' + esc(s.parametro || '?') + '</b>: ' +
@@ -1566,7 +1624,7 @@ ta.value = '';
                                 'Cambiar ' + s.parametro + ' de <b>' + antes + '</b> a <b>' + s.valor_sugerido + '</b>?<br><br>' +
                                 '<span style="color:var(--rondo-fg-dim);font-size:11.5px">' + esc(s.motivo || '') + '</span>',
                                 () => aplicarSugerenciaIA(s),
-                                { okText: 'Aplicar', icon: UIS.check }
+                                { okText: 'Aplicar', icon: UIS.check, html: true }
                             );
                         });
                     });
@@ -1702,6 +1760,14 @@ ta.value = '';
         if (APP.tab === 'dash') paintKPI();
         paintStateBadge();
     }
+    // Resuelve el icono de un toast: acepta un SVG ya listo (el que pasa
+    // advice con UIS.*) o la CLAVE guardada en el historial (p. ej.
+    // 'riesgo', 'critico'), que antes se pintaba como texto literal.
+    function rxIconoToast(item) {
+        const ic = item && item.icono;
+        if (typeof ic === 'string' && ic.charAt(0) === '<') return ic;
+        return (ic && UIS[ic]) || (item && SEV_UIS[item.sev]) || UIS.info;
+    }
     function toast(item) {
         const cont = byId('rondo-toasts');
         if (!cont) return;
@@ -1709,17 +1775,20 @@ ta.value = '';
         card.style.borderLeftColor = COL[item.sev] || '#555';
         const color = COL[item.sev] || '#777';
         card.innerHTML =
-            '<span class="ico rondo-usym" style="color:' + color + '">' + item.icono + '</span>' +
+            '<span class="ico rondo-usym" style="color:' + color + '">' + rxIconoToast(item) + '</span>' +
             '<div class="cuerpo"><b>' + esc(item.titulo) + '</b>' +
             (item.detalle ? '<span>' + esc(item.detalle) + '</span>' : '') +
             '</div><span class="hora">' + new Date(item.ts).toLocaleTimeString().slice(0, 5) + '</span>' +
             '<button class="mini" data-acc="x">×</button>';
         card.querySelector('[data-acc="x"]').addEventListener('click', () => { if (card.parentNode) card.parentNode.removeChild(card); });
         cont.appendChild(card);
+        // Fallback numerico: un toastSeg invalido no debe auto-cerrar el
+        // aviso al instante (setTimeout NaN => 0).
+        const ms = (Number(APP.config.toastSeg) || 12) * 1000;
         setTimeout(() => {
             card.classList.add('sale');
             setTimeout(() => { if (card.parentNode) card.parentNode.removeChild(card); }, 400);
-        }, APP.config.toastSeg * 1000);
+        }, ms);
         while (cont.children.length > 6) cont.removeChild(cont.firstChild);
     }
     // Toasts informativos con severidad opcional: 'info' (default), 'ok',
@@ -1781,6 +1850,21 @@ ta.value = '';
         return dlgEl;
     }
     function dialogoAbierto() { return !!(dlgEl && dlgEl.classList.contains('abierto')); }
+    // Trampa de foco: Tab/Shift+Tab ciclan solo dentro del dialogo abierto
+    // (accesibilidad: el foco no debe escapar al contenido de atras).
+    function rxDialogoTrapTab(e) {
+        if (e.key !== 'Tab') return;
+        const el = e.currentTarget;
+        const nodos = el.querySelectorAll('button, input, select, textarea, a[href], [tabindex]:not([tabindex="-1"])');
+        const vis = Array.prototype.filter.call(nodos, (n) => !n.disabled && n.getClientRects().length > 0);
+        if (!vis.length) return;
+        const primero = vis[0];
+        const ultimo = vis[vis.length - 1];
+        const activo = document.activeElement;
+        if (e.shiftKey && activo === primero) { e.preventDefault(); ultimo.focus(); }
+        else if (!e.shiftKey && activo === ultimo) { e.preventDefault(); primero.focus(); }
+        else if (!el.contains(activo)) { e.preventDefault(); primero.focus(); }
+    }
     function cerrarDialogo() {
         if (!dlgEl) return;
         dlgEl.classList.remove('abierto');
@@ -1805,16 +1889,18 @@ ta.value = '';
         const showCancel = opts.cancel !== false && cancelText !== okText;
         el.innerHTML =
             '<div class="dlg-head"><span class="rondo-usym">' + (opts.icon || UIS.info) + '</span>' +
-            '<span>' + esc(opts.titulo) + '</span></div>' +
+            '<span id="rondo-dlg-title">' + esc(opts.titulo) + '</span></div>' +
             '<div class="dlg-body">' +
             (opts.html || '') +
             (opts.input ? '<input id="' + inputId + '" type="' + (inp.type || 'text') + '" placeholder="' +
                 esc(inp.placeholder || '') + '" value="' + esc(inp.value == null ? '' : inp.value) + '">' : '') +
             '</div>' +
             '<div class="dlg-foot">' +
-            (showCancel ? '<button class="dlg-cancel">' + cancelText + '</button>' : '') +
-            '<button class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + okText + '</button>' +
+            (showCancel ? '<button type="button" class="dlg-cancel">' + cancelText + '</button>' : '') +
+            '<button type="button" class="dlg-ok' + (opts.peligro ? ' peligro' : '') + '">' + okText + '</button>' +
             '</div>';
+        // Nombre accesible del dialogo (rol dialog ya lo pone ensureDialog).
+        el.setAttribute('aria-labelledby', 'rondo-dlg-title');
         el.classList.add('abierto');
         const okBtn = el.querySelector('.dlg-ok');
         const cancelBtn = el.querySelector('.dlg-cancel');
@@ -1827,6 +1913,11 @@ ta.value = '';
             if (opts.onOk) opts.onOk(val);
         });
         if (cancelBtn) cancelBtn.addEventListener('click', cerrarDialogo);
+        // El listener vive en el elemento persistente: se registra una vez.
+        if (!el._rondoTrap) {
+            el._rondoTrap = true;
+            el.addEventListener('keydown', rxDialogoTrapTab);
+        }
         if (inpEl) inpEl.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') { e.preventDefault(); okBtn.click(); }
         });
@@ -1843,7 +1934,9 @@ ta.value = '';
         abrirDialogo({
             icon: o.icon || UIS.warn,
             titulo: titulo,
-            html: '<p>' + esc(mensaje) + '</p>',
+            // o.html permite HTML confiable (p. ej. negritas de la IA); por
+            // defecto el mensaje se escapa para no inyectar HTML.
+            html: o.html ? '<p>' + mensaje + '</p>' : '<p>' + esc(mensaje) + '</p>',
             okText: o.okText || 'Confirmar',
             peligro: !!o.peligro,
             onOk: onOk
@@ -1993,7 +2086,11 @@ ta.value = '';
             lat = +z.centro[0]; lon = +z.centro[1];
         } else {
             if (z.lat != null) lat = +z.lat;
-            if (z.lon != null || z.lng != null || z.long != null) lon = +(z.lon || z.lng || z.long);
+            // OJO: usar != null (no ||) para no descartar lon = 0 (meridiano
+            // de Greenwich) ni confundirlo con una columna ausente.
+            if (z.lon != null) lon = +z.lon;
+            else if (z.lng != null) lon = +z.lng;
+            else if (z.long != null) lon = +z.long;
         }
         if (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) return null;
         if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
@@ -2130,10 +2227,8 @@ ta.value = '';
             if (!b.estado && iEstado >= 0) b.estado = row[iEstado] || '';
             if (!b.municipio && iMun >= 0) b.municipio = row[iMun] || '';
         }
-        if (!defaultRadio) {
-            // Si no se encontro columna de radio, lo estimamos:
-            // score >= 70 -> 4.5 km, 50-70 -> 2.2 km, 30-50 -> 1.4 km, >0 -> 0.5 km.
-        }
+        // Si no hay columna de radio se deriva del score mas abajo (en el
+        // bucle de salida), no hace falta estimarlo aqui.
         const out = [];
         // Acumula total de delitos por bucket para derivar score si falta.
         for (const b of buckets.values()) {
@@ -2252,8 +2347,18 @@ ta.value = '';
             const z = APP.riesgo[i];
             if (!z || !z.centro || !Array.isArray(z.centro)) continue;
             if (!(z.radio_m > 0)) continue;
-            if (typeof z.score !== 'number' || z.score < minScore) continue;
+            if (typeof z.score !== 'number' || !isFinite(z.score) || z.score < minScore) continue;
             const radioKm = (z.radio_m * mul) / 1000;
+            // Prefiltro barato por bounding box antes del haversine: con
+            // datasets grandes (miles de zonas) y una llamada por unidad y
+            // refresco, evita calcular distancias de zonas lejanas. El margen
+            // es conservador (nunca descarta una zona que pueda contener el
+            // punto), asi que el resultado es identico al de antes.
+            const margenLat = radioKm / 110.5 + 0.001;
+            if (Math.abs(lat - z.centro[0]) > margenLat) continue;
+            const cosLat = Math.cos(Math.max(Math.abs(lat), Math.abs(z.centro[0])) * Math.PI / 180);
+            const margenLon = (cosLat > 1e-6) ? (radioKm / (111.32 * cosLat) + 0.001) : 180;
+            if (Math.abs(lon - z.centro[1]) > margenLon) continue;
             const distKm = haversine(lat, lon, z.centro[0], z.centro[1]);
             if (distKm <= radioKm) {
                 if (!mejor || z.score > mejor.score) {
@@ -2674,7 +2779,9 @@ ta.value = '';
         const lat = (st.lat != null) ? st.lat : prev.lat;
         const lon = (st.lon != null) ? st.lon : prev.lon;
         if (lat == null || lon == null) return;
-        const z = puntoEnZonaDeRiesgo(lat, lon);
+        // Reutiliza la zona ya buscada en evaluateUnit para esta transicion
+        // (undefined = no se calculo antes; null = no habia zona).
+        const z = (R._zRiesgoOffline !== undefined) ? R._zRiesgoOffline : puntoEnZonaDeRiesgo(lat, lon);
         if (!z) return;
         if (R.riesgoSinSenalAlerta) return;
         R.riesgoSinSenalAlerta = true;
@@ -2737,9 +2844,8 @@ ta.value = '';
             }
         }
         if (!candidata) return;
-        // Distancia previa: usamos el mismo prev.lat/prev.lon del tick anterior.
-        const distPrevKm = haversine(prev.lat, prev.lon, candidata.centro ? candidata.centro[0] : candidata.estado, candidata.centro ? candidata.centro[1] : 0);
-        // Mejor: recalcular con la zona completa para no perder precision.
+        // Distancia previa: se recalcula con la zona completa (no con el
+        // resumen `candidata`, que no lleva centro) para no perder precision.
         const zObj = APP.riesgo.find((z) => z && z.id === candidata.id);
         let distPrev = Infinity;
         if (zObj && zObj.centro) {
@@ -2786,6 +2892,10 @@ ta.value = '';
     async function reglaOffline(st, prev, R, info, etq) {
         if (!APP.config.reglas.offline) return;
         if (prev && prev.estado !== 'offline' && st.estado === 'offline') {
+            // Si la transicion cae en zona de riesgo, el aviso critico de
+            // reglaRiesgoSinSenal ya da el contexto; no se duplica con el
+            // generico "SIN SENAL" en el mismo tick.
+            if (R._zRiesgoOffline) return;
             pushAlert({
                 regla: 'offline', sev: 'alto', clave: info.clave, eco: info.eco,
                 titulo: 'SIN SENAL · ' + etq,
@@ -2831,7 +2941,12 @@ ta.value = '';
             const m = (Date.now() / 1000 - R.detenidoDesde) / 60;
             if (m >= APP.config.stopMin && !isBase(R.zona)) {
                 let ctxTxt = ctx.ubicaciones[info.clave];
-                if (ctxTxt == null && ctx.quotaGeo) {
+                // Presupuesto de geocodificacion por refresco (ver refresh):
+                // evita que muchas detenciones simultaneas encadenen llamadas
+                // a Nominatim y alarguen el refresco por encima del poll.
+                const geoOk = (APP.geoRestante == null) || (APP.geoRestante > 0);
+                if (ctxTxt == null && ctx.quotaGeo && geoOk) {
+                    if (APP.geoRestante != null) APP.geoRestante--;
                     const g = await reverseGeocode(st.lat, st.lon);
                     ctx.ubicaciones[info.clave] = ctxTxt = g ? (g.texto || g.ciudad || '') : '';
                 }
@@ -2983,6 +3098,10 @@ ta.value = '';
         // primera parada del plan.
         const primera = plan.paradas[0].texto || '';
         if (!primera) return;
+        // Sin presupuesto de geocodificacion en este refresco: se reintenta en
+        // el siguiente tick en vez de bloquear la cola de unidades.
+        if (APP.geoRestante != null && APP.geoRestante <= 0) return;
+        if (APP.geoRestante != null) APP.geoRestante--;
         const geo = await reverseGeocode(st.lat, st.lon);
         const ciudad = geo ? geo.ciudad : '';
         const enDestino = !!(ciudad && (norm(ciudad).indexOf(norm(primera)) >= 0 || norm(primera).indexOf(norm(ciudad)) >= 0));
@@ -3177,6 +3296,18 @@ ta.value = '';
             desvioTolerado: false
         };
         try {
+            // Transicion a offline: se busca una sola vez si la ultima
+            // posicion cae en zona de riesgo. reglaOffline usa el resultado
+            // para no duplicar el aviso y reglaRiesgoSinSenal lo reutiliza.
+            if (prev && prev.estado !== 'offline' && st.estado === 'offline' &&
+                st.edadMin >= APP.config.offlineMin) {
+                const latT = (st.lat != null) ? st.lat : prev.lat;
+                const lonT = (st.lon != null) ? st.lon : prev.lon;
+                R._zRiesgoOffline = (APP.config.reglas.riesgoSinSenal &&
+                    APP.riesgo && APP.riesgo.length && latT != null && lonT != null)
+                    ? puntoEnZonaDeRiesgo(latT, lonT)
+                    : null;
+            }
             await reglaOffline(st, prev, R, info, etq);
             // Si la unidad vuelve a reportar, rearma la alerta de desconexion
             // aunque la regla general este desactivada.
@@ -3201,6 +3332,8 @@ ta.value = '';
             APP.stats.erroresReglas = (APP.stats.erroresReglas || 0) + 1;
             if (APP.unlocked) console.warn('[Rondo] regla', clave, e && e.message);
         }
+        // Campo interno de un solo tick: no debe persistirse en el memo.
+        delete R._zRiesgoOffline;
         return R;
     }
 
@@ -3215,13 +3348,23 @@ ta.value = '';
                 try { APP.zonas = await fetchZones(); } catch (_) { APP.zonas = []; }
             }
             APP.consultaRestante = 40;
+            // Presupuesto de geocodificacion inversa por refresco: los avisos
+            // con contexto de municipio (detenido, destino) no deben encadenar
+            // llamadas a Nominatim para toda la flota y retrasar el refresco.
+            APP.geoRestante = 8;
             const ubicaciones = {};
             const nuevas = {};
+            // El recorrido se calcula una sola vez (antes se llamaba a
+            // shouldWatch/unitState dos veces por unidad y por refresco).
+            const watched = [];
+            let onNow = 0;
             for (let i = 0; i < unidades.length; i++) {
                 const u = unidades[i];
                 if (!shouldWatch(u)) continue;
+                watched.push(u);
                 const info = parseUnitName(u);
                 const st = unitState(u);
+                if (st.online) onNow++;
                 registrarTraza(info, st);
                 const prev = APP.memo[info.clave];
                 const ctx = {
@@ -3240,8 +3383,6 @@ ta.value = '';
             APP.memo = nuevas;
             writeSession(SS.memo, APP.memo);
 
-            const watched = unidades.filter(shouldWatch);
-            const onNow = watched.filter((u) => unitState(u).online).length;
             APP.kpi.online = APP.kpi.online.concat(onNow).slice(-180);
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);
             writeSession(SS.kpi, APP.kpi);
@@ -3982,6 +4123,13 @@ ta.value = '';
         // Detecta "lat,lon" y lo trata como coordenadas (sin geocodificar).
         const cm = /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/.exec(String(texto || '').trim());
         if (cm) { tipo = 'coord'; coords = { lat: parseFloat(cm[1]), lon: parseFloat(cm[2]) }; }
+        // Rango valido: una coordenada imposible deja la parada "sin ubicar"
+        // para siempre y hace fallar el trazado. Mejor avisar y no agregarla.
+        if (coords && coords.lat != null && coords.lon != null &&
+            (coords.lat < -90 || coords.lat > 90 || coords.lon < -180 || coords.lon > 180)) {
+            adviceWarn('Coordenadas invalidas', 'Latitud entre -90 y 90, longitud entre -180 y 180.');
+            return;
+        }
         const p = nuevaParada(tipo, texto, coords);
         if (extra && extra.zonaId) p.zonaId = extra.zonaId;
         if (extra && extra.municipioId) p.municipioId = extra.municipioId;
@@ -3992,6 +4140,9 @@ ta.value = '';
         if (!_planEdit) return;
         const clave = _planEdit.clave, eco = _planEdit.eco;
         const modo = _planEdit.modo === 'optimo' ? 'optimo' : 'secuencial';
+        // El motor se captura ANTES de cerrar el editor: cerrarEditorParadas()
+        // pone _planEdit = null y luego no se puede leer _planEdit.engine.
+        const engine = (_planEdit.engine === 'astar') ? 'astar' : 'osrm';
         const plan = {
             modo: modo,
             circuito: (modo === 'optimo') ? true : !!_planEdit.circuito,
@@ -4007,7 +4158,6 @@ ta.value = '';
         pintarModalLista();
         paintInfo();
         if (trazar) {
-            const engine = (_planEdit.engine === 'astar') ? 'astar' : 'osrm';
             if (engine === 'astar' && !APP.config.overpass) adviceWarn('A* desactivado', 'Activa "Permitir A* sobre datos OSM" en Ajustes · Rutas. Se usara OSRM.');
             planearRuta(eco, plan, null, (engine === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
         } else if (APP.config.autoRuta) {
@@ -4159,7 +4309,7 @@ ta.value = '';
         if (theme === 'claro') document.body.setAttribute('data-rondo-theme', 'claro');
         else document.body.removeAttribute('data-rondo-theme');
         const ti = document.querySelector('#rondo-tema .rondo-usym');
-        if (ti) ti.innerHTML = (theme === 'claro') ? UIS.theme : UIS.theme;
+        if (ti) ti.innerHTML = UIS.theme;
         const btnTema = byId('rondo-tema');
         if (btnTema) btnTema.title = 'Tema: ' + theme;
         if (c.acento) {

@@ -24,8 +24,13 @@
         return null;
     }
     // Peticion HTTP unificada. Devuelve Promise<{ok, status, texto, red?}>.
-    // `red:true` marca fallo de red/CORS (sin respuesta del servidor).
+    // `red:true` marca fallo de red/CORS (sin respuesta del servidor) y
+    // `timeout:true` distingue el corte por tiempo del resto de fallos.
     function httpRequest(opts) {
+        const url = opts && opts.url;
+        // Sin URL no hay peticion posible. Resolver como fallo en vez de
+        // dejar que `opts.url` lance y rompa el `await` del llamador.
+        if (!url) return Promise.resolve({ ok: false, status: 0, texto: 'URL vacia', red: true });
         const metodo = (opts && opts.method) || 'GET';
         const headers = (opts && opts.headers) || {};
         const body = opts && opts.body;
@@ -33,34 +38,64 @@
         const gm = gmXhr();
         if (gm) {
             return new Promise((resolve) => {
+                let listo = false;
+                let safety = null;
+                // Resolucion unica: el callback del gestor y el temporizador
+                // de seguridad pueden competir; gana el primero y el timer
+                // se limpia para no dejar trabajo colgando.
+                const terminar = (res) => {
+                    if (listo) return;
+                    listo = true;
+                    if (safety) clearTimeout(safety);
+                    resolve(res);
+                };
+                // Red de seguridad: si el gestor no soporta la opcion
+                // `timeout` no dispara ontimeout y la promesa quedaria
+                // pendiente para siempre. Preferimos resolver como timeout.
+                try {
+                    safety = setTimeout(() => terminar({ ok: false, status: 0, texto: '', red: true, timeout: true }), timeoutMs + 2000);
+                } catch (_) { safety = null; }
                 try {
                     gm({
                         method: metodo,
-                        url: opts.url,
+                        url: url,
                         headers: headers,
                         data: body,
                         timeout: timeoutMs,
-                        onload: (r) => resolve({
+                        onload: (r) => terminar({
                             ok: r.status >= 200 && r.status < 300,
                             status: r.status,
                             texto: r.responseText || ''
                         }),
-                        onerror: () => resolve({ ok: false, status: 0, texto: '', red: true }),
-                        ontimeout: () => resolve({ ok: false, status: 0, texto: '', red: true, timeout: true })
+                        onerror: () => terminar({ ok: false, status: 0, texto: '', red: true }),
+                        ontimeout: () => terminar({ ok: false, status: 0, texto: '', red: true, timeout: true })
                     });
                 } catch (e) {
-                    resolve({ ok: false, status: 0, texto: String((e && e.message) || e), red: true });
+                    terminar({ ok: false, status: 0, texto: String((e && e.message) || e), red: true });
                 }
             });
         }
+        if (typeof fetch !== 'function') {
+            return Promise.resolve({ ok: false, status: 0, texto: 'fetch no disponible', red: true });
+        }
         const ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
         const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
-        return fetch(opts.url, {
-            method: metodo,
-            headers: headers,
-            body: body,
-            signal: ctrl ? ctrl.signal : undefined
-        }).then((r) => r.text().then((t) => {
+        let peticion;
+        try {
+            // fetch() lanza SINCRONAMENTE ante una URL malformada o un scheme
+            // no soportado. Sin este try/catch el throw escaparia de
+            // httpRequest y romperia a quien hace `await httpRequest(...)`.
+            peticion = fetch(url, {
+                method: metodo,
+                headers: headers,
+                body: body,
+                signal: ctrl ? ctrl.signal : undefined
+            });
+        } catch (e) {
+            if (timer) clearTimeout(timer);
+            return Promise.resolve({ ok: false, status: 0, texto: String((e && e.message) || e), red: true });
+        }
+        return peticion.then((r) => r.text().then((t) => {
             if (timer) clearTimeout(timer);
             return { ok: r.ok, status: r.status, texto: t };
         })).catch((e) => {
