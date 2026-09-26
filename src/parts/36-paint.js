@@ -1,7 +1,7 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
-        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'chat', 'zonas'];
+        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'replay', 'chat', 'zonas'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
@@ -17,6 +17,7 @@
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
         else if (name === 'caravana') paintCaravana();
+        else if (name === 'replay') { rxReplayPintar(); }
         else if (name === 'chat') pintarChat();
         else if (name === 'zonas') { aplicarZonasVista(); paintGeocercas(); paintRiesgo(); }
         paintCounters();

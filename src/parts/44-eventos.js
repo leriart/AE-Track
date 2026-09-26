@@ -106,7 +106,10 @@
         if (railEl) railEl.addEventListener('click', togglePanel);
         byId('rondo-sb-main').addEventListener('click', () => mainBtn.click());
         byId('rondo-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
-        byId('rondo-sb-panel').addEventListener('click', togglePanel);
+        byId('rondo-sb-panel').addEventListener('click', alternarVentanas);
+        pintarBotonVentanas();
+        byId('rondo-sb-mas').addEventListener('click', () => rxAjustarVentanas(1));
+        byId('rondo-sb-menos').addEventListener('click', () => rxAjustarVentanas(-1));
         // Clic fuera del panel en modo barra lateral: se oculta.
         document.addEventListener('pointerdown', (e) => {
             if (!APP.config.ocultarAlClicFuera) return;
@@ -130,11 +133,11 @@
         byId('rondo-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
         const rutasTrazar = byId('rondo-rutas-trazar');
         if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
-        const rutasVentanas = byId('rondo-rutas-ventanas');
-        if (rutasVentanas) rutasVentanas.addEventListener('click', () => rxMapaVentanasToggle());
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
-        byId('rondo-informe').addEventListener('click', exportInforme);
+        byId('rondo-informe').addEventListener('click', () => exportReportePDF());
+        const informeMd = byId('rondo-informe-md');
+        if (informeMd) informeMd.addEventListener('click', exportInforme);
         const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {
@@ -155,7 +158,7 @@
                         planearRuta(eco, destino, null, (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
                     }
                 }
-                else if (b.classList.contains('rondo-ruta-mapa')) rxMapaDibujarRuta(eco);
+                else if (b.classList.contains('rondo-ruta-mapa')) rxRutaMiniMapa(eco);
                 else if (b.classList.contains('rondo-ruta-gmaps')) rxRutaGoogleMaps(eco);
                 else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
                 else if (b.classList.contains('rondo-traza-geo')) exportTraza(eco);
@@ -376,8 +379,7 @@
                 { id: 'limite', icon: UIS.speed, label: 'Límite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
                 { id: 'ruta-paradas', icon: UIS.route, label: 'Destinos y paradas (multipunto)…' },
-                { id: 'ruta-mapa', icon: UIS.map, label: 'Dibujar ruta en el mapa de la plataforma' },
-                { id: 'ruta-mapa-diag', icon: UIS.info, label: 'Diagnosticar mapa (consola)' },
+                { id: 'ruta-mapa', icon: UIS.map, label: 'Ver ruta en el mini-mapa' },
                 { id: 'ruta-gmaps', icon: UIS.pin, label: 'Abrir ruta en Google Maps' },
                 { id: 'ruta-osm', icon: UIS.zone, label: 'Abrir ruta en OpenStreetMap' },
                 { id: 'ruta-geo', icon: UIS.export, label: 'Exportar ruta GeoJSON' },
@@ -385,6 +387,7 @@
                 { id: 'traza-geo', icon: UIS.csv, label: 'Exportar traza GeoJSON' },
                 { id: 'viaje-analizar', icon: UIS.clock, label: 'Analizar viaje (historial)' },
                 { id: 'viaje-geo', icon: UIS.export, label: 'Exportar viaje GeoJSON' },
+                { id: 'replay', icon: UIS.moving, label: 'Reproducir el dia (replay)' },
                 { id: 'odo-reset', icon: UIS.refresh, label: 'Reiniciar odómetro' },
                 { sep: 1 },
                 { id: 'mapa-osm', icon: UIS.zone, label: 'Ver en OpenStreetMap' },
@@ -420,8 +423,7 @@
                     adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }, { type: 'number', icon: UIS.speed, okText: 'Guardar' });
             } else if (acc === 'ruta-paradas') abrirEditorParadas(eco);
-            else if (acc === 'ruta-mapa') rxMapaDibujarRuta(eco);
-            else if (acc === 'ruta-mapa-diag') rxMapaDiagnostico();
+            else if (acc === 'ruta-mapa') rxRutaMiniMapa(eco);
             else if (acc === 'ruta-gmaps') rxRutaGoogleMaps(eco);
             else if (acc === 'ruta-osm') rxRutaOSM(eco);
             else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
@@ -432,6 +434,7 @@
             } else if (acc === 'traza-geo') exportTraza(eco);
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
+            else if (acc === 'replay') rxReplayAbrirUnidad(eco);
             else if (acc === 'odo-reset') {
                 rondoConfirm('Reiniciar odómetro', 'El odómetro acumulado de ' + eco + ' volverá a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: UIS.refresh });
             }
@@ -500,6 +503,11 @@
             if (iaRadioEl) iaRadioEl.value = APP.config.iaRadioPoisM != null ? APP.config.iaRadioPoisM : 250;
             const iaTimeoutEl = byId('c-ia-timeout');
             if (iaTimeoutEl) iaTimeoutEl.value = APP.config.iaTimeoutS != null ? APP.config.iaTimeoutS : 25;
+            // v6.0.9: contexto ampliado por API y reporte del servidor.
+            const iaCtxEl = byId('c-ia-contexto-api');
+            if (iaCtxEl) iaCtxEl.checked = APP.config.iaContextoAPI !== false;
+            const iaRepEl = byId('c-ia-reporte-servidor');
+            if (iaRepEl) iaRepEl.checked = !!APP.config.iaReporteServidor;
             // v5.14: analisis en lote + resumen + limite diario.
             const iaResumenEl = byId('c-ia-resumen-on');
             if (iaResumenEl) iaResumenEl.checked = !!APP.config.iaResumenInforme;
@@ -765,6 +773,8 @@
             }
             const iaRadioEl = byId('c-ia-radio'); if (iaRadioEl) cf.iaRadioPoisM = clamp(isoNum(iaRadioEl.value, 250), 50, 2000);
             const iaTimeoutEl = byId('c-ia-timeout'); if (iaTimeoutEl) cf.iaTimeoutS = clamp(isoNum(iaTimeoutEl.value, 25), 5, 120);
+            const iaCtxEl = byId('c-ia-contexto-api'); if (iaCtxEl) cf.iaContextoAPI = !!iaCtxEl.checked;
+            const iaRepEl = byId('c-ia-reporte-servidor'); if (iaRepEl) cf.iaReporteServidor = !!iaRepEl.checked;
             // v5.14: analisis en lote + resumen narrativo.
             const iaResumenEl = byId('c-ia-resumen-on'); if (iaResumenEl) cf.iaResumenInforme = !!iaResumenEl.checked;
             const iaBatchmaxEl = byId('c-ia-batchmax'); if (iaBatchmaxEl) cf.iaBatchMax = clamp(isoNum(iaBatchmaxEl.value, DEFAULTS.iaBatchMax), 5, 50);

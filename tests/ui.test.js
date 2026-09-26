@@ -544,7 +544,7 @@ ok('bindings: chatSendBtn -> chatEnviar', /chatSendBtn\.addEventListener\('click
 ok('bindings: Enter envia, Shift+Enter inserta nueva linea', /e\.key === 'Enter' && !e\.shiftKey/.test(src));
 ok('bindings: textarea autoresize', /Math\.min\(140, chatInput\.scrollHeight\)/.test(src));
 ok('bindings: chatClearBtn con confirmacion', /rondoConfirm\('Limpiar conversacion'/.test(src));
-ok('setTab incluye chat en ids', /'dash', 'unidades', 'alertas', 'rutas', 'caravana', 'chat', 'zonas'/.test(src));
+ok('setTab incluye chat y replay en ids', /'dash', 'unidades', 'alertas', 'rutas', 'caravana', 'replay', 'chat', 'zonas'/.test(src));
 ok('setTab pinta chat al cambiar', /else if \(name === 'chat'\) pintarChat\(\)/.test(src));
 ok('toggleIA llama paintTabsChat', /paintIABatchBtn\(\);[\s\S]{0,200}paintTabsChat/.test(src));
 ok('cargarChat al arranque', /cargarChat\(\);[\s\S]{0,200}paintTabsChat\(\)/.test(src));
@@ -595,7 +595,7 @@ ok('chatContextoFlota devuelve unidades[]', /unidades: detalle/.test(src));
 ok('chatContextoFlota cap de detalle a 80', /detalle\.length < 80/.test(src));
 ok('chatContextoFlota incluye geocercasCargadas', /geocercasCargadas: zonasCargadas/.test(src));
 ok('chatContextoFlota incluye ecosFueraDeGeocerca', /ecosFueraDeGeocerca: fueraDeGeocerca\.slice\(0, 40\)/.test(src));
-ok('chatContextoFlota lista geocercas con unidades dentro', /geocercas = zonasCargadas \? \(APP\.zonas \|\| \[\]\)\.slice\(0, 40\)/.test(src) && /unidadesDentro: dentro/.test(src));
+ok('chatContextoFlota lista TODAS las geocercas con unidades dentro', /geocercasTodas = zonasCargadas \? \(APP\.zonas \|\| \[\]\)\.map\(/.test(src) && /unidadesDentro: porZona\.get\(nom\)/.test(src) && /geocercasTotal/.test(src));
 ok('chatContextoFlota resumen de zonas de riesgo', /zonasDeRiesgo: riesgoResumen/.test(src));
 ok('chatContextoFlota cuenta rutas activas', /rutasActivas: Object\.keys\(APP\.rutas \|\| \{\}\)\.length/.test(src));
 ok('chatContextoFlota ultimosAvisos con detalle', /detalle: \(a\.detalle \|\| ''\)\.slice\(0, 160\)/.test(src));
@@ -610,7 +610,7 @@ ok('ayuda rapida menciona Chat IA', /<b>Chat IA<\/b>: consultas libres a la IA/.
 ok('ayuda rapida tiene seccion Chat con la IA', /<h4>Chat con la IA<\/h4>/.test(src));
 ok('ayuda rapida menciona Alt+7', /<kbd>Alt<\/kbd>\+<kbd>7<\/kbd>: Chat IA/.test(src));
 ok('MANUAL.md tiene seccion Chat con la IA', /## Chat con la IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
-ok('MANUAL.md menciona las siete pestanas', /## Las siete pestanas/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+ok('MANUAL.md menciona las ocho pestanas', /## Las ocho pestanas/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 ok('MANUAL.md lista regla Detenida en geocerca', /Detenida en geocerca \| Lleva parada dentro de una geocerca/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 ok('MANUAL.md lista regla Aproximacion a zona de riesgo', /Aproximacion a zona de riesgo \| Una unidad en movimiento/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 ok('MANUAL.md atajo Alt+7', /Alt.*\+.*7.*Chat IA/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
@@ -777,8 +777,8 @@ ok('CSS del modal de carga', /#rondo-carga-modal \.carga-card\{/.test(src));
 ok('sugerencias en linea de OSM', /async function sugerenciasOSM\(/.test(src) && /nominatim\.openstreetmap\.org\/search\?format=jsonv2/.test(src));
 ok('editor de paradas usa sugerencias OSM (debounce)', /_rpmOsmTimer/.test(src) && /sugerenciasOSM\(q\)/.test(src));
 ok('carga rapida compara tambien municipios', /function cargaCatalogo\(/.test(src) && /municipiosRiesgo/.test(src));
-ok('ruta en el mapa: deteccion multi-motor', /function rxMapaCandidatos\(/.test(src) && /openlayers/.test(src) && /mapbox/.test(src) && /leaflet/.test(src));
-ok('ruta en el mapa: dibujar, quitar y diagnostico', /function rxMapaDibujarRuta\(/.test(src) && /function rxMapaQuitar\(/.test(src) && /function rxMapaDiagnostico\(/.test(src));
+ok('mini-mapa propio de OSM (sin depender del mapa de la plataforma)', /function rxMiniMapa\(/.test(src) && /function rxRutaMiniMapa\(/.test(src) && /tile\.openstreetmap\.org/.test(src) && /rondo-mm-tiles/.test(src));
+ok('mini-mapa: encuadre, tiles y marcadores', /function rxMMFit\(/.test(src) && /function rxMMTiles\(/.test(src) && /function rxMMMarcasHTML\(/.test(src) && /function rxMMDibujar\(/.test(src));
 ok('ruta en Google Maps y OSM (fallback)', /function rxRutaGoogleMaps\(/.test(src) && /google\.com\/maps\/dir\//.test(src) && /function rxRutaOSM\(/.test(src));
 ok('botones de mapa por ruta', /rondo-ruta-mapa/.test(src) && /rondo-ruta-gmaps/.test(src));
 
@@ -797,9 +797,48 @@ ok('busqueda OSM restringida por pais', /function rxGeoParams\(/.test(src) && /c
 ok('sesgo por cercania a la unidad', /geoBiasKm/.test(src) && /viewbox=/.test(src) && /APP\.geoRef/.test(src));
 ok('tarjeta de rutas rediseñada', /class="rondo-ruta-card/.test(src) && /rr-head/.test(src) && /rr-chip/.test(src) && /rr-progress/.test(src) && /function rxFmtDist\(/.test(src));
 
-ok('ruta en ventanas de vehiculos', /function rxMapaVentanasToggle\(/.test(src) && /function rxMapaVentanasSync\(/.test(src) && /openWindows\(\)/.test(src) && /rondo-rutas-ventanas/.test(src));
+ok('se elimino el overlay del mapa de la plataforma', !/function rxMapaDibujarRuta\(/.test(src) && !/function rxMapaCandidatos\(/.test(src) && !/function rxMapaVentanasToggle\(/.test(src) && !/rondo-rutas-ventanas/.test(src) && !/rxMapaDiagnostico/.test(src));
+
+// v6.0.11: replay del dia.
+ok('replay del dia con mini-mapa propio', /function rxReplayMapaCrear\(/.test(src) && /function rxReplayAnalizar\(/.test(src) && /function rxReplayTick\(/.test(src) && /rondo-replay-eco/.test(src) && /rondo-replay-centrar/.test(src));
+ok('replay: paradas, resumen y exportacion', /function rxReplayParadasHTML\(/.test(src) && /function rxReplayResumenHTML\(/.test(src) && /rondo-replay-paradas/.test(src) && /function rxReplayExportarGeoJSON\(/.test(src) && /function rxReplayExportarParadasCSV\(/.test(src));
+ok('mini-mapa por tarjeta de ruta (resaltado)', /function rxRutasMiniSync\(/.test(src) && /rondo-ru-mini-/.test(src) && /function rxRutaLineasMarcas\(/.test(src) && /glow: true/.test(src));
+
+// v6.0.12: replay con buscador, rango por horas y perfil de velocidad.
+ok('replay: buscador de unidades', /function rxReplayUnidades\(/.test(src) && /function rxReplayFiltrar\(/.test(src) && /id="rondo-replay-buscar"/.test(src) && /id="rondo-replay-sug"/.test(src));
+ok('replay: rango por dia y horas', /id="rondo-replay-desde"/.test(src) && /id="rondo-replay-hasta"/.test(src) && /function rxReplayRango\(/.test(src) && /function rxReplayRangoRapido\(/.test(src) && /data-rango="noche"/.test(src));
+ok('replay: perfil de velocidad', /function rxReplayChartHTML\(/.test(src) && /function rxReplayChartCursor\(/.test(src) && /id="rondo-replay-chart"/.test(src) && /rondo-replay-chart-cur/.test(src));
+
+// v6.0.13: lugares OSM en las paradas y reporte PDF.
+ok('paradas con lugar de OpenStreetMap', /function rxReplayLugarOSM\(/.test(src) && /function rxReplayReversa\(/.test(src) && /nominatim\.openstreetmap\.org\/reverse/.test(src) && /function rxReplayPoiCerca\(/.test(src) && /function rxReplayUbicarParadas\(/.test(src));
+ok('mini-mapa: actualizar marcas sin reencuadrar', /inst\.setMarcas = /.test(src));
+ok('reporte PDF completo y profesional', /function exportReportePDF\(/.test(src) && /function rxInformeHTML\(/.test(src) && /function rxImprimirHTML\(/.test(src) && /function rxInfEstilo\(/.test(src) && /size:A4/.test(src) && /rondo-print-frame/.test(src) && /id="rondo-informe-md"/.test(src));
+ok('reporte PDF del recorrido junto a GeoJSON/CSV', /function rxReplayInformeHTML\(/.test(src) && /function exportReplayPDF\(/.test(src) && /id="rondo-replay-pdf"/.test(src) && /rondo-replay-acciones/.test(src));
+ok('mini-mapa: version imprimible y capa fija (sin parpadeo)', /function rxMiniMapaHTML\(/.test(src) && /function rxMMTilesHTML\(/.test(src) && /rr-mini-abs/.test(src) && /rondo-lista-rutas\{position:relative\}/.test(src));
+ok('reporte del recorrido incluye el mapa', /rondo-mm-print/.test(src) && /mapa-leyenda/.test(src) && /rxMiniMapaHTML\(\{/.test(src));
 
 ok('alerta de cordura de ruta (destino/origen dudosos)', /Ruta inusualmente larga/.test(src) && /Origen lejano/.test(src));
+
+// v6.0.9: editor multipunto movible/redimensionable, reordenar y teclado.
+ok('editor multipunto movible y redimensionable', /function rpmBindWin\(/.test(src) && /function rpmClampWin\(/.test(src) && /class="rpm-resize"/.test(src) && /RPM_WIN_KEY/.test(src));
+ok('editor multipunto: reordenar paradas arrastrando', /function rpmBindReorden\(/.test(src) && /drop-target/.test(src));
+ok('editor multipunto: sugerencias con flechas y Enter', /function rpmSeleccionarSug\(/.test(src) && /function rpmResaltarSug\(/.test(src) && /ArrowDown/.test(src) && /_rpmSugList/.test(src));
+
+// v6.0.9: el boton Ocultar oculta/muestra las ventanas abiertas.
+ok('boton Ocultar muestra y oculta ventanas', /function alternarVentanas\(/.test(src) && /function ocultarVentanas\(/.test(src) && /function mostrarVentanas\(/.test(src) && /function rxVentanasSync\(/.test(src) && /pintarBotonVentanas/.test(src) && /'rondo-sb-panel'\)\.addEventListener\('click', alternarVentanas\)/.test(src));
+
+// v6.0.9: la IA amplia contexto por la API (historial, propiedades, reporte, catalogo).
+ok('IA: contexto ampliado por API', /function iaContextoAmpliado\(/.test(src) && /function iaDatosUnidad\(/.test(src) && /function iaEcosEnTexto\(/.test(src));
+ok('IA: historial y propiedades de la unidad', /function iaFetchUnidadHistorial\(/.test(src) && /function iaFetchUnidadProps\(/.test(src) && /_rxResumenHistorial/.test(src));
+ok('IA: reporte del dia opcional del servidor', /function iaFetchReporteDia\(/.test(src) && /function iaFetchReportTemplates\(/.test(src) && /report\/exec_report/.test(src) && /iaReporteServidor/.test(src));
+ok('IA: catalogo de municipios y geocercas completas', /municipiosCatalogo/.test(src) && /municipiosRiesgoCatalogo/.test(src) && /iaContextoAPI/.test(src));
+
+// v6.0.10: editor mas grande dimensionado por contenido; dialogos de IA
+// acotados a la pantalla; botones +/- para redimensionar ventanas.
+ok('editor multipunto mas grande y ajustado a la pantalla', /width:min\(1120px,96vw\)/.test(src) && /max-height:92vh/.test(src) && /rpmWin\.v2/.test(src));
+ok('dialogo acotado a la pantalla con cuerpo desplazable', /#rondo-dialog\{[^}]*max-height:90vh/.test(src) && /\.dlg-body\{[^}]*overflow-y:auto/.test(src) && /el\.style\.width = 'min\('/.test(src));
+ok('resultados de IA con ancho propio', /ancho: 760/.test(src) && /ancho: 780/.test(src));
+ok('botones +/- para redimensionar ventanas (verticales, sin texto)', /id="rondo-sb-mas"/.test(src) && /id="rondo-sb-menos"/.test(src) && /rondo-tile-escala/.test(src) && /rondo-tile mini/.test(src) && !/id="rondo-sb-mas"[^\n]*tile-lbl/.test(src) && !/id="rondo-sb-menos"[^\n]*tile-lbl/.test(src) && /function rxAjustarVentanas\(/.test(src) && /RX_VENTANA_PASO/.test(src) && /mas: \[/.test(src) && /menos: \[/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

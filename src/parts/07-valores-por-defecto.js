@@ -37,6 +37,12 @@
         iaResumenInforme: true, // anadir bloque "## Resumen IA" al informe Markdown diario
         iaLimiteDiario: 200,    // tope blando de llamadas IA/dia (cache + colas)
         iaCacheTTL: 21600,      // TTL del cache de respuestas IA (s, 6h por defecto)
+        // v6.0.9: la IA amplia el contexto consultando la API de Wialon
+        // (campos personalizados e historial de las unidades mencionadas en
+        // la pregunta). Solo lectura. El reporte del servidor es opcional
+        // porque puede interferir con los reportes de la propia plataforma.
+        iaContextoAPI: true,
+        iaReporteServidor: false,
         beep: true,
         beepVol: 0.06,
         desktop: false,

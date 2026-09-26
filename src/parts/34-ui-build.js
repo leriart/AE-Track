@@ -24,7 +24,11 @@
         panelEl.innerHTML = (
             '<div class="rondo-sidebar-tools" id="rondo-sidebar-tools">' +
             '<button class="rondo-tile primary" id="rondo-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="rondo-usym">' + UIS.gear + '</span><span class="tile-lbl">Automatizar</span></button>' +
-            '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar el panel (Alt+P)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
+            '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar o mostrar las ventanas de unidades abiertas (sin cerrarlas)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
+            '<div class="rondo-tile-escala" role="group" aria-label="Tamano de las ventanas de unidades">' +
+            '<button class="rondo-tile mini" id="rondo-sb-mas" title="Aumentar el tamano de las ventanas abiertas" aria-label="Aumentar el tamano de las ventanas"><span class="rondo-usym">' + UIS.mas + '</span></button>' +
+            '<button class="rondo-tile mini" id="rondo-sb-menos" title="Disminuir el tamano de las ventanas abiertas" aria-label="Disminuir el tamano de las ventanas"><span class="rondo-usym">' + UIS.menos + '</span></button>' +
+            '</div>' +
             '<button class="rondo-tile" id="rondo-sb-close" title="Cerrar todas las ventanas de unidades"><span class="rondo-usym">' + UIS.close + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
 '<header id="rondo-drag">' +
@@ -59,6 +63,8 @@
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-usym md">' + UIS.route + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="zonas" title="Geocercas de la plataforma y zonas de riesgo"><span class="rondo-usym md">' + UIS.map + '</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-usym md">' + UIS.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
+            // v6.0.11: tab de replay (reproducir el recorrido de un dia).
+            '<button class="tab" data-tab="replay" title="Reproducir el recorrido de una unidad en un dia"><span class="rondo-usym md">' + UIS.moving + '</span><span class="etqt">Replay</span></button>' +
             // v5.14.6: tab de chat con IA. Visible solo si la IA esta
             // habilitada y tiene API key (se oculta desde paintTabs() si no).
             '<button class="tab tab-ia" data-tab="chat" title="Chat con la IA (consultas libres)" style="display:none"><span class="rondo-usym md">' + UIS.robot + '</span><span class="etqt">Chat IA</span></button>' +
@@ -85,7 +91,8 @@
             '<button id="rondo-unidades-menu" class="rondo-tool" data-tabs="unidades" title="Agregar unidades, destinos y rutas multipunto"><span class="rondo-usym">' + UIS.route + '</span> Unidades y rutas</button>' +
             '<button id="rondo-carga-btn" class="rondo-tool" data-tabs="unidades" title="Carga rapida: pega la lista de clientes del embarque y asigna la ruta a una unidad"><span class="rondo-usym">' + UIS.watch + '</span> Carga rapida</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
-            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar informe del dia"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
+            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+            '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
             '<button id="rondo-captura" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Capturar las ventanas abiertas"><span class="rondo-usym">' + UIS.expand + '</span></button>' +
@@ -181,7 +188,6 @@
             '<div class="rondo-rutas-bar">' +
             '<span class="rondo-rutas-pend" id="rondo-rutas-pend"></span>' +
             '<button class="mini" id="rondo-rutas-trazar" title="Reintentar el trazado de todas las rutas pendientes (sin limite de intentos)"><span class="rondo-usym">' + UIS.refresh + '</span> Trazar pendientes</button>' +
-            '<button class="mini" id="rondo-rutas-ventanas" title="Dibujar la ruta en el mapa de cada ventana de unidad abierta (si el mapa es Leaflet)"><span class="rondo-usym">' + UIS.map + '</span> Ventanas</button>' +
             '</div>' +
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
@@ -192,6 +198,50 @@
              '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
              '</div>' +
              '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
+             '</div>' +
+             // v6.0.11: tab de replay. Reproduce el recorrido de un dia.
+             '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
+             '<div class="rondo-replay-bar">' +
+             '<div class="rondo-replay-buscar">' +
+             '<input type="text" id="rondo-replay-buscar" class="filtro" placeholder="Buscar unidad (eco, placa, nombre)..." autocomplete="off" spellcheck="false" title="Buscar la unidad a reproducir">' +
+             '<input type="hidden" id="rondo-replay-eco">' +
+             '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
+             '</div>' +
+             '<input type="date" id="rondo-replay-fecha" class="filtro" title="Dia a reproducir">' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora desde" value="00:00">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora hasta" value="23:59">' +
+             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
+             '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '</div>' +
+             '<div class="rondo-replay-quick">' +
+             '<span class="rq-lbl">Rango:</span>' +
+             '<button class="mini" data-rango="hoy">Hoy</button>' +
+             '<button class="mini" data-rango="ayer">Ayer</button>' +
+             '<button class="mini" data-rango="dia">Turno dia</button>' +
+             '<button class="mini" data-rango="noche">Turno noche</button>' +
+             '</div>' +
+             '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
+             '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
+             '<div class="rondo-replay-ctrl">' +
+             '<button class="mini" id="rondo-replay-play" title="Reproducir o pausar">Play</button>' +
+             '<select id="rondo-replay-vel" class="filtro" title="Velocidad de reproduccion">' +
+             '<option value="60">1 min/s</option>' +
+             '<option value="300" selected>5 min/s</option>' +
+             '<option value="900">15 min/s</option>' +
+             '<option value="3600">1 h/s</option>' +
+             '</select>' +
+             '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
+             '</div>' +
+             '<div class="rondo-replay-chart" id="rondo-replay-chart" title="Velocidad en el tiempo; clic para saltar"><div class="rondo-replay-vacio">Perfil de velocidad</div></div>' +
+             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
+             '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
+             '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-acciones">' +
+             '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido (resumen, paradas y eventos)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+             '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
+             '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
+             '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
              // habilitada y con API key (ver paintTabsChat()).
@@ -589,6 +639,9 @@
             '<label>Max tokens (opcional, vacio = el del modelo) <input type="text" id="c-ia-maxtok" autocomplete="off" placeholder="(omitir)" spellcheck="false" title="Vacio = se omite. Algunos modelos rechazan max_tokens bajo."></label>' +
             numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
             numRow('c-ia-timeout', 'Timeout (s)') +
+            '<h4>Contexto de la API</h4>' +
+            checkRow('c-ia-contexto-api', 'Ampliar contexto con la API (historial y propiedades de la unidad preguntada)') +
+            checkRow('c-ia-reporte-servidor', 'Usar reportes del servidor (report/exec_report; puede interferir con los reportes de la plataforma)') +
             '<h4>Analisis en lote y resumen</h4>' +
             checkRow('c-ia-resumen-on', 'Incluir resumen IA en el informe diario') +
             numRow('c-ia-batchmax', 'Max avisos por analisis en lote (5-50)') +

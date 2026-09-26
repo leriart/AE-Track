@@ -66,6 +66,10 @@
             '</div>';
         // Nombre accesible del dialogo (rol dialog ya lo pone ensureDialog).
         el.setAttribute('aria-labelledby', 'rondo-dlg-title');
+        // v6.0.10: ancho configurable por dialogo. Los resultados de IA son
+        // anchos y largos; se acotan a la pantalla y el cuerpo hace scroll.
+        if (opts.ancho) el.style.width = 'min(' + Math.max(320, Math.round(Number(opts.ancho) || 0)) + 'px,94vw)';
+        else el.style.width = '';
         try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
         el.classList.add('abierto');
         const okBtn = el.querySelector('.dlg-ok');

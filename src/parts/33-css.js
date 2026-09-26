@@ -122,6 +122,71 @@
             "#rondo-panel .rondo-ruta-card .rr-progress-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-ruta-card .rr-meta{display:flex;flex-wrap:wrap;gap:5px}\n" +
             "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-mini{height:150px;margin-top:2px}\n" +
+            "#rondo-lista-rutas{position:relative}\n" +
+            "#rondo-lista-rutas .rr-mini-abs{position:absolute;left:0;top:0;z-index:1}\n" +
+            "#rondo-lista-rutas .rr-mini-abs.rondo-mm{position:absolute}\n" +
+            // v6.0.11: replay del dia.
+            "#rondo-panel .rondo-replay-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}\n" +
+            "#rondo-panel .rondo-replay-bar .filtro{min-width:0;width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-bar .mini{width:100%;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-bar > input[type=date]{grid-column:1 / -1}\n" +
+            "#rondo-panel .rondo-replay-mapa{width:100%;height:240px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;overflow:hidden;margin:8px 0}\n" +
+            "#rondo-panel .rondo-replay-mapa svg{width:100%;height:100%;display:block}\n" +
+            "#rondo-panel .rondo-replay-vacio{display:flex;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-ctrl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-replay-ctrl input[type=range]{flex:1;min-width:110px}\n" +
+            "#rondo-panel .rondo-replay-info{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}\n" +
+            "#rondo-panel .rondo-replay-info .rr-chip{font:600 11px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 7px}\n" +
+            "#rondo-panel .rondo-replay-eventos{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}\n" +
+            "#rondo-panel .rondo-replay-ev{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
+            "#rondo-panel .rondo-replay-ev:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-replay-ev.activo{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-hora{color:var(--rondo-fg-dim);flex:0 0 auto;font-variant-numeric:tabular-nums}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-tipo{font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;border-radius:6px;padding:1px 5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-parada{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-exceso{color:#b71c1c}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-desvio{color:#e65100}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-zona{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-sec{margin-top:8px}\n" +
+            "#rondo-panel .rondo-replay-sec h5{margin:0 0 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-lista{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}\n" +
+            "#rondo-panel .rondo-replay-par{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
+            "#rondo-panel .rondo-replay-par:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-replay-par.activo{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-par .par-idx{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--rondo-bg-strong);display:inline-flex;align-items:center;justify-content:center;font:700 10px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-replay-par .par-hora{color:var(--rondo-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
+            "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
+            "#rondo-panel .rondo-replay-buscar{position:relative;grid-column:1 / -1;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-buscar input{width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-sug{position:relative;margin-top:4px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border);border-radius:8px;max-height:200px;overflow:auto;box-shadow:0 8px 22px rgba(0,0,0,.35);display:none}\n" +
+            "#rondo-panel .rondo-replay-sug.abierto{display:block}\n" +
+            "#rondo-panel .rondo-replay-sug-item{padding:6px 9px;cursor:pointer;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .rondo-replay-sug-item:last-child{border-bottom:none}\n" +
+            "#rondo-panel .rondo-replay-sug-item:hover,#rondo-panel .rondo-replay-sug-item.sel{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-panel .rondo-replay-sug-item .su-eco{font-weight:700;color:var(--rondo-fg);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-sug-item .su-sub{flex:1;min-width:0;color:var(--rondo-fg-dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-quick{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-replay-quick .rq-lbl{font-size:11px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-chart{height:70px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;overflow:hidden;margin:8px 0;cursor:crosshair}\n" +
+            "#rondo-panel .rondo-replay-chart svg{width:100%;height:100%;display:block}\n" +
+            "#rondo-panel .rondo-replay-leyenda{display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--rondo-fg-dim);margin-bottom:6px}\n" +
+            "#rondo-panel .rondo-replay-leyenda .lg{display:inline-flex;align-items:center;gap:4px}\n" +
+            "#rondo-panel .rondo-replay-leyenda .lg i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
+            "#rondo-panel .rondo-replay-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
+            // v6.0.11: mini-mapa propio (global: se usa en el panel y en el dialogo de ruta).
+            ".rondo-minimapa{height:min(64vh,560px);border-radius:10px;overflow:hidden}\n" +
+            ".rondo-mm{position:relative;overflow:hidden;background:var(--rondo-bg-strong);cursor:grab;touch-action:none;border-radius:10px;border:1px solid var(--rondo-border-soft)}\n" +
+            ".rondo-mm:active{cursor:grabbing}\n" +
+            ".rondo-mm-tiles{position:absolute;inset:0}\n" +
+            ".rondo-mm-tile{position:absolute;width:256px;height:256px;user-select:none;pointer-events:none}\n" +
+            ".rondo-mm-svg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}\n" +
+            ".rondo-mm-atrib{position:absolute;right:3px;bottom:2px;font-size:9px;color:#222;background:rgba(255,255,255,.72);padding:0 3px;border-radius:3px;pointer-events:none}\n" +
+            ".rondo-mm-resumen{font-size:12.5px;color:var(--rondo-fg-dim);margin:0 0 8px}\n" +
+            ".rondo-mm-hint{font-size:11px;color:var(--rondo-fg-dim);margin-top:6px}\n" +
             "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.45)}50%{box-shadow:0 0 0 5px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
@@ -806,6 +871,9 @@
             "#rondo-panel .rondo-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
             "#rondo-panel .rondo-tile.primary{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .rondo-tile.primary .rondo-usym{color:#fff}\n" +
+            "#rondo-panel .rondo-tile-escala{display:flex;flex-direction:column;gap:3px;justify-content:center;align-items:stretch;min-width:0}\n" +
+            "#rondo-panel .rondo-tile.mini{flex:1 1 0;min-height:0;padding:1px 0;gap:0;border-radius:8px}\n" +
+            "#rondo-panel .rondo-tile.mini .rondo-usym{font-size:12px}\n" +
             "#rondo-barra .rondo-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#rondo-barra .rondo-badge-estado.ok{background:var(--rondo-ok)}\n" +
             "#rondo-barra .rondo-badge-estado.warn{background:var(--rondo-warn)}\n" +
@@ -854,16 +922,16 @@
             /* ── Focus visible global ── */
             "#rondo-panel button:focus-visible,#rondo-barra button:focus-visible,#rondo-modal button:focus-visible,#rondo-config button:focus-visible,#rondo-ayuda button:focus-visible,#rondo-contexto .op:focus-visible,#rondo-panel input:focus-visible,#rondo-config input:focus-visible,#rondo-config select:focus-visible,#rondo-dialog button:focus-visible,#rondo-dialog input:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
             /* ── Dialogo propio (confirm / prompt / bienvenida) ── */
-            "#rondo-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:var(--rondo-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);font:13px var(--rondo-font);overflow:hidden}\n" +
+            "#rondo-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:var(--rondo-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);max-height:90vh;font:13px var(--rondo-font);overflow:hidden}\n" +
             "#rondo-dialog.abierto{display:flex;animation: rondoPop .18s var(--rondo-easing) both}\n" +
             "@keyframes rondoPop{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}\n" +
-            "#rondo-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}\n" +
+            "#rondo-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;flex:0 0 auto}\n" +
             "#rondo-dialog .dlg-head .rondo-usym{color:var(--rondo-accent-2);font-size:20px}\n" +
-            "#rondo-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px}\n" +
+            "#rondo-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;flex:1 1 auto}\n" +
             "#rondo-dialog p{margin:0;font-size:12.5px;color:var(--rondo-fg-dim);line-height:1.5}\n" +
             "#rondo-dialog input{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:7px;padding:8px 10px;font:13px var(--rondo-font);width:100%;box-sizing:border-box}\n" +
             "#rondo-dialog input:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 3px rgba(var(--rondo-accent-rgb),.2)}\n" +
-            "#rondo-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--rondo-bg);border-top:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--rondo-bg);border-top:1px solid var(--rondo-border-soft);flex:0 0 auto}\n" +
             "#rondo-dialog .dlg-foot button{border-radius:7px;padding:8px 16px;cursor:pointer;font:600 12px var(--rondo-font);border:1px solid transparent;transition:transform .12s,filter .15s,box-shadow .15s}\n" +
             "#rondo-dialog .dlg-foot .dlg-cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
             "#rondo-dialog .dlg-foot .dlg-ok{background:var(--rondo-accent-grad);color:#fff}\n" +
@@ -1027,12 +1095,13 @@
             /* ── v5.15: editor de paradas multipunto ───────────────── */
             "#rondo-plan-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:14px}\n" +
             "#rondo-plan-modal.abierto{display:flex}\n" +
-            "#rondo-plan-modal .rpm-card{width:min(580px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font)}\n" +
-            "#rondo-plan-modal .rpm-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700}\n" +
+            "#rondo-plan-modal .rpm-card{position:relative;width:min(1120px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font);min-width:0}\n" +
+            "#rondo-plan-modal .rpm-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700;cursor:move;touch-action:none;user-select:none}\n" +
+            "#rondo-plan-modal .rpm-head button{cursor:pointer}\n" +
             "#rondo-plan-modal .rpm-head .rpm-eco{color:var(--rondo-accent-2)}\n" +
             "#rondo-plan-modal .rpm-head .rpm-count{margin-left:8px;font-size:10.5px;font-weight:600;color:var(--rondo-fg-dim);background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:1px 7px}\n" +
             "#rondo-plan-modal .rpm-sug-item .rondo-usym{font-size:13px;color:var(--rondo-accent-2);flex:0 0 auto}\n" +
-            "#rondo-plan-modal .rpm-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}\n" +
+            "#rondo-plan-modal .rpm-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}\n" +
             "#rondo-plan-modal .rpm-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}\n" +
             "#rondo-plan-modal label.rpm-lbl{font-size:11.5px;color:var(--rondo-fg-dim);font-weight:600}\n" +
             "#rondo-plan-modal select,#rondo-plan-modal input[type=text]{background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font-size:12px}\n" +
@@ -1053,10 +1122,20 @@
             "#rondo-plan-modal .rpm-sug-item:hover{background:var(--rondo-bg-strong)}\n" +
             "#rondo-plan-modal .rpm-sug-item .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
             "#rondo-plan-modal .rpm-sug-item .k{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase}\n" +
-            "#rondo-plan-modal .rpm-foot{display:flex;gap:8px;justify-content:flex-end;padding:11px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-plan-modal .rpm-foot{display:flex;gap:8px;justify-content:flex-end;padding:11px 26px 11px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
             "#rondo-plan-modal .rpm-foot button{padding:7px 14px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font-weight:600}\n" +
             "#rondo-plan-modal .rpm-foot button.primary{background:var(--rondo-accent);color:#fff;border-color:transparent}\n" +
             "#rondo-plan-modal .rpm-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
+            // v6.0.9: editor movible/redimensionable, reordenar arrastrando y
+            // navegacion por teclado en las sugerencias.
+            "#rondo-plan-modal .rpm-card.moviendo{box-shadow:0 30px 90px rgba(0,0,0,.65)}\n" +
+            "#rondo-plan-modal .rpm-resize{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;z-index:4;touch-action:none;" +
+            "background:linear-gradient(135deg,transparent 46%,var(--rondo-fg-mute) 46%,var(--rondo-fg-mute) 54%,transparent 54%,transparent 68%,var(--rondo-fg-mute) 68%,var(--rondo-fg-mute) 76%,transparent 76%);border-bottom-right-radius:12px}\n" +
+            "#rondo-plan-modal .rpm-stop .rpm-grip{color:var(--rondo-fg-mute);cursor:grab;font-size:13px;line-height:1;flex:0 0 auto;touch-action:none}\n" +
+            "#rondo-plan-modal .rpm-stop .rpm-grip:active{cursor:grabbing}\n" +
+            "#rondo-plan-modal .rpm-stop.dragging{opacity:.45}\n" +
+            "#rondo-plan-modal .rpm-stop.drop-target{border-top:2px solid var(--rondo-accent-2)}\n" +
+            "#rondo-plan-modal .rpm-sug-item.sel{background:var(--rondo-bg-strong);box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
             /* ── v5.15: geocercas enriquecidas ─────────────────────── */
             "#rondo-panel .rondo-geo-kpis{display:flex;gap:6px;flex-wrap:wrap}\n" +
             "#rondo-panel .rondo-geo-kpi{flex:1;min-width:70px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:1px}\n" +

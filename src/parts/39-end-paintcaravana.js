@@ -293,8 +293,8 @@
     }
 
     setInterval(() => {
-        // Rutas en ventanas: se sincroniza aunque el panel este oculto.
-        try { if (typeof rxMapaVentanasOn === 'function' && rxMapaVentanasOn()) rxMapaVentanasSync(); } catch (_) { /* noop */ }
+        // Ventanas ocultas: oculta tambien las que se abran despues.
+        try { if (typeof rxVentanasSync === 'function') rxVentanasSync(); } catch (_) { /* noop */ }
         if (panelEl.style.display === 'none') return;
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();

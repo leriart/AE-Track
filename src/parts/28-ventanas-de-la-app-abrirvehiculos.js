@@ -277,6 +277,115 @@
         document.querySelectorAll('[id$="_pursuit_win_close_id"]').forEach((b) => {
             b.dispatchEvent(new PAGE.MouseEvent('click', { bubbles: true, cancelable: true }));
         });
+        // Si estaban ocultas, al cerrarlas el modo deja de aplicar.
+        _ventanasOcultas = false;
+        pintarBotonVentanas();
+    }
+    // v6.0.9: el boton "Ocultar" (junto a Automatizar) oculta o vuelve a
+    // mostrar las ventanas de unidades abiertas, sin cerrarlas.
+    let _ventanasOcultas = false;
+    function ventanasOcultasOn() { return _ventanasOcultas; }
+    function pintarBotonVentanas() {
+        const btn = byId('rondo-sb-panel');
+        if (!btn) return;
+        const icon = btn.querySelector('.rondo-usym');
+        const lbl = btn.querySelector('.tile-lbl');
+        if (_ventanasOcultas) {
+            if (icon) icon.innerHTML = UIS.panel;
+            if (lbl) lbl.textContent = 'Mostrar';
+            btn.title = 'Mostrar las ventanas de unidades que ocultaste';
+            btn.classList.add('activo');
+        } else {
+            if (icon) icon.innerHTML = UIS.collapse;
+            if (lbl) lbl.textContent = 'Ocultar';
+            btn.title = 'Ocultar las ventanas de unidades abiertas (sin cerrarlas)';
+            btn.classList.remove('activo');
+        }
+    }
+    function ocultarVentanas() {
+        const list = openWindows();
+        if (!list.length) { adviceWarn('Sin ventanas', 'No hay ventanas de unidades abiertas.'); return; }
+        list.forEach((v) => {
+            if (!v.cont) return;
+            v.cont.dataset.rondoOculta = '1';
+            v.cont.style.display = 'none';
+        });
+        _ventanasOcultas = true;
+        pintarBotonVentanas();
+        advice('Ventanas ocultas', list.length + ' ventana(s) · pulsa de nuevo para mostrarlas');
+    }
+    function mostrarVentanas() {
+        const list = openWindows();
+        list.forEach((v) => {
+            if (!v.cont) return;
+            if (v.cont.dataset.rondoOculta) { v.cont.style.display = ''; delete v.cont.dataset.rondoOculta; }
+        });
+        _ventanasOcultas = false;
+        pintarBotonVentanas();
+        advice('Ventanas visibles', list.length + ' ventana(s)');
+    }
+    function alternarVentanas() {
+        if (_ventanasOcultas) mostrarVentanas(); else ocultarVentanas();
+    }
+    // Mantiene ocultas las ventanas nuevas que se abran mientras el modo este
+    // activo (se llama desde el intervalo de 1 s).
+    function rxVentanasSync() {
+        if (!_ventanasOcultas) return;
+        openWindows().forEach((v) => {
+            if (v.cont && !v.cont.dataset.rondoOculta) {
+                v.cont.dataset.rondoOculta = '1';
+                v.cont.style.display = 'none';
+            }
+        });
+    }
+    // v6.0.10: botones +/- para agrandar o encoger las ventanas abiertas.
+    const RX_VENTANA_PASO = 80;
+    function rxDesplazarVentana(c, dx, dy) {
+        const cs = getComputedStyle(c);
+        const t = cs.transform;
+        if (t && t !== 'none' && t.indexOf('matrix') === 0) {
+            try {
+                const DMR = PAGE.DOMMatrixReadOnly || DOMMatrixReadOnly;
+                const m = new DMR(t);
+                c.style.transform = 'translate(' + (m.m41 + dx) + 'px,' + (m.m42 + dy) + 'px)';
+                return;
+            } catch (_) { /* fallback a left/top */ }
+        }
+        c.style.left = ((parseFloat(cs.left) || 0) + dx) + 'px';
+        c.style.top = ((parseFloat(cs.top) || 0) + dy) + 'px';
+    }
+    function rxAjustarVentanas(dir) {
+        const list = openWindows();
+        if (!list.length) { adviceWarn('Sin ventanas', 'No hay ventanas de unidades abiertas.'); return; }
+        const d = dir >= 0 ? 1 : -1;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let ajustadas = 0;
+        list.forEach((v) => {
+            const c = v.cont;
+            if (!c) return;
+            const r = c.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) return; // oculta o sin tamano
+            const w = Math.round(clamp(r.width + d * RX_VENTANA_PASO, 260, Math.max(260, vw - 20)));
+            const h = Math.round(clamp(r.height + d * RX_VENTANA_PASO, 170, Math.max(170, vh - 20)));
+            if (w === Math.round(r.width) && h === Math.round(r.height)) return;
+            c.style.width = w + 'px';
+            c.style.height = h + 'px';
+            // Reubica si se salio por abajo/derecha (asi no se pierde).
+            const r2 = c.getBoundingClientRect();
+            let nx = r2.left, ny = r2.top;
+            if (nx + w > vw - 4) nx = Math.max(4, vw - 4 - w);
+            if (ny + h > vh - 4) ny = Math.max(4, vh - 4 - h);
+            if (nx < 4) nx = 4;
+            if (ny < 4) ny = 4;
+            if (Math.abs(nx - r2.left) > 1 || Math.abs(ny - r2.top) > 1) rxDesplazarVentana(c, nx - r2.left, ny - r2.top);
+            ajustadas++;
+        });
+        // Avisa a los mapas (Leaflet) de que el contenedor cambio de tamano.
+        try {
+            const W = PAGE || window;
+            W.dispatchEvent(new (W.Event || Event)('resize'));
+        } catch (_) { /* noop */ }
+        if (ajustadas) advice(d >= 0 ? 'Ventanas mas grandes' : 'Ventanas mas pequenas', ajustadas + ' ventana(s)');
     }
     // Cierre seguro en dos pasos: el primer clic "arma" el boton y el segundo
     // ejecuta el cierre. Asi un clic accidental no cierra todas las ventanas.

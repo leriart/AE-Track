@@ -870,9 +870,11 @@ PANEL (barra lateral a pantalla completa, lado y ancho configurables):
 - Dashboard: salud de la flota, KPIs (en linea, sin senal, detenidas, en movimiento, en zonas, avisos hoy), unidades que requieren atencion, zonas con unidades, rutas activas, avisos recientes. Las tarjetas KPI son clicables y filtran.
 - Unidades: tarjetas por unidad con estado, placa, velocidad, ultimo reporte, zona y ruta. Clic para abrir su ventana; clic derecho para mas opciones (planear ruta, geocerca, odometro, limite de velocidad, silenciar). Barra "Ordenar".
 - Avisos: historial de alertas filtrable por severidad (criticas/altas/medias/bajas). Boton IA por aviso, boton "Analizar lote" (resumen + ranking) y "Avisos CSV".
-- Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad.
+- Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad. En el editor multipunto la ventana se mueve (arrastra el encabezado) y se redimensiona (esquina inferior derecha); las sugerencias se recorren con flechas arriba/abajo y Enter; las paradas se reordenan arrastrando el asa. La ruta se puede ver en un mini-mapa propio con tiles de OpenStreetMap.
 - Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:).
 - Caravana: unidades cerca de una unidad lider (distancia firmada, sentido contrario, no vigiladas).
+- Replay: reproduce el recorrido de una unidad en un dia o rango de horas, con buscador de unidades, mini-mapa (tiles de OpenStreetMap), perfil de velocidad, resumen, lista de paradas (hora, duracion y lugar resuelto con OpenStreetMap: comercio, direccion o municipio) y eventos (geocercas, excesos, desvios). Exporta el recorrido a GeoJSON, las paradas a CSV y un reporte PDF del recorrido. Solo lectura.
+- Reporte PDF: desde la barra de herramientas se genera un reporte operativo completo (resumen, KPIs, unidades, avisos del dia, rutas, sin senal, geocercas y zonas de riesgo) paginado en A4 y listo para guardar como PDF.
 - Chat IA: consultas libres a la IA (solo si la IA esta habilitada con API key). La IA ve el estado de la flota.
 - Riesgo: se ve dentro de Zonas (segmentado).
 
@@ -892,7 +894,7 @@ AJUSTES (engranaje del panel):
 
 ATAJOS: Alt+1..6 cambia de tab (Dashboard..Caravana), Alt+P y Alt+L muestran/ocultan el panel, Alt+H pliega la barra, Esc cierra dialogos.
 
-IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres.
+IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres y, si la pregunta menciona un economico, consulta por API su historial de 24 h y sus campos personalizados. El boton Ocultar (junto a Automatizar) oculta/muestra las ventanas de unidades abiertas sin cerrarlas; los botones + y - las agrandan o encogen. Los resultados de Analizar lote/flota se acotan al alto de la pantalla y hacen scroll.
 
 POPULAR: los avisos criticos abren la ventana de la unidad (si esta activado). Las ventanas de unidad se resaltan con un contorno del color de la severidad. El odometro y el limite de velocidad se editan con clic derecho sobre la unidad.`;
 
@@ -906,8 +908,10 @@ Tienes DOS fuentes de informacion:
    - unidades[]: por unidad -> eco, placa, estado (online/offline), zona (nombre de la geocerca, null = fuera de toda geocerca), edadMin (minutos sin reportar), vel (km/h).
    - unidadesFueraDeGeocerca / ecosFueraDeGeocerca: unidades fuera de toda geocerca.
    - offlineFueraDeGeocerca: unidades SIN SENAL y fuera de geocerca (esta es la respuesta directa a "que unidades fuera de geocerca se desconectaron").
-   - geocercas[]: cada geocerca con las unidades dentro.
+   - geocercas[]: TODAS las geocercas, cada una con su tipo (circulo/poligono/linea) y las unidades dentro.
    - zonasDeRiesgo: resumen (total/alto/medio/bajo) o null si no hay dataset.
+   - municipiosCatalogo[] / municipiosRiesgoCatalogo[]: nombres de municipios cargados (OSM y de riesgo).
+   - consultaUnidades[]: SOLO aparece si tu pregunta menciona economicos (numeros de 3 a 5 digitos). Por unidad -> camposPersonalizados (conductor, marca...), ultimas24h (km, velMax, movimientoMin, detenidoMin, paradas, primera/ultima posicion) y, si esta activado, reporteServidorHoy.
    - alertasHoy, porSeveridad: conteos de hoy.
    - ultimosAvisos[]: ultimos avisos con ts, sev, regla, eco, titulo y detalle (el detalle suele indicar la zona o "fuera de geocercas").
    - desconexionesHoy[]: avisos de sin senal/desconexion de hoy con su detalle (para correlacionar con la zona).
@@ -915,6 +919,7 @@ Tienes DOS fuentes de informacion:
 
 Reglas:
 - Se breve: 2-5 lineas salvo que pidan detalle.
+- Si la pregunta menciona un economico, revisa consultaUnidades[] (historial de 24 h y campos personalizados); si no aparece ahi, di que esa unidad no esta en el alcance o no reporta en el periodo.
 - Para datos concretos usa SOLO el contexto adjunto. Si el dato no esta (p.ej. historial de dias anteriores), dilo claramente y explica con que reporte/accion se obtendria.
 - Si geocercasCargadas es false, NO afirmes que una unidad esta "fuera de geocerca": di que las geocercas no estan cargadas.
 - Para dudas de uso, apóyate en el manual y da pasos concretos (ruta de menu incluida).
@@ -982,6 +987,8 @@ Reglas:
             const detalle = [];
             const offlineFuera = [];
             const fueraDeGeocerca = [];        // todas (online u offline)
+            // v6.0.9: unidades agrupadas por geocerca (para la lista completa).
+            const porZona = new Map();
             for (const u of unidadesRaw) {
                 let info, st;
                 try { info = parseUnitName(u); st = unitState(u); } catch (_) { continue; }
@@ -994,6 +1001,9 @@ Reglas:
                 if (zona === '') {
                     fueraDeGeocerca.push(eco);
                     if (!online) offlineFuera.push(eco);
+                } else if (zona) {
+                    if (!porZona.has(zona)) porZona.set(zona, []);
+                    porZona.get(zona).push(eco);
                 }
                 if (detalle.length < 80) {
                     // v5.15: contexto enriquecido por unidad: posicion,
@@ -1045,16 +1055,19 @@ Reglas:
             // Geocercas de la plataforma con las unidades dentro de cada una.
             // Permite responder "que unidades hay en CEDIS Norte", "cuantas
             // geocercas tengo", etc.
-            const geocercas = zonasCargadas ? (APP.zonas || []).slice(0, 40).map((z) => {
-                const dentro = [];
-                for (const u of unidadesRaw) {
-                    try {
-                        const st = unitState(u);
-                        if (st.lat != null && inZone(st.lat, st.lon, z)) dentro.push(parseUnitName(u).eco);
-                    } catch (_) { /* noop */ }
-                }
-                return { nombre: z.n || z.nombre || ('Zona ' + z.id), unidadesDentro: dentro };
+            // v6.0.9: lista COMPLETA de geocercas (antes se recortaba a 40).
+            // Se acota a un maximo alto por seguridad de tamano.
+            const geocercasTodas = zonasCargadas ? (APP.zonas || []).map((z) => {
+                const nom = z.n || z.nombre || ('Zona ' + z.id);
+                return {
+                    nombre: nom,
+                    tipo: (z.t === 3 ? 'circulo' : (z.t === 2 ? 'poligono' : (z.t === 1 ? 'linea' : 'zona'))),
+                    unidadesDentro: porZona.get(nom) || []
+                };
             }) : [];
+            const geocercasTotal = geocercasTodas.length;
+            const geocercas = geocercasTodas.slice(0, 800);
+            const geocercasTruncado = geocercasTotal > geocercas.length;
             // Zonas de riesgo cargadas (resumen).
             const riesgoResumen = (APP.riesgo && APP.riesgo.length) ? {
                 total: APP.riesgo.length,
@@ -1099,6 +1112,11 @@ Reglas:
                     .map((z) => ({ id: z.id, estado: z.estado || '', municipio: z.municipio || '', score: z.score, radio_m: z.radio_m || 0 }))
                 : [];
             const municipios = { osm: (APP.municipios || []).length, deRiesgo: (APP.municipiosRiesgo || []).length };
+            // v6.0.9: catalogo de municipios (nombres) para que la IA pueda
+            // ubicar destinos/preguntas por municipio. Acotado para no inflar.
+            const municipiosCatalogo = (APP.municipios || []).slice(0, 600)
+                .map((m) => String(m.nombre || '') + (m.estado ? ', ' + m.estado : ''));
+            const municipiosRiesgoCatalogo = (APP.municipiosRiesgo || []).slice(0, 300).map((m) => String(m.nombre || ''));
             const configResumen = {
                 cadenciaSeg: Math.round((APP.config.pollMs || 10000) / 1000),
                 offlineMin: APP.config.offlineMin, gpsMin: APP.config.gpsMin,
@@ -1128,9 +1146,13 @@ Reglas:
                 ultimosAvisos: ultimos,
                 desconexionesHoy: desconexiones,
                 geocercas,
+                geocercasTotal,
+                geocercasTruncado,
                 zonasDeRiesgo: riesgoResumen,
                 riesgoZonas,
                 municipios,
+                municipiosCatalogo,
+                municipiosRiesgoCatalogo,
                 rutasActivas: Object.keys(APP.rutas || {}).length,
                 rutas: rutasResumen,
                 viajes,
@@ -1138,6 +1160,57 @@ Reglas:
                 unidades: detalle
             };
         } catch (_) { return { fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; }
+    }
+    // v6.0.9: datos ampliados por unidad para el chat. Detecta economicos
+    // (3-5 digitos) mencionados en la pregunta y trae, solo para esos,
+    // campos personalizados e historial de las ultimas 24 h. Todo lectura.
+    function iaEcosEnTexto(texto) {
+        const out = [];
+        const vistos = new Set();
+        const matches = String(texto || '').match(/\b\d{3,5}\b/g) || [];
+        for (let i = 0; i < matches.length; i++) {
+            const n = normEco(matches[i]);
+            if (!n || vistos.has(n)) continue;
+            vistos.add(n);
+            const it = unitByEco(n);
+            if (it) out.push(it);
+            if (out.length >= 3) break;
+        }
+        return out;
+    }
+    const _iaUnidadCache = new Map(); // eco -> { t, datos }
+    async function iaDatosUnidad(it) {
+        const eco = it.info.eco || it.info.clave;
+        const hit = _iaUnidadCache.get(eco);
+        if (hit && (Date.now() - hit.t) < 45000) return hit.datos;
+        const uid = it.u && it.u.id != null ? it.u.id : null;
+        const datos = { eco: eco, nombre: it.info.nombre, placa: it.info.placa || null };
+        try {
+            if (APP.config.iaContextoAPI !== false) {
+                const props = await iaFetchUnidadProps(uid, it.info.nombre);
+                if (props && Object.keys(props).length) datos.camposPersonalizados = props;
+                const hist = await iaFetchUnidadHistorial(uid, 24);
+                if (hist) datos.ultimas24h = hist;
+                if (APP.config.iaReporteServidor && uid != null) {
+                    const rep = await iaFetchReporteDia(uid);
+                    if (rep && rep.length) datos.reporteServidorHoy = rep;
+                }
+            }
+        } catch (_) { /* devuelve lo basico */ }
+        _iaUnidadCache.set(eco, { t: Date.now(), datos: datos });
+        return datos;
+    }
+    async function iaContextoAmpliado(ultimoTexto) {
+        const base = chatContextoFlota();
+        try {
+            if (APP.config.iaContextoAPI === false) return base;
+            const its = iaEcosEnTexto(ultimoTexto);
+            if (!its.length) return base;
+            const detalle = [];
+            for (let i = 0; i < its.length; i++) detalle.push(await iaDatosUnidad(its[i]));
+            base.consultaUnidades = detalle;
+            return base;
+        } catch (_) { return base; }
     }
     // v5.14.7: el chat se renderiza de forma INCREMENTAL para no parpadear.
 //   - pintarChat(): pinta la cabecera (provider) y, si no hay mensajes,
@@ -1247,9 +1320,13 @@ function chatMsgHTML(m) {
         // Filtra los mensajes de error locales: la API solo acepta roles
         // system/user/assistant y el chat se rompia tras el primer fallo.
         const validos = (Array.isArray(mensajes) ? mensajes : []).filter((m) => m && m.role !== 'error');
+        // v6.0.9: el contexto se amplia consultando la API para las unidades
+        // mencionadas en la ultima pregunta (historial, propiedades...).
+        const ultimo = validos.slice().reverse().find((m) => m.role === 'user');
+        const contexto = await iaContextoAmpliado(ultimo ? ultimo.text : '');
         const messages = [
             { role: 'system', content: CHAT_SYS + '\n\nContexto actual de la flota:\n' +
-                JSON.stringify(chatContextoFlota(), null, 0) },
+                JSON.stringify(contexto, null, 0) },
             ...validos.map((m) => ({ role: m.role === 'ia' ? 'assistant' : m.role, content: m.text || '' }))
         ];
         const body = {
@@ -1477,7 +1554,7 @@ ta.value = '';
                 cancelText: 'Cerrar',
                 okText: 'Cerrar',
                 onOk: () => {},
-                ancho: 520
+                ancho: 760
             });
         } finally {
             setBusy(btn, false);
@@ -1530,7 +1607,7 @@ ta.value = '';
                 cancelText: 'Cerrar',
                 okText: 'Cerrar',
                 onOk: () => {},
-                ancho: 540
+                ancho: 780
             });
         } finally {
             setBusy(btn, false);

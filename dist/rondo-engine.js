@@ -871,9 +871,11 @@ PANEL (barra lateral a pantalla completa, lado y ancho configurables):
 - Dashboard: salud de la flota, KPIs (en linea, sin senal, detenidas, en movimiento, en zonas, avisos hoy), unidades que requieren atencion, zonas con unidades, rutas activas, avisos recientes. Las tarjetas KPI son clicables y filtran.
 - Unidades: tarjetas por unidad con estado, placa, velocidad, ultimo reporte, zona y ruta. Clic para abrir su ventana; clic derecho para mas opciones (planear ruta, geocerca, odometro, limite de velocidad, silenciar). Barra "Ordenar".
 - Avisos: historial de alertas filtrable por severidad (criticas/altas/medias/bajas). Boton IA por aviso, boton "Analizar lote" (resumen + ranking) y "Avisos CSV".
-- Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad.
+- Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad. En el editor multipunto la ventana se mueve (arrastra el encabezado) y se redimensiona (esquina inferior derecha); las sugerencias se recorren con flechas arriba/abajo y Enter; las paradas se reordenan arrastrando el asa. La ruta se puede ver en un mini-mapa propio con tiles de OpenStreetMap.
 - Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:).
 - Caravana: unidades cerca de una unidad lider (distancia firmada, sentido contrario, no vigiladas).
+- Replay: reproduce el recorrido de una unidad en un dia o rango de horas, con buscador de unidades, mini-mapa (tiles de OpenStreetMap), perfil de velocidad, resumen, lista de paradas (hora, duracion y lugar resuelto con OpenStreetMap: comercio, direccion o municipio) y eventos (geocercas, excesos, desvios). Exporta el recorrido a GeoJSON, las paradas a CSV y un reporte PDF del recorrido. Solo lectura.
+- Reporte PDF: desde la barra de herramientas se genera un reporte operativo completo (resumen, KPIs, unidades, avisos del dia, rutas, sin senal, geocercas y zonas de riesgo) paginado en A4 y listo para guardar como PDF.
 - Chat IA: consultas libres a la IA (solo si la IA esta habilitada con API key). La IA ve el estado de la flota.
 - Riesgo: se ve dentro de Zonas (segmentado).
 
@@ -893,7 +895,7 @@ AJUSTES (engranaje del panel):
 
 ATAJOS: Alt+1..6 cambia de tab (Dashboard..Caravana), Alt+P y Alt+L muestran/ocultan el panel, Alt+H pliega la barra, Esc cierra dialogos.
 
-IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres.
+IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres y, si la pregunta menciona un economico, consulta por API su historial de 24 h y sus campos personalizados. El boton Ocultar (junto a Automatizar) oculta/muestra las ventanas de unidades abiertas sin cerrarlas; los botones + y - las agrandan o encogen. Los resultados de Analizar lote/flota se acotan al alto de la pantalla y hacen scroll.
 
 POPULAR: los avisos criticos abren la ventana de la unidad (si esta activado). Las ventanas de unidad se resaltan con un contorno del color de la severidad. El odometro y el limite de velocidad se editan con clic derecho sobre la unidad.`;
 
@@ -907,8 +909,10 @@ Tienes DOS fuentes de informacion:
    - unidades[]: por unidad -> eco, placa, estado (online/offline), zona (nombre de la geocerca, null = fuera de toda geocerca), edadMin (minutos sin reportar), vel (km/h).
    - unidadesFueraDeGeocerca / ecosFueraDeGeocerca: unidades fuera de toda geocerca.
    - offlineFueraDeGeocerca: unidades SIN SENAL y fuera de geocerca (esta es la respuesta directa a "que unidades fuera de geocerca se desconectaron").
-   - geocercas[]: cada geocerca con las unidades dentro.
+   - geocercas[]: TODAS las geocercas, cada una con su tipo (circulo/poligono/linea) y las unidades dentro.
    - zonasDeRiesgo: resumen (total/alto/medio/bajo) o null si no hay dataset.
+   - municipiosCatalogo[] / municipiosRiesgoCatalogo[]: nombres de municipios cargados (OSM y de riesgo).
+   - consultaUnidades[]: SOLO aparece si tu pregunta menciona economicos (numeros de 3 a 5 digitos). Por unidad -> camposPersonalizados (conductor, marca...), ultimas24h (km, velMax, movimientoMin, detenidoMin, paradas, primera/ultima posicion) y, si esta activado, reporteServidorHoy.
    - alertasHoy, porSeveridad: conteos de hoy.
    - ultimosAvisos[]: ultimos avisos con ts, sev, regla, eco, titulo y detalle (el detalle suele indicar la zona o "fuera de geocercas").
    - desconexionesHoy[]: avisos de sin senal/desconexion de hoy con su detalle (para correlacionar con la zona).
@@ -916,6 +920,7 @@ Tienes DOS fuentes de informacion:
 
 Reglas:
 - Se breve: 2-5 lineas salvo que pidan detalle.
+- Si la pregunta menciona un economico, revisa consultaUnidades[] (historial de 24 h y campos personalizados); si no aparece ahi, di que esa unidad no esta en el alcance o no reporta en el periodo.
 - Para datos concretos usa SOLO el contexto adjunto. Si el dato no esta (p.ej. historial de dias anteriores), dilo claramente y explica con que reporte/accion se obtendria.
 - Si geocercasCargadas es false, NO afirmes que una unidad esta "fuera de geocerca": di que las geocercas no estan cargadas.
 - Para dudas de uso, apóyate en el manual y da pasos concretos (ruta de menu incluida).
@@ -983,6 +988,8 @@ Reglas:
             const detalle = [];
             const offlineFuera = [];
             const fueraDeGeocerca = [];        // todas (online u offline)
+            // v6.0.9: unidades agrupadas por geocerca (para la lista completa).
+            const porZona = new Map();
             for (const u of unidadesRaw) {
                 let info, st;
                 try { info = parseUnitName(u); st = unitState(u); } catch (_) { continue; }
@@ -995,6 +1002,9 @@ Reglas:
                 if (zona === '') {
                     fueraDeGeocerca.push(eco);
                     if (!online) offlineFuera.push(eco);
+                } else if (zona) {
+                    if (!porZona.has(zona)) porZona.set(zona, []);
+                    porZona.get(zona).push(eco);
                 }
                 if (detalle.length < 80) {
                     // v5.15: contexto enriquecido por unidad: posicion,
@@ -1046,16 +1056,19 @@ Reglas:
             // Geocercas de la plataforma con las unidades dentro de cada una.
             // Permite responder "que unidades hay en CEDIS Norte", "cuantas
             // geocercas tengo", etc.
-            const geocercas = zonasCargadas ? (APP.zonas || []).slice(0, 40).map((z) => {
-                const dentro = [];
-                for (const u of unidadesRaw) {
-                    try {
-                        const st = unitState(u);
-                        if (st.lat != null && inZone(st.lat, st.lon, z)) dentro.push(parseUnitName(u).eco);
-                    } catch (_) { /* noop */ }
-                }
-                return { nombre: z.n || z.nombre || ('Zona ' + z.id), unidadesDentro: dentro };
+            // v6.0.9: lista COMPLETA de geocercas (antes se recortaba a 40).
+            // Se acota a un maximo alto por seguridad de tamano.
+            const geocercasTodas = zonasCargadas ? (APP.zonas || []).map((z) => {
+                const nom = z.n || z.nombre || ('Zona ' + z.id);
+                return {
+                    nombre: nom,
+                    tipo: (z.t === 3 ? 'circulo' : (z.t === 2 ? 'poligono' : (z.t === 1 ? 'linea' : 'zona'))),
+                    unidadesDentro: porZona.get(nom) || []
+                };
             }) : [];
+            const geocercasTotal = geocercasTodas.length;
+            const geocercas = geocercasTodas.slice(0, 800);
+            const geocercasTruncado = geocercasTotal > geocercas.length;
             // Zonas de riesgo cargadas (resumen).
             const riesgoResumen = (APP.riesgo && APP.riesgo.length) ? {
                 total: APP.riesgo.length,
@@ -1100,6 +1113,11 @@ Reglas:
                     .map((z) => ({ id: z.id, estado: z.estado || '', municipio: z.municipio || '', score: z.score, radio_m: z.radio_m || 0 }))
                 : [];
             const municipios = { osm: (APP.municipios || []).length, deRiesgo: (APP.municipiosRiesgo || []).length };
+            // v6.0.9: catalogo de municipios (nombres) para que la IA pueda
+            // ubicar destinos/preguntas por municipio. Acotado para no inflar.
+            const municipiosCatalogo = (APP.municipios || []).slice(0, 600)
+                .map((m) => String(m.nombre || '') + (m.estado ? ', ' + m.estado : ''));
+            const municipiosRiesgoCatalogo = (APP.municipiosRiesgo || []).slice(0, 300).map((m) => String(m.nombre || ''));
             const configResumen = {
                 cadenciaSeg: Math.round((APP.config.pollMs || 10000) / 1000),
                 offlineMin: APP.config.offlineMin, gpsMin: APP.config.gpsMin,
@@ -1129,9 +1147,13 @@ Reglas:
                 ultimosAvisos: ultimos,
                 desconexionesHoy: desconexiones,
                 geocercas,
+                geocercasTotal,
+                geocercasTruncado,
                 zonasDeRiesgo: riesgoResumen,
                 riesgoZonas,
                 municipios,
+                municipiosCatalogo,
+                municipiosRiesgoCatalogo,
                 rutasActivas: Object.keys(APP.rutas || {}).length,
                 rutas: rutasResumen,
                 viajes,
@@ -1139,6 +1161,57 @@ Reglas:
                 unidades: detalle
             };
         } catch (_) { return { fecha: new Date().toISOString().slice(0, 16).replace('T', ' ') }; }
+    }
+    // v6.0.9: datos ampliados por unidad para el chat. Detecta economicos
+    // (3-5 digitos) mencionados en la pregunta y trae, solo para esos,
+    // campos personalizados e historial de las ultimas 24 h. Todo lectura.
+    function iaEcosEnTexto(texto) {
+        const out = [];
+        const vistos = new Set();
+        const matches = String(texto || '').match(/\b\d{3,5}\b/g) || [];
+        for (let i = 0; i < matches.length; i++) {
+            const n = normEco(matches[i]);
+            if (!n || vistos.has(n)) continue;
+            vistos.add(n);
+            const it = unitByEco(n);
+            if (it) out.push(it);
+            if (out.length >= 3) break;
+        }
+        return out;
+    }
+    const _iaUnidadCache = new Map(); // eco -> { t, datos }
+    async function iaDatosUnidad(it) {
+        const eco = it.info.eco || it.info.clave;
+        const hit = _iaUnidadCache.get(eco);
+        if (hit && (Date.now() - hit.t) < 45000) return hit.datos;
+        const uid = it.u && it.u.id != null ? it.u.id : null;
+        const datos = { eco: eco, nombre: it.info.nombre, placa: it.info.placa || null };
+        try {
+            if (APP.config.iaContextoAPI !== false) {
+                const props = await iaFetchUnidadProps(uid, it.info.nombre);
+                if (props && Object.keys(props).length) datos.camposPersonalizados = props;
+                const hist = await iaFetchUnidadHistorial(uid, 24);
+                if (hist) datos.ultimas24h = hist;
+                if (APP.config.iaReporteServidor && uid != null) {
+                    const rep = await iaFetchReporteDia(uid);
+                    if (rep && rep.length) datos.reporteServidorHoy = rep;
+                }
+            }
+        } catch (_) { /* devuelve lo basico */ }
+        _iaUnidadCache.set(eco, { t: Date.now(), datos: datos });
+        return datos;
+    }
+    async function iaContextoAmpliado(ultimoTexto) {
+        const base = chatContextoFlota();
+        try {
+            if (APP.config.iaContextoAPI === false) return base;
+            const its = iaEcosEnTexto(ultimoTexto);
+            if (!its.length) return base;
+            const detalle = [];
+            for (let i = 0; i < its.length; i++) detalle.push(await iaDatosUnidad(its[i]));
+            base.consultaUnidades = detalle;
+            return base;
+        } catch (_) { return base; }
     }
     // v5.14.7: el chat se renderiza de forma INCREMENTAL para no parpadear.
 //   - pintarChat(): pinta la cabecera (provider) y, si no hay mensajes,
@@ -1248,9 +1321,13 @@ function chatMsgHTML(m) {
         // Filtra los mensajes de error locales: la API solo acepta roles
         // system/user/assistant y el chat se rompia tras el primer fallo.
         const validos = (Array.isArray(mensajes) ? mensajes : []).filter((m) => m && m.role !== 'error');
+        // v6.0.9: el contexto se amplia consultando la API para las unidades
+        // mencionadas en la ultima pregunta (historial, propiedades...).
+        const ultimo = validos.slice().reverse().find((m) => m.role === 'user');
+        const contexto = await iaContextoAmpliado(ultimo ? ultimo.text : '');
         const messages = [
             { role: 'system', content: CHAT_SYS + '\n\nContexto actual de la flota:\n' +
-                JSON.stringify(chatContextoFlota(), null, 0) },
+                JSON.stringify(contexto, null, 0) },
             ...validos.map((m) => ({ role: m.role === 'ia' ? 'assistant' : m.role, content: m.text || '' }))
         ];
         const body = {
@@ -1478,7 +1555,7 @@ ta.value = '';
                 cancelText: 'Cerrar',
                 okText: 'Cerrar',
                 onOk: () => {},
-                ancho: 520
+                ancho: 760
             });
         } finally {
             setBusy(btn, false);
@@ -1531,7 +1608,7 @@ ta.value = '';
                 cancelText: 'Cerrar',
                 okText: 'Cerrar',
                 onOk: () => {},
-                ancho: 540
+                ancho: 780
             });
         } finally {
             setBusy(btn, false);
@@ -1910,6 +1987,10 @@ ta.value = '';
             '</div>';
         // Nombre accesible del dialogo (rol dialog ya lo pone ensureDialog).
         el.setAttribute('aria-labelledby', 'rondo-dlg-title');
+        // v6.0.10: ancho configurable por dialogo. Los resultados de IA son
+        // anchos y largos; se acotan a la pantalla y el cuerpo hace scroll.
+        if (opts.ancho) el.style.width = 'min(' + Math.max(320, Math.round(Number(opts.ancho) || 0)) + 'px,94vw)';
+        else el.style.width = '';
         try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
         el.classList.add('abierto');
         const okBtn = el.querySelector('.dlg-ok');
@@ -3716,6 +3797,115 @@ ta.value = '';
         document.querySelectorAll('[id$="_pursuit_win_close_id"]').forEach((b) => {
             b.dispatchEvent(new PAGE.MouseEvent('click', { bubbles: true, cancelable: true }));
         });
+        // Si estaban ocultas, al cerrarlas el modo deja de aplicar.
+        _ventanasOcultas = false;
+        pintarBotonVentanas();
+    }
+    // v6.0.9: el boton "Ocultar" (junto a Automatizar) oculta o vuelve a
+    // mostrar las ventanas de unidades abiertas, sin cerrarlas.
+    let _ventanasOcultas = false;
+    function ventanasOcultasOn() { return _ventanasOcultas; }
+    function pintarBotonVentanas() {
+        const btn = byId('rondo-sb-panel');
+        if (!btn) return;
+        const icon = btn.querySelector('.rondo-usym');
+        const lbl = btn.querySelector('.tile-lbl');
+        if (_ventanasOcultas) {
+            if (icon) icon.innerHTML = UIS.panel;
+            if (lbl) lbl.textContent = 'Mostrar';
+            btn.title = 'Mostrar las ventanas de unidades que ocultaste';
+            btn.classList.add('activo');
+        } else {
+            if (icon) icon.innerHTML = UIS.collapse;
+            if (lbl) lbl.textContent = 'Ocultar';
+            btn.title = 'Ocultar las ventanas de unidades abiertas (sin cerrarlas)';
+            btn.classList.remove('activo');
+        }
+    }
+    function ocultarVentanas() {
+        const list = openWindows();
+        if (!list.length) { adviceWarn('Sin ventanas', 'No hay ventanas de unidades abiertas.'); return; }
+        list.forEach((v) => {
+            if (!v.cont) return;
+            v.cont.dataset.rondoOculta = '1';
+            v.cont.style.display = 'none';
+        });
+        _ventanasOcultas = true;
+        pintarBotonVentanas();
+        advice('Ventanas ocultas', list.length + ' ventana(s) · pulsa de nuevo para mostrarlas');
+    }
+    function mostrarVentanas() {
+        const list = openWindows();
+        list.forEach((v) => {
+            if (!v.cont) return;
+            if (v.cont.dataset.rondoOculta) { v.cont.style.display = ''; delete v.cont.dataset.rondoOculta; }
+        });
+        _ventanasOcultas = false;
+        pintarBotonVentanas();
+        advice('Ventanas visibles', list.length + ' ventana(s)');
+    }
+    function alternarVentanas() {
+        if (_ventanasOcultas) mostrarVentanas(); else ocultarVentanas();
+    }
+    // Mantiene ocultas las ventanas nuevas que se abran mientras el modo este
+    // activo (se llama desde el intervalo de 1 s).
+    function rxVentanasSync() {
+        if (!_ventanasOcultas) return;
+        openWindows().forEach((v) => {
+            if (v.cont && !v.cont.dataset.rondoOculta) {
+                v.cont.dataset.rondoOculta = '1';
+                v.cont.style.display = 'none';
+            }
+        });
+    }
+    // v6.0.10: botones +/- para agrandar o encoger las ventanas abiertas.
+    const RX_VENTANA_PASO = 80;
+    function rxDesplazarVentana(c, dx, dy) {
+        const cs = getComputedStyle(c);
+        const t = cs.transform;
+        if (t && t !== 'none' && t.indexOf('matrix') === 0) {
+            try {
+                const DMR = PAGE.DOMMatrixReadOnly || DOMMatrixReadOnly;
+                const m = new DMR(t);
+                c.style.transform = 'translate(' + (m.m41 + dx) + 'px,' + (m.m42 + dy) + 'px)';
+                return;
+            } catch (_) { /* fallback a left/top */ }
+        }
+        c.style.left = ((parseFloat(cs.left) || 0) + dx) + 'px';
+        c.style.top = ((parseFloat(cs.top) || 0) + dy) + 'px';
+    }
+    function rxAjustarVentanas(dir) {
+        const list = openWindows();
+        if (!list.length) { adviceWarn('Sin ventanas', 'No hay ventanas de unidades abiertas.'); return; }
+        const d = dir >= 0 ? 1 : -1;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        let ajustadas = 0;
+        list.forEach((v) => {
+            const c = v.cont;
+            if (!c) return;
+            const r = c.getBoundingClientRect();
+            if (r.width <= 0 || r.height <= 0) return; // oculta o sin tamano
+            const w = Math.round(clamp(r.width + d * RX_VENTANA_PASO, 260, Math.max(260, vw - 20)));
+            const h = Math.round(clamp(r.height + d * RX_VENTANA_PASO, 170, Math.max(170, vh - 20)));
+            if (w === Math.round(r.width) && h === Math.round(r.height)) return;
+            c.style.width = w + 'px';
+            c.style.height = h + 'px';
+            // Reubica si se salio por abajo/derecha (asi no se pierde).
+            const r2 = c.getBoundingClientRect();
+            let nx = r2.left, ny = r2.top;
+            if (nx + w > vw - 4) nx = Math.max(4, vw - 4 - w);
+            if (ny + h > vh - 4) ny = Math.max(4, vh - 4 - h);
+            if (nx < 4) nx = 4;
+            if (ny < 4) ny = 4;
+            if (Math.abs(nx - r2.left) > 1 || Math.abs(ny - r2.top) > 1) rxDesplazarVentana(c, nx - r2.left, ny - r2.top);
+            ajustadas++;
+        });
+        // Avisa a los mapas (Leaflet) de que el contenedor cambio de tamano.
+        try {
+            const W = PAGE || window;
+            W.dispatchEvent(new (W.Event || Event)('resize'));
+        } catch (_) { /* noop */ }
+        if (ajustadas) advice(d >= 0 ? 'Ventanas mas grandes' : 'Ventanas mas pequenas', ajustadas + ' ventana(s)');
     }
     // Cierre seguro en dos pasos: el primer clic "arma" el boton y el segundo
     // ejecuta el cierre. Asi un clic accidental no cierra todas las ventanas.
@@ -3993,12 +4183,190 @@ ta.value = '';
      */
     let _planEdit = null;
     let _rpmOsmTimer = null;
+    let _rpmSugList = [];
+    let _rpmSugIdx = -1;
+    // v6.0.9: posicion y tamano del editor multipunto. Se conserva durante la
+    // sesion para que el operador no tenga que recolocarlo cada vez.
+    let _rpmWin = { dx: 0, dy: 0, w: null, h: null };
+    const RPM_WIN_KEY = 'rondo.api.s.rpmWin.v2';
+    function rpmWinCargar() {
+        try {
+            const j = JSON.parse(sessionStorage.getItem(RPM_WIN_KEY) || 'null');
+            if (j && typeof j === 'object') {
+                _rpmWin = {
+                    dx: Number(j.dx) || 0,
+                    dy: Number(j.dy) || 0,
+                    w: Number(j.w) > 0 ? Number(j.w) : null,
+                    h: Number(j.h) > 0 ? Number(j.h) : null
+                };
+            }
+        } catch (_) { /* noop */ }
+    }
+    function rpmWinGuardar() {
+        try { sessionStorage.setItem(RPM_WIN_KEY, JSON.stringify(_rpmWin)); } catch (_) { /* noop */ }
+    }
+    function rpmAplicarWin(el) {
+        const card = el.querySelector('.rpm-card');
+        if (!card) return;
+        if (_rpmWin.w) card.style.width = _rpmWin.w + 'px';
+        if (_rpmWin.h) card.style.height = _rpmWin.h + 'px';
+        rpmClampWin(card);
+        card.style.transform = 'translate(' + _rpmWin.dx + 'px,' + _rpmWin.dy + 'px)';
+    }
+    // El modal centra la tarjeta con flex; el desplazamiento se aplica con
+    // transform. Aqui se acota para que nunca quede fuera de la pantalla.
+    function rpmClampWin(card) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const w = card.offsetWidth || 0, h = card.offsetHeight || 0;
+        const cx = vw / 2, cy = vh / 2;
+        const minDX = 8 - (cx - w / 2), maxDX = (vw - 8) - (cx + w / 2);
+        const minDY = 8 - (cy - h / 2), maxDY = (vh - 8) - (cy + h / 2);
+        _rpmWin.dx = (minDX <= maxDX) ? clamp(_rpmWin.dx || 0, minDX, maxDX) : Math.round(minDX);
+        _rpmWin.dy = (minDY <= maxDY) ? clamp(_rpmWin.dy || 0, minDY, maxDY) : Math.round(minDY);
+    }
+    function rpmMoverWin(card) {
+        card.style.transform = 'translate(' + _rpmWin.dx + 'px,' + _rpmWin.dy + 'px)';
+    }
+    function rpmBindWin(el) {
+        const card = el.querySelector('.rpm-card');
+        if (!card) return;
+        const head = card.querySelector('.rpm-head');
+        const grip = card.querySelector('.rpm-resize');
+        if (head) {
+            let drag = null;
+            head.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                if (e.target.closest('button')) return;
+                drag = { x: e.clientX, y: e.clientY, dx: _rpmWin.dx || 0, dy: _rpmWin.dy || 0 };
+                card.classList.add('moviendo');
+                try { head.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+                e.preventDefault();
+            });
+            head.addEventListener('pointermove', (e) => {
+                if (!drag) return;
+                _rpmWin.dx = drag.dx + (e.clientX - drag.x);
+                _rpmWin.dy = drag.dy + (e.clientY - drag.y);
+                rpmClampWin(card);
+                rpmMoverWin(card);
+            });
+            const fin = () => {
+                if (!drag) return;
+                drag = null;
+                card.classList.remove('moviendo');
+                rpmWinGuardar();
+            };
+            head.addEventListener('pointerup', fin);
+            head.addEventListener('pointercancel', fin);
+        }
+        if (grip) {
+            let rs = null;
+            grip.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                rs = { x: e.clientX, y: e.clientY, w: card.offsetWidth, h: card.offsetHeight };
+                try { grip.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+                e.preventDefault();
+                e.stopPropagation();
+            });
+            grip.addEventListener('pointermove', (e) => {
+                if (!rs) return;
+                const vw = window.innerWidth, vh = window.innerHeight;
+                const w = clamp(rs.w + (e.clientX - rs.x), 360, Math.round(vw * 0.96));
+                const h = clamp(rs.h + (e.clientY - rs.y), 320, Math.round(vh * 0.92));
+                _rpmWin.w = Math.round(w);
+                _rpmWin.h = Math.round(h);
+                card.style.width = _rpmWin.w + 'px';
+                card.style.height = _rpmWin.h + 'px';
+                rpmClampWin(card);
+                rpmMoverWin(card);
+            });
+            const fin = () => {
+                if (!rs) return;
+                rs = null;
+                rpmWinGuardar();
+            };
+            grip.addEventListener('pointerup', fin);
+            grip.addEventListener('pointercancel', fin);
+        }
+    }
+    // Reordenar paradas arrastrando (con indicador de destino).
+    function rpmBindReorden(el) {
+        const cont = el.querySelector('.rpm-stops');
+        if (!cont) return;
+        const filas = Array.prototype.slice.call(cont.querySelectorAll('.rpm-stop'));
+        if (filas.length < 2) return;
+        filas.forEach((fila) => {
+            fila.addEventListener('pointerdown', (e) => {
+                if (e.button !== 0) return;
+                if (e.target.closest('button')) return;
+                e.preventDefault();
+                const from = +fila.dataset.i;
+                const x0 = e.clientX, y0 = e.clientY;
+                const restantes = filas.filter((_, i) => i !== from);
+                let ins = -1, activo = false;
+                const marcar = (ev) => {
+                    ins = restantes.length;
+                    for (let i = 0; i < restantes.length; i++) {
+                        const rr = restantes[i].getBoundingClientRect();
+                        if (ev.clientY < rr.top + rr.height / 2) { ins = i; break; }
+                    }
+                    restantes.forEach((r, i) => r.classList.toggle('drop-target', i === ins));
+                };
+                const mover = (ev) => {
+                    if (!activo) {
+                        if (Math.abs(ev.clientY - y0) < 4 && Math.abs(ev.clientX - x0) < 4) return;
+                        activo = true;
+                        fila.classList.add('dragging');
+                    }
+                    marcar(ev);
+                };
+                const limpiar = () => {
+                    fila.classList.remove('dragging');
+                    restantes.forEach((r) => r.classList.remove('drop-target'));
+                };
+                const soltar = () => {
+                    document.removeEventListener('pointermove', mover);
+                    document.removeEventListener('pointerup', soltar);
+                    document.removeEventListener('pointercancel', soltar);
+                    limpiar();
+                    if (!activo || ins < 0) return;
+                    const arr = _planEdit && _planEdit.paradas;
+                    if (!arr || from >= arr.length) return;
+                    const item = arr.splice(from, 1)[0];
+                    arr.splice(Math.min(ins, arr.length), 0, item);
+                    renderEditorParadas();
+                };
+                document.addEventListener('pointermove', mover);
+                document.addEventListener('pointerup', soltar);
+                document.addEventListener('pointercancel', soltar);
+            });
+        });
+    }
+    function rpmResaltarSug() {
+        const sug = byId('rpm-sug');
+        if (!sug) return;
+        sug.querySelectorAll('.rpm-sug-item').forEach((n) => n.classList.toggle('sel', +n.dataset.k === _rpmSugIdx));
+        const sel = sug.querySelector('.rpm-sug-item.sel');
+        if (sel && sel.scrollIntoView) { try { sel.scrollIntoView({ block: 'nearest' }); } catch (_) { /* noop */ } }
+    }
+    function rpmSeleccionarSug(k) {
+        const item = _rpmSugList[k];
+        if (!item) return;
+        if (item.libre) agregarParadaEditor('lugar', item.texto, null);
+        else agregarParadaEditor(item.tipoFinal, item.texto, item.coords, item.extra);
+        _rpmSugList = [];
+        _rpmSugIdx = -1;
+    }
     function planModalEl() {
         let el = byId('rondo-plan-modal');
         if (el) return el;
         el = makeEl('div', { id: 'rondo-plan-modal' });
         document.body.appendChild(el);
         el.addEventListener('pointerdown', (e) => { if (e.target === el) cerrarEditorParadas(); });
+        // Si cambia el tamano de la ventana, reacota la posicion guardada.
+        window.addEventListener('resize', () => {
+            const card = el.querySelector('.rpm-card');
+            if (card) { rpmClampWin(card); rpmMoverWin(card); }
+        });
         return el;
     }
     function cerrarEditorParadas() {
@@ -4017,8 +4385,11 @@ ta.value = '';
             engine: (engine === 'astar' || engine === 'osrm') ? engine : (APP.config.autoRutaModo || 'osrm'),
             paradas: (plan.paradas || []).map((p) => Object.assign({}, p))
         };
-        renderEditorParadas();
+        rpmWinCargar();
+        // Muestra el modal antes de medir, para que el acotado de la ventana
+        // use el tamano real de la tarjeta (si esta en display:none mide 0).
         planModalEl().classList.add('abierto');
+        renderEditorParadas();
     }
     function renderEditorParadas() {
         const el = planModalEl();
@@ -4027,6 +4398,7 @@ ta.value = '';
         const stops = _planEdit.paradas;
         const filas = stops.map((p, i) => (
             '<div class="rpm-stop' + (p.fijo ? ' pinned' : '') + '" data-i="' + i + '">' +
+            '<span class="rpm-grip" title="Arrastrar para reordenar">\u283F</span>' +
             '<span class="rpm-idx">' + (i + 1) + '</span>' +
             '<span class="rpm-tipo">' + esc(p.tipo || 'lugar') + '</span>' +
             '<span class="rpm-txt" title="' + esc(p.texto) + '">' + esc(p.texto) + (p.coords ? '' : ' <em>(sin ubicar)</em>') + '</span>' +
@@ -4074,8 +4446,12 @@ ta.value = '';
             '<button id="rpm-guardar">Solo guardar</button>' +
             '<button class="primary" id="rpm-guardar-trazar"><span class="rondo-usym">' + UIS.route + '</span> Guardar y trazar</button>' +
             '</div>' +
+            '<div class="rpm-resize" title="Arrastrar para redimensionar"></div>' +
             '</div>';
         try { rxBarridoAutofill(el); } catch (_) { /* noop */ }
+        rpmAplicarWin(el);
+        rpmBindWin(el);
+        rpmBindReorden(el);
         byId('rpm-x').onclick = cerrarEditorParadas;
         byId('rpm-cancelar').onclick = cerrarEditorParadas;
         byId('rpm-guardar').onclick = () => guardarEditorParadas(false);
@@ -4111,30 +4487,34 @@ ta.value = '';
         const sug = byId('rpm-sug');
         const pintarSug = () => {
             const q = buscar.value.trim();
-            if (!q) { sug.classList.remove('abierto'); sug.innerHTML = ''; return; }
+            _rpmSugIdx = -1;
+            if (!q) { sug.classList.remove('abierto'); sug.innerHTML = ''; _rpmSugList = []; return; }
             const icoTipo = (t) => (t === 'geocerca') ? UIS.zone : ((t === 'municipio' || t === 'ciudad') ? UIS.map : UIS.pin);
-            let actuales = [];
             const render = (items) => {
-                actuales = items;
-                let html = items.map((cand, k) =>
-                    '<div class="rpm-sug-item" data-k="' + k + '"><span class="rondo-usym">' + icoTipo(cand.tipo) + '</span>' +
-                    '<span class="k">' + esc(cand.tipo) + '</span>' +
-                    '<span class="t">' + esc(cand.texto || '') + (cand.sub ? ' <span class="k">' + esc(cand.sub) + '</span>' : '') + '</span></div>'
-                ).join('');
-                html += '<div class="rpm-sug-item" data-libre="1"><span class="rondo-usym">' + UIS.pin + '</span><span class="k">lugar</span><span class="t">Buscar "' + esc(q) + '" en OpenStreetMap</span></div>';
-                sug.innerHTML = html;
+                const lista = items.map((cand) => ({
+                    tipo: cand.tipo,
+                    tipoFinal: cand.tipo === 'ciudad' ? 'municipio' : cand.tipo,
+                    texto: cand.texto,
+                    coords: cand.coords || null,
+                    extra: cand
+                }));
+                // Ultimo elemento: buscar el texto tal cual en OpenStreetMap.
+                lista.push({ libre: true, texto: q });
+                _rpmSugList = lista;
+                if (_rpmSugIdx >= lista.length) _rpmSugIdx = lista.length - 1;
+                sug.innerHTML = lista.map((it, k) => {
+                    const cls = 'rpm-sug-item' + (k === _rpmSugIdx ? ' sel' : '');
+                    if (it.libre) {
+                        return '<div class="' + cls + '" data-k="' + k + '"><span class="rondo-usym">' + UIS.pin + '</span><span class="k">lugar</span><span class="t">Buscar "' + esc(q) + '" en OpenStreetMap</span></div>';
+                    }
+                    return '<div class="' + cls + '" data-k="' + k + '"><span class="rondo-usym">' + icoTipo(it.tipo) + '</span>' +
+                        '<span class="k">' + esc(it.tipo) + '</span>' +
+                        '<span class="t">' + esc(it.texto || '') + (it.extra && it.extra.sub ? ' <span class="k">' + esc(it.extra.sub) + '</span>' : '') + '</span></div>';
+                }).join('');
                 sug.classList.add('abierto');
                 sug.querySelectorAll('.rpm-sug-item').forEach((n) => {
-                    n.onclick = () => {
-                        if (n.dataset.libre) agregarParadaEditor('lugar', q, null);
-                        else {
-                            const cand = actuales[+n.dataset.k];
-                            const tipo = cand.tipo === 'ciudad' ? 'municipio' : cand.tipo;
-                            agregarParadaEditor(tipo, cand.texto, cand.coords || null, cand);
-                        }
-                        buscar.value = '';
-                        sug.classList.remove('abierto');
-                    };
+                    n.onclick = () => rpmSeleccionarSug(+n.dataset.k);
+                    n.onmouseenter = () => { _rpmSugIdx = +n.dataset.k; rpmResaltarSug(); };
                 });
             };
             const locales = catalogoParadas(q, 8);
@@ -4155,14 +4535,44 @@ ta.value = '';
         };
         buscar.oninput = pintarSug;
         buscar.onfocus = pintarSug;
+        // Teclado: flechas para recorrer las sugerencias, Enter para elegir la
+        // resaltada (o el texto libre si no hay ninguna seleccionada).
         buscar.onkeydown = (e) => {
+            const abierto = sug.classList.contains('abierto') && _rpmSugList.length;
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (!abierto) { pintarSug(); return; }
+                _rpmSugIdx = (_rpmSugIdx + 1) % _rpmSugList.length;
+                rpmResaltarSug();
+                return;
+            }
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (!abierto) return;
+                _rpmSugIdx = (_rpmSugIdx - 1 + _rpmSugList.length) % _rpmSugList.length;
+                rpmResaltarSug();
+                return;
+            }
+            if (e.key === 'Escape') {
+                // Si hay sugerencias abiertas, Esc solo cierra el desplegable;
+                // de lo contrario se deja pasar para cerrar el editor.
+                if (sug.classList.contains('abierto')) {
+                    e.stopPropagation();
+                    sug.classList.remove('abierto');
+                    _rpmSugIdx = -1;
+                }
+                return;
+            }
             if (e.key === 'Enter') {
                 e.preventDefault();
+                if (abierto && _rpmSugIdx >= 0) { rpmSeleccionarSug(_rpmSugIdx); return; }
                 const q = buscar.value.trim();
                 if (!q) return;
                 agregarParadaEditor('lugar', q, null);
                 buscar.value = '';
                 sug.classList.remove('abierto');
+                _rpmSugList = [];
+                _rpmSugIdx = -1;
             }
         };
         byId('rpm-agregar').onclick = () => {

@@ -123,6 +123,71 @@
             "#rondo-panel .rondo-ruta-card .rr-progress-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-ruta-card .rr-meta{display:flex;flex-wrap:wrap;gap:5px}\n" +
             "#rondo-panel .rondo-ruta-card .rr-chip{font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:1px 7px;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ruta-card .rr-mini{height:150px;margin-top:2px}\n" +
+            "#rondo-lista-rutas{position:relative}\n" +
+            "#rondo-lista-rutas .rr-mini-abs{position:absolute;left:0;top:0;z-index:1}\n" +
+            "#rondo-lista-rutas .rr-mini-abs.rondo-mm{position:absolute}\n" +
+            // v6.0.11: replay del dia.
+            "#rondo-panel .rondo-replay-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}\n" +
+            "#rondo-panel .rondo-replay-bar .filtro{min-width:0;width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-bar .mini{width:100%;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-bar > input[type=date]{grid-column:1 / -1}\n" +
+            "#rondo-panel .rondo-replay-mapa{width:100%;height:240px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;overflow:hidden;margin:8px 0}\n" +
+            "#rondo-panel .rondo-replay-mapa svg{width:100%;height:100%;display:block}\n" +
+            "#rondo-panel .rondo-replay-vacio{display:flex;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-ctrl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-replay-ctrl input[type=range]{flex:1;min-width:110px}\n" +
+            "#rondo-panel .rondo-replay-info{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}\n" +
+            "#rondo-panel .rondo-replay-info .rr-chip{font:600 11px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 7px}\n" +
+            "#rondo-panel .rondo-replay-eventos{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}\n" +
+            "#rondo-panel .rondo-replay-ev{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
+            "#rondo-panel .rondo-replay-ev:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-replay-ev.activo{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-hora{color:var(--rondo-fg-dim);flex:0 0 auto;font-variant-numeric:tabular-nums}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-tipo{font-size:9.5px;text-transform:uppercase;letter-spacing:.3px;border-radius:6px;padding:1px 5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-parada{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-exceso{color:#b71c1c}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-desvio{color:#e65100}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-zona{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-ev .ev-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-sec{margin-top:8px}\n" +
+            "#rondo-panel .rondo-replay-sec h5{margin:0 0 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-lista{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}\n" +
+            "#rondo-panel .rondo-replay-par{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
+            "#rondo-panel .rondo-replay-par:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-replay-par.activo{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-par .par-idx{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--rondo-bg-strong);display:inline-flex;align-items:center;justify-content:center;font:700 10px var(--rondo-font)}\n" +
+            "#rondo-panel .rondo-replay-par .par-hora{color:var(--rondo-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
+            "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
+            "#rondo-panel .rondo-replay-buscar{position:relative;grid-column:1 / -1;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-buscar input{width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-sug{position:relative;margin-top:4px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border);border-radius:8px;max-height:200px;overflow:auto;box-shadow:0 8px 22px rgba(0,0,0,.35);display:none}\n" +
+            "#rondo-panel .rondo-replay-sug.abierto{display:block}\n" +
+            "#rondo-panel .rondo-replay-sug-item{padding:6px 9px;cursor:pointer;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-panel .rondo-replay-sug-item:last-child{border-bottom:none}\n" +
+            "#rondo-panel .rondo-replay-sug-item:hover,#rondo-panel .rondo-replay-sug-item.sel{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-panel .rondo-replay-sug-item .su-eco{font-weight:700;color:var(--rondo-fg);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-replay-sug-item .su-sub{flex:1;min-width:0;color:var(--rondo-fg-dim);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-quick{display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap}\n" +
+            "#rondo-panel .rondo-replay-quick .rq-lbl{font-size:11px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-chart{height:70px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;overflow:hidden;margin:8px 0;cursor:crosshair}\n" +
+            "#rondo-panel .rondo-replay-chart svg{width:100%;height:100%;display:block}\n" +
+            "#rondo-panel .rondo-replay-leyenda{display:flex;gap:10px;flex-wrap:wrap;font-size:10.5px;color:var(--rondo-fg-dim);margin-bottom:6px}\n" +
+            "#rondo-panel .rondo-replay-leyenda .lg{display:inline-flex;align-items:center;gap:4px}\n" +
+            "#rondo-panel .rondo-replay-leyenda .lg i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
+            "#rondo-panel .rondo-replay-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
+            // v6.0.11: mini-mapa propio (global: se usa en el panel y en el dialogo de ruta).
+            ".rondo-minimapa{height:min(64vh,560px);border-radius:10px;overflow:hidden}\n" +
+            ".rondo-mm{position:relative;overflow:hidden;background:var(--rondo-bg-strong);cursor:grab;touch-action:none;border-radius:10px;border:1px solid var(--rondo-border-soft)}\n" +
+            ".rondo-mm:active{cursor:grabbing}\n" +
+            ".rondo-mm-tiles{position:absolute;inset:0}\n" +
+            ".rondo-mm-tile{position:absolute;width:256px;height:256px;user-select:none;pointer-events:none}\n" +
+            ".rondo-mm-svg{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}\n" +
+            ".rondo-mm-atrib{position:absolute;right:3px;bottom:2px;font-size:9px;color:#222;background:rgba(255,255,255,.72);padding:0 3px;border-radius:3px;pointer-events:none}\n" +
+            ".rondo-mm-resumen{font-size:12.5px;color:var(--rondo-fg-dim);margin:0 0 8px}\n" +
+            ".rondo-mm-hint{font-size:11px;color:var(--rondo-fg-dim);margin-top:6px}\n" +
             "@keyframes rondo-ver-pulse{0%,100%{box-shadow:0 0 0 0 rgba(183,28,28,.45)}50%{box-shadow:0 0 0 5px rgba(183,28,28,0)}}\n" +
             "#rondo-panel .rondo-iconbtn{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);cursor:pointer;border-radius:var(--rondo-radius-sm);font-size:13px;line-height:1;transition:background .15s var(--rondo-easing),color .15s,transform .1s,box-shadow .15s}\n" +
             "#rondo-panel .rondo-iconbtn .rondo-usym{font-size:16px;font-weight:600;line-height:1}\n" +
@@ -807,6 +872,9 @@
             "#rondo-panel .rondo-tile .tile-lbl{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;text-align:center}\n" +
             "#rondo-panel .rondo-tile.primary{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 4px 12px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .rondo-tile.primary .rondo-usym{color:#fff}\n" +
+            "#rondo-panel .rondo-tile-escala{display:flex;flex-direction:column;gap:3px;justify-content:center;align-items:stretch;min-width:0}\n" +
+            "#rondo-panel .rondo-tile.mini{flex:1 1 0;min-height:0;padding:1px 0;gap:0;border-radius:8px}\n" +
+            "#rondo-panel .rondo-tile.mini .rondo-usym{font-size:12px}\n" +
             "#rondo-barra .rondo-badge-estado{display:inline-block;width:11px;height:11px;border-radius:50%;background:#7d8595;flex-shrink:0;border:1px solid rgba(255,255,255,.15)}\n" +
             "#rondo-barra .rondo-badge-estado.ok{background:var(--rondo-ok)}\n" +
             "#rondo-barra .rondo-badge-estado.warn{background:var(--rondo-warn)}\n" +
@@ -855,16 +923,16 @@
             /* ── Focus visible global ── */
             "#rondo-panel button:focus-visible,#rondo-barra button:focus-visible,#rondo-modal button:focus-visible,#rondo-config button:focus-visible,#rondo-ayuda button:focus-visible,#rondo-contexto .op:focus-visible,#rondo-panel input:focus-visible,#rondo-config input:focus-visible,#rondo-config select:focus-visible,#rondo-dialog button:focus-visible,#rondo-dialog input:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
             /* ── Dialogo propio (confirm / prompt / bienvenida) ── */
-            "#rondo-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:var(--rondo-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);font:13px var(--rondo-font);overflow:hidden}\n" +
+            "#rondo-dialog{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:var(--rondo-elev);z-index:1000004;display:none;flex-direction:column;width:min(420px,92vw);max-height:90vh;font:13px var(--rondo-font);overflow:hidden}\n" +
             "#rondo-dialog.abierto{display:flex;animation: rondoPop .18s var(--rondo-easing) both}\n" +
             "@keyframes rondoPop{from{opacity:0;transform:translate(-50%,-48%) scale(.97)}to{opacity:1;transform:translate(-50%,-50%) scale(1)}}\n" +
-            "#rondo-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px}\n" +
+            "#rondo-dialog .dlg-head{padding:16px 18px 4px;font-size:14px;font-weight:700;display:flex;align-items:center;gap:8px;flex:0 0 auto}\n" +
             "#rondo-dialog .dlg-head .rondo-usym{color:var(--rondo-accent-2);font-size:20px}\n" +
-            "#rondo-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px}\n" +
+            "#rondo-dialog .dlg-body{padding:4px 18px 16px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;min-height:0;flex:1 1 auto}\n" +
             "#rondo-dialog p{margin:0;font-size:12.5px;color:var(--rondo-fg-dim);line-height:1.5}\n" +
             "#rondo-dialog input{background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:7px;padding:8px 10px;font:13px var(--rondo-font);width:100%;box-sizing:border-box}\n" +
             "#rondo-dialog input:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 3px rgba(var(--rondo-accent-rgb),.2)}\n" +
-            "#rondo-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--rondo-bg);border-top:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .dlg-foot{display:flex;justify-content:flex-end;gap:8px;padding:12px 18px;background:var(--rondo-bg);border-top:1px solid var(--rondo-border-soft);flex:0 0 auto}\n" +
             "#rondo-dialog .dlg-foot button{border-radius:7px;padding:8px 16px;cursor:pointer;font:600 12px var(--rondo-font);border:1px solid transparent;transition:transform .12s,filter .15s,box-shadow .15s}\n" +
             "#rondo-dialog .dlg-foot .dlg-cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
             "#rondo-dialog .dlg-foot .dlg-ok{background:var(--rondo-accent-grad);color:#fff}\n" +
@@ -1028,12 +1096,13 @@
             /* ── v5.15: editor de paradas multipunto ───────────────── */
             "#rondo-plan-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.5);padding:14px}\n" +
             "#rondo-plan-modal.abierto{display:flex}\n" +
-            "#rondo-plan-modal .rpm-card{width:min(580px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font)}\n" +
-            "#rondo-plan-modal .rpm-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700}\n" +
+            "#rondo-plan-modal .rpm-card{position:relative;width:min(1120px,96vw);max-height:92vh;display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font);min-width:0}\n" +
+            "#rondo-plan-modal .rpm-head{display:flex;align-items:center;gap:8px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700;cursor:move;touch-action:none;user-select:none}\n" +
+            "#rondo-plan-modal .rpm-head button{cursor:pointer}\n" +
             "#rondo-plan-modal .rpm-head .rpm-eco{color:var(--rondo-accent-2)}\n" +
             "#rondo-plan-modal .rpm-head .rpm-count{margin-left:8px;font-size:10.5px;font-weight:600;color:var(--rondo-fg-dim);background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:1px 7px}\n" +
             "#rondo-plan-modal .rpm-sug-item .rondo-usym{font-size:13px;color:var(--rondo-accent-2);flex:0 0 auto}\n" +
-            "#rondo-plan-modal .rpm-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}\n" +
+            "#rondo-plan-modal .rpm-body{padding:11px 13px;overflow-y:auto;display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}\n" +
             "#rondo-plan-modal .rpm-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}\n" +
             "#rondo-plan-modal label.rpm-lbl{font-size:11.5px;color:var(--rondo-fg-dim);font-weight:600}\n" +
             "#rondo-plan-modal select,#rondo-plan-modal input[type=text]{background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font-size:12px}\n" +
@@ -1054,10 +1123,20 @@
             "#rondo-plan-modal .rpm-sug-item:hover{background:var(--rondo-bg-strong)}\n" +
             "#rondo-plan-modal .rpm-sug-item .t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
             "#rondo-plan-modal .rpm-sug-item .k{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase}\n" +
-            "#rondo-plan-modal .rpm-foot{display:flex;gap:8px;justify-content:flex-end;padding:11px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
+            "#rondo-plan-modal .rpm-foot{display:flex;gap:8px;justify-content:flex-end;padding:11px 26px 11px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft)}\n" +
             "#rondo-plan-modal .rpm-foot button{padding:7px 14px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font-weight:600}\n" +
             "#rondo-plan-modal .rpm-foot button.primary{background:var(--rondo-accent);color:#fff;border-color:transparent}\n" +
             "#rondo-plan-modal .rpm-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
+            // v6.0.9: editor movible/redimensionable, reordenar arrastrando y
+            // navegacion por teclado en las sugerencias.
+            "#rondo-plan-modal .rpm-card.moviendo{box-shadow:0 30px 90px rgba(0,0,0,.65)}\n" +
+            "#rondo-plan-modal .rpm-resize{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;z-index:4;touch-action:none;" +
+            "background:linear-gradient(135deg,transparent 46%,var(--rondo-fg-mute) 46%,var(--rondo-fg-mute) 54%,transparent 54%,transparent 68%,var(--rondo-fg-mute) 68%,var(--rondo-fg-mute) 76%,transparent 76%);border-bottom-right-radius:12px}\n" +
+            "#rondo-plan-modal .rpm-stop .rpm-grip{color:var(--rondo-fg-mute);cursor:grab;font-size:13px;line-height:1;flex:0 0 auto;touch-action:none}\n" +
+            "#rondo-plan-modal .rpm-stop .rpm-grip:active{cursor:grabbing}\n" +
+            "#rondo-plan-modal .rpm-stop.dragging{opacity:.45}\n" +
+            "#rondo-plan-modal .rpm-stop.drop-target{border-top:2px solid var(--rondo-accent-2)}\n" +
+            "#rondo-plan-modal .rpm-sug-item.sel{background:var(--rondo-bg-strong);box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
             /* ── v5.15: geocercas enriquecidas ─────────────────────── */
             "#rondo-panel .rondo-geo-kpis{display:flex;gap:6px;flex-wrap:wrap}\n" +
             "#rondo-panel .rondo-geo-kpi{flex:1;min-width:70px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px 8px;display:flex;flex-direction:column;gap:1px}\n" +
@@ -1101,7 +1180,11 @@
         panelEl.innerHTML = (
             '<div class="rondo-sidebar-tools" id="rondo-sidebar-tools">' +
             '<button class="rondo-tile primary" id="rondo-sb-main" title="Abrir lista de unidades y automatizar ventanas"><span class="rondo-usym">' + UIS.gear + '</span><span class="tile-lbl">Automatizar</span></button>' +
-            '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar el panel (Alt+P)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
+            '<button class="rondo-tile" id="rondo-sb-panel" title="Ocultar o mostrar las ventanas de unidades abiertas (sin cerrarlas)"><span class="rondo-usym">' + UIS.collapse + '</span><span class="tile-lbl">Ocultar</span></button>' +
+            '<div class="rondo-tile-escala" role="group" aria-label="Tamano de las ventanas de unidades">' +
+            '<button class="rondo-tile mini" id="rondo-sb-mas" title="Aumentar el tamano de las ventanas abiertas" aria-label="Aumentar el tamano de las ventanas"><span class="rondo-usym">' + UIS.mas + '</span></button>' +
+            '<button class="rondo-tile mini" id="rondo-sb-menos" title="Disminuir el tamano de las ventanas abiertas" aria-label="Disminuir el tamano de las ventanas"><span class="rondo-usym">' + UIS.menos + '</span></button>' +
+            '</div>' +
             '<button class="rondo-tile" id="rondo-sb-close" title="Cerrar todas las ventanas de unidades"><span class="rondo-usym">' + UIS.close + '</span><span class="tile-lbl">Cerrar</span></button>' +
             '</div>' +
 '<header id="rondo-drag">' +
@@ -1136,6 +1219,8 @@
             '<button class="tab" data-tab="rutas" title="Rutas planificadas y seguimiento"><span class="rondo-usym md">' + UIS.route + '</span><span class="etqt">Rutas</span><span class="contador" id="rondo-c-ru">0</span></button>' +
             '<button class="tab" data-tab="zonas" title="Geocercas de la plataforma y zonas de riesgo"><span class="rondo-usym md">' + UIS.map + '</span><span class="contador" id="rondo-c-zn">0</span></button>' +
             '<button class="tab" data-tab="caravana" title="Modo caravana: vehiculos cerca de la unidad vigilada"><span class="rondo-usym md">' + UIS.caravana + '</span><span class="etqt">Caravana</span><span class="contador" id="rondo-c-cv">0</span></button>' +
+            // v6.0.11: tab de replay (reproducir el recorrido de un dia).
+            '<button class="tab" data-tab="replay" title="Reproducir el recorrido de una unidad en un dia"><span class="rondo-usym md">' + UIS.moving + '</span><span class="etqt">Replay</span></button>' +
             // v5.14.6: tab de chat con IA. Visible solo si la IA esta
             // habilitada y tiene API key (se oculta desde paintTabs() si no).
             '<button class="tab tab-ia" data-tab="chat" title="Chat con la IA (consultas libres)" style="display:none"><span class="rondo-usym md">' + UIS.robot + '</span><span class="etqt">Chat IA</span></button>' +
@@ -1162,7 +1247,8 @@
             '<button id="rondo-unidades-menu" class="rondo-tool" data-tabs="unidades" title="Agregar unidades, destinos y rutas multipunto"><span class="rondo-usym">' + UIS.route + '</span> Unidades y rutas</button>' +
             '<button id="rondo-carga-btn" class="rondo-tool" data-tabs="unidades" title="Carga rapida: pega la lista de clientes del embarque y asigna la ruta a una unidad"><span class="rondo-usym">' + UIS.watch + '</span> Carga rapida</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
-            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar informe del dia"><span class="rondo-usym">' + UIS.csv + '</span> Informe</button>' +
+            '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+            '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
             '<button id="rondo-captura" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Capturar las ventanas abiertas"><span class="rondo-usym">' + UIS.expand + '</span></button>' +
@@ -1258,7 +1344,6 @@
             '<div class="rondo-rutas-bar">' +
             '<span class="rondo-rutas-pend" id="rondo-rutas-pend"></span>' +
             '<button class="mini" id="rondo-rutas-trazar" title="Reintentar el trazado de todas las rutas pendientes (sin limite de intentos)"><span class="rondo-usym">' + UIS.refresh + '</span> Trazar pendientes</button>' +
-            '<button class="mini" id="rondo-rutas-ventanas" title="Dibujar la ruta en el mapa de cada ventana de unidad abierta (si el mapa es Leaflet)"><span class="rondo-usym">' + UIS.map + '</span> Ventanas</button>' +
             '</div>' +
             '<div id="rondo-lista-rutas"></div>' +
             '<div id="rondo-lista-viajes"></div>' +
@@ -1269,6 +1354,50 @@
              '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
              '</div>' +
              '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
+             '</div>' +
+             // v6.0.11: tab de replay. Reproduce el recorrido de un dia.
+             '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
+             '<div class="rondo-replay-bar">' +
+             '<div class="rondo-replay-buscar">' +
+             '<input type="text" id="rondo-replay-buscar" class="filtro" placeholder="Buscar unidad (eco, placa, nombre)..." autocomplete="off" spellcheck="false" title="Buscar la unidad a reproducir">' +
+             '<input type="hidden" id="rondo-replay-eco">' +
+             '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
+             '</div>' +
+             '<input type="date" id="rondo-replay-fecha" class="filtro" title="Dia a reproducir">' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora desde" value="00:00">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora hasta" value="23:59">' +
+             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
+             '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '</div>' +
+             '<div class="rondo-replay-quick">' +
+             '<span class="rq-lbl">Rango:</span>' +
+             '<button class="mini" data-rango="hoy">Hoy</button>' +
+             '<button class="mini" data-rango="ayer">Ayer</button>' +
+             '<button class="mini" data-rango="dia">Turno dia</button>' +
+             '<button class="mini" data-rango="noche">Turno noche</button>' +
+             '</div>' +
+             '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
+             '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
+             '<div class="rondo-replay-ctrl">' +
+             '<button class="mini" id="rondo-replay-play" title="Reproducir o pausar">Play</button>' +
+             '<select id="rondo-replay-vel" class="filtro" title="Velocidad de reproduccion">' +
+             '<option value="60">1 min/s</option>' +
+             '<option value="300" selected>5 min/s</option>' +
+             '<option value="900">15 min/s</option>' +
+             '<option value="3600">1 h/s</option>' +
+             '</select>' +
+             '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
+             '</div>' +
+             '<div class="rondo-replay-chart" id="rondo-replay-chart" title="Velocidad en el tiempo; clic para saltar"><div class="rondo-replay-vacio">Perfil de velocidad</div></div>' +
+             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
+             '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
+             '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
+             '<div class="rondo-replay-acciones">' +
+             '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido (resumen, paradas y eventos)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+             '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
+             '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
+             '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
              // habilitada y con API key (ver paintTabsChat()).
@@ -1666,6 +1795,9 @@
             '<label>Max tokens (opcional, vacio = el del modelo) <input type="text" id="c-ia-maxtok" autocomplete="off" placeholder="(omitir)" spellcheck="false" title="Vacio = se omite. Algunos modelos rechazan max_tokens bajo."></label>' +
             numRow('c-ia-radio', 'Radio de busqueda de POIs (m)') +
             numRow('c-ia-timeout', 'Timeout (s)') +
+            '<h4>Contexto de la API</h4>' +
+            checkRow('c-ia-contexto-api', 'Ampliar contexto con la API (historial y propiedades de la unidad preguntada)') +
+            checkRow('c-ia-reporte-servidor', 'Usar reportes del servidor (report/exec_report; puede interferir con los reportes de la plataforma)') +
             '<h4>Analisis en lote y resumen</h4>' +
             checkRow('c-ia-resumen-on', 'Incluir resumen IA en el informe diario') +
             numRow('c-ia-batchmax', 'Max avisos por analisis en lote (5-50)') +
@@ -1960,7 +2092,7 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
-        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'chat', 'zonas'];
+        const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'replay', 'chat', 'zonas'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
             if (el) el.style.display = (n === name) ? '' : 'none';
@@ -1976,6 +2108,7 @@
         else if (name === 'alertas') paintAlertas();
         else if (name === 'rutas') paintRutas();
         else if (name === 'caravana') paintCaravana();
+        else if (name === 'replay') { rxReplayPintar(); }
         else if (name === 'chat') pintarChat();
         else if (name === 'zonas') { aplicarZonasVista(); paintGeocercas(); paintRiesgo(); }
         paintCounters();
@@ -3021,6 +3154,7 @@
             setHtml(cont, emptyState(UIS.route, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
                 '<button class="mini rondo-vacio-acc" data-acc="tab-unidades"><span class="rondo-usym">' + UIS.panel + '</span> Ir a Unidades</button>'));
+            try { rxRutasMiniSync([]); } catch (_) { /* noop */ }
             return;
         }
         const tarjeta = (info, st) => {
@@ -3051,7 +3185,7 @@
                 '<span class="rr-modo">' + esc(r.optimo ? 'mejor ruta' : 'secuencial') + ' \u00b7 ' + esc(r.modo || '') + '</span>' +
                 '<span class="rr-actions">' +
                 '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas del plan"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
-                '<button class="mini rondo-ruta-mapa" data-eco="' + esc(eco) + '" title="Dibujar la ruta encima del mapa de la plataforma"><span class="rondo-usym">' + UIS.map + '</span></button>' +
+                '<button class="mini rondo-ruta-mapa" data-eco="' + esc(eco) + '" title="Ver la ruta en el mini-mapa"><span class="rondo-usym">' + UIS.map + '</span></button>' +
                 '<button class="mini rondo-ruta-gmaps" data-eco="' + esc(eco) + '" title="Abrir la ruta en Google Maps (con paradas)"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
                 '<button class="mini rondo-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="rondo-usym">' + UIS.export + '</span></button>' +
                 '<button class="mini rondo-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
@@ -3062,6 +3196,7 @@
                 '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
                 (totalP > 1 || s ? '<div class="rr-progress"><div class="rr-progress-fill" style="width:' + pct + '%"></div></div>' : '') +
                 '<div class="rr-meta">' + chips.map((c) => '<span class="rr-chip">' + c + '</span>').join('') + '</div>' +
+                '<div class="rr-mini" id="rondo-ru-mini-' + esc(eco) + '"></div>' +
                 '</div>';
         };
         let html = pendientes.map((x) => {
@@ -3100,6 +3235,7 @@
                 '</div>';
         });
         setHtml(cont, html);
+        try { rxRutasMiniSync(filas); } catch (_) { /* noop */ }
     }
     function paintPanel() { setTab(APP.tab); }
 
@@ -3521,8 +3657,8 @@
     }
 
     setInterval(() => {
-        // Rutas en ventanas: se sincroniza aunque el panel este oculto.
-        try { if (typeof rxMapaVentanasOn === 'function' && rxMapaVentanasOn()) rxMapaVentanasSync(); } catch (_) { /* noop */ }
+        // Ventanas ocultas: oculta tambien las que se abran despues.
+        try { if (typeof rxVentanasSync === 'function') rxVentanasSync(); } catch (_) { /* noop */ }
         if (panelEl.style.display === 'none') return;
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();
@@ -4162,7 +4298,7 @@
             const enCampo = !!(tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable));
             if (e.altKey && !e.ctrlKey && !e.shiftKey) {
                 // v5.14.8: Alt+7 = Chat IA (solo si la IA esta configurada).
-                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana', '7': 'chat' };
+                const tabs = { '1': 'dash', '2': 'unidades', '3': 'alertas', '4': 'rutas', '5': 'zonas', '6': 'caravana', '7': 'chat', '8': 'replay' };
                 if (tabs[e.key] && (tabs[e.key] !== 'chat' || (APP.config.iaHabilitada && APP.config.iaApiKey))) {
                     setTab(tabs[e.key]);
                     if (APP.panelHidden) togglePanel();
@@ -4314,7 +4450,10 @@
         if (railEl) railEl.addEventListener('click', togglePanel);
         byId('rondo-sb-main').addEventListener('click', () => mainBtn.click());
         byId('rondo-sb-close').addEventListener('click', (e) => cerrarTodasSeguro(e.currentTarget));
-        byId('rondo-sb-panel').addEventListener('click', togglePanel);
+        byId('rondo-sb-panel').addEventListener('click', alternarVentanas);
+        pintarBotonVentanas();
+        byId('rondo-sb-mas').addEventListener('click', () => rxAjustarVentanas(1));
+        byId('rondo-sb-menos').addEventListener('click', () => rxAjustarVentanas(-1));
         // Clic fuera del panel en modo barra lateral: se oculta.
         document.addEventListener('pointerdown', (e) => {
             if (!APP.config.ocultarAlClicFuera) return;
@@ -4338,11 +4477,11 @@
         byId('rondo-refresh').addEventListener('click', (e) => conBusy(e.currentTarget, refresh));
         const rutasTrazar = byId('rondo-rutas-trazar');
         if (rutasTrazar) rutasTrazar.addEventListener('click', (e) => conBusy(e.currentTarget, () => trazarRutasAhora()));
-        const rutasVentanas = byId('rondo-rutas-ventanas');
-        if (rutasVentanas) rutasVentanas.addEventListener('click', () => rxMapaVentanasToggle());
         byId('rondo-csv').addEventListener('click', exportUnits);
         byId('rondo-csv-al').addEventListener('click', exportAlertas);
-        byId('rondo-informe').addEventListener('click', exportInforme);
+        byId('rondo-informe').addEventListener('click', () => exportReportePDF());
+        const informeMd = byId('rondo-informe-md');
+        if (informeMd) informeMd.addEventListener('click', exportInforme);
         const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {
@@ -4363,7 +4502,7 @@
                         planearRuta(eco, destino, null, (APP.config.autoRutaModo === 'astar' && APP.config.overpass) ? 'astar' : 'osrm');
                     }
                 }
-                else if (b.classList.contains('rondo-ruta-mapa')) rxMapaDibujarRuta(eco);
+                else if (b.classList.contains('rondo-ruta-mapa')) rxRutaMiniMapa(eco);
                 else if (b.classList.contains('rondo-ruta-gmaps')) rxRutaGoogleMaps(eco);
                 else if (b.classList.contains('rondo-ruta-geo')) exportRutaGeoJSON(eco);
                 else if (b.classList.contains('rondo-traza-geo')) exportTraza(eco);
@@ -4584,8 +4723,7 @@
                 { id: 'limite', icon: UIS.speed, label: 'Límite de velocidad (actual ' + lim + ' km/h)' },
                 { sep: 1 },
                 { id: 'ruta-paradas', icon: UIS.route, label: 'Destinos y paradas (multipunto)…' },
-                { id: 'ruta-mapa', icon: UIS.map, label: 'Dibujar ruta en el mapa de la plataforma' },
-                { id: 'ruta-mapa-diag', icon: UIS.info, label: 'Diagnosticar mapa (consola)' },
+                { id: 'ruta-mapa', icon: UIS.map, label: 'Ver ruta en el mini-mapa' },
                 { id: 'ruta-gmaps', icon: UIS.pin, label: 'Abrir ruta en Google Maps' },
                 { id: 'ruta-osm', icon: UIS.zone, label: 'Abrir ruta en OpenStreetMap' },
                 { id: 'ruta-geo', icon: UIS.export, label: 'Exportar ruta GeoJSON' },
@@ -4593,6 +4731,7 @@
                 { id: 'traza-geo', icon: UIS.csv, label: 'Exportar traza GeoJSON' },
                 { id: 'viaje-analizar', icon: UIS.clock, label: 'Analizar viaje (historial)' },
                 { id: 'viaje-geo', icon: UIS.export, label: 'Exportar viaje GeoJSON' },
+                { id: 'replay', icon: UIS.moving, label: 'Reproducir el dia (replay)' },
                 { id: 'odo-reset', icon: UIS.refresh, label: 'Reiniciar odómetro' },
                 { sep: 1 },
                 { id: 'mapa-osm', icon: UIS.zone, label: 'Ver en OpenStreetMap' },
@@ -4628,8 +4767,7 @@
                     adviceOk('Límite actualizado', eco + ': ' + (APP.limites[eco] ? APP.limites[eco] + ' km/h' : 'global ' + APP.config.velMax + ' km/h'));
                 }, { type: 'number', icon: UIS.speed, okText: 'Guardar' });
             } else if (acc === 'ruta-paradas') abrirEditorParadas(eco);
-            else if (acc === 'ruta-mapa') rxMapaDibujarRuta(eco);
-            else if (acc === 'ruta-mapa-diag') rxMapaDiagnostico();
+            else if (acc === 'ruta-mapa') rxRutaMiniMapa(eco);
             else if (acc === 'ruta-gmaps') rxRutaGoogleMaps(eco);
             else if (acc === 'ruta-osm') rxRutaOSM(eco);
             else if (acc === 'ruta-geo') exportRutaGeoJSON(eco);
@@ -4640,6 +4778,7 @@
             } else if (acc === 'traza-geo') exportTraza(eco);
             else if (acc === 'viaje-analizar') analizarViaje(eco, false);
             else if (acc === 'viaje-geo') exportViajeGeoJSON(eco);
+            else if (acc === 'replay') rxReplayAbrirUnidad(eco);
             else if (acc === 'odo-reset') {
                 rondoConfirm('Reiniciar odómetro', 'El odómetro acumulado de ' + eco + ' volverá a 0 km.', () => resetOdometro(eco), { okText: 'Reiniciar', icon: UIS.refresh });
             }
@@ -4708,6 +4847,11 @@
             if (iaRadioEl) iaRadioEl.value = APP.config.iaRadioPoisM != null ? APP.config.iaRadioPoisM : 250;
             const iaTimeoutEl = byId('c-ia-timeout');
             if (iaTimeoutEl) iaTimeoutEl.value = APP.config.iaTimeoutS != null ? APP.config.iaTimeoutS : 25;
+            // v6.0.9: contexto ampliado por API y reporte del servidor.
+            const iaCtxEl = byId('c-ia-contexto-api');
+            if (iaCtxEl) iaCtxEl.checked = APP.config.iaContextoAPI !== false;
+            const iaRepEl = byId('c-ia-reporte-servidor');
+            if (iaRepEl) iaRepEl.checked = !!APP.config.iaReporteServidor;
             // v5.14: analisis en lote + resumen + limite diario.
             const iaResumenEl = byId('c-ia-resumen-on');
             if (iaResumenEl) iaResumenEl.checked = !!APP.config.iaResumenInforme;
@@ -4973,6 +5117,8 @@
             }
             const iaRadioEl = byId('c-ia-radio'); if (iaRadioEl) cf.iaRadioPoisM = clamp(isoNum(iaRadioEl.value, 250), 50, 2000);
             const iaTimeoutEl = byId('c-ia-timeout'); if (iaTimeoutEl) cf.iaTimeoutS = clamp(isoNum(iaTimeoutEl.value, 25), 5, 120);
+            const iaCtxEl = byId('c-ia-contexto-api'); if (iaCtxEl) cf.iaContextoAPI = !!iaCtxEl.checked;
+            const iaRepEl = byId('c-ia-reporte-servidor'); if (iaRepEl) cf.iaReporteServidor = !!iaRepEl.checked;
             // v5.14: analisis en lote + resumen narrativo.
             const iaResumenEl = byId('c-ia-resumen-on'); if (iaResumenEl) cf.iaResumenInforme = !!iaResumenEl.checked;
             const iaBatchmaxEl = byId('c-ia-batchmax'); if (iaBatchmaxEl) cf.iaBatchMax = clamp(isoNum(iaBatchmaxEl.value, DEFAULTS.iaBatchMax), 5, 50);
@@ -5849,6 +5995,7 @@
         bindKeys();
         bindEvents();
         bindCaravanaSelect();
+        bindReplay();
         bindRiesgo();
 
         const ok = await wialonReady();
@@ -5939,180 +6086,354 @@
 
     init();
 
-    /* ====================== RUTA EN EL MAPA DE LA PLATAFORMA ======================
-     * v6.0.4. Dibuja la ruta planificada de una unidad ENCIMA del mapa de la
-     * plataforma. El overlay es una capa vectorial, asi que funciona con
-     * cualquiera de los mapas base de la plataforma (WebGIS, Bing, OSM...).
+    /* ====================== MINI-MAPA PROPIO + RUTA (v6.0.11) ======================
+     * v6.0.11: se elimino el overlay sobre el mapa de la plataforma (dependia
+     * del motor del mapa y no era fiable). En su lugar, Rondo trae su propio
+     * mini-mapa de tiles de OpenStreetMap: no depende del mapa de la
+     * plataforma, asi que siempre funciona. Se usa para ver una ruta
+     * planificada y para el replay del dia.
      *
-     * Es solo lectura: agrega una capa de dibujo y no toca nada de Wialon.
-     * Se intenta detectar el motor del mapa (Leaflet, OpenLayers, Mapbox o el
-     * WebGIS de Wialon) y, si no se puede, se ofrecen alternativas (Google
-     * Maps / exportar GeoJSON).
+     * Es solo lectura: pide tiles publicos de OSM (con atribucion) y dibuja
+     * encima el trazo y los marcadores.
      */
-    let _rxMapaLayer = null;   // capa/overlay activo
-    let _rxMapaMotor = null;   // 'leaflet' | 'openlayers' | 'mapbox'
-    let _rxMapaInst = null;    // instancia del mapa
-    let _rxMapaClave = null;   // ruta dibujada
-
-    function rxMapaClasificar(o) {
-        if (!o || typeof o !== 'object') return null;
-        try {
-            if (typeof o.addLayer === 'function' && o._container && typeof o.getCenter === 'function') return 'leaflet';
-            if (typeof o.getTargetElement === 'function' && typeof o.getView === 'function' && typeof o.addLayer === 'function') return 'openlayers';
-            if (typeof o.addSource === 'function' && typeof o.addLayer === 'function' && typeof o.getCanvas === 'function') return 'mapbox';
-            if (o.map && typeof o.map.addLayer === 'function') return 'wialon';
-        } catch (_) { /* noop */ }
-        return null;
+    function rxMMLonX(lon, z) { return ((lon + 180) / 360) * Math.pow(2, z) * 256; }
+    function rxMMLatY(lat, z) {
+        const l = clamp(Number(lat) || 0, -85.05112878, 85.05112878);
+        const s = Math.sin(l * Math.PI / 180);
+        return (0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI)) * Math.pow(2, z) * 256;
     }
-    // Busca una instancia de mapa: nombres tipicos, globals conocidos y, si no,
-    // un escaneo superficial del objeto global de la pagina.
-    function rxMapaCandidatos() {
+    function rxMMMuestrear(arr, max) {
+        if (!arr || arr.length <= max) return arr || [];
+        const paso = Math.ceil(arr.length / max);
         const out = [];
-        const vistos = new Set();
-        const probar = (nombre, obj) => {
-            if (!obj || typeof obj !== 'object' || vistos.has(obj)) return;
-            const motor = rxMapaClasificar(obj);
-            if (motor) { vistos.add(obj); out.push({ nombre: nombre, motor: motor, obj: obj }); }
-        };
-        // Globals conocidos (Wialon WebGIS, Leaflet, OpenLayers, Mapbox).
-        try { probar('webgis', PAGE.webgis); } catch (_) { /* noop */ }
-        try { probar('map', PAGE.map); } catch (_) { /* noop */ }
-        try { probar('mapa', PAGE.mapa); } catch (_) { /* noop */ }
-        try { probar('leafletMap', PAGE.leafletMap); } catch (_) { /* noop */ }
-        try { probar('wialonMap', PAGE.wialonMap); } catch (_) { /* noop */ }
-        try { probar('gmap', PAGE.gmap); } catch (_) { /* noop */ }
-        try { probar('_map', PAGE._map); } catch (_) { /* noop */ }
-        try { if (PAGE.webgis && PAGE.webgis.map) probar('webgis.map', PAGE.webgis.map); } catch (_) { /* noop */ }
-        try { if (PAGE.L && PAGE.L.Map && PAGE.L.Map._instances) Object.keys(PAGE.L.Map._instances).forEach((k) => probar('L.Map#' + k, PAGE.L.Map._instances[k])); } catch (_) { /* noop */ }
-        // Escaneo superficial.
-        try {
-            let n = 0;
-            for (const k in PAGE) {
-                if (n > 4000 || out.length > 3) break;
-                n++;
-                let v = null;
-                try { v = PAGE[k]; } catch (_) { continue; }
-                probar(k, v);
-            }
-        } catch (_) { /* noop */ }
-        // Prefiere motores que sepamos dibujar.
-        const orden = { leaflet: 0, mapbox: 1, openlayers: 2, wialon: 3 };
-        out.sort((a, b) => (orden[a.motor] || 9) - (orden[b.motor] || 9));
+        for (let i = 0; i < arr.length; i += paso) out.push(arr[i]);
+        if (out[out.length - 1] !== arr[arr.length - 1]) out.push(arr[arr.length - 1]);
         return out;
     }
-    function rxMapaDiagnostico() {
-        const c = rxMapaCandidatos();
-        try {
-            console.log('[Rondo] mapas detectados:', c.map((x) => x.nombre + ' (' + x.motor + ')'));
-            console.log('[Rondo] L:', !!PAGE.L, 'ol:', !!PAGE.ol, 'mapboxgl:', !!PAGE.mapboxgl, 'webgis:', !!PAGE.webgis);
-        } catch (_) { /* noop */ }
-        advice(c.length ? 'Mapa detectado' : 'Mapa no detectado',
-            c.length ? (c[0].nombre + ' \u00b7 ' + c[0].motor) : 'Revisa la consola (F12) para mas detalle.');
-        return c;
+    function rxMMPt(inst, lat, lon) {
+        return [rxMMLonX(lon, inst.z) - inst.ox, rxMMLatY(lat, inst.z) - inst.oy];
     }
-    function rxMapaQuitar() {
-        try {
-            if (_rxMapaLayer) {
-                if (_rxMapaMotor === 'leaflet' && typeof _rxMapaLayer.remove === 'function') _rxMapaLayer.remove();
-                else if (_rxMapaMotor === 'openlayers' && _rxMapaInst && typeof _rxMapaInst.removeLayer === 'function') _rxMapaInst.removeLayer(_rxMapaLayer);
-                else if (_rxMapaMotor === 'mapbox' && _rxMapaInst) {
-                    if (_rxMapaInst.getLayer('rondo-ruta-line')) _rxMapaInst.removeLayer('rondo-ruta-line');
-                    if (_rxMapaInst.getLayer('rondo-ruta-pts')) _rxMapaInst.removeLayer('rondo-ruta-pts');
-                    if (_rxMapaInst.getSource('rondo-ruta')) _rxMapaInst.removeSource('rondo-ruta');
+    function rxMMPuntos(inst) {
+        const out = [];
+        (inst.lineas || []).forEach((ln) => { if (ln && ln.pts) for (let i = 0; i < ln.pts.length; i++) out.push(ln.pts[i]); });
+        (inst.marcas || []).forEach((m) => out.push(m));
+        if (inst.pos) out.push(inst.pos);
+        return out;
+    }
+    function rxMMFit(inst) {
+        const pts = rxMMPuntos(inst);
+        if (!pts.length) return;
+        let latMin = Infinity, latMax = -Infinity, lonMin = Infinity, lonMax = -Infinity;
+        for (let i = 0; i < pts.length; i++) {
+            const p = pts[i];
+            if (!p || !isFinite(p.lat) || !isFinite(p.lon)) continue;
+            if (p.lat < latMin) latMin = p.lat;
+            if (p.lat > latMax) latMax = p.lat;
+            if (p.lon < lonMin) lonMin = p.lon;
+            if (p.lon > lonMax) lonMax = p.lon;
+        }
+        if (!isFinite(latMin)) return;
+        const W = Math.max(80, inst.W), H = Math.max(80, inst.H);
+        if (latMax - latMin < 1e-5 && lonMax - lonMin < 1e-5) {
+            inst.z = 16;
+            inst.ox = rxMMLonX(lonMin, 16) - W / 2;
+            inst.oy = rxMMLatY(latMin, 16) - H / 2;
+            return;
+        }
+        let z = 19;
+        for (; z >= 2; z--) {
+            const pw = rxMMLonX(lonMax, z) - rxMMLonX(lonMin, z);
+            const ph = rxMMLatY(latMin, z) - rxMMLatY(latMax, z);
+            if (pw <= W - 40 && ph <= H - 40) break;
+        }
+        inst.z = clamp(z, 2, 19);
+        const cx = (rxMMLonX(lonMin, inst.z) + rxMMLonX(lonMax, inst.z)) / 2;
+        const cy = (rxMMLatY(latMin, inst.z) + rxMMLatY(latMax, inst.z)) / 2;
+        inst.ox = cx - W / 2;
+        inst.oy = cy - H / 2;
+    }
+    function rxMMTilesHTML(inst, lazy) {
+        const z = inst.z;
+        const n = Math.pow(2, z);
+        const x0 = Math.floor(inst.ox / 256), x1 = Math.floor((inst.ox + inst.W) / 256);
+        const y0 = Math.floor(inst.oy / 256), y1 = Math.floor((inst.oy + inst.H) / 256);
+        let html = '';
+        for (let tx = x0; tx <= x1; tx++) {
+            for (let ty = y0; ty <= y1; ty++) {
+                if (ty < 0 || ty >= n) continue;
+                const wx = ((tx % n) + n) % n;
+                const left = tx * 256 - inst.ox;
+                const top = ty * 256 - inst.oy;
+                html += '<img class="rondo-mm-tile" src="https://tile.openstreetmap.org/' + z + '/' + wx + '/' + ty + '.png"' +
+                    ' style="left:' + left + 'px;top:' + top + 'px" alt="" draggable="false"' + (lazy === false ? '' : ' loading="lazy"') + '>';
+            }
+        }
+        return html;
+    }
+    function rxMMTiles(inst) {
+        inst.capaTiles.innerHTML = rxMMTilesHTML(inst);
+    }
+    function rxMMLineaHTML(inst, ln) {
+        if (!ln || !ln.pts || ln.pts.length < 2) return '';
+        const pts = rxMMMuestrear(ln.pts, 2000);
+        let d = '';
+        for (let i = 0; i < pts.length; i++) {
+            const q = rxMMPt(inst, pts[i].lat, pts[i].lon);
+            d += (d ? ' ' : '') + q[0].toFixed(1) + ',' + q[1].toFixed(1);
+        }
+        const color = ln.color || '#850D22';
+        let out = '';
+        if (ln.glow) {
+            out += '<polyline fill="none" stroke="' + color + '" stroke-width="' + ((ln.width || 3) + 7) +
+                '" stroke-opacity="0.22" stroke-linejoin="round" stroke-linecap="round" points="' + d + '"/>';
+        }
+        out += '<polyline fill="none" stroke="' + color + '" stroke-width="' + (ln.width || 3) +
+            '" stroke-opacity="' + (ln.opacity == null ? 1 : ln.opacity) + '" stroke-linejoin="round" stroke-linecap="round" points="' + d + '"/>';
+        return out;
+    }
+    function rxMMMarcasHTML(inst) {
+        let html = '';
+        (inst.marcas || []).forEach((m) => {
+            if (!m || !isFinite(m.lat) || !isFinite(m.lon)) return;
+            const q = rxMMPt(inst, m.lat, m.lon);
+            html += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="' + (m.radio || 5) +
+                '" fill="' + (m.color || '#1565c0') + '" stroke="#fff" stroke-width="1.5">' +
+                (m.txt ? '<title>' + esc(m.txt) + '</title>' : '') + '</circle>';
+            if (m.num != null) {
+                html += '<text x="' + (q[0] + 7).toFixed(1) + '" y="' + (q[1] + 3.5).toFixed(1) + '" font-size="10" font-weight="700"' +
+                    ' fill="#1c2030" stroke="#fff" stroke-width="2.5" paint-order="stroke" style="font-family:system-ui,Arial,sans-serif">' +
+                    esc(String(m.num)) + '</text>';
+            }
+        });
+        return html;
+    }
+    function rxMMDibujar(inst, soloDinamico) {
+        const est = inst.svg.querySelector('.rondo-mm-est');
+        const din = inst.svg.querySelector('.rondo-mm-din');
+        if (!soloDinamico && est) {
+            let h = '';
+            (inst.lineas || []).forEach((ln) => { if (ln && !ln.dyn) h += rxMMLineaHTML(inst, ln); });
+            h += rxMMMarcasHTML(inst);
+            est.innerHTML = h;
+        }
+        if (din) {
+            let h = '';
+            (inst.lineas || []).forEach((ln) => { if (ln && ln.dyn) h += rxMMLineaHTML(inst, ln); });
+            if (inst.pos && isFinite(inst.pos.lat)) {
+                const q = rxMMPt(inst, inst.pos.lat, inst.pos.lon);
+                h += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#850D22" stroke="#fff" stroke-width="2"/>';
+            }
+            din.innerHTML = h;
+        }
+    }
+    // Crea un mini-mapa dentro de `cont`.
+    // cfg: { lineas:[{pts:[{lat,lon}], color, width, opacity, dyn}], marcas:[{lat,lon,color,radio,txt}], pos }
+    function rxMiniMapa(cont, cfg) {
+        if (!cont) return null;
+        const o = cfg || {};
+        cont.classList.add('rondo-mm');
+        cont.innerHTML = '<div class="rondo-mm-tiles"></div>' +
+            '<svg class="rondo-mm-svg" xmlns="http://www.w3.org/2000/svg"><g class="rondo-mm-est"></g><g class="rondo-mm-din"></g></svg>' +
+            '<div class="rondo-mm-atrib">\u00a9 OpenStreetMap</div>';
+        const inst = {
+            cont: cont,
+            capaTiles: cont.querySelector('.rondo-mm-tiles'),
+            svg: cont.querySelector('.rondo-mm-svg'),
+            lineas: o.lineas || [],
+            marcas: o.marcas || [],
+            pos: o.pos || null,
+            W: 0, H: 0, z: 16, ox: 0, oy: 0
+        };
+        inst.medir = () => {
+            inst.W = Math.max(80, cont.clientWidth || 300);
+            inst.H = Math.max(80, cont.clientHeight || 240);
+            inst.svg.setAttribute('viewBox', '0 0 ' + inst.W + ' ' + inst.H);
+        };
+        inst.render = () => { rxMMTiles(inst); rxMMDibujar(inst, false); };
+        inst.encuadrar = () => { inst.medir(); rxMMFit(inst); inst.render(); };
+        inst.ponerDatos = (d) => {
+            if (!d) return;
+            if (d.lineas) inst.lineas = d.lineas;
+            if (d.marcas) inst.marcas = d.marcas;
+            inst.pos = d.pos || null;
+            inst.encuadrar();
+        };
+        inst.setPos = (lat, lon) => {
+            inst.pos = (lat == null || lon == null || !isFinite(lat) || !isFinite(lon)) ? null : { lat: lat, lon: lon };
+            if (inst.svg) rxMMDibujar(inst, true);
+        };
+        inst.setLinea = (i, pts, color, width, opacity) => {
+            inst.lineas[i] = { pts: pts, color: color, width: width, opacity: opacity, dyn: true };
+            if (inst.svg) rxMMDibujar(inst, true);
+        };
+        inst.setMarcas = (marcas) => {
+            inst.marcas = marcas || [];
+            if (inst.svg) rxMMDibujar(inst, false);
+        };
+        inst.destruir = () => { try { cont.innerHTML = ''; } catch (_) { /* noop */ } };
+        // Pan con arrastre.
+        let drag = null;
+        cont.addEventListener('pointerdown', (e) => {
+            if (e.button !== 0) return;
+            drag = { x: e.clientX, y: e.clientY, ox: inst.ox, oy: inst.oy };
+            try { cont.setPointerCapture(e.pointerId); } catch (_) { /* noop */ }
+            e.preventDefault();
+        });
+        cont.addEventListener('pointermove', (e) => {
+            if (!drag) return;
+            inst.ox = drag.ox - (e.clientX - drag.x);
+            inst.oy = drag.oy - (e.clientY - drag.y);
+            rxMMTiles(inst); rxMMDibujar(inst, false);
+        });
+        const fin = () => { drag = null; };
+        cont.addEventListener('pointerup', fin);
+        cont.addEventListener('pointercancel', fin);
+        // Zoom con rueda, centrado en el cursor.
+        cont.addEventListener('wheel', (e) => {
+            const nz = clamp(inst.z + (e.deltaY < 0 ? 1 : -1), 2, 19);
+            if (nz === inst.z) return;
+            e.preventDefault();
+            const rect = cont.getBoundingClientRect();
+            const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+            const f = Math.pow(2, nz - inst.z);
+            inst.ox = (inst.ox + mx) * f - mx;
+            inst.oy = (inst.oy + my) * f - my;
+            inst.z = nz;
+            rxMMTiles(inst); rxMMDibujar(inst, false);
+        }, { passive: false });
+        inst.encuadrar();
+        return inst;
+    }
+    // Mini-mapa estatico en HTML (tiles + SVG) para incrustar en el reporte PDF.
+    // Los tiles son <img> normales: el navegador los carga y los imprime.
+    function rxMiniMapaHTML(cfg, W, H) {
+        const o = cfg || {};
+        const inst = {
+            W: Math.max(160, W || 680), H: Math.max(120, H || 300), z: 16, ox: 0, oy: 0,
+            lineas: o.lineas || [], marcas: o.marcas || [], pos: o.pos || null
+        };
+        rxMMFit(inst);
+        let svg = '';
+        (inst.lineas || []).forEach((ln) => { svg += rxMMLineaHTML(inst, ln); });
+        svg += rxMMMarcasHTML(inst);
+        if (inst.pos) {
+            const q = rxMMPt(inst, inst.pos.lat, inst.pos.lon);
+            svg += '<circle cx="' + q[0].toFixed(1) + '" cy="' + q[1].toFixed(1) + '" r="7" fill="#850D22" stroke="#fff" stroke-width="2"/>';
+        }
+        return '<div class="rondo-mm-print" style="width:' + inst.W + 'px;height:' + inst.H + 'px">' +
+            rxMMTilesHTML(inst, false) +
+            '<svg width="' + inst.W + '" height="' + inst.H + '" viewBox="0 0 ' + inst.W + ' ' + inst.H + '">' + svg + '</svg>' +
+            '</div>';
+    }
+    // Lineas y marcadores de una ruta (trazo resaltado con halo).
+    function rxRutaLineasMarcas(r) {
+        const lineas = [{ pts: r.coords.map((c) => ({ lat: c[1], lon: c[0] })), color: '#850D22', width: 4, opacity: 0.95, glow: true }];
+        const marcas = [];
+        if (r.origen) marcas.push({ lat: r.origen.lat, lon: r.origen.lon, color: '#2e7d32', radio: 6, txt: 'Origen' });
+        (r.paradas || []).forEach((p, i) => {
+            if (p.coords) marcas.push({ lat: p.coords.lat, lon: p.coords.lon, color: '#1565c0', radio: 5, txt: (i + 1) + '. ' + (p.texto || '') });
+        });
+        if (r.destino) marcas.push({ lat: r.destino.lat, lon: r.destino.lon, color: '#b71c1c', radio: 6, txt: 'Destino' });
+        return { lineas: lineas, marcas: marcas };
+    }
+    // Mini-mapas de las tarjetas de la pestana Rutas. Para que no parpadeen ni
+    // se reencuadren, NO van dentro del HTML que se repinta cada segundo: se
+    // crean una vez como capa absoluta dentro de la lista y solo se reposicionan
+    // sobre su hueco (.rr-mini) en cada repintado.
+    const _rxRutaMini = new Map(); // eco -> { inst, hold, key, w, h }
+    function rxRutasMiniSync(filas) {
+        const list = byId('rondo-lista-rutas');
+        if (!list) return;
+        const listRect = list.getBoundingClientRect();
+        const vistos = new Set();
+        (filas || []).forEach((x) => {
+            const info = x && x.info ? x.info : x;
+            if (!info || !info.clave) return;
+            const eco = info.clave;
+            const r = rutaDe(info);
+            if (!r || !r.coords || r.coords.length < 2) return;
+            const ph = byId('rondo-ru-mini-' + eco);
+            if (!ph) return;
+            vistos.add(eco);
+            const st = x && x.st ? x.st : null;
+            const er = (typeof estadoRuta === 'function') ? estadoRuta(info, st) : { snap: null };
+            const s = er.snap || null;
+            const key = (r.creada || 0) + ':' + eco + ':' + r.coords.length;
+            const phRect = ph.getBoundingClientRect();
+            const w = Math.max(120, Math.round(phRect.width || 300));
+            const h = Math.max(90, Math.round(phRect.height || 150));
+            const left = Math.round(phRect.left - listRect.left);
+            const top = Math.round(phRect.top - listRect.top);
+            let ent = _rxRutaMini.get(eco);
+            if (!ent || ent.key !== key) {
+                if (ent) {
+                    try { ent.inst.destruir(); } catch (_) { /* noop */ }
+                    if (ent.hold && ent.hold.parentNode) ent.hold.parentNode.removeChild(ent.hold);
+                }
+                const hold = document.createElement('div');
+                hold.className = 'rr-mini-abs';
+                hold.style.left = left + 'px'; hold.style.top = top + 'px';
+                hold.style.width = w + 'px'; hold.style.height = h + 'px';
+                list.appendChild(hold);
+                const lm = rxRutaLineasMarcas(r);
+                lm.lineas.push({ pts: [], dyn: true });
+                const pos = (st && st.lat != null) ? { lat: st.lat, lon: st.lon } : null;
+                ent = { inst: rxMiniMapa(hold, { lineas: lm.lineas, marcas: lm.marcas, pos: pos }), hold: hold, key: key, w: w, h: h };
+                _rxRutaMini.set(eco, ent);
+            } else {
+                // El repintado vacio la lista: re-inserta la capa (conserva tiles y paneo).
+                if (ent.hold.parentNode !== list) list.appendChild(ent.hold);
+                if (ent.hold.style.left !== (left + 'px')) ent.hold.style.left = left + 'px';
+                if (ent.hold.style.top !== (top + 'px')) ent.hold.style.top = top + 'px';
+                if (ent.w !== w || ent.h !== h) {
+                    ent.hold.style.width = w + 'px'; ent.hold.style.height = h + 'px';
+                    ent.w = w; ent.h = h;
+                    try { ent.inst.medir(); ent.inst.render(); } catch (_) { /* noop */ }
                 }
             }
-        } catch (_) { /* noop */ }
-        _rxMapaLayer = null; _rxMapaMotor = null; _rxMapaInst = null; _rxMapaClave = null;
-    }
-    function rxMapaRutaActiva() { return !!_rxMapaLayer; }
-
-    function rxMapaDibujarLeaflet(map, L, r, fit) {
-        const grp = L.layerGroup();
-        const pts = r.coords.map((c) => [c[1], c[0]]);
-        L.polyline(pts, { color: '#850D22', weight: 4, opacity: 0.9 }).addTo(grp);
-        if (r.origen) L.circleMarker([r.origen.lat, r.origen.lon], { radius: 6, color: '#2e7d32', fillColor: '#2e7d32', fillOpacity: 1 }).bindTooltip('Origen').addTo(grp);
-        (r.paradas || []).forEach((p, i) => {
-            if (!p.coords) return;
-            L.circleMarker([p.coords.lat, p.coords.lon], { radius: 5, color: '#1565c0', fillColor: '#1565c0', fillOpacity: 1 })
-                .bindTooltip((i + 1) + '. ' + (p.texto || '')).addTo(grp);
+            if (s && st && st.lat != null) {
+                const idx = clamp((s.idx || 0) + 1, 0, r.coords.length - 1);
+                const paso = Math.max(1, Math.ceil((idx + 1) / 200));
+                const pts = [];
+                for (let i = 0; i <= idx; i += paso) { const c = r.coords[i]; pts.push({ lat: c[1], lon: c[0] }); }
+                pts.push({ lat: st.lat, lon: st.lon });
+                ent.inst.setLinea(1, pts, '#1565c0', 4, 0.95);
+                ent.inst.setPos(st.lat, st.lon);
+            } else {
+                ent.inst.setLinea(1, [], '#1565c0', 4, 0.95);
+                ent.inst.setPos(null, null);
+            }
         });
-        if (r.destino) L.circleMarker([r.destino.lat, r.destino.lon], { radius: 6, color: '#b71c1c', fillColor: '#b71c1c', fillOpacity: 1 }).bindTooltip('Destino').addTo(grp);
-        grp.addTo(map);
-        if (fit !== false) { try { map.fitBounds(L.latLngBounds(pts), { padding: [30, 30] }); } catch (_) { /* noop */ } }
-        return grp;
-    }
-    function rxMapaDibujarMapbox(map, r) {
-        const src = { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: r.coords } } };
-        if (map.getSource('rondo-ruta')) map.removeSource('rondo-ruta');
-        map.addSource('rondo-ruta', src);
-        map.addLayer({ id: 'rondo-ruta-line', type: 'line', source: 'rondo-ruta', paint: { 'line-color': '#850D22', 'line-width': 4, 'line-opacity': 0.9 } });
-        const feat = (r.paradas || []).filter((p) => p.coords).map((p) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [p.coords.lon, p.coords.lat] } }));
-        feat.unshift({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [r.origen.lon, r.origen.lat] } });
-        map.addSource('rondo-ruta-pts', { type: 'geojson', data: { type: 'FeatureCollection', features: feat } });
-        map.addLayer({ id: 'rondo-ruta-pts', type: 'circle', source: 'rondo-ruta-pts', paint: { 'circle-radius': 5, 'circle-color': '#1565c0' } });
-        try {
-            const xs = r.coords.map((c) => c[0]), ys = r.coords.map((c) => c[1]);
-            map.fitBounds([[Math.min.apply(null, xs), Math.min.apply(null, ys)], [Math.max.apply(null, xs), Math.max.apply(null, ys)]], { padding: 40 });
-        } catch (_) { /* noop */ }
-        return true;
-    }
-    function rxMapaDibujarOL(map, ol, r) {
-        const geom = new ol.geom.LineString(r.coords);
-        if (ol.proj && ol.proj.fromLonLat) geom.transform('EPSG:4326', 'EPSG:3857');
-        const features = [new ol.Feature({ geometry: geom })];
-        (r.paradas || []).forEach((p) => {
-            if (!p.coords) return;
-            const g = new ol.geom.Point([p.coords.lon, p.coords.lat]);
-            if (ol.proj && ol.proj.fromLonLat) g.transform('EPSG:4326', 'EPSG:3857');
-            features.push(new ol.Feature({ geometry: g }));
+        _rxRutaMini.forEach((ent, eco) => {
+            if (vistos.has(eco)) return;
+            try { ent.inst.destruir(); } catch (_) { /* noop */ }
+            if (ent.hold && ent.hold.parentNode) ent.hold.parentNode.removeChild(ent.hold);
+            _rxRutaMini.delete(eco);
         });
-        const source = new ol.source.Vector({ features: features });
-        const layer = new ol.layer.Vector({ source: source, style: new ol.style.Style({ stroke: new ol.style.Stroke({ color: '#850D22', width: 4 }), image: new ol.style.Circle({ radius: 5, fill: new ol.style.Fill({ color: '#1565c0' }) }) }) });
-        map.addLayer(layer);
-        try {
-            const ext = source.getExtent();
-            if (ext && map.getView) map.getView().fit(ext, { padding: [30, 30, 30, 30] });
-        } catch (_) { /* noop */ }
-        return layer;
     }
-
-    function rxMapaDibujarRuta(eco) {
+    // Abre una ventana con el mini-mapa de la ruta planificada de una unidad.
+    function rxRutaMiniMapa(eco) {
         const it = unitByEco(eco);
         const r = it ? rutaDe(it.info) : (APP.rutas[eco] || null);
-        if (!r || !r.coords || r.coords.length < 2) { adviceWarn('Sin ruta', 'No hay una ruta trazada para ' + eco + '.'); return false; }
-        const clave = (it && it.info.clave) || eco;
-        if (_rxMapaLayer && _rxMapaClave === clave) { rxMapaQuitar(); advice('Ruta quitada del mapa', eco); if (APP.tab === 'rutas') paintRutas(); return true; }
-        const cands = rxMapaCandidatos();
-        if (!cands.length) {
-            adviceWarn('Mapa no detectado', 'Usa "Google Maps" o exporta el GeoJSON. Abre la consola (F12) y pulsa el boton del mapa para diagnosticar.');
-            try { console.log('[Rondo] sin mapa detectado. L=', !!PAGE.L, 'ol=', !!PAGE.ol, 'mapboxgl=', !!PAGE.mapboxgl, 'webgis=', !!PAGE.webgis); } catch (_) { /* noop */ }
-            return false;
-        }
-        const c = cands[0];
-        rxMapaQuitar();
-        try {
-            if (c.motor === 'leaflet') {
-                const L = PAGE.L;
-                _rxMapaLayer = rxMapaDibujarLeaflet(c.obj, L, r);
-                _rxMapaMotor = 'leaflet'; _rxMapaInst = c.obj;
-            } else if (c.motor === 'mapbox') {
-                rxMapaDibujarMapbox(c.obj, r);
-                _rxMapaLayer = true; _rxMapaMotor = 'mapbox'; _rxMapaInst = c.obj;
-            } else if (c.motor === 'openlayers') {
-                _rxMapaLayer = rxMapaDibujarOL(c.obj, PAGE.ol, r);
-                _rxMapaMotor = 'openlayers'; _rxMapaInst = c.obj;
-            } else {
-                adviceWarn('Motor no soportado', 'Mapa "' + c.nombre + '". Exporta el GeoJSON.');
-                return false;
+        if (!r || !r.coords || r.coords.length < 2) { adviceWarn('Sin ruta', 'No hay una ruta trazada para ' + eco + '.'); return; }
+        const lm = rxRutaLineasMarcas(r);
+        const resumen = Math.round((r.total || 0) / 1000) + ' km' +
+            (r.modo ? ' \u00b7 ' + r.modo : '') + ' \u00b7 ' + ((r.paradas || []).length) + ' parada(s)';
+        abrirDialogo({
+            icon: UIS.map,
+            titulo: 'Ruta de ' + eco,
+            html: '<div class="rondo-mm-resumen">' + esc(resumen) + '</div>' +
+                '<div id="rondo-ruta-minimapa" class="rondo-minimapa"></div>' +
+                '<div class="rondo-mm-hint">Arrastra para mover, rueda para acercar. Trazo y marcadores de Rondo.</div>',
+            cancelText: 'Cerrar',
+            okText: 'Cerrar',
+            onOk: () => {},
+            ancho: 860,
+            onOpen: (el) => {
+                const cont = el.querySelector('#rondo-ruta-minimapa');
+                if (cont) rxMiniMapa(cont, { lineas: lm.lineas, marcas: lm.marcas });
             }
-            _rxMapaClave = clave;
-            adviceOk('Ruta dibujada en el mapa', eco + ' \u00b7 ' + Math.round((r.total || 0) / 1000) + ' km');
-            if (APP.tab === 'rutas') paintRutas();
-            return true;
-        } catch (e) {
-            adviceErr('No se pudo dibujar', (e && e.message) || '');
-            return false;
-        }
+        });
     }
     // Alternativa garantizada: abrir la ruta en Google Maps con paradas.
     function rxRutaGoogleMaps(eco) {
@@ -6139,57 +6460,1095 @@
             r.origen.lat + ',' + r.origen.lon + ';' + d.lat + ',' + d.lon;
         try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) { /* noop */ }
     }
+    /* ====================== REPLAY DEL DIA (v6.0.12) ======================
+     * Reproduce el recorrido de una unidad en un dia o en un rango de horas.
+     * Solo lectura: pide el historial con messages/load_interval y lo dibuja en
+     * el mini-mapa propio de Rondo (tiles de OSM), sin depender del mapa de la
+     * plataforma.
+     *
+     * Incluye: buscador de unidades, rango por dia y horas, resumen del tramo,
+     * perfil de velocidad, paradas (zona/municipio), eventos (geocercas,
+     * excesos, desvios) y exportacion (GeoJSON del recorrido, CSV de paradas).
+     */
+    let RX_REPLAY = null;
+    let _rxRepSug = [];
+    let _rxRepSugIdx = -1;
 
-    // ---- Rutas dibujadas en las ventanas de cada vehiculo (v6.0.8) ----
-    // Cada ventana de unidad tiene su propio mapa; si el motor es Leaflet se
-    // detecta el mapa dentro de cada ventana y se dibuja la ruta de esa unidad.
-    let _rxWinsOn = false;
-    const _rxWinsLayers = new Map(); // eco -> capa Leaflet
-    function rxMapaVentanasOn() { return _rxWinsOn; }
-    function rxMapaVentanasQuitar() {
-        _rxWinsLayers.forEach((layer) => { try { layer.remove(); } catch (_) { /* noop */ } });
-        _rxWinsLayers.clear();
+    function rxReplayHHMM(t) {
+        try { return new Date((Number(t) || 0) * 1000).toLocaleTimeString().slice(0, 5); } catch (_) { return '--:--'; }
     }
-    function rxMapaVentanasSync() {
-        if (!_rxWinsOn) return;
-        if (typeof openWindows !== 'function') return;
-        const L = PAGE && PAGE.L;
-        if (!L) return;
-        const mapas = rxMapaCandidatos().filter((c) => c.motor === 'leaflet').map((c) => c.obj);
-        if (!mapas.length) return;
-        const wins = openWindows();
-        const activos = new Set();
-        for (let i = 0; i < wins.length; i++) {
-            const eco = wins[i].eco;
-            const cont = wins[i].cont;
-            if (!eco || !cont) continue;
-            const it = unitByEco(eco);
-            const r = it ? rutaDe(it.info) : null;
-            if (!r || !r.coords || r.coords.length < 2) continue;
-            activos.add(eco);
-            if (_rxWinsLayers.has(eco)) continue;
-            let map = null;
-            for (let k = 0; k < mapas.length; k++) {
-                const c = mapas[k] && mapas[k]._container;
-                if (c && cont.contains(c)) { map = mapas[k]; break; }
-            }
-            if (!map) continue;
-            try { _rxWinsLayers.set(eco, rxMapaDibujarLeaflet(map, L, r, false)); } catch (_) { /* noop */ }
+    function rxReplayFechaHoy() {
+        const d = new Date();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        const dd = String(d.getDate()).padStart(2, '0');
+        return d.getFullYear() + '-' + mm + '-' + dd;
+    }
+    function rxReplayRango(fecha, h1, h2) {
+        const f = String(fecha || rxReplayFechaHoy());
+        const t1 = /^\d{1,2}:\d{2}$/.test(h1) ? h1 : '00:00';
+        const t2 = /^\d{1,2}:\d{2}$/.test(h2) ? h2 : '23:59';
+        let desde = Math.floor(new Date(f + 'T' + t1 + ':00').getTime() / 1000);
+        let hasta = Math.floor(new Date(f + 'T' + t2 + ':59').getTime() / 1000);
+        const ahora = Math.floor(Date.now() / 1000);
+        if (!isFinite(desde)) desde = ahora - 86400;
+        if (!isFinite(hasta)) hasta = ahora;
+        if (hasta > ahora) hasta = ahora;
+        return { desde: desde, hasta: hasta };
+    }
+    function rxReplayColor(tipo) {
+        return { parada: '#7d8595', exceso: '#b71c1c', zona: '#1565c0', desvio: '#e65100' }[tipo] || '#888';
+    }
+    function rxReplayDescargar(nombre, texto, mime) {
+        try {
+            const a = makeEl('a', { href: URL.createObjectURL(new Blob([texto], { type: mime || 'text/plain;charset=utf-8;' })) });
+            a.download = nombre;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => { try { URL.revokeObjectURL(a.href); a.remove(); } catch (_) { /* noop */ } }, 1500);
+        } catch (_) { adviceWarn('No se pudo exportar', nombre); }
+    }
+    // ---- Buscador de unidades (combobox) ----
+    function rxReplayUnidades() {
+        const out = [], vistos = new Set();
+        const push = (u) => {
+            let info; try { info = parseUnitName(u); } catch (_) { return; }
+            const eco = info.eco || info.clave;
+            if (!eco || vistos.has(eco)) return;
+            vistos.add(eco);
+            out.push({ eco: eco, placa: info.placa || '', nombre: info.nombre || '', etq: eco + (info.placa ? ' \u00b7 ' + info.placa : '') });
+        };
+        (APP.unidades || []).forEach((u) => { try { if (shouldWatch(u)) push(u); } catch (_) { /* noop */ } });
+        (APP.unidades || []).forEach(push);
+        return out;
+    }
+    function rxReplayFiltrar(q) {
+        const cat = rxReplayUnidades();
+        const t = String(q || '').trim();
+        if (!t) return cat.slice(0, 40);
+        const sc = cat.map((u) => ({ u: u, s: fuzzyScore(t, u.eco + ' ' + u.placa + ' ' + u.nombre) }))
+            .filter((x) => x.s > 0)
+            .sort((a, b) => b.s - a.s)
+            .slice(0, 30)
+            .map((x) => x.u);
+        // Si escribieron un economico exacto y no aparecio, lo agregamos.
+        const m = /^0*(\d{3,5})\b/.exec(t);
+        if (m && !sc.some((u) => u.eco === m[1])) {
+            const exacto = cat.filter((u) => u.eco === m[1])[0];
+            if (exacto) sc.unshift(exacto);
         }
-        _rxWinsLayers.forEach((layer, eco) => {
-            if (activos.has(eco)) return;
-            try { layer.remove(); } catch (_) { /* noop */ }
-            _rxWinsLayers.delete(eco);
+        return sc;
+    }
+    function rxReplaySugResaltar() {
+        const box = byId('rondo-replay-sug');
+        if (!box) return;
+        box.querySelectorAll('.rondo-replay-sug-item').forEach((n) => n.classList.toggle('sel', +n.dataset.i === _rxRepSugIdx));
+        const sel = box.querySelector('.rondo-replay-sug-item.sel');
+        if (sel && sel.scrollIntoView) { try { sel.scrollIntoView({ block: 'nearest' }); } catch (_) { /* noop */ } }
+    }
+    function rxReplaySugRender() {
+        const inp = byId('rondo-replay-buscar');
+        const box = byId('rondo-replay-sug');
+        if (!inp || !box) return;
+        _rxRepSug = rxReplayFiltrar(inp.value);
+        if (!_rxRepSug.length) { box.classList.remove('abierto'); box.innerHTML = ''; return; }
+        if (_rxRepSugIdx >= _rxRepSug.length) _rxRepSugIdx = _rxRepSug.length - 1;
+        box.innerHTML = _rxRepSug.map((u, i) =>
+            '<div class="rondo-replay-sug-item' + (i === _rxRepSugIdx ? ' sel' : '') + '" data-i="' + i + '">' +
+            '<span class="su-eco">' + esc(u.eco) + '</span>' +
+            '<span class="su-sub">' + esc([u.placa, u.nombre].filter(Boolean).join(' \u00b7 ')) + '</span>' +
+            '</div>').join('');
+        box.classList.add('abierto');
+        box.querySelectorAll('.rondo-replay-sug-item').forEach((n) => {
+            n.onclick = () => rxReplayElegir(+n.dataset.i);
+            n.onmouseenter = () => { _rxRepSugIdx = +n.dataset.i; rxReplaySugResaltar(); };
         });
     }
-    function rxMapaVentanasToggle() {
-        _rxWinsOn = !_rxWinsOn;
-        if (_rxWinsOn) {
-            rxMapaVentanasSync();
-            adviceOk('Rutas en ventanas', 'Dibujando la ruta en el mapa de cada ventana abierta.');
-        } else {
-            rxMapaVentanasQuitar();
-            advice('Rutas en ventanas', 'Se dejo de dibujar en las ventanas.');
+    function rxReplayCerrarSug() {
+        const box = byId('rondo-replay-sug');
+        if (box) { box.classList.remove('abierto'); box.innerHTML = ''; }
+        _rxRepSugIdx = -1;
+    }
+    function rxReplayElegir(i) {
+        const u = _rxRepSug[i];
+        if (!u) return;
+        rxReplaySetUnidad(u.eco, u.etq);
+    }
+    function rxReplaySetUnidad(eco, etq) {
+        APP.replayEco = eco || '';
+        const hid = byId('rondo-replay-eco');
+        if (hid) hid.value = APP.replayEco;
+        const inp = byId('rondo-replay-buscar');
+        if (inp) inp.value = etq || eco || '';
+        rxReplayCerrarSug();
+    }
+    // ---- Analisis del recorrido ----
+    function rxReplayDetalleParada(lat, lon, zonas) {
+        let zona = '', municipio = '';
+        try { if (zonas && lat != null) zona = zoneAt(lat, lon) || ''; } catch (_) { /* noop */ }
+        try { const m = municipioEn(lat, lon); municipio = (m && m.nombre) ? m.nombre : ''; } catch (_) { /* noop */ }
+        return { zona: zona, municipio: municipio };
+    }
+    // ---- Lugares de OpenStreetMap para las paradas ----
+    // Etiqueta de una parada: lugar de OSM > geocerca > municipio > coordenadas.
+    function rxReplayParadaEtiqueta(p) {
+        if (!p) return '';
+        if (p.lugar) return p.lugar + (p.categoria ? ' (' + p.categoria + ')' : '');
+        if (p.zona) return p.zona;
+        if (p.municipio) return p.municipio;
+        return (+p.lat).toFixed(4) + ',' + (+p.lon).toFixed(4);
+    }
+    function rxReplayParadaTooltip(p) {
+        const partes = [];
+        if (p.lugar) partes.push(p.lugar + (p.categoria ? ' (' + p.categoria + ')' : ''));
+        if (p.direccion && p.direccion !== p.lugar) partes.push(p.direccion);
+        if (p.zona) partes.push('geocerca: ' + p.zona);
+        if (p.municipio) partes.push('municipio: ' + p.municipio);
+        partes.push((+p.lat).toFixed(5) + ',' + (+p.lon).toFixed(5));
+        return partes.join(' \u00b7 ');
+    }
+    function rxReplayCatPOI(t) {
+        if (!t) return 'lugar';
+        if (t.shop) {
+            const map = { convenience: 'tienda de conveniencia', supermarket: 'supermercado', bakery: 'panaderia', butcher: 'carniceria', greengrocer: 'fruteria', clothes: 'ropa', hardware: 'ferreteria', car_repair: 'taller', tyres: 'llantera', pharmacy: 'farmacia', beverages: 'bebidas', department_store: 'tienda', variety_store: 'tienda', wholesale: 'mayoreo', doityourself: 'ferreteria', mall: 'plaza' };
+            return map[t.shop] || ('tienda de ' + t.shop);
         }
-        if (APP.tab === 'rutas') paintRutas();
+        if (t.amenity) {
+            const map = { fuel: 'gasolinera', restaurant: 'restaurante', fast_food: 'comida rapida', cafe: 'cafeteria', bank: 'banco', atm: 'cajero', pharmacy: 'farmacia', hospital: 'hospital', clinic: 'clinica', school: 'escuela', parking: 'estacionamiento', marketplace: 'mercado', toilets: 'sanitarios', place_of_worship: 'templo', police: 'policia' };
+            return map[t.amenity] || ('servicio de ' + t.amenity);
+        }
+        if (t.tourism) return 'turismo';
+        if (t.leisure) return 'ocio';
+        if (t.office) return 'oficina';
+        return 'lugar';
+    }
+    async function rxReplayPoiCerca(lat, lon, radio) {
+        const q = '[out:json][timeout:12];(' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["shop"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["amenity"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["tourism"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["leisure"];' +
+            'nwr(around:' + radio + ',' + lat + ',' + lon + ')["name"]["office"];' +
+            ');out center 25;';
+        const res = await _rxFetchJson('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: 'data=' + encodeURIComponent(q)
+        }, 12000);
+        const els = (res && res.elements) || [];
+        let mejor = null;
+        els.forEach((el) => {
+            const t = el.tags || {};
+            if (!t.name) return;
+            const y = (el.lat != null) ? el.lat : (el.center && el.center.lat);
+            const x = (el.lon != null) ? el.lon : (el.center && el.center.lon);
+            if (y == null || x == null) return;
+            const d = haversine(lat, lon, y, x);
+            if (d > radio) return;
+            if (!mejor || d < mejor.dist) mejor = { nombre: t.name, categoria: rxReplayCatPOI(t), direccion: '', dist: Math.round(d) };
+        });
+        return mejor;
+    }
+    async function rxReplayReversa(lat, lon) {
+        const espera = 1100 - (Date.now() - APP.geoLast);
+        if (espera > 0) await sleep(espera);
+        APP.geoLast = Date.now();
+        const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&addressdetails=1&zoom=18&accept-language=es&lat=' + lat + '&lon=' + lon;
+        const d = await _rxFetchJson(url, {}, 15000);
+        if (!d) return null;
+        const a = d.address || {};
+        const via = [a.road || a.pedestrian || a.footway, a.house_number].filter(Boolean).join(' ');
+        const colonia = a.suburb || a.neighbourhood || a.city_district || a.quarter || '';
+        const ciudad = a.city || a.town || a.village || a.municipality || a.county || '';
+        const direccion = [via, colonia, ciudad].filter(Boolean).join(', ');
+        const nombre = (d.name && d.name !== ciudad) ? d.name : '';
+        if (!nombre && !direccion) return null;
+        return { nombre: nombre, categoria: '', direccion: direccion, dist: null };
+    }
+    const _rxRepLugares = new Map(); // "lat,lon" -> lugar|null
+    async function rxReplayLugarOSM(lat, lon) {
+        if (lat == null || lon == null) return null;
+        const key = (+lat).toFixed(5) + ',' + (+lon).toFixed(5);
+        if (_rxRepLugares.has(key)) return _rxRepLugares.get(key);
+        let out = null;
+        if (APP.config && APP.config.overpass) {
+            try { out = await rxReplayPoiCerca(lat, lon, 90); } catch (_) { out = null; }
+        }
+        if (!out) {
+            try { out = await rxReplayReversa(lat, lon); } catch (_) { out = null; }
+        }
+        _rxRepLugares.set(key, out);
+        return out;
+    }
+    // Ubica las paradas con OSM en segundo plano y refresca la lista/mapa.
+    async function rxReplayUbicarParadas() {
+        const r = RX_REPLAY;
+        if (!r || !r.paradas || !r.paradas.length) return;
+        const pend = r.paradas.filter((p) => p.lugar === undefined);
+        if (!pend.length) return;
+        r.ubicando = true;
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        for (let i = 0; i < pend.length; i++) {
+            if (RX_REPLAY !== r) return;
+            const p = pend[i];
+            let lugar = null;
+            try { lugar = await rxReplayLugarOSM(p.lat, p.lon); } catch (_) { lugar = null; }
+            p.lugar = lugar ? (lugar.nombre || lugar.direccion || '') : '';
+            p.categoria = lugar ? (lugar.categoria || '') : '';
+            p.direccion = lugar ? (lugar.direccion || '') : '';
+            if (pars) {
+                const celda = pars.querySelector('.rondo-replay-par[data-idx="' + p.idx + '"] .par-lugar');
+                if (celda) { celda.textContent = rxReplayParadaEtiqueta(p); celda.title = rxReplayParadaTooltip(p); }
+            }
+        }
+        if (RX_REPLAY !== r) return;
+        r.ubicando = false;
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        if (r.mapa) {
+            const marcas = [];
+            r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
+            r.eventos.forEach((m) => marcas.push({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
+            r.mapa.setMarcas(marcas);
+        }
+    }
+    function rxReplayAnalizar(msgs, info) {
+        const eventos = [], paradas = [];
+        const paradaMinS = Math.max(60, (Number(APP.config.paradaMin) || 15) * 60);
+        const limite = info ? limiteDe(info) : APP.config.velMax;
+        const zonas = !!(APP.config.loadZones && (APP.zonas || []).length);
+        let enParadaDesde = null, paradaLat = null, paradaLon = null, paradaIdx = 0;
+        let zonaPrev = null;
+        let excesoDesde = null, excesoMax = 0, excesoLat = null, excesoLon = null, excesos = 0;
+        let detenido = 0, moviendo = 0, velMax = 0;
+        const cerrarParada = (tFin, idxFin) => {
+            const dur = tFin - enParadaDesde;
+            if (dur >= paradaMinS) {
+                const det = rxReplayDetalleParada(paradaLat, paradaLon, zonas);
+                paradas.push({ t: enParadaDesde, dur: dur, idx: paradaIdx, idxFin: idxFin, lat: paradaLat, lon: paradaLon, zona: det.zona, municipio: det.municipio });
+            }
+            enParadaDesde = null;
+        };
+        const cerrarExceso = (idx) => {
+            if (excesoDesde == null) return;
+            excesos++;
+            eventos.push({ t: excesoDesde, tipo: 'exceso', idx: idx, lat: excesoLat, lon: excesoLon, txt: 'Exceso ' + Math.round(excesoMax) + ' km/h (limite ' + Math.round(limite) + ')' });
+            excesoDesde = null;
+        };
+        for (let i = 0; i < msgs.length; i++) {
+            const m = msgs[i];
+            const dt = (i > 0) ? Math.max(0, m.t - (msgs[i - 1].t || m.t)) : 0;
+            if (m.s > 3) { moviendo += dt; if (m.s > velMax) velMax = m.s; } else { detenido += dt; }
+            if (m.s > 3) { if (enParadaDesde != null) cerrarParada(m.t, i); }
+            else if (enParadaDesde == null) { enParadaDesde = m.t; paradaLat = m.lat; paradaLon = m.lon; paradaIdx = i; }
+            if (limite && m.s > limite) {
+                if (excesoDesde == null) { excesoDesde = m.t; excesoMax = m.s; excesoLat = m.lat; excesoLon = m.lon; }
+                else if (m.s > excesoMax) excesoMax = m.s;
+            } else if (excesoDesde != null) cerrarExceso(i);
+            if (zonas && m.lat != null) {
+                const z = zoneAt(m.lat, m.lon) || null;
+                if (z !== zonaPrev) {
+                    if (z) eventos.push({ t: m.t, tipo: 'zona', idx: i, lat: m.lat, lon: m.lon, txt: 'Entra a ' + z });
+                    else if (zonaPrev) eventos.push({ t: m.t, tipo: 'zona', idx: i, lat: m.lat, lon: m.lon, txt: 'Sale de ' + zonaPrev });
+                    zonaPrev = z;
+                }
+            }
+        }
+        const ult = msgs[msgs.length - 1];
+        if (enParadaDesde != null && ult) cerrarParada(ult.t, msgs.length - 1);
+        cerrarExceso(msgs.length - 1);
+        try {
+            const ruta = info ? rutaDe(info) : null;
+            if (ruta && ruta.coords && ruta.coords.length >= 2 && ruta.coords.length <= 4000) {
+                const umbral = Number(APP.config.desvioM) || 250;
+                const minSost = Math.max(60, (Number(APP.config.desvioMin) || 5) * 60);
+                const paso = Math.max(1, Math.floor(msgs.length / 400));
+                let memo = null, desde = null, max = 0, dLat = null, dLon = null;
+                for (let i = 0; i < msgs.length; i += paso) {
+                    const m = msgs[i];
+                    let s = null;
+                    try { s = snapRuta(m.lat, m.lon, ruta, memo); } catch (_) { s = null; }
+                    memo = s;
+                    if (s && s.dist > umbral) {
+                        if (desde == null) { desde = m.t; max = s.dist; dLat = m.lat; dLon = m.lon; }
+                        else if (s.dist > max) max = s.dist;
+                    } else if (desde != null) {
+                        if (m.t - desde >= minSost) eventos.push({ t: desde, tipo: 'desvio', idx: i, lat: dLat, lon: dLon, txt: 'Desvio ' + Math.round(max) + ' m del trazado' });
+                        desde = null;
+                    }
+                }
+                if (desde != null && ult && ult.t - desde >= minSost) {
+                    eventos.push({ t: desde, tipo: 'desvio', idx: msgs.length - 1, lat: dLat, lon: dLon, txt: 'Desvio ' + Math.round(max) + ' m del trazado' });
+                }
+            }
+        } catch (_) { /* sin desvios */ }
+        eventos.sort((a, b) => a.t - b.t);
+        const resumen = {
+            distM: Math.round((ult && ult.km) || 0),
+            durSeg: (ult && msgs[0]) ? Math.max(0, ult.t - msgs[0].t) : 0,
+            inicio: msgs[0] ? msgs[0].t : 0,
+            fin: ult ? ult.t : 0,
+            detenidoSeg: Math.round(detenido),
+            moviendoSeg: Math.round(moviendo),
+            paradas: paradas.length,
+            velMax: Math.round(velMax),
+            excesos: excesos
+        };
+        return { eventos: eventos, paradas: paradas, resumen: resumen };
+    }
+    function rxReplayResumenHTML() {
+        const r = RX_REPLAY;
+        if (!r || !r.resumen) return '';
+        const s = r.resumen;
+        return '<span class="rr-chip"><b>' + esc(r.eco) + '</b></span>' +
+            '<span class="rr-chip">' + rxReplayHHMM(s.inicio) + '-' + rxReplayHHMM(s.fin) + '</span>' +
+            '<span class="rr-chip">' + rxFmtDist(s.distM) + '</span>' +
+            '<span class="rr-chip">' + rxFmtDur(s.durSeg) + '</span>' +
+            '<span class="rr-chip">' + s.paradas + ' parada(s)</span>' +
+            '<span class="rr-chip">mov ' + rxFmtDur(s.moviendoSeg) + '</span>' +
+            '<span class="rr-chip">det ' + rxFmtDur(s.detenidoSeg) + '</span>' +
+            '<span class="rr-chip">max ' + s.velMax + ' km/h</span>' +
+            (s.excesos ? '<span class="rr-chip">' + s.excesos + ' exceso(s)</span>' : '');
+    }
+    function rxReplayParadasHTML() {
+        const r = RX_REPLAY;
+        if (!r) return '';
+        if (!r.paradas.length) return '<div class="rondo-replay-hint">Sin paradas de mas de ' + (APP.config.paradaMin || 15) + ' min.</div>';
+        let html = r.paradas.map((p, i) =>
+            '<div class="rondo-replay-par" data-idx="' + p.idx + '" data-idxfin="' + (p.idxFin == null ? p.idx : p.idxFin) + '">' +
+            '<span class="par-idx">' + (i + 1) + '</span>' +
+            '<span class="par-hora">' + rxReplayHHMM(p.t) + '</span>' +
+            '<span class="par-dur">' + rxFmtDur(p.dur) + '</span>' +
+            '<span class="par-lugar" title="' + esc(rxReplayParadaTooltip(p)) + '">' + esc(rxReplayParadaEtiqueta(p)) + '</span>' +
+            '</div>'
+        ).join('');
+        if (r.ubicando) html += '<div class="rondo-replay-hint">Ubicando las paradas con OpenStreetMap...</div>';
+        return html;
+    }
+    function rxReplayEventosHTML() {
+        const r = RX_REPLAY;
+        if (!r) return '';
+        if (!r.eventos.length) return '<div class="rondo-replay-hint">Sin eventos (geocercas, excesos o desvios).</div>';
+        return r.eventos.map((m) =>
+            '<div class="rondo-replay-ev" data-idx="' + m.idx + '">' +
+            '<span class="ev-hora">' + rxReplayHHMM(m.t) + '</span>' +
+            '<span class="ev-tipo ev-' + m.tipo + '">' + esc(m.tipo) + '</span>' +
+            '<span class="ev-txt" title="' + esc(m.txt) + '">' + esc(m.txt) + '</span>' +
+            '</div>'
+        ).join('');
+    }
+    // ---- Perfil de velocidad ----
+    function rxReplayChartHTML() {
+        const r = RX_REPLAY;
+        if (!r || !r.msgs.length) return '<div class="rondo-replay-vacio">Perfil de velocidad</div>';
+        const W = 1000, H = 100;
+        const t0 = r.msgs[0].t, t1 = r.msgs[r.msgs.length - 1].t;
+        const dur = Math.max(1, t1 - t0);
+        const vmax = Math.max(10, r.resumen.velMax);
+        const paso = Math.max(1, Math.ceil(r.msgs.length / 500));
+        let d = '';
+        for (let i = 0; i < r.msgs.length; i += paso) {
+            const m = r.msgs[i];
+            const x = ((m.t - t0) / dur) * W;
+            const y = H - (Math.min(m.s, vmax) / vmax * (H - 8)) - 4;
+            d += (d ? ' ' : '') + x.toFixed(1) + ',' + y.toFixed(1);
+        }
+        const last = r.msgs[r.msgs.length - 1];
+        d += ' ' + W + ',' + (H - (Math.min(last.s, vmax) / vmax * (H - 8)) - 4).toFixed(1);
+        let mx = '';
+        r.paradas.forEach((p) => { mx += '<circle cx="' + (((p.t - t0) / dur) * W).toFixed(1) + '" cy="' + (H - 3) + '" r="2.5" fill="#7d8595"/>'; });
+        r.eventos.forEach((e2) => { mx += '<circle cx="' + (((e2.t - t0) / dur) * W).toFixed(1) + '" cy="' + (H - 8) + '" r="2.5" fill="' + rxReplayColor(e2.tipo) + '"/>'; });
+        return '<svg id="rondo-replay-chart-svg" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" class="rondo-replay-chart-svg">' +
+            '<polyline fill="none" stroke="var(--rondo-accent-2)" stroke-width="2" vector-effect="non-scaling-stroke" points="' + d + '"/>' +
+            mx +
+            '<line id="rondo-replay-chart-cur" x1="0" y1="0" x2="0" y2="' + H + '" stroke="var(--rondo-accent)" stroke-width="2" vector-effect="non-scaling-stroke"/>' +
+            '</svg>';
+    }
+    function rxReplayChartRender() {
+        const cont = byId('rondo-replay-chart');
+        if (cont) cont.innerHTML = rxReplayChartHTML();
+    }
+    function rxReplayChartCursor() {
+        const r = RX_REPLAY;
+        const cur = byId('rondo-replay-chart-cur');
+        if (!r || !cur) return;
+        const t0 = r.msgs[0].t, t1 = r.msgs[r.msgs.length - 1].t;
+        const dur = Math.max(1, t1 - t0);
+        const x = ((r.msgs[r.idx].t - t0) / dur) * 1000;
+        cur.setAttribute('x1', x.toFixed(1));
+        cur.setAttribute('x2', x.toFixed(1));
+    }
+    // ---- Mini-mapa ----
+    function rxReplayMapaCrear() {
+        const r = RX_REPLAY;
+        const cont = byId('rondo-replay-mapa');
+        if (!cont || !r) return;
+        if (r.mapa) { try { r.mapa.destruir(); } catch (_) { /* noop */ } r.mapa = null; }
+        cont.innerHTML = '';
+        const full = r.msgs.map((m) => ({ lat: m.lat, lon: m.lon }));
+        const marcas = [];
+        r.paradas.forEach((p, i) => marcas.push({ lat: p.lat, lon: p.lon, color: rxReplayColor('parada'), radio: 5, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxFmtDur(p.dur) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
+        r.eventos.forEach((m) => marcas.push({ lat: m.lat, lon: m.lon, color: rxReplayColor(m.tipo), radio: 5, txt: rxReplayHHMM(m.t) + ' \u00b7 ' + m.txt }));
+        r.mapa = rxMiniMapa(cont, {
+            lineas: [
+                { pts: full, color: '#850D22', width: 4, opacity: 0.35, glow: true },
+                { pts: [], dyn: true }
+            ],
+            marcas: marcas,
+            pos: { lat: r.msgs[r.idx].lat, lon: r.msgs[r.idx].lon }
+        });
+        rxReplayMarcarViajado();
+    }
+    function rxReplayMarcarViajado() {
+        const r = RX_REPLAY;
+        if (!r || !r.mapa) return;
+        const n = r.idx + 1;
+        const paso = Math.max(1, Math.ceil(n / 400));
+        const pts = [];
+        for (let i = 0; i < n; i += paso) pts.push({ lat: r.msgs[i].lat, lon: r.msgs[i].lon });
+        pts.push({ lat: r.msgs[r.idx].lat, lon: r.msgs[r.idx].lon });
+        r.mapa.setLinea(1, pts, '#1565c0', 4, 0.95);
+    }
+    function rxReplayActualizar() {
+        const r = RX_REPLAY;
+        if (!r) return;
+        const m = r.msgs[r.idx] || r.msgs[0];
+        const info = byId('rondo-replay-info');
+        if (info) {
+            const zonas = !!(APP.config.loadZones && (APP.zonas || []).length);
+            const zona = (zonas && m.lat != null) ? (zoneAt(m.lat, m.lon) || '') : '';
+            const mun = (m.lat != null) ? municipioEn(m.lat, m.lon) : null;
+            info.innerHTML =
+                '<span class="rr-chip"><b>' + rxReplayHHMM(m.t) + '</b></span>' +
+                '<span class="rr-chip">' + Math.round(m.s) + ' km/h</span>' +
+                '<span class="rr-chip">' + ((m.km || 0) / 1000).toFixed(1) + ' km</span>' +
+                (zona ? '<span class="rr-chip">' + esc(zona) + '</span>' : '') +
+                (mun && mun.nombre ? '<span class="rr-chip">' + esc(mun.nombre) + '</span>' : '');
+        }
+        const sl = byId('rondo-replay-slider');
+        if (sl) sl.value = r.idx;
+        const pb = byId('rondo-replay-play');
+        if (pb) pb.textContent = r.playing ? 'Pausa' : 'Play';
+        if (r.mapa) {
+            r.mapa.setPos(m.lat, m.lon);
+            rxReplayMarcarViajado();
+        }
+        rxReplayChartCursor();
+        const evs = byId('rondo-replay-eventos');
+        if (evs) evs.querySelectorAll('.rondo-replay-ev').forEach((n) => n.classList.toggle('activo', +n.dataset.idx === r.idx));
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.querySelectorAll('.rondo-replay-par').forEach((n) => {
+            const a = +n.dataset.idx, b = +n.dataset.idxfin;
+            n.classList.toggle('activo', r.idx >= a && r.idx <= b);
+        });
+    }
+    function rxReplayPintar() {
+        const r = RX_REPLAY;
+        const resumen = byId('rondo-replay-resumen');
+        if (resumen) resumen.innerHTML = rxReplayResumenHTML();
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.innerHTML = rxReplayParadasHTML();
+        const evs = byId('rondo-replay-eventos');
+        if (evs) evs.innerHTML = rxReplayEventosHTML();
+        rxReplayChartRender();
+        if (r) rxReplayMapaCrear();
+        else {
+            const cont = byId('rondo-replay-mapa');
+            if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
+        }
+        const sl = byId('rondo-replay-slider');
+        if (sl && r) { sl.min = 0; sl.max = Math.max(0, r.msgs.length - 1); sl.value = r.idx; }
+        if (r) rxReplayActualizar();
+    }
+    function rxReplayTick() {
+        const r = RX_REPLAY;
+        if (!r || !r.playing) return;
+        const ahora = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+        const dt = Math.max(0, (ahora - (r._tick || ahora)) / 1000);
+        r._tick = ahora;
+        const fin = r.msgs[r.msgs.length - 1].t;
+        r.vt = Math.min(fin, r.vt + dt * r.factor);
+        let lo = 0, hi = r.msgs.length - 1, idx = 0;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (r.msgs[mid].t <= r.vt) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        r.idx = idx;
+        rxReplayActualizar();
+        if (r.vt >= fin) rxReplayPausar();
+    }
+    function rxReplayReproducir() {
+        const r = RX_REPLAY;
+        if (!r) return;
+        if (r.idx >= r.msgs.length - 1) { r.idx = 0; r.vt = r.msgs[0].t; rxReplayActualizar(); }
+        r.playing = true;
+        r._tick = 0;
+        if (r._timer) clearInterval(r._timer);
+        r._timer = setInterval(rxReplayTick, 120);
+        rxReplayActualizar();
+    }
+    function rxReplayPausar() {
+        const r = RX_REPLAY;
+        if (!r) return;
+        r.playing = false;
+        if (r._timer) { clearInterval(r._timer); r._timer = null; }
+        rxReplayActualizar();
+    }
+    function rxReplayAlternar() {
+        const r = RX_REPLAY;
+        if (!r) return;
+        if (r.playing) rxReplayPausar(); else rxReplayReproducir();
+    }
+    function rxReplayIrA(idx) {
+        const r = RX_REPLAY;
+        if (!r) return;
+        r.idx = clamp(+idx || 0, 0, r.msgs.length - 1);
+        r.vt = r.msgs[r.idx].t;
+        rxReplayActualizar();
+    }
+    function rxReplayIrAFraccion(frac) {
+        const r = RX_REPLAY;
+        if (!r) return;
+        const t0 = r.msgs[0].t, t1 = r.msgs[r.msgs.length - 1].t;
+        const t = t0 + clamp(frac, 0, 1) * Math.max(1, t1 - t0);
+        let lo = 0, hi = r.msgs.length - 1, idx = 0;
+        while (lo <= hi) {
+            const mid = (lo + hi) >> 1;
+            if (r.msgs[mid].t <= t) { idx = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        if (r.playing) rxReplayPausar();
+        rxReplayIrA(idx);
+    }
+    function rxReplayRangoRapido(kind) {
+        const f = byId('rondo-replay-fecha');
+        const d = byId('rondo-replay-desde');
+        const h = byId('rondo-replay-hasta');
+        const set = (fecha, h1, h2) => { if (f) f.value = fecha; if (d) d.value = h1; if (h) h.value = h2; };
+        const hoy = rxReplayFechaHoy();
+        const ayer = (() => { const x = new Date(); x.setDate(x.getDate() - 1); const mm = String(x.getMonth() + 1).padStart(2, '0'); const dd = String(x.getDate()).padStart(2, '0'); return x.getFullYear() + '-' + mm + '-' + dd; })();
+        if (kind === 'ayer') set(ayer, '00:00', '23:59');
+        else if (kind === 'dia') set(f && f.value ? f.value : hoy, '06:00', '18:00');
+        else if (kind === 'noche') set(f && f.value ? f.value : hoy, '18:00', '23:59');
+        else set(hoy, '00:00', '23:59');
+    }
+    function rxReplayExportarGeoJSON() {
+        const r = RX_REPLAY;
+        if (!r) { adviceWarn('Sin recorrido', 'Carga un recorrido primero.'); return; }
+        const features = [{
+            type: 'Feature',
+            properties: { eco: r.eco, desde: new Date(r.resumen.inicio * 1000).toISOString(), hasta: new Date(r.resumen.fin * 1000).toISOString(), km: Math.round(r.resumen.distM / 1000) },
+            geometry: { type: 'LineString', coordinates: r.msgs.map((m) => [+m.lon.toFixed(6), +m.lat.toFixed(6)]) }
+        }];
+        r.paradas.forEach((p, i) => features.push({
+            type: 'Feature',
+            properties: { tipo: 'parada', n: i + 1, hora: rxReplayHHMM(p.t), durMin: Math.round(p.dur / 60), zona: p.zona || '', municipio: p.municipio || '' },
+            geometry: { type: 'Point', coordinates: [+p.lon.toFixed(6), +p.lat.toFixed(6)] }
+        }));
+        r.eventos.forEach((e2) => features.push({
+            type: 'Feature',
+            properties: { tipo: e2.tipo, hora: rxReplayHHMM(e2.t), texto: e2.txt },
+            geometry: { type: 'Point', coordinates: [+e2.lon.toFixed(6), +e2.lat.toFixed(6)] }
+        }));
+        rxReplayDescargar('rondo-replay-' + r.eco + '-' + r.fecha + '.geojson',
+            JSON.stringify({ type: 'FeatureCollection', features: features }, null, 2),
+            'application/geo+json;charset=utf-8;');
+    }
+    function rxReplayExportarParadasCSV() {
+        const r = RX_REPLAY;
+        if (!r) { adviceWarn('Sin recorrido', 'Carga un recorrido primero.'); return; }
+        const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
+        const filas = [['n', 'hora', 'duracion_min', 'lat', 'lon', 'zona', 'municipio']];
+        r.paradas.forEach((p, i) => filas.push([i + 1, rxReplayHHMM(p.t), Math.round(p.dur / 60), p.lat.toFixed(5), p.lon.toFixed(5), p.zona || '', p.municipio || '']));
+        rxReplayDescargar('rondo-paradas-' + r.eco + '-' + r.fecha + '.csv',
+            '\uFEFF' + filas.map((f) => f.map(q).join(',')).join('\r\n'),
+            'text/csv;charset=utf-8;');
+    }
+    function rxReplayLimpiar() {
+        const r = RX_REPLAY;
+        if (r && r._timer) clearInterval(r._timer);
+        if (r && r.mapa) { try { r.mapa.destruir(); } catch (_) { /* noop */ } }
+        RX_REPLAY = null;
+        const cont = byId('rondo-replay-mapa');
+        if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
+        const chart = byId('rondo-replay-chart');
+        if (chart) chart.innerHTML = '<div class="rondo-replay-vacio">Perfil de velocidad</div>';
+        const info = byId('rondo-replay-info');
+        if (info) info.innerHTML = '';
+        const resumen = byId('rondo-replay-resumen');
+        if (resumen) resumen.innerHTML = '';
+        const pars = byId('rondo-replay-paradas');
+        if (pars) pars.innerHTML = '';
+        const evs = byId('rondo-replay-eventos');
+        if (evs) evs.innerHTML = '';
+        const sl = byId('rondo-replay-slider');
+        if (sl) { sl.max = 0; sl.value = 0; }
+        const pb = byId('rondo-replay-play');
+        if (pb) pb.textContent = 'Play';
+    }
+    async function rxReplayCargar() {
+        let eco = APP.replayEco || '';
+        if (!eco) {
+            const inp = byId('rondo-replay-buscar');
+            const t = inp ? inp.value.trim() : '';
+            if (t) { const cand = rxReplayFiltrar(t)[0]; if (cand) eco = cand.eco; }
+        }
+        if (!eco) { adviceWarn('Sin unidad', 'Busca y elige una unidad para reproducir.'); return; }
+        const it = unitByEco(eco);
+        if (!it) { adviceWarn('Unidad no encontrada', eco); return; }
+        const ucat = rxReplayUnidades().filter((x) => x.eco === eco)[0];
+        rxReplaySetUnidad(eco, ucat ? ucat.etq : eco);
+        const fechaEl = byId('rondo-replay-fecha');
+        const h1 = byId('rondo-replay-desde');
+        const h2 = byId('rondo-replay-hasta');
+        const fecha = (fechaEl && fechaEl.value) || rxReplayFechaHoy();
+        const rango = rxReplayRango(fecha, h1 ? h1.value : '', h2 ? h2.value : '');
+        if (rango.hasta <= rango.desde) { adviceWarn('Rango invalido', 'La hora "hasta" debe ser mayor que "desde".'); return; }
+        const btn = byId('rondo-replay-cargar');
+        if (btn) setBusy(btn, true);
+        try {
+            let crudos = [];
+            try {
+                const r = await remoteCall('messages/load_interval', {
+                    itemId: it.u.id,
+                    timeFrom: rango.desde, timeTo: rango.hasta,
+                    flags: 1, flagsMask: 1, loadCount: 10000
+                });
+                crudos = r.messages || [];
+            } catch (e) { crudos = []; }
+            const msgs = crudos
+                .filter((m) => m && m.pos && isFinite(+m.pos.y) && isFinite(+m.pos.x))
+                .map((m) => ({ t: Number(m.t) || 0, lat: +m.pos.y, lon: +m.pos.x, s: Number(m.pos.s) || 0, c: Number(m.pos.c) || 0 }))
+                .filter((m) => m.t > 0)
+                .sort((a, b) => a.t - b.t);
+            if (!msgs.length) {
+                rxReplayLimpiar();
+                advice('Sin recorrido', 'No hay mensajes con posicion de ' + eco + ' en ese rango.');
+                return;
+            }
+            let acum = 0;
+            msgs[0].km = 0;
+            for (let i = 1; i < msgs.length; i++) {
+                const d = haversine(msgs[i - 1].lat, msgs[i - 1].lon, msgs[i].lat, msgs[i].lon);
+                if (d <= 5000) acum += d;
+                msgs[i].km = acum;
+            }
+            const an = rxReplayAnalizar(msgs, it.info);
+            if (RX_REPLAY && RX_REPLAY._timer) clearInterval(RX_REPLAY._timer);
+            RX_REPLAY = {
+                eco: eco, clave: it.info.clave, info: it.info, fecha: fecha,
+                desde: rango.desde, hasta: rango.hasta,
+                msgs: msgs, paradas: an.paradas, eventos: an.eventos, resumen: an.resumen,
+                idx: 0, vt: msgs[0].t, factor: 300, playing: false, _timer: null, _tick: 0,
+                truncado: msgs.length >= 10000
+            };
+            rxReplayPintar();
+            rxReplayUbicarParadas();
+            adviceOk('Recorrido cargado', eco + ' \u00b7 ' + rxReplayHHMM(msgs[0].t) + '-' + rxReplayHHMM(msgs[msgs.length - 1].t) +
+                ' \u00b7 ' + Math.round(acum / 1000) + ' km \u00b7 ' + an.paradas.length + ' parada(s)' + (msgs.length >= 10000 ? ' (truncado)' : ''));
+        } finally {
+            if (btn) setBusy(btn, false);
+        }
+    }
+    function rxReplayAbrirUnidad(eco) {
+        const u = rxReplayUnidades().filter((x) => x.eco === eco)[0];
+        rxReplaySetUnidad(eco, u ? u.etq : eco);
+        const f = byId('rondo-replay-fecha');
+        if (f && !f.value) f.value = rxReplayFechaHoy();
+        setTab('replay');
+        rxReplayCargar();
+    }
+    function bindReplay() {
+        const f = byId('rondo-replay-fecha');
+        if (f && !f.value) f.value = rxReplayFechaHoy();
+        const inp = byId('rondo-replay-buscar');
+        if (inp) {
+            inp.addEventListener('input', () => { _rxRepSugIdx = -1; rxReplaySugRender(); });
+            inp.addEventListener('focus', () => rxReplaySugRender());
+            inp.addEventListener('keydown', (e) => {
+                const abierto = byId('rondo-replay-sug') && byId('rondo-replay-sug').classList.contains('abierto');
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    if (!abierto) { rxReplaySugRender(); return; }
+                    if (_rxRepSug.length) { _rxRepSugIdx = (_rxRepSugIdx + 1) % _rxRepSug.length; rxReplaySugResaltar(); }
+                    return;
+                }
+                if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    if (abierto && _rxRepSug.length) { _rxRepSugIdx = (_rxRepSugIdx - 1 + _rxRepSug.length) % _rxRepSug.length; rxReplaySugResaltar(); }
+                    return;
+                }
+                if (e.key === 'Escape') {
+                    if (abierto) { e.stopPropagation(); rxReplayCerrarSug(); }
+                    return;
+                }
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (abierto && _rxRepSugIdx >= 0) { rxReplayElegir(_rxRepSugIdx); rxReplayCargar(); return; }
+                    if (_rxRepSug.length) { rxReplayElegir(0); rxReplayCargar(); return; }
+                    rxReplayCargar();
+                }
+            });
+        }
+        document.addEventListener('click', (e) => {
+            const wrap = e.target.closest && e.target.closest('.rondo-replay-buscar');
+            if (!wrap) rxReplayCerrarSug();
+        });
+        const cargar = byId('rondo-replay-cargar');
+        if (cargar) cargar.addEventListener('click', () => rxReplayCargar());
+        const play = byId('rondo-replay-play');
+        if (play) play.addEventListener('click', () => rxReplayAlternar());
+        const sl = byId('rondo-replay-slider');
+        if (sl) sl.addEventListener('input', () => {
+            if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();
+            rxReplayIrA(+sl.value);
+        });
+        const vel = byId('rondo-replay-vel');
+        if (vel) vel.addEventListener('change', () => {
+            if (RX_REPLAY) RX_REPLAY.factor = clamp(+vel.value || 300, 10, 7200);
+        });
+        const centrar = byId('rondo-replay-centrar');
+        if (centrar) centrar.addEventListener('click', () => { if (RX_REPLAY && RX_REPLAY.mapa) RX_REPLAY.mapa.encuadrar(); });
+        const geo = byId('rondo-replay-geo');
+        if (geo) geo.addEventListener('click', () => rxReplayExportarGeoJSON());
+        const csv = byId('rondo-replay-csv');
+        if (csv) csv.addEventListener('click', () => rxReplayExportarParadasCSV());
+        const pdf = byId('rondo-replay-pdf');
+        if (pdf) pdf.addEventListener('click', () => exportReplayPDF());
+        // Rangos rapidos.
+        document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((b) => {
+            b.addEventListener('click', () => {
+                document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((x) => x.classList.remove('activo'));
+                b.classList.add('activo');
+                rxReplayRangoRapido(b.dataset.rango);
+                rxReplayCargar();
+            });
+        });
+        // Perfil de velocidad: clic para saltar.
+        const chart = byId('rondo-replay-chart');
+        if (chart) chart.addEventListener('click', (e) => {
+            const rect = chart.getBoundingClientRect();
+            rxReplayIrAFraccion((e.clientX - rect.left) / Math.max(1, rect.width));
+        });
+        const paradas = byId('rondo-replay-paradas');
+        if (paradas) paradas.addEventListener('click', (e) => {
+            const n = e.target.closest && e.target.closest('.rondo-replay-par');
+            if (!n) return;
+            if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();
+            rxReplayIrA(+n.dataset.idx);
+        });
+        const evs = byId('rondo-replay-eventos');
+        if (evs) evs.addEventListener('click', (e) => {
+            const n = e.target.closest && e.target.closest('.rondo-replay-ev');
+            if (!n) return;
+            if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();
+            rxReplayIrA(+n.dataset.idx);
+        });
+    }
+    /* ====================== REPORTE PDF (v6.0.13) ======================
+     * Genera un informe operativo completo y lo abre en el dialogo de
+     * impresion del navegador para guardarlo como PDF. Sin dependencias:
+     * se construye un documento HTML con CSS de impresion (A4, saltos de
+     * pagina, encabezados de tabla repetidos) y se imprime desde un iframe.
+     */
+    function rxInfResumenTexto(d) {
+        const total = d.watched.length;
+        const avisos = d.hoy.length;
+        const crit = d.porSev.critico || 0;
+        const alto = d.porSev.alto || 0;
+        const partes = [];
+        partes.push('De ' + total + ' unidad(es) en el alcance, ' + d.online.length + ' reportan en linea y ' + d.sinSenal.length + ' estan sin senal.');
+        if (d.zonasCargadas) partes.push(d.enZona.length + ' dentro de geocerca y ' + d.fueraZona.length + ' fuera (de las que reportan posicion).');
+        else partes.push('Las geocercas no estan cargadas, por lo que no se evaluo la pertenencia a zonas.');
+        partes.push('En el dia se registraron ' + avisos + ' aviso(s)' + (avisos ? ' (' + crit + ' critico(s), ' + alto + ' alto(s)).' : '.'));
+        if (d.moviendo.length || d.detenidas.length) partes.push(d.moviendo.length + ' en movimiento y ' + d.detenidas.length + ' detenidas.');
+        return partes.join(' ');
+    }
+    function rxInformeDatos() {
+        const now = new Date();
+        const ini = new Date(); ini.setHours(0, 0, 0, 0);
+        const toda = !!APP.config.watchAll;
+        const watched = (APP.unidades || []).filter((u) => { try { return toda || shouldWatch(u); } catch (_) { return false; } });
+        const filas = watched.map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
+        const zonasCargadas = !!(APP.config.loadZones && (APP.zonas || []).length);
+        const conPos = filas.filter((x) => x.st.lat != null);
+        const enZona = zonasCargadas ? conPos.filter((x) => { try { return !!zoneAt(x.st.lat, x.st.lon); } catch (_) { return false; } }) : [];
+        const fueraZona = zonasCargadas ? conPos.filter((x) => enZona.indexOf(x) < 0) : [];
+        const hoy = (APP.historial || []).filter((a) => a.ts >= ini.getTime());
+        const porSev = {};
+        hoy.forEach((a) => { porSev[a.sev] = (porSev[a.sev] || 0) + 1; });
+        return {
+            now: now, ini: ini, toda: toda, watched: filas, zonasCargadas: zonasCargadas,
+            enZona: enZona, fueraZona: fueraZona, hoy: hoy, porSev: porSev,
+            online: filas.filter((x) => x.st.online),
+            moviendo: filas.filter((x) => x.st.online && x.st.vel > 3),
+            detenidas: filas.filter((x) => x.st.online && x.st.vel <= 3),
+            sinSenal: filas.filter((x) => !x.st.online)
+        };
+    }
+    function rxInfSevBadge(sev) {
+        const s = String(sev || '').toLowerCase();
+        const txt = s ? s.charAt(0).toUpperCase() + s.slice(1) : '-';
+        return '<span class="badge sev-' + esc(s || 'bajo') + '">' + esc(txt) + '</span>';
+    }
+    function rxInfTabla(cabeceras, filas) {
+        if (!filas.length) return '<p class="muted">Sin datos.</p>';
+        return '<table><thead><tr>' + cabeceras.map((h) => '<th>' + h + '</th>').join('') + '</tr></thead><tbody>' +
+            filas.map((f) => '<tr>' + f.map((c) => '<td>' + c + '</td>').join('') + '</tr>').join('') +
+            '</tbody></table>';
+    }
+    function rxInfEstilo() {
+        return '*{box-sizing:border-box}' +
+            'body{font:11px/1.45 "Segoe UI",system-ui,Arial,sans-serif;color:#1c2030;margin:0}' +
+            '@page{size:A4;margin:14mm 12mm 18mm}' +
+            'h1,h2,h3{margin:0}' +
+            '.cover{border-bottom:3px solid #850D22;padding-bottom:10px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end}' +
+            '.brand{font-size:22px;font-weight:800;letter-spacing:.6px;color:#850D22;line-height:1.1}' +
+            '.brand small{display:block;font-size:11px;font-weight:600;color:#5a6072;letter-spacing:.3px}' +
+            '.meta{text-align:right;font-size:10px;color:#5a6072;line-height:1.5}' +
+            '.meta b{color:#1c2030}' +
+            '.kpis{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0 16px}' +
+            '.kpi{flex:1 1 108px;border:1px solid #d9dce4;border-radius:8px;padding:8px 10px;background:#fafbfd}' +
+            '.kpi b{display:block;font-size:18px;color:#1c2030}' +
+            '.kpi span{font-size:9px;text-transform:uppercase;letter-spacing:.5px;color:#5a6072}' +
+            'h2.seccion{font-size:12.5px;border-left:4px solid #850D22;padding-left:8px;margin:18px 0 8px;color:#1c2030;page-break-after:avoid}' +
+            'table{width:100%;border-collapse:collapse;font-size:10px;margin:0 0 6px}' +
+            'th,td{border:1px solid #d9dce4;padding:4px 6px;text-align:left;vertical-align:top}' +
+            'thead th{background:#eef1f6;font-size:9px;text-transform:uppercase;letter-spacing:.4px;color:#3a4050}' +
+            'tbody tr:nth-child(even){background:#fafbfd}' +
+            'thead{display:table-header-group}tr{page-break-inside:avoid}' +
+            '.badge{display:inline-block;padding:0 6px;border-radius:8px;font-size:9px;font-weight:700;text-transform:uppercase;border:1px solid #ccc}' +
+            '.sev-critico{color:#b71c1c;border-color:#e7a3a3;background:#fdeaea}' +
+            '.sev-alto{color:#e65100;border-color:#f0c39a;background:#fdf1e6}' +
+            '.sev-medio{color:#8a6d00;border-color:#e6d79a;background:#fdf9e6}' +
+            '.sev-bajo{color:#1565c0;border-color:#a9c8e8;background:#eaf3fc}' +
+            '.muted{color:#6b7280}' +
+            'p{margin:0 0 8px;font-size:10.5px;line-height:1.5}' +
+            '.resumen{background:#f7f8fb;border:1px solid #e3e6ee;border-radius:8px;padding:10px 12px;margin:0 0 4px}' +
+            '.ia{border:1px solid #e3e6ee;border-left:4px solid #1565c0;border-radius:6px;padding:8px 10px;background:#f7f9fc}' +
+            '.pie{margin-top:20px;border-top:1px solid #d9dce4;padding-top:6px;font-size:8.5px;color:#8890a2;display:flex;justify-content:space-between}' +
+            '.rondo-mm-print{position:relative;overflow:hidden;background:#eef1f6;border:1px solid #d9dce4;border-radius:6px;margin:4px 0 10px}' +
+            '.rondo-mm-print .rondo-mm-tile{position:absolute;width:256px;height:256px}' +
+            '.rondo-mm-print svg{position:absolute;left:0;top:0}' +
+            '.mapa-leyenda{display:flex;gap:14px;flex-wrap:wrap;font-size:9.5px;color:#5a6072;margin:0 0 10px}' +
+            '.mapa-leyenda i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:4px;vertical-align:-1px}';
+    }
+    function rxInfCabecera(titulo, subtitulo, meta) {
+        return '<div class="cover">' +
+            '<div class="brand">' + esc(titulo) + '<small>' + esc(subtitulo) + '</small></div>' +
+            '<div class="meta">' + meta + '</div>' +
+            '</div>';
+    }
+    function rxInfPie() {
+        return '<div class="pie"><span>Rondo &middot; generado automaticamente</span><span>Documento de solo lectura: no modifica datos en la plataforma.</span></div>';
+    }
+    function rxInformeHTML() {
+        const d = rxInformeDatos();
+        const fecha = d.now.toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+        const hora = d.now.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
+        const kpis = [
+            kpi(d.watched.length, 'Unidades'),
+            kpi(d.online.length, 'En linea'),
+            kpi(d.sinSenal.length, 'Sin senal'),
+            kpi(d.moviendo.length, 'En movimiento'),
+            kpi(d.detenidas.length, 'Detenidas'),
+            kpi(d.zonasCargadas ? d.enZona.length : '-', 'En geocerca'),
+            kpi(d.zonasCargadas ? d.fueraZona.length : '-', 'Fuera de geocerca'),
+            kpi(d.hoy.length, 'Avisos hoy')
+        ].join('');
+        const sevOrden = ['critico', 'alto', 'medio', 'bajo'].filter((s) => d.porSev[s]);
+        const sevResumen = sevOrden.length
+            ? sevOrden.map((s) => rxInfSevBadge(s) + ' ' + d.porSev[s]).join(' &nbsp; ')
+            : '<span class="muted">Sin avisos registrados hoy.</span>';
+
+        const filasUnidades = d.watched.map((x) => {
+            const info = x.info, st = x.st;
+            const zona = (st.lat != null) ? (zoneAt(st.lat, st.lon) || (d.zonasCargadas ? 'Fuera de geocerca' : '-')) : '-';
+            const r = rutaDe(info);
+            let rutaTxt = '-';
+            if (r) {
+                const er = estadoRuta(info, st) || {};
+                const pct = er.snap ? Math.round(er.snap.progreso * 100) : 0;
+                rutaTxt = (er.estado || 'EN RUTA') + (er.snap ? ' (' + pct + '%)' : '');
+            }
+            const odo = odometroDe(info);
+            return [
+                '<b>' + esc(info.eco || info.nombre) + '</b>',
+                esc(info.placa || '-'),
+                st.online ? 'En linea' : 'Sin senal',
+                esc(ageText(st.edadMin)),
+                Math.round(st.vel) + ' km/h',
+                esc(zona),
+                esc(rutaTxt),
+                odo ? Math.round((+odo.m || 0) / 1000) + ' km' : '-',
+                esc(String(limiteDe(info))) + ' km/h'
+            ];
+        });
+        const filasAvisos = d.hoy.slice(0, 250).map((a) => [
+            esc(new Date(a.ts).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' })),
+            rxInfSevBadge(a.sev),
+            esc(a.regla || '-'),
+            esc(a.eco || '-'),
+            esc(a.titulo || '') + (a.detalle ? '<br><span class="muted">' + esc(a.detalle) + '</span>' : '')
+        ]);
+        const rutas = d.watched.filter((x) => rutaDe(x.info)).map((x) => {
+            const r = rutaDe(x.info);
+            const er = estadoRuta(x.info, x.st) || {};
+            const pct = er.snap ? Math.round(er.snap.progreso * 100) : 0;
+            const eta = er.snap ? calcularETA(er.snap, r, x.st.vel) : null;
+            return [
+                '<b>' + esc(x.info.eco || x.info.nombre) + '</b>',
+                esc(r.destinoTexto || '-'),
+                esc(er.estado || 'EN RUTA'),
+                pct + '%',
+                rxFmtDist(r.total),
+                eta != null ? rxFmtDur(eta) : '-',
+                er.desviado ? 'Si' : 'No'
+            ];
+        });
+        const riesgo = (APP.riesgo || []).slice(0, 120).map((z) => [
+            esc(z.municipio || z.nombre || '-'),
+            esc(z.estado || '-'),
+            String(z.score == null ? '-' : z.score),
+            z.radio_m ? Math.round(z.radio_m) + ' m' : '-'
+        ]);
+        const geocercas = (APP.zonas || []).slice(0, 200).map((z) => {
+            const nom = z.n || z.nombre || ('Zona ' + z.id);
+            let dentro = 0;
+            try { dentro = d.watched.filter((x) => x.st.lat != null && inZone(x.st.lat, x.st.lon, z)).length; } catch (_) { dentro = 0; }
+            const tipo = z.t === 3 ? 'Circulo' : (z.t === 2 ? 'Poligono' : (z.t === 1 ? 'Linea' : 'Zona'));
+            return [esc(nom), tipo, String(dentro)];
+        });
+        const sinSenal = d.sinSenal.map((x) => [
+            '<b>' + esc(x.info.eco || x.info.nombre) + '</b>',
+            esc(x.info.placa || '-'),
+            esc(ageText(x.st.edadMin)),
+            x.st.lat != null ? (esc(zoneAt(x.st.lat, x.st.lon) || 'Fuera de geocerca')) : '-'
+        ]);
+
+        const seccion = (titulo, contenido) => '<h2 class="seccion">' + esc(titulo) + '</h2>' + contenido;
+
+        return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
+            '<title>Reporte Rondo ' + esc(fecha) + '</title>' +
+            '<style>' + rxInfEstilo() + '</style></head><body>' +
+            rxInfCabecera('Rondo', 'Vigilancia de flota',
+                'Reporte operativo<b>' + esc(fecha) + ', ' + esc(hora) + '</b>' +
+                'Alcance: ' + esc(d.toda ? 'toda la flota' : 'unidades vigiladas') + '<br>' +
+                'Periodo de avisos: hoy (00:00 a ' + esc(hora) + ')') +
+            '<div class="kpis">' + kpis + '</div>' +
+            '<h2 class="seccion">Resumen ejecutivo</h2>' +
+            '<div class="resumen"><p>' + esc(rxInfResumenTexto(d)) + '</p><p style="margin:0">' + sevResumen + '</p></div>' +
+            seccion('1. Unidades (' + d.watched.length + ')', rxInfTabla(['Eco', 'Placa', 'Estado', 'Ultimo reporte', 'Velocidad', 'Zona', 'Ruta', 'Odometro', 'Limite'], filasUnidades)) +
+            seccion('2. Avisos del dia (' + d.hoy.length + ')', rxInfTabla(['Hora', 'Severidad', 'Regla', 'Eco', 'Titulo y detalle'], filasAvisos)) +
+            seccion('3. Rutas activas (' + rutas.length + ')', rxInfTabla(['Eco', 'Destino', 'Estado', 'Progreso', 'Distancia', 'ETA', 'Desviado'], rutas)) +
+            seccion('4. Unidades sin senal (' + sinSenal.length + ')', rxInfTabla(['Eco', 'Placa', 'Ultimo reporte', 'Ultima zona'], sinSenal)) +
+            (d.zonasCargadas ? seccion('5. Geocercas (' + (APP.zonas || []).length + ')', rxInfTabla(['Geocerca', 'Tipo', 'Unidades dentro'], geocercas)) : '') +
+            ((APP.riesgo || []).length ? seccion((d.zonasCargadas ? '6' : '5') + '. Zonas de riesgo (' + APP.riesgo.length + ')', rxInfTabla(['Municipio', 'Estado', 'Score', 'Radio'], riesgo)) : '') +
+            rxInfPie() +
+            '</body></html>';
+    }
+    // Reporte PDF de un recorrido del Replay (botón junto a GeoJSON/CSV).
+    function rxReplayInformeHTML() {
+        const r = RX_REPLAY;
+        if (!r) return '';
+        const s = r.resumen || {};
+        const fecha = new Date((s.inicio || 0) * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+        const rango = rxReplayHHMM(s.inicio) + ' - ' + rxReplayHHMM(s.fin);
+        const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
+        const kpis = [
+            kpi(r.eco, 'Unidad'),
+            kpi(rxFmtDist(s.distM || 0), 'Distancia'),
+            kpi(rxFmtDur(s.durSeg || 0), 'Duracion'),
+            kpi(s.paradas || 0, 'Paradas'),
+            kpi(rxFmtDur(s.moviendoSeg || 0), 'En movimiento'),
+            kpi(rxFmtDur(s.detenidoSeg || 0), 'Detenido'),
+            kpi((s.velMax || 0) + ' km/h', 'Velocidad maxima'),
+            kpi(s.excesos || 0, 'Excesos')
+        ].join('');
+        const filasParadas = (r.paradas || []).map((p, i) => [
+            String(i + 1),
+            rxReplayHHMM(p.t),
+            rxFmtDur(p.dur),
+            '<b>' + esc(rxReplayParadaEtiqueta(p)) + '</b>',
+            esc(p.direccion || ''),
+            esc(p.zona || ''),
+            esc(p.municipio || ''),
+            (+p.lat).toFixed(5) + ',' + (+p.lon).toFixed(5)
+        ]);
+        const filasEventos = (r.eventos || []).map((e2) => [
+            rxReplayHHMM(e2.t),
+            esc(e2.tipo),
+            esc(e2.txt),
+            (+e2.lat).toFixed(5) + ',' + (+e2.lon).toFixed(5)
+        ]);
+        // Mapa del recorrido con los puntos marcados (tiles de OSM + trazo SVG).
+        const marcasMapa = [];
+        (r.paradas || []).forEach((p, i) => marcasMapa.push({ lat: p.lat, lon: p.lon, color: '#7d8595', radio: 6, num: i + 1, txt: 'Parada ' + (i + 1) + ' \u00b7 ' + rxReplayHHMM(p.t) + ' \u00b7 ' + rxReplayParadaEtiqueta(p) }));
+        (r.eventos || []).forEach((e2) => marcasMapa.push({ lat: e2.lat, lon: e2.lon, color: rxReplayColor(e2.tipo), radio: 5, txt: rxReplayHHMM(e2.t) + ' \u00b7 ' + e2.txt }));
+        const mapa = rxMiniMapaHTML({
+            lineas: [{ pts: (r.msgs || []).map((m) => ({ lat: m.lat, lon: m.lon })), color: '#850D22', width: 4, opacity: 0.95, glow: true }],
+            marcas: marcasMapa
+        }, 680, 300);
+        const leyenda = '<div class="mapa-leyenda">' +
+            '<span><i style="background:#850D22"></i>Recorrido</span>' +
+            '<span><i style="background:#7d8595"></i>Parada (numerada)</span>' +
+            '<span><i style="background:#1565c0"></i>Geocerca</span>' +
+            '<span><i style="background:#b71c1c"></i>Exceso</span>' +
+            '<span><i style="background:#e65100"></i>Desvio</span>' +
+            '<span class="muted">Mapa: OpenStreetMap</span></div>';
+        const seccion = (titulo, contenido) => '<h2 class="seccion">' + esc(titulo) + '</h2>' + contenido;
+        return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
+            '<title>Recorrido ' + esc(r.eco) + ' ' + esc(fecha) + '</title>' +
+            '<style>' + rxInfEstilo() + '</style></head><body>' +
+            rxInfCabecera('Rondo', 'Recorrido de la unidad',
+                'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(fecha) + ' &middot; ' + esc(rango) + '<br>Documento de solo lectura') +
+            '<div class="kpis">' + kpis + '</div>' +
+            seccion('1. Mapa del recorrido', mapa + leyenda) +
+            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
+            seccion('3. Eventos (' + filasEventos.length + ')', rxInfTabla(['Hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
+            (r.truncado ? '<p class="muted">Nota: el historial se trunco al limite de mensajes; el resumen puede ser parcial.</p>' : '') +
+            rxInfPie() +
+            '</body></html>';
+    }
+    function exportReplayPDF() {
+        if (!RX_REPLAY) { adviceWarn('Sin recorrido', 'Carga un recorrido antes de generar el PDF.'); return; }
+        rxImprimirHTML(rxReplayInformeHTML());
+        advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
+    }
+    function rxImprimirHTML(html) {
+        let fr = document.getElementById('rondo-print-frame');
+        if (fr && fr.parentNode) fr.parentNode.removeChild(fr);
+        fr = document.createElement('iframe');
+        fr.id = 'rondo-print-frame';
+        fr.setAttribute('style', 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none');
+        document.body.appendChild(fr);
+        let doc = null;
+        try {
+            doc = fr.contentWindow.document;
+            doc.open(); doc.write(html); doc.close();
+        } catch (_) {
+            adviceWarn('No se pudo preparar el reporte', 'Intenta de nuevo.');
+            try { fr.remove(); } catch (_) { /* noop */ }
+            return;
+        }
+        // Espera a que carguen los tiles del mapa antes de imprimir.
+        const pendientes = () => {
+            try { return Array.prototype.filter.call(doc.images || [], (i) => !i.complete).length; }
+            catch (_) { return 0; }
+        };
+        const t0 = Date.now();
+        const listo = () => {
+            if (pendientes() && (Date.now() - t0) < 5000) { setTimeout(listo, 150); return; }
+            setTimeout(() => {
+                try { fr.contentWindow.focus(); fr.contentWindow.print(); }
+                catch (_) { adviceWarn('No se pudo imprimir', 'Permite la impresion/ventanas emergentes e intenta de nuevo.'); }
+                setTimeout(() => { try { fr.remove(); } catch (_) { /* noop */ } }, 60000);
+            }, 250);
+        };
+        setTimeout(listo, 400);
+    }
+    function exportReportePDF() {
+        const d = rxInformeDatos();
+        if (!d.watched.length) { adviceWarn('Sin unidades', 'No hay unidades en el alcance para el reporte.'); return; }
+        rxImprimirHTML(rxInformeHTML());
+        advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
     }

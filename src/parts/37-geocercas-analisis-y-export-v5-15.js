@@ -366,6 +366,7 @@
             setHtml(cont, emptyState(UIS.route, 'Sin rutas planificadas',
                 'Haz <b>clic derecho</b> en una unidad de la pestaña Unidades y elige <b>Planear ruta (OSRM)</b> o <b>(A*)</b>. Aquí verás el progreso, la distancia y los desvíos.',
                 '<button class="mini rondo-vacio-acc" data-acc="tab-unidades"><span class="rondo-usym">' + UIS.panel + '</span> Ir a Unidades</button>'));
+            try { rxRutasMiniSync([]); } catch (_) { /* noop */ }
             return;
         }
         const tarjeta = (info, st) => {
@@ -396,7 +397,7 @@
                 '<span class="rr-modo">' + esc(r.optimo ? 'mejor ruta' : 'secuencial') + ' \u00b7 ' + esc(r.modo || '') + '</span>' +
                 '<span class="rr-actions">' +
                 '<button class="mini rondo-plan-edit" data-eco="' + esc(eco) + '" title="Editar paradas del plan"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
-                '<button class="mini rondo-ruta-mapa" data-eco="' + esc(eco) + '" title="Dibujar la ruta encima del mapa de la plataforma"><span class="rondo-usym">' + UIS.map + '</span></button>' +
+                '<button class="mini rondo-ruta-mapa" data-eco="' + esc(eco) + '" title="Ver la ruta en el mini-mapa"><span class="rondo-usym">' + UIS.map + '</span></button>' +
                 '<button class="mini rondo-ruta-gmaps" data-eco="' + esc(eco) + '" title="Abrir la ruta en Google Maps (con paradas)"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
                 '<button class="mini rondo-ruta-geo" data-eco="' + esc(eco) + '" title="Exportar ruta GeoJSON"><span class="rondo-usym">' + UIS.export + '</span></button>' +
                 '<button class="mini rondo-traza-geo" data-eco="' + esc(eco) + '" title="Exportar traza GeoJSON"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
@@ -407,6 +408,7 @@
                 '<div class="rr-dest" title="' + esc(dest) + '">' + esc(dest) + '</div>' +
                 (totalP > 1 || s ? '<div class="rr-progress"><div class="rr-progress-fill" style="width:' + pct + '%"></div></div>' : '') +
                 '<div class="rr-meta">' + chips.map((c) => '<span class="rr-chip">' + c + '</span>').join('') + '</div>' +
+                '<div class="rr-mini" id="rondo-ru-mini-' + esc(eco) + '"></div>' +
                 '</div>';
         };
         let html = pendientes.map((x) => {
@@ -445,6 +447,7 @@
                 '</div>';
         });
         setHtml(cont, html);
+        try { rxRutasMiniSync(filas); } catch (_) { /* noop */ }
     }
     function paintPanel() { setTab(APP.tab); }
 

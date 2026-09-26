@@ -96,10 +96,18 @@ Para ajustar la barra ve a Ajustes, pestana **Ventanas**, y elige **Lado**
 (derecha o izquierda) y **Ancho de la barra (px)**.
 
 Para mostrar u ocultar la barra usa el boton **Panel** de la barra superior, el
-boton **Ocultar** de la propia barra lateral, el icono de campana con tachado
-del menu **No molestar**, o el atajo **Alt + P** (tambien **Alt + L**). Al
-ocultarla queda una pequena pestana vertical en el borde (el **rail**) que la
-trae de vuelta con un clic y una animacion suave.
+icono de campana con tachado del menu **No molestar**, o el atajo **Alt + P**
+(tambien **Alt + L**). Al ocultarla queda una pequena pestana vertical en el
+borde (el **rail**) que la trae de vuelta con un clic y una animacion suave.
+
+El boton **Ocultar** (junto a **Automatizar**, arriba de la barra lateral) ya no
+oculta la barra: **oculta o vuelve a mostrar las ventanas de unidades abiertas**
+sin cerrarlas. Mientras estan ocultas, el boton dice **Mostrar** y las ventanas
+nuevas que se abran se ocultan solas.
+
+A su lado, los botones **+** y **-** **agrandan o encogen** todas las ventanas
+de unidades abiertas en pasos, reubicandolas si hiciera falta para que no se
+salgan de la pantalla.
 
 Ademas, **al hacer clic fuera del panel** la barra se oculta automaticamente y
 deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
@@ -108,7 +116,7 @@ deja el rail visible. Puedes desactivar este comportamiento en Ajustes, pestana
 La barra **recuerda como la dejaste**: el lado, el ancho y si estaba abierta o
 cerrada. Al recargar la pagina se restaura en ese estado.
 
-## Las siete pestanas
+## Las ocho pestanas
 
 En la parte superior del panel:
 
@@ -148,6 +156,9 @@ En la parte superior del panel:
   cercania. Muestra distancia firmada (+450 m delante / -300 m detras), modo
   "cerca" cuando no toca la ruta, sentido contrario y velocidad. Ver
   [Modo caravana](#modo-caravana).
+- **Replay**: reproduce el recorrido de una unidad en un dia o **rango de
+  horas**, con buscador de unidades, mini-mapa, perfil de velocidad, resumen y
+  eventos. Ver [Reproducir el recorrido (Replay)](#reproducir-el-recorrido-replay).
 - **Chat IA**: asistente conversacional. Solo aparece si la IA esta
   habilitada con una API key en Ajustes > IA. Sirve tanto para consultar
   el estado de la flota como para resolver dudas del propio Rondo. Ver
@@ -186,8 +197,17 @@ El editor (boton **Paradas**, o clic derecho &gt; **Destinos y paradas
 - Anade paradas con el buscador: **geocercas**, **municipios** (OpenStreetMap)
   o lugares; escribe `lat,lon` para una coordenada. Mientras escribes aparecen
   **sugerencias** con su tipo.
-- Reordena con las flechas, **Fija** una parada para conservar su posicion o
-  quitala con la x. **Vaciar paradas** las borra todas.
+- Reordena con las flechas, **arrastrando** el asa (⠿) de cada parada o con los
+  botones subir/bajar. **Fija** una parada para conservar su posicion o quitala
+  con la x. **Vaciar paradas** las borra todas.
+- La ventana del editor es **amplia** y se **ajusta al contenido**: crece con
+  las paradas hasta el alto de la pantalla y, si hay mas, la lista hace scroll;
+  nunca se sale de la pantalla. Ademas se puede **mover** (arrastra el
+  encabezado) y **redimensionar** (esquina inferior derecha), y recuerda su
+  posicion y tamano durante la sesion.
+- En el buscador, usa las **flechas arriba/abajo** para recorrer las sugerencias
+  y **Enter** para elegir la resaltada; si no hay ninguna resaltada, Enter anade
+  el texto como lugar. **Esc** cierra el desplegable.
 - **Guardar y trazar** calcula la ruta y la sigue en la pestana Rutas.
 
 ### Orden de las ventanas
@@ -400,14 +420,21 @@ El chat conoce **dos cosas**:
    - **Conteos y agregados**: en linea, sin senal, en movimiento, detenidas,
      velocidad promedio, cuantas fuera de geocerca, cuantas sin senal **y**
      fuera de geocerca.
-   - **Geocercas** de la plataforma, con las unidades dentro de cada una.
+   - **Geocercas**: la lista completa (no un recorte), con su tipo y las
+     unidades dentro de cada una.
    - **Zonas de riesgo** cargadas: total, por nivel y las de mayor score con
      estado/municipio.
-   - **Municipios** conocidos (OSM y derivados de riesgo).
+   - **Municipios** conocidos (OSM y derivados de riesgo), con el catalogo de
+     nombres.
    - **Viajes** analizados (km, paradas, carga, llegada, regreso).
    - **Alertas de hoy** por severidad y por regla, y los ultimos avisos con su
      detalle, mas las **desconexiones** del dia.
    - **Rutas** activas, con destino, modo (secuencial/mejor ruta) y paradas.
+   - **Detalle por unidad**: si tu pregunta menciona un economico (3 a 5
+     digitos), Rondo consulta por API sus **campos personalizados** (conductor,
+     marca, etc.) y su **historial de las ultimas 24 h** (km, velocidad maxima,
+     tiempo en movimiento/detenido, paradas y ultima posicion). Opcionalmente,
+     y si lo activas en Ajustes &gt; IA, un **reporte del dia** del servidor.
    - **Configuracion** de umbrales activa, para que pueda explicar y proponer.
 
 Asi puedes preguntar, por ejemplo, "que unidades estan fuera de
@@ -462,6 +489,8 @@ Estado de la flota:
 ### Notas
 
 - El chat respeta el **limite diario de llamadas** de Ajustes > IA.
+- Las ventanas de **Analizar lote** y **Analizar flota** se acotan al alto de la
+  pantalla y hacen scroll si el resultado es largo, para que no se desborden.
 - Cada turno envia los ultimos 20 mensajes del historial mas el contexto.
 - La IA **no inventa** datos que no esten en el contexto: si preguntas
   por algo que no tiene (por ejemplo, el historial de un dia anterior),
@@ -548,19 +577,15 @@ eco=Monterrey | geo:CEDIS Norte | mun:Saltillo
 En la pestana **Rutas** (y en el clic derecho de una unidad) hay acciones para
 ver la ruta:
 
-- **Dibujar en el mapa de la plataforma**: agrega la ruta como una **capa
-  vectorial encima** del mapa (WebGIS, Bing, OpenStreetMap...). Rondo detecta el
-  motor del mapa (Leaflet, OpenLayers, Mapbox o WebGIS) y dibuja la polilinea y
-  las paradas. Volver a pulsar la quita.
+- **Mini-mapa**: abre una ventana con un **mini-mapa propio de Rondo** (tiles
+  de OpenStreetMap) con el trazo y los marcadores (origen, paradas y destino).
+  Arrastra para moverlo y usa la rueda para acercar. No depende del mapa de la
+  plataforma, por lo que funciona siempre. Ademas, cada tarjeta de la pestana
+  **Rutas** incluye su propio **mini-mapa del trazo** (resaltado) con la posicion
+  actual y el tramo ya recorrido.
 - **Google Maps**: abre la ruta en Google Maps con las paradas como *waypoints*
   (alternativa garantizada).
 - **OpenStreetMap**: abre el trayecto origen-destino en OSM.
-- **Diagnosticar mapa**: si el boton de dibujar no funciona, esto imprime en la
-  consola (F12) que motor de mapa detecto, para poder ajustarlo.
-- **Ventanas**: dibuja la ruta **en el mapa de cada ventana de unidad abierta**
-  (si el mapa de la plataforma es Leaflet). Pulsar de nuevo lo detiene. Se
-  mantiene actualizado mientras haya ventanas abiertas, aunque el panel este
-  oculto.
 
 El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
 
@@ -571,6 +596,36 @@ El dibujo es **solo lectura**: no crea ni modifica nada en Wialon.
 > mantenga `desvioMin` (5 min). Si la unidad sigue dentro de un municipio por el
 > que pasa la ruta, se tolera hasta `desvioMunicipioM` (3000 m). Ajustable en
 > Ajustes &gt; Rutas.
+
+### Reproducir el recorrido (Replay)
+
+La pestana **Replay** reproduce el recorrido de una unidad:
+
+1. **Busca la unidad** por economico, placa o nombre (tambien puedes escribir un
+   economico y pulsar Enter) y elige el **dia** y el **rango de horas**
+   (desde/hasta). Los botones **Hoy**, **Ayer**, **Turno dia** y **Turno noche**
+   lo rellenan de un clic. Pulsa **Cargar**.
+2. Con **Play/Pausa** y la velocidad (**1 min/s** a **1 h/s**) se reproduce el
+   tramo; la barra inferior y el **perfil de velocidad** (haz clic en la grafica)
+   permiten saltar a un momento concreto.
+3. El **mini-mapa** (tiles de OpenStreetMap) muestra el trazo completo, el tramo
+   ya recorrido y la posicion actual. Arrastra para moverlo, rueda para acercar
+   y **Centrar** para volver a encuadrarlo.
+4. **Paradas** (hora, duracion y **lugar**) y **Eventos** (entradas/salidas de
+   geocerca, excesos de velocidad y desvios). El lugar de cada parada se
+   resuelve con **OpenStreetMap**: si se detuvo en un OXXO, una tienda, una
+   gasolinera o un restaurante, lo menciona (y si no, la direccion o el
+   municipio). Con **Overpass** activado en Ajustes se afinan mas los nombres de
+   comercios. Haz clic en una parada o en un evento para saltar a ese momento.
+5. Arriba veras un **resumen** (rango de horas, distancia, duracion, paradas,
+   tiempo en movimiento y detenido, velocidad maxima y excesos) y, abajo, junto
+   a **GeoJSON** y **Paradas CSV**, el boton **Reporte PDF** genera un PDF del
+   recorrido con la **imagen del mapa** (recorrido y puntos marcados), el
+   resumen, las paradas con su lugar y los eventos.
+
+Es solo lectura (historial de la plataforma). Atajo: **Alt + 8**. Tambien puedes
+abrirla desde el **clic derecho** sobre una unidad, en **Reproducir el dia
+(replay)**.
 
 ### Carga rapida de rutas (embarque)
 
@@ -836,6 +891,7 @@ te pedirá confirmación.
 | `Alt` + `5` | Zonas |
 | `Alt` + `6` | Caravana |
 | `Alt` + `7` | Chat IA (si la IA esta activa) |
+| `Alt` + `8` | Replay |
 | `Alt` + `P` | Mostrar u ocultar la barra lateral |
 | `Alt` + `L` | Mostrar u ocultar la barra lateral |
 | `Alt` + `H` | Plegar la barra de botones |
@@ -845,8 +901,13 @@ te pedirá confirmación.
 
 - **CSV** (Unidades): descarga la lista de unidades con estado, velocidad y zona.
 - **Avisos CSV**: descarga el historial de avisos.
-- **Informe**: genera un informe del dia en Markdown con alertas por severidad,
-  por regla, unidades con mas avisos y unidades sin senal.
+- **Reporte PDF**: genera un **reporte operativo completo** (resumen ejecutivo,
+  KPIs, unidades, avisos del dia, rutas activas, unidades sin senal, geocercas y
+  zonas de riesgo) y abre el dialogo de impresion del navegador; elige
+  **Guardar como PDF**. Esta paginado en A4, con encabezados de tabla que se
+  repiten y sin emojis.
+- **Informe (Markdown)**: el icono junto a Reporte PDF descarga el informe del
+  dia en texto Markdown (alertas por severidad, por regla, etc.).
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y
   prueba; descarga un JSON con toda tu configuracion, listas, limites y rutas.
 - **Importar** configuracion: en la misma seccion; restaura ese JSON.
