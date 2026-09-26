@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-5.15.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.15.0.md)
-[![tests](https://img.shields.io/badge/tests-930%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-5.15.1-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/5.15.1.md)
+[![tests](https://img.shields.io/badge/tests-958%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -256,7 +256,7 @@ con `Alt+L`.
 | Pestana | Para que sirve |
 | --- | --- |
 | **Dashboard** | Resumen compacto para la barra lateral: cabecera con velocidad promedio, 6 KPIs en cuadricula 3x2 (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy) clicables para filtrar Unidades, distribucion de la flota con leyenda, "Requieren atencion" y avisos recientes. |
-| **Unidades** | Lista de **tarjetas** (sin desbordes) con estado, velocidad, ultimo reporte, geocerca, odometro y **estado de ruta** con barra de progreso y ETA. Barra **Ordenar** por estado, eco, placa, velocidad, zona, odometro o ruta, con boton para invertir la direccion. Clic en una tarjeta abre su ventana. |
+| **Unidades** | Lista de **tarjetas** (sin desbordes ni parpadeo) con estado, velocidad, ultimo reporte, geocerca, odometro y **estado de ruta** con barra de progreso y ETA. Cada tarjeta tiene **botones rapidos** (abrir, paradas/ruta, mapa, vigilar, silenciar). Barra **Ordenar** por estado, eco, placa, velocidad, zona, odometro o ruta, con boton para invertir la direccion. Clic en una tarjeta abre su ventana. |
 | **Avisos** | Historial de alertas con filtro por severidad y exportable a CSV o Markdown. |
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
 | **Zonas** | Fusiona las geocercas de la plataforma (con las unidades dentro, boton Recargar) y las zonas de riesgo (dona, histograma, KPIs, filtros, export y lista). |
@@ -328,11 +328,12 @@ node tests/autoruta.test.js
 node tests/caravana.test.js
 node tests/riesgo.test.js
 node tests/paradas.test.js
+node tests/geocercas.test.js
 node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**11 suites, ~930 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**12 suites, ~958 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

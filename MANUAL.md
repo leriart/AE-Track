@@ -121,11 +121,14 @@ En la parte superior del panel:
   urgentes (sin señal, exceso, desviadas o detenidas) que abren su ventana
   al pulsarlas, y los avisos recientes.
 - **Unidades**: lista de **tarjetas** de las unidades vigiladas, con estado,
-  economico, placa, velocidad, ultimo reporte, zona y ruta. Clic en una tarjeta
-  para abrir su ventana; la campana silencia los avisos de esa unidad. El estado
-  se muestra como **pildora de color** (verde en linea, ambar detenida, rojo sin
-  senal) y hay una barra **Ordenar** (estado, eco, placa, velocidad, zona,
-  odometro o ruta) con boton para invertir la direccion.
+  economico, placa, velocidad, ultimo reporte, zona y ruta. Cada tarjeta tiene
+  **botones rapidos** (abrir ventana, paradas/ruta, ver en mapa, vigilar y
+  silenciar) y clic en la tarjeta para abrir su ventana; la campana silencia los
+  avisos de esa unidad. La lista se actualiza **sin parpadeo** (solo se
+  redibuja la unidad que cambia). El estado se muestra como **pildora de color**
+  (verde en linea, ambar detenida, rojo sin senal) y hay una barra **Ordenar**
+  (estado, eco, placa, velocidad, zona, odometro o ruta) con boton para
+  invertir la direccion.
 - **Avisos**: historial de alertas con filtro por severidad (criticas, altas,
   medias, bajas). Cada aviso indica la regla que lo genero y la hora.
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al

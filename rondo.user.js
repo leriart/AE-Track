@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rondo
 // @namespace    https://github.com/leriart/AE-Track
-// @version      5.15.0
+// @version      5.15.1
 // @description  Rondo es el script de vigilancia de flota de AE-TrackRondo. Corre sobre la API nativa de Wialon o AE-Track y evalua reglas de negocio, notifica con toasts/voz/pitido, automatiza la apertura y acomodo de ventanas de unidades y mantiene abiertas solo las seleccionadas. Panel con 7 pestanas: Dashboard, Unidades, Avisos, Rutas, Geocercas, Caravana y Riesgo (zonas de alto riesgo con dona SVG, histograma, KPIs clicables, slider, drag-and-drop y export CSV/GeoJSON). Unidades en tarjetas responsivas sin desbordes. Rutas con OpenStreetMap (OSRM), algoritmo A*, trazado automatico al asignar destino, deteccion de desvios, giros en U, retorno por viaje cancelado y trazado con exportacion GeoJSON. Incluye odometro por unidad, limite de velocidad por unidad, perfiles de configuracion, filtros, tema oscuro/claro, backup JSON y barra lateral redimensionable. Tamano de interfaz ajustable. IA de razonamiento: analisis por aviso, analisis en lote del dia, resumen narrativo del informe y deteccion de patrones con sugerencias aplicables. Rutas multipunto (secuencial o mejor ruta), municipios de OpenStreetMap con tolerancia de desvio, busqueda difusa de geocercas/municipios, geocercas con KPIs y exportacion, y monitor de flota con IA. Sin emojis.
 // @author       lerit, Hector Ramirez (HectorRamirez-cpu)
 // @contributor  Hector Ramirez (https://github.com/HectorRamirez-cpu), creador del proyecto original
@@ -388,7 +388,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '5.15.0';
+    const VER = '5.15.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -780,6 +780,9 @@
         unlocked: false,
         consultaRestante: 0,
         stats: { erroresReglas: 0, astarCap: 0 },
+        // v5.15.1: velocidad suavizada por unidad (media exponencial) para
+        // ETAs y estados mas estables, sin depender del ultimo reporte.
+        velSuave: {},
         caravanaEco: '',
 
         // Riesgo: zonas de alto riesgo para flota, consultadas en cada arranque
@@ -1508,13 +1511,17 @@ function _extraerZonasDe(items) {
     function centroDeZona(z) {
         if (!z) return null;
         const b = z.b;
-        if (z.t === 3 || (b && b.cen_x != null && b.cen_y != null)) {
-            const lon = (z.c && z.c.x != null) ? +z.c.x : (b && b.cen_x != null ? +b.cen_x : null);
-            const lat = (z.c && z.c.y != null) ? +z.c.y : (b && b.cen_y != null ? +b.cen_y : null);
-            if (lat != null && lon != null) return { lat, lon };
-        }
         let pts = z.p;
         if (typeof pts === 'string') { try { pts = JSON.parse(pts); } catch (_) { pts = null; } }
+        const radio = (z.w != null) ? +z.w : ((z.r != null) ? +z.r : 0);
+        const cenX = (z.c && z.c.x != null) ? +z.c.x : (b && b.cen_x != null ? +b.cen_x : null);
+        const cenY = (z.c && z.c.y != null) ? +z.c.y : (b && b.cen_y != null ? +b.cen_y : null);
+        // v5.15.1: solo es circulo si NO hay poligono/polilinea con puntos.
+        // Antes cualquier zona con bounding box (b.cen_x) se trataba como
+        // circulo, lo que daba areas y centros incorrectos en poligonos.
+        const minimoPts = (z.t === 1) ? 2 : 3;
+        const esCirculo = (z.t === 3) || ((!Array.isArray(pts) || pts.length < minimoPts) && cenX != null && cenY != null && radio > 0);
+        if (esCirculo && cenX != null && cenY != null) return { lat: cenY, lon: cenX };
         if (Array.isArray(pts) && pts.length) {
             let sLat = 0, sLon = 0, n = 0;
             for (let i = 0; i < pts.length; i++) {
@@ -1526,6 +1533,7 @@ function _extraerZonasDe(items) {
             }
             if (n) return { lat: sLat / n, lon: sLon / n };
         }
+        if (cenX != null && cenY != null) return { lat: cenY, lon: cenX };
         if (b && b.min_y != null && b.max_y != null && b.min_x != null && b.max_x != null) {
             return { lat: (+b.min_y + +b.max_y) / 2, lon: (+b.min_x + +b.max_x) / 2 };
         }
@@ -2631,6 +2639,14 @@ function _extraerZonasDe(items) {
     function odometroDe(info) {
         if (!info || !info.clave) return null;
         return APP.odometro[info.clave] || null;
+    }
+    // Velocidad suavizada (media exponencial) para ETAs y avisos estables.
+    // Se actualiza una vez por refresco en evaluateUnit; aquí solo se lee.
+    function velSuavizada(info, st) {
+        const k = info && info.clave;
+        const v = k ? APP.velSuave[k] : null;
+        if (Number.isFinite(v)) return v;
+        return (st && Number.isFinite(st.vel)) ? st.vel : 0;
     }
     function isBase(zona) {
         return /\b(GENA|CEDIS|PATIO|PLANTA|OFICINAS|ALMACEN|TALLER|BODEGA|LABORATORIO|BASCULA|RASTRO)\b/.test(norm(zona));
@@ -5876,7 +5892,9 @@ ta.value = '';
     }
     async function reglaDetenido(u, st, R, info, etq, ctx) {
         if (!APP.config.reglas.detenido) return;
-        if (st.online && st.vel <= 1) {
+        // v5.15.1: umbral sobre la velocidad suavizada para que los picos de
+        // ruido del GPS no reinicien el temporizador de detencion.
+        if (st.online && velSuavizada(info, st) <= 1.5) {
             if (!R.detenidoDesde) {
                 R.detenidoDesde = Date.now() / 1000;
                 if (APP.config.historico && APP.consultaRestante > 0 && ctx.quotaOk) {
@@ -5969,7 +5987,7 @@ ta.value = '';
         if (!APP.config.reglas.geocercaDetenido) return;
         if (!st.online) { R.geoDetenidoDesde = null; return; }
         // Reset: si se mueve o sale de la geocerca, vuelve a contar.
-        if (st.vel > 1 || !R.zona) { R.geoDetenidoDesde = null; return; }
+        if (velSuavizada(info, st) > 1.5 || !R.zona) { R.geoDetenidoDesde = null; return; }
         if (!R.geoDetenidoDesde) R.geoDetenidoDesde = Date.now() / 1000;
         const minDet = Math.max(1, +APP.config.geocercaDetenidoMin || 5);
         const m = (Date.now() / 1000 - R.geoDetenidoDesde) / 60;
@@ -6089,7 +6107,7 @@ ta.value = '';
     }
     function reglaDemoraBase(st, R, info, etq) {
         if (!APP.config.reglas.demoraBase) return;
-        if (!st.online || st.vel > 1) { R.demoraBaseAlerta = 0; return; }
+        if (!st.online || velSuavizada(info, st) > 1.5) { R.demoraBaseAlerta = 0; return; }
         if (!isBase(R.zona)) { R.demoraBaseAlerta = 0; return; }
         if (R.enDestino || R.llego) return;
         if (!R.demoraBaseAlerta) R.demoraBaseAlerta = Date.now() / 1000;
@@ -6203,6 +6221,11 @@ ta.value = '';
     async function evaluateUnit(u, info, st, prev, ctx) {
         const clave = info.clave;
         const etq = (info.eco || info.placa || info.nombre || info.id || '');
+        // v5.15.1: media exponencial de velocidad (suaviza GPS y ETA).
+        if (clave && Number.isFinite(st.vel)) {
+            const pv = APP.velSuave[clave];
+            APP.velSuave[clave] = (pv == null) ? st.vel : (pv * 0.65 + st.vel * 0.35);
+        }
         const R = {
             estado: st.estado, t: st.t, vel: st.vel, lat: st.lat, lon: st.lon,
             zona: zoneAt(st.lat, st.lon),
@@ -7828,6 +7851,10 @@ ta.value = '';
             "#rondo-panel .rondo-uni-card .u-vel em{font:500 9px var(--rondo-font);color:var(--rondo-fg-mute);font-style:normal;margin-left:1px}\n" +
             "#rondo-panel .rondo-uni-card .u-vel.excede{color:var(--rondo-bad-fg)}\n" +
             "#rondo-panel .rondo-uni-card .u-sil{flex-shrink:0}\n" +
+            "#rondo-panel .rondo-uni-card .u-quick{display:inline-flex;gap:3px;flex-shrink:0;align-items:center;margin-left:4px}\n" +
+            "#rondo-panel .rondo-uni-card .u-quick .mini{padding:2px 5px;font-size:11px;line-height:1}\n" +
+            "#rondo-panel .rondo-uni-card .u-quick .mini .rondo-usym{font-size:12px}\n" +
+            "#rondo-panel .rondo-uni-card .u-quick .u-watch.on{background:var(--rondo-ok-bg);color:var(--rondo-ok-fg);border-color:transparent}\n" +
             "#rondo-panel .rondo-uni-card .u-meta{display:flex;flex-wrap:wrap;gap:5px;font-size:10.5px;color:var(--rondo-fg-dim);min-width:0}\n" +
             "#rondo-panel .rondo-uni-card .u-meta .u-tag{display:inline-flex;align-items:center;gap:3px;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}\n" +
             "#rondo-panel .rondo-uni-card .u-meta .u-tag .rondo-usym{font-size:12px;color:var(--rondo-fg-mute);flex-shrink:0}\n" +
@@ -7923,7 +7950,7 @@ ta.value = '';
             "#rondo-modal button.accbtn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--rondo-accent-rgb),.4);filter:brightness(1.05)}\n" +
             "#rondo-modal button.cancel{background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius-sm);padding:8px 16px;cursor:pointer;font:600 12px var(--rondo-font);transition:background .15s,transform .12s}\n" +
             "#rondo-modal button.cancel:hover{background:var(--rondo-bg);transform:translateY(-1px)}\n" +
-            "#rondo-contexto{padding:4px;gap:0;width:auto;min-width:170px}\n" +
+            "#rondo-contexto{padding:4px;gap:0;width:auto;min-width:170px;max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain}\n" +
             "#rondo-contexto .op{padding:7px 12px;cursor:pointer;font-size:12.5px;border-bottom:1px solid var(--rondo-border-soft);display:flex;align-items:center;gap:8px}\n" +
             "#rondo-contexto .op .rondo-usym{color:var(--rondo-accent-2);font-size:1.15em}\n" +
             "#rondo-contexto .op:last-child{border-bottom:none}\n" +
@@ -9398,7 +9425,7 @@ ta.value = '';
             case 'estado': return x.st.estado || '';
             case 'edad': return x.st.edadMin == null ? Infinity : x.st.edadMin;
             case 'vel': return x.st.vel || 0;
-            case 'zona': return zoneAt(x.st.lat, x.st.lon) || '';
+            case 'zona': return (x.zona != null) ? x.zona : zoneAt(x.st.lat, x.st.lon);
             case 'odo': { const o = odometroDe(x.info); return o ? o.m : 0; }
             case 'ruta': {
                 // Orden por estado de ruta: primero "LLEGO", luego "DESV",
@@ -9433,91 +9460,159 @@ ta.value = '';
             dir.title = APP.sortDir === 'desc' ? 'Orden descendente (clic para ascendente)' : 'Orden ascendente (clic para descendente)';
         }
     }
+    // Render incremental de tarjetas: reutiliza los nodos existentes y solo
+    // reescribe el contenido de las tarjetas que cambiaron. Evita el parpadeo
+    // (la animacion de entrada solo corre en tarjetas nuevas) y conserva el
+    // scroll y el foco del usuario.
+    function renderCards(cont, cards) {
+        const mapa = cont._rondoCards || (cont._rondoCards = new Map());
+        invalidarHtml(cont.id);
+        const nodos = [];
+        for (let i = 0; i < cards.length; i++) {
+            const c = cards[i];
+            let n = mapa.get(c.eco);
+            if (!n) {
+                n = document.createElement('div');
+                n.dataset.eco = c.eco;
+                n.className = c.clase;
+                n.innerHTML = c.inner;
+                n._rondoClase = c.clase;
+                n._rondoInner = c.inner;
+                mapa.set(c.eco, n);
+            } else {
+                if (n._rondoClase !== c.clase) { n.className = c.clase; n._rondoClase = c.clase; }
+                if (n._rondoInner !== c.inner) { n.innerHTML = c.inner; n._rondoInner = c.inner; }
+            }
+            nodos.push(n);
+        }
+        const vigentes = new Set(cards.map((c) => c.eco));
+        mapa.forEach((n, k) => {
+            if (vigentes.has(k)) return;
+            if (n.parentNode) n.parentNode.removeChild(n);
+            mapa.delete(k);
+        });
+        // Quita cualquier hijo que no sea una tarjeta vigente (p.ej. el
+        // bloque de estado vacio cuando se pasa de lista vacia a tarjetas).
+        const setNodos = new Set(nodos);
+        Array.prototype.slice.call(cont.children).forEach((ch) => {
+            if (!setNodos.has(ch)) cont.removeChild(ch);
+        });
+        let igual = cont.children.length === nodos.length;
+        if (igual) {
+            for (let i = 0; i < nodos.length; i++) {
+                if (cont.children[i] !== nodos[i]) { igual = false; break; }
+            }
+        }
+        if (!igual) {
+            for (let i = 0; i < nodos.length; i++) cont.appendChild(nodos[i]);
+        }
+    }
     function paintTabla() {
         const body = byId('rondo-body');
         if (!body) return;
+        const filtro = (APP.filtro || '').toLowerCase();
+        const est = APP.filtEstado || 'todas';
         const lista = APP.unidades
             .filter(shouldWatch)
-            .map((u) => ({ info: parseUnitName(u), st: unitState(u) }))
+            .map((u) => {
+                const info = parseUnitName(u);
+                const st = unitState(u);
+                // La zona se calcula una sola vez por unidad y se reutiliza en
+                // el filtro, la tarjeta y el orden.
+                return { info: info, st: st, zona: zoneAt(st.lat, st.lon) };
+            })
             .filter((x) => {
-                const est = APP.filtEstado || 'todas';
                 if (est === 'moviendo' && x.st.estado !== 'moviendo') return false;
                 if (est === 'detenida' && x.st.estado !== 'detenida') return false;
                 if (est === 'offline' && x.st.estado !== 'offline') return false;
                 if (est === 'vigilada' && !isWatched(x.info)) return false;
                 if (est === 'silenciada' && !APP.dismissed.has(x.info.clave)) return false;
-                if (!APP.filtro) return true;
-                const f = APP.filtro.toLowerCase();
-                const zona = zoneAt(x.st.lat, x.st.lon);
-                return (x.info.eco + ' ' + x.info.placa + ' ' + x.info.nombre + ' ' + zona).toLowerCase().indexOf(f) >= 0;
-            })
-            .sort((a, b) => {
-                if (APP.sortCol) {
-                    const r = cmpOrd(valorOrden(a, APP.sortCol), valorOrden(b, APP.sortCol));
-                    if (r !== 0) return APP.sortDir === 'desc' ? -r : r;
-                    return a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
-                }
+                if (!filtro) return true;
+                return (x.info.eco + ' ' + x.info.placa + ' ' + x.info.nombre + ' ' + x.zona).toLowerCase().indexOf(filtro) >= 0;
+            });
+        if (APP.sortCol) {
+            const col = APP.sortCol;
+            lista.forEach((x) => { x._ord = valorOrden(x, col); });
+        }
+        lista.sort((a, b) => {
+            if (APP.sortCol) {
+                const r = cmpOrd(a._ord, b._ord);
+                if (r !== 0) return APP.sortDir === 'desc' ? -r : r;
+            } else {
                 const peso = (e) => e === 'offline' ? 0 : (e === 'detenida' ? 1 : 2);
                 const d = peso(a.st.estado) - peso(b.st.estado);
-                return d !== 0 ? d : a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
-            });
-        setHtml(body, lista.map(({ info, st }) => {
-            const clave = info.clave;
-            const sel = APP.seleccion.has(info.eco) || APP.seleccion.has(info.placa);
-            const sil = APP.dismissed.has(clave);
-            const vig = isWatched(info);
-            const zona = zoneAt(st.lat, st.lon);
-            const clase = st.estado === 'offline' ? 'off' : (st.estado === 'detenida' ? 'det' : 'on');
-            const ic = st.estado === 'offline' ? UIS.offline : (st.estado === 'detenida' ? UIS.stopped : UIS.moving);
-            const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
-            const coords = (APP.config.mostrarCoords && st.lat != null)
-                ? st.lat.toFixed(3) + ', ' + st.lon.toFixed(3) : '';
-            const lim = limiteDe(info);
-            const excede = st.online && st.vel > lim;
-            const velTitle = (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h');
-            const odo = odometroDe(info);
-            const km = odo ? Math.round(odo.m / 100) / 10 : 0;
-            // Estado de ruta con progreso y ETA cuando aplica.
-            const er = estadoRuta(info, st);
-            let rutaHtml = '<span class="rondo-pill ' + rutaClasePill(er.estado) + '">' + esc(er.estado) + '</span>';
-            if (er.snap) {
-                const pct = Math.round(er.snap.progreso * 100);
-                const etaSeg = calcularETA(er.snap, er.ruta, st.vel);
-                const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min' : '-';
-                rutaHtml += '<div class="u-ruta-bar"><div class="u-ruta-fill" style="width:' + pct + '%"></div></div>' +
-                    '<span class="u-ruta-meta">' + pct + '% · ' + etaTxt + '</span>';
-            } else if (watchDest(info)) {
-                rutaHtml += '<span class="u-ruta-meta">trazando...</span>';
+                if (d !== 0) return d;
             }
-            // Sub-linea de metadatos: ultimo reporte, zona, odometro, coords.
-            const metas = [];
-            metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.clock + '</span>' + esc(ageText(st.edadMin)) + '</span>');
-            if (zona) metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.zone + '</span>' + esc(zona) + '</span>');
-            if (coords) metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.info + '</span>' + coords + '</span>');
-            metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.pin + '</span>' + km.toFixed(1) + ' km</span>');
-            return (
-                '<div class="rondo-uni-card fila ' + clase + (sel ? ' sel-row' : '') + '" data-eco="' + esc(info.eco) + '">' +
-                '<label class="u-check" title="Seleccionar la unidad">' +
-                '<input type="checkbox" class="rondo-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
-                '</label>' +
-                '<div class="u-body">' +
-                '<div class="u-head">' +
-                '<span class="u-eco">' + (vig ? '<span class="rondo-usym" title="En lista vigilada">' + UIS.watch + '</span>' : '') + esc(info.eco || '-') + '</span>' +
-                '<span class="u-placa">' + esc(info.placa || '') + '</span>' +
-                '<span class="rondo-pill ' + clase + '"><span class="rondo-usym">' + ic + '</span>' + txt + '</span>' +
-                '<span class="u-vel' + (excede ? ' excede' : '') + '" title="' + velTitle + '">' + Math.round(st.vel) +
-                (lim !== APP.config.velMax ? '<small>/' + lim + '</small>' : '') + '<em>km/h</em></span>' +
-                '<button class="mini u-sil rondo-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar avisos' : 'Silenciar unidad') + '">' +
-                '<span class="rondo-usym">' + (sil ? UIS.mute : UIS.alertas) + '</span></button>' +
-                '</div>' +
-                '<div class="u-meta">' + metas.join('') + '</div>' +
-                '<div class="u-ruta">' + rutaHtml + '</div>' +
-                '</div>' +
-                '</div>'
-            );
-        }).join('') || '<div class="rondo-uni-empty">' + emptyState(UIS.panel, LANG.sinUni,
-            'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
-            '<button class="mini rondo-vacio-acc" data-acc="abrir-lista"><span class="rondo-usym">' + UIS.gear + '</span> Abrir lista de unidades</button>') + '</div>');
+            return a.info.eco.localeCompare(b.info.eco, undefined, { numeric: true });
+        });
+        if (!lista.length) {
+            body._rondoCards = new Map();
+            invalidarHtml(body.id);
+            const vacio = emptyState(UIS.panel, LANG.sinUni,
+                'Activa <b>Monitorear todas</b> en Ajustes, o abre la lista y agrega tus economicos.',
+                '<button class="mini rondo-vacio-acc" data-acc="abrir-lista"><span class="rondo-usym">' + UIS.gear + '</span> Abrir lista de unidades</button>');
+            body.innerHTML = '<div class="rondo-uni-empty">' + vacio + '</div>';
+        } else {
+            const cards = lista.map(({ info, st, zona }) => {
+                const clave = info.clave;
+                const sel = APP.seleccion.has(info.eco) || APP.seleccion.has(info.placa);
+                const sil = APP.dismissed.has(clave);
+                const vig = isWatched(info);
+                const clase = st.estado === 'offline' ? 'off' : (st.estado === 'detenida' ? 'det' : 'on');
+                const ic = st.estado === 'offline' ? UIS.offline : (st.estado === 'detenida' ? UIS.stopped : UIS.moving);
+                const txt = st.estado === 'offline' ? 'sin señal' : (st.estado === 'detenida' ? 'detenida' : 'moviendo');
+                const coords = (APP.config.mostrarCoords && st.lat != null)
+                    ? st.lat.toFixed(3) + ', ' + st.lon.toFixed(3) : '';
+                const lim = limiteDe(info);
+                const excede = st.online && st.vel > lim;
+                const velTitle = (lim !== APP.config.velMax ? 'límite de la unidad: ' + lim + ' km/h' : 'límite global: ' + lim + ' km/h');
+                const odo = odometroDe(info);
+                const km = odo ? Math.round(odo.m / 100) / 10 : 0;
+                // Estado de ruta con progreso y ETA (velocidad suavizada).
+                const er = estadoRuta(info, st);
+                let rutaHtml = '<span class="rondo-pill ' + rutaClasePill(er.estado) + '">' + esc(er.estado) + '</span>';
+                if (er.snap) {
+                    const pct = Math.round(er.snap.progreso * 100);
+                    const etaSeg = calcularETA(er.snap, er.ruta, velSuavizada(info, st));
+                    const etaTxt = etaSeg != null ? Math.round(etaSeg / 60) + ' min' : '-';
+                    rutaHtml += '<div class="u-ruta-bar"><div class="u-ruta-fill" style="width:' + pct + '%"></div></div>' +
+                        '<span class="u-ruta-meta">' + pct + '% · ' + etaTxt + '</span>';
+                } else if (watchDest(info)) {
+                    rutaHtml += '<span class="u-ruta-meta">trazando...</span>';
+                }
+                // Sub-linea de metadatos: ultimo reporte, zona, odometro, coords.
+                const metas = [];
+                metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.clock + '</span>' + esc(ageText(st.edadMin)) + '</span>');
+                if (zona) metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.zone + '</span>' + esc(zona) + '</span>');
+                if (coords) metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.info + '</span>' + coords + '</span>');
+                metas.push('<span class="u-tag"><span class="rondo-usym">' + UIS.pin + '</span>' + km.toFixed(1) + ' km</span>');
+                const inner =
+                    '<label class="u-check" title="Seleccionar la unidad">' +
+                    '<input type="checkbox" class="rondo-sel" data-eco="' + esc(info.eco) + '" data-placa="' + esc(info.placa) + '"' + (sel ? ' checked' : '') + '>' +
+                    '</label>' +
+                    '<div class="u-body">' +
+                    '<div class="u-head">' +
+                    '<span class="u-eco">' + (vig ? '<span class="rondo-usym" title="En lista vigilada">' + UIS.watch + '</span>' : '') + esc(info.eco || '-') + '</span>' +
+                    '<span class="u-placa">' + esc(info.placa || '') + '</span>' +
+                    '<span class="rondo-pill ' + clase + '"><span class="rondo-usym">' + ic + '</span>' + txt + '</span>' +
+                    '<span class="u-vel' + (excede ? ' excede' : '') + '" title="' + velTitle + '">' + Math.round(st.vel) +
+                    (lim !== APP.config.velMax ? '<small>/' + lim + '</small>' : '') + '<em>km/h</em></span>' +
+                    '<span class="u-quick">' +
+                    '<button class="mini u-open" data-eco="' + esc(info.eco) + '" title="Abrir ventana de la unidad"><span class="rondo-usym">' + UIS.panel + '</span></button>' +
+                    '<button class="mini u-route" data-eco="' + esc(info.eco) + '" title="Paradas y ruta"><span class="rondo-usym">' + UIS.route + '</span></button>' +
+                    '<button class="mini u-map" data-eco="' + esc(info.eco) + '" title="Ver en OpenStreetMap"><span class="rondo-usym">' + UIS.pin + '</span></button>' +
+                    '<button class="mini u-watch' + (vig ? ' on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (vig ? 'Quitar de la lista vigilada' : 'Anadir a la lista vigilada') + '"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
+                    '<button class="mini u-sil rondo-sil ' + (sil ? 'on' : '') + '" data-eco="' + esc(info.eco) + '" title="' + (sil ? 'Reactivar avisos' : 'Silenciar unidad') + '">' +
+                    '<span class="rondo-usym">' + (sil ? UIS.mute : UIS.alertas) + '</span></button>' +
+                    '</span>' +
+                    '</div>' +
+                    '<div class="u-meta">' + metas.join('') + '</div>' +
+                    '<div class="u-ruta">' + rutaHtml + '</div>' +
+                    '</div>';
+                return { eco: info.eco, clase: 'rondo-uni-card fila ' + clase + (sel ? ' sel-row' : ''), inner: inner };
+            });
+            renderCards(body, cards);
+        }
         const aviso = byId('rondo-sel-vacio');
         if (aviso) {
             const noHaySel = (!APP.config.watchAll && APP.seleccion.size === 0 && lista.length > 0);
@@ -9614,43 +9709,76 @@ ta.value = '';
         if (esZonaCarga(n)) return 'carga';
         return 'normal';
     }
+    function _zonaPuntos(z) {
+        let p = z && z.p;
+        if (typeof p === 'string') { try { p = JSON.parse(p); } catch (_) { p = null; } }
+        return Array.isArray(p) ? p : null;
+    }
+    function _zonaRadio(z) {
+        const r = (z && (z.w != null ? z.w : z.r));
+        const n = +r;
+        return Number.isFinite(n) && n > 0 ? n : 0;
+    }
+    function _zonaEsCirculo(z, pts) {
+        if (!z) return false;
+        if (z.t === 3) return true;
+        const minimoPts = (z.t === 1) ? 2 : 3;
+        if (Array.isArray(pts) && pts.length >= minimoPts) return false;
+        const b = z.b;
+        return !!(b && b.cen_x != null && b.cen_y != null && _zonaRadio(z) > 0);
+    }
     function zonaAreaM2(z) {
         if (!z) return 0;
+        const pts = _zonaPuntos(z);
         const c = centroDeZona(z) || { lat: 0, lon: 0 };
         const mx = 111320 * Math.cos(rad(c.lat)), my = 110540;
-        if (z.t === 3 || (z.b && z.b.cen_x != null)) {
-            const r = +(z.w || z.r || 0);
+        if (_zonaEsCirculo(z, pts)) {
+            const r = _zonaRadio(z);
             return Math.PI * r * r;
         }
         const xy = (a) => {
             const la = (a && a.y != null) ? +a.y : (Array.isArray(a) ? +a[1] : null);
             const lo = (a && a.x != null) ? +a.x : (Array.isArray(a) ? +a[0] : null);
-            return (la == null || lo == null) ? null : [lo * mx, la * my];
+            return (la == null || lo == null || isNaN(la) || isNaN(lo)) ? null : [lo * mx, la * my];
         };
-        let pts = z.p;
-        if (typeof pts === 'string') { try { pts = JSON.parse(pts); } catch (_) { pts = null; } }
-        if (Array.isArray(pts) && pts.length >= 3) {
-            let a2 = 0;
-            let prev = xy(pts[pts.length - 1]);
-            for (let i = 0; i < pts.length; i++) {
-                const cur = xy(pts[i]);
-                if (!cur || !prev) { prev = cur; continue; }
-                a2 += prev[0] * cur[1] - cur[0] * prev[1];
-                prev = cur;
+        if (Array.isArray(pts) && pts.length >= 2) {
+            // Linea (t=1) o polilinea de 2 puntos: longitud x ancho.
+            if (z.t === 1 || (z.t !== 2 && pts.length === 2)) {
+                let len = 0;
+                for (let i = 1; i < pts.length; i++) {
+                    const a = xy(pts[i - 1]), b2 = xy(pts[i]);
+                    if (!a || !b2) continue;
+                    len += Math.hypot(b2[0] - a[0], b2[1] - a[1]);
+                }
+                let ancho = _zonaRadio(z);
+                if (!ancho) {
+                    ancho = pts.reduce((m, a) => Math.max(m, +(a && a.r) || 0), 0);
+                }
+                return len * ancho * 2; // el radio/medio-ancho se cuenta a ambos lados
             }
-            return Math.abs(a2 / 2);
+            // Poligono: formula del area (shoelace) en metros.
+            if (pts.length >= 3) {
+                let a2 = 0;
+                let prev = xy(pts[pts.length - 1]);
+                for (let i = 0; i < pts.length; i++) {
+                    const cur = xy(pts[i]);
+                    if (!cur || !prev) { prev = cur; continue; }
+                    a2 += prev[0] * cur[1] - cur[0] * prev[1];
+                    prev = cur;
+                }
+                return Math.abs(a2 / 2);
+            }
         }
-        if (z.b && z.b.min_x != null) {
+        if (z.b && z.b.min_x != null && z.b.max_x != null && z.b.min_y != null && z.b.max_y != null) {
             const w = (z.b.max_x - z.b.min_x) * mx, h = (z.b.max_y - z.b.min_y) * my;
             return Math.abs(w * h);
         }
         return 0;
     }
     function zonaGeometry(z) {
+        const pts = _zonaPuntos(z);
         const c = centroDeZona(z);
-        if ((z.t === 3 || (z.b && z.b.cen_x != null)) && c) return { type: 'Point', coordinates: [c.lon, c.lat] };
-        let pts = z.p;
-        if (typeof pts === 'string') { try { pts = JSON.parse(pts); } catch (_) { pts = null; } }
+        if (_zonaEsCirculo(z, pts)) return c ? { type: 'Point', coordinates: [c.lon, c.lat] } : null;
         if (Array.isArray(pts) && pts.length >= 3) {
             const ring = pts.map((a) => {
                 const la = (a && a.y != null) ? +a.y : +a[1];
@@ -9658,6 +9786,13 @@ ta.value = '';
                 return [lo, la];
             });
             if (ring.length && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1])) ring.push(ring[0]);
+            return { type: 'Polygon', coordinates: [ring] };
+        }
+        if (z.b && z.b.min_x != null && z.b.max_x != null && z.b.min_y != null && z.b.max_y != null) {
+            const ring = [
+                [z.b.min_x, z.b.min_y], [z.b.max_x, z.b.min_y], [z.b.max_x, z.b.max_y],
+                [z.b.min_x, z.b.max_y], [z.b.min_x, z.b.min_y]
+            ];
             return { type: 'Polygon', coordinates: [ring] };
         }
         return c ? { type: 'Point', coordinates: [c.lon, c.lat] } : null;
@@ -10934,15 +11069,34 @@ ta.value = '';
     }
 
     /* ====================== MENU CONTEXTUAL ====================== */
-    function showMenu(x, y, options) {
+    function showMenu(x, y, options, anchor) {
         ctxEl.innerHTML = options.map((o) =>
             o.sep ? '<div class="sep"></div>' : '<div class="op" data-acc="' + esc(o.id) + '">' + (o.icon ? '<span class="rondo-usym">' + o.icon + '</span> ' : '') + esc(o.label) + '</div>'
         ).join('');
         ctxEl.style.display = 'flex';
-        ctxEl.style.left = '0px'; ctxEl.style.top = '0px';
+        // La regla base de #rondo-contexto lo centra con translate(-50%,-50%);
+        // hay que anularla o el menu aparece descuadrado y se sale.
+        ctxEl.style.transform = 'none';
+        ctxEl.style.left = '0px';
+        ctxEl.style.top = '0px';
         const r = ctxEl.getBoundingClientRect();
-        ctxEl.style.left = Math.min(x, window.innerWidth - r.width - 6) + 'px';
-        ctxEl.style.top = Math.min(y, window.innerHeight - r.height - 6) + 'px';
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const m = 8;
+        let left, top;
+        if (anchor && anchor.getBoundingClientRect) {
+            const a = anchor.getBoundingClientRect();
+            // Despliega a la derecha de la tarjeta; si no cabe, a la izquierda.
+            left = a.right + 6;
+            if (left + r.width > vw - m) left = a.left - r.width - 6;
+            top = a.top;
+            if (top + r.height > vh - m) top = a.bottom - r.height;
+        } else {
+            left = x; top = y;
+        }
+        left = clamp(left, m, Math.max(m, vw - r.width - m));
+        top = clamp(top, m, Math.max(m, vh - r.height - m));
+        ctxEl.style.left = left + 'px';
+        ctxEl.style.top = top + 'px';
         ctxEl._options = options;
     }
     function hideMenu() { ctxEl.style.display = 'none'; ctxEl._target = null; }
@@ -11351,9 +11505,20 @@ ta.value = '';
             if (!card) return;
             const eco = card.dataset.eco;
             if (!eco) return;
-            if (e.target.classList && e.target.classList.contains('rondo-sil')) {
+            const btn = e.target.closest('button');
+            const cl = btn ? btn.classList : null;
+            if (cl && cl.contains('rondo-sil')) {
                 if (APP.dismissed.has(eco)) APP.dismissed.delete(eco); else APP.dismissed.add(eco);
                 writeSession(SS.dismissed, Array.from(APP.dismissed));
+                paintTabla();
+                return;
+            }
+            if (cl && cl.contains('u-open')) { openUnitWindow(eco); return; }
+            if (cl && cl.contains('u-route')) { abrirEditorParadas(eco); return; }
+            if (cl && cl.contains('u-map')) { openMap(eco, 'osm'); return; }
+            if (cl && cl.contains('u-watch')) {
+                if (APP.watchMap[eco] !== undefined) { quitarDeLista(eco); adviceOk('Quitada de la lista', eco); }
+                else { agregarALista(eco, ''); adviceOk('Anadida a la lista', eco); }
                 paintTabla();
                 return;
             }
@@ -11391,7 +11556,7 @@ ta.value = '';
                 { id: 'copy-eco', icon: UIS.copy, label: 'Copiar economico' },
                 { id: 'copy-placa', icon: UIS.copy, label: 'Copiar placa' },
                 { id: 'copy-coords', icon: UIS.copy, label: 'Copiar coordenadas' }
-            ]);
+            ], card);
             ctxEl._target = { eco };
         });
         ctxEl.addEventListener('click', (e) => {
