@@ -3990,6 +3990,7 @@ ta.value = '';
      * y elegir entre recorrido secuencial o "mejor ruta".
      */
     let _planEdit = null;
+    let _rpmOsmTimer = null;
     function planModalEl() {
         let el = byId('rondo-plan-modal');
         if (el) return el;
@@ -4108,27 +4109,43 @@ ta.value = '';
         const pintarSug = () => {
             const q = buscar.value.trim();
             if (!q) { sug.classList.remove('abierto'); sug.innerHTML = ''; return; }
-            const items = catalogoParadas(q, 8);
-            const icoTipo = (t) => (t === 'geocerca') ? UIS.zone : (t === 'municipio' ? UIS.map : UIS.pin);
-            let html = items.map((cand, k) =>
-                '<div class="rpm-sug-item" data-k="' + k + '"><span class="rondo-usym">' + icoTipo(cand.tipo) + '</span>' +
-                '<span class="k">' + esc(cand.tipo) + '</span>' +
-                '<span class="t">' + esc(cand.texto || '') + (cand.sub ? ' <span class="k">' + esc(cand.sub) + '</span>' : '') + '</span></div>'
-            ).join('');
-            html += '<div class="rpm-sug-item" data-libre="1"><span class="rondo-usym">' + UIS.pin + '</span><span class="k">lugar</span><span class="t">Buscar "' + esc(q) + '" en OpenStreetMap</span></div>';
-            sug.innerHTML = html;
-            sug.classList.add('abierto');
-            sug.querySelectorAll('.rpm-sug-item').forEach((n) => {
-                n.onclick = () => {
-                    if (n.dataset.libre) agregarParadaEditor('lugar', q, null);
-                    else {
-                        const cand = items[+n.dataset.k];
-                        agregarParadaEditor(cand.tipo, cand.texto, cand.coords || null, cand);
-                    }
-                    buscar.value = '';
-                    sug.classList.remove('abierto');
-                };
-            });
+            const icoTipo = (t) => (t === 'geocerca') ? UIS.zone : ((t === 'municipio' || t === 'ciudad') ? UIS.map : UIS.pin);
+            let actuales = [];
+            const render = (items) => {
+                actuales = items;
+                let html = items.map((cand, k) =>
+                    '<div class="rpm-sug-item" data-k="' + k + '"><span class="rondo-usym">' + icoTipo(cand.tipo) + '</span>' +
+                    '<span class="k">' + esc(cand.tipo) + '</span>' +
+                    '<span class="t">' + esc(cand.texto || '') + (cand.sub ? ' <span class="k">' + esc(cand.sub) + '</span>' : '') + '</span></div>'
+                ).join('');
+                html += '<div class="rpm-sug-item" data-libre="1"><span class="rondo-usym">' + UIS.pin + '</span><span class="k">lugar</span><span class="t">Buscar "' + esc(q) + '" en OpenStreetMap</span></div>';
+                sug.innerHTML = html;
+                sug.classList.add('abierto');
+                sug.querySelectorAll('.rpm-sug-item').forEach((n) => {
+                    n.onclick = () => {
+                        if (n.dataset.libre) agregarParadaEditor('lugar', q, null);
+                        else {
+                            const cand = actuales[+n.dataset.k];
+                            const tipo = cand.tipo === 'ciudad' ? 'municipio' : cand.tipo;
+                            agregarParadaEditor(tipo, cand.texto, cand.coords || null, cand);
+                        }
+                        buscar.value = '';
+                        sug.classList.remove('abierto');
+                    };
+                });
+            };
+            const locales = catalogoParadas(q, 8);
+            render(locales);
+            // Ampliacion en linea: municipios/ciudades/direcciones de OSM.
+            if (_rpmOsmTimer) clearTimeout(_rpmOsmTimer);
+            _rpmOsmTimer = setTimeout(async () => {
+                if (buscar.value.trim() !== q) return;
+                const osm = await sugerenciasOSM(q);
+                if (!osm.length || buscar.value.trim() !== q) return;
+                const vistos = new Set(locales.map((x) => norm(x.texto)));
+                const extra = osm.filter((x) => !vistos.has(norm(x.texto)));
+                if (extra.length) render(locales.concat(extra));
+            }, 450);
         };
         buscar.oninput = pintarSug;
         buscar.onfocus = pintarSug;
