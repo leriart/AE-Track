@@ -1819,10 +1819,29 @@ ta.value = '';
         if (APP.cooldowns[ck] && ahora - APP.cooldowns[ck] < APP.config.cooldownMin * 60000) return;
         APP.cooldowns[ck] = ahora;
 
+        // v6.11: guarda la posicion de la unidad en el momento de la alerta
+        // (la mayoria de los reportes necesitan fecha/hora y coordenadas por
+        // dato). Si la regla ya trae lat/lon se usan; si no, se toma el
+        // estado actual de la unidad del mismo ciclo de refresco.
+        let aLat = (alert.lat != null && isFinite(+alert.lat)) ? +alert.lat : null;
+        let aLon = (alert.lon != null && isFinite(+alert.lon)) ? +alert.lon : null;
+        if ((aLat == null || aLon == null) && alert.eco) {
+            try {
+                const u = (APP.unidades || []).find((x) => {
+                    try { const i = parseUnitName(x); return i.eco === alert.eco || i.clave === alert.clave; } catch (_) { return false; }
+                });
+                if (u) {
+                    const st = unitState(u);
+                    if (aLat == null) aLat = (st.lat != null && isFinite(+st.lat)) ? +st.lat : null;
+                    if (aLon == null) aLon = (st.lon != null && isFinite(+st.lon)) ? +st.lon : null;
+                }
+            } catch (_) { /* noop */ }
+        }
         const item = {
             regla: alert.regla, sev: alert.sev,
             titulo: alert.titulo, detalle: alert.detalle || '',
             eco: alert.eco || '', clave: alert.clave, ts: ahora,
+            lat: aLat, lon: aLon,
             // Se guarda la CLAVE del icono (no el SVG) para no inflar el
             // sessionStorage. Se resuelve al pintar con UIS[...].
             icono: alert.icono || alert.sev || 'info'

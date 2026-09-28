@@ -910,15 +910,28 @@ te pedirá confirmación.
 
 ## Informes, respaldos y CSV
 
-- **CSV** (Unidades): descarga la lista de unidades con estado, velocidad y zona.
-- **Avisos CSV**: descarga el historial de avisos.
-- **Reporte PDF**: genera un **reporte operativo completo** (resumen ejecutivo,
-  KPIs, unidades, avisos del dia, rutas activas, unidades sin senal, geocercas y
-  zonas de riesgo) y abre el dialogo de impresion del navegador; elige
-  **Guardar como PDF**. Esta paginado en A4, con encabezados de tabla que se
-  repiten y sin emojis.
+- **CSV** (Unidades): descarga la lista de unidades con estado, velocidad, zona,
+  la **fecha y hora del ultimo reporte** y las **coordenadas** (lat, lon).
+- **Avisos CSV**: descarga el historial de avisos con **fecha y hora completas**
+  y las **coordenadas** de cada aviso.
+- **Reporte PDF**: genera un **reporte operativo completo** y abre el dialogo de
+  impresion del navegador; elige **Guardar como PDF**. Incluye portada, indice,
+  KPIs, resumen ejecutivo, y tablas de: **unidades** (con fecha/hora del ultimo
+  reporte, ID y coordenadas), **avisos del dia** (fecha/hora por aviso y
+  coordenadas), **rutas activas**, **unidades sin senal** (con coordenadas),
+  **geocercas** (tipo, area, centro y unidades dentro) y **zonas de riesgo**
+  (con coordenadas). Cada dato lleva **fecha, hora y coordenadas** cuando se
+  conocen. Esta paginado en A4, con encabezados de tabla que se repiten y sin
+  emojis.
 - **Informe (Markdown)**: el icono junto a Reporte PDF descarga el informe del
-  dia en texto Markdown (alertas por severidad, por regla, etc.).
+  dia en texto Markdown: resumen IA (opcional), alertas por severidad y por
+  regla, unidades con mas alertas, una **tabla de unidades** (con fecha/hora y
+  coordenadas), las **unidades sin senal** (con coordenadas) y los **ultimos
+  avisos** con fecha/hora y coordenadas.
+- **Reporte PDF del recorrido** (pestana Replay): ademas del mapa, las paradas y
+  los eventos, incluye una seccion **Puntos del recorrido** con fecha, hora,
+  coordenadas, velocidad, rumbo y km acumulado de cada punto (muestreado). Ver
+  [Reproducir el recorrido](#reproducir-el-recorrido-replay).
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y
   prueba; descarga un JSON con toda tu configuracion, listas, limites y rutas.
 - **Importar** configuracion: en la misma seccion; restaura ese JSON.
