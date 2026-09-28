@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.6.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.6.0.md)
-[![tests](https://img.shields.io/badge/tests-1108%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1161%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -127,14 +127,21 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **8 pestañas** con los mismos iconos que la plataforma AE-Track
   (Ant Design, SVG inline, sin fuente externa).
 - **Lista vigilada** editable desde el menu unificado **Unidades y rutas**
-  (agregar, pegar, destinos/rutas multipunto, orden de ventanas), con
-  **perfiles de configuracion**, **filtros**, **exportacion a
-  CSV/Markdown/GeoJSON** y **respaldo JSON**.
+  (agregar, pegar, destinos/rutas multipunto, orden de ventanas, **buscador de
+  la lista** por eco/placa/destino), con **perfiles de configuracion**,
+  **filtros**, **exportacion a CSV/Markdown/GeoJSON** y **respaldo JSON**.
 - **Dialogos y confirmaciones** coherentes con el estilo del panel, y
   **estado vacio util** con pista y accion en cada pestana.
 - **Ajustes con buscador**: filtra las opciones de todas las secciones a la
   vez, recuerda la ultima que usaste y permite **Restaurar** los valores por
   defecto sin borrar datos. El panel tambien recuerda su ultima pestaña.
+- **Coherencia visual opcional**: Rondo detecta el skin de la plataforma y puede
+  heredar su **color de acento** (Ajustes > Visual) para integrarse con la
+  pagina, **reestilizar la plataforma** con su propia paleta (experimental, usando
+  las variables CSS del skin y reversible) y **usar el idioma del sitio** para la
+  voz. El panel de Diagnostico muestra el sitio, la skin, la API y el idioma
+  detectados. Si la plataforma esta en la pantalla de login, Rondo lo avisa en
+  lugar de decir que falta la API.
 - **Atajos de teclado** para abrir/cerrar el panel y cambiar de pestana.
 - **Test de voz** en Ajustes > Avisos: boton Probar / Detener que
   reproduce una frase editable con el motor (Web, StreamElements,
@@ -267,7 +274,7 @@ con `Alt+L`.
 
 | Pestana | Para que sirve |
 | --- | --- |
-| **Dashboard** | Resumen compacto para la barra lateral: cabecera con velocidad promedio, 6 KPIs en cuadricula 3x2 (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy) clicables para filtrar Unidades, distribucion de la flota con leyenda, "Requieren atencion" y avisos recientes. |
+| **Dashboard** | Resumen general de la flota: cabecera con velocidad promedio y **accesos rapidos** (Unidades, Avisos, Rutas, Zonas), **9 KPIs** en cuadricula 3x3 (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy, en ruta, exceso, silenciadas) clicables, distribucion de la flota con leyenda, **tendencia** de unidades en linea/sin senal, "Requieren atencion", **ranking de unidades con mas avisos hoy** y avisos recientes. |
 | **Unidades** | Lista de **tarjetas** (sin desbordes ni parpadeo) con estado, velocidad, ultimo reporte, geocerca, odometro y **estado de ruta** con barra de progreso y ETA. Cada tarjeta tiene **botones rapidos** (abrir, paradas/ruta, mapa, vigilar, silenciar). Barra **Ordenar** por estado, eco, placa, velocidad, zona, odometro o ruta, con boton para invertir la direccion. Clic en una tarjeta abre su ventana. |
 | **Avisos** | Historial de alertas con filtro por severidad y exportable a CSV o Markdown. |
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
@@ -369,7 +376,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**16 suites, ~1108 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**17 suites, ~1161 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

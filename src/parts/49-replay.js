@@ -519,7 +519,19 @@
         const sl = byId('rondo-replay-slider');
         if (sl) sl.value = r.idx;
         const pb = byId('rondo-replay-play');
-        if (pb) pb.textContent = r.playing ? 'Pausa' : 'Play';
+        if (pb) {
+            // El boton lleva icono + texto: actualizamos solo el texto para no
+            // borrar el icono, y marcamos el estado de reproduccion.
+            const txt = pb.querySelector('.rrc-play-txt');
+            if (txt) txt.textContent = r.playing ? 'Pausa' : 'Play';
+            else pb.textContent = r.playing ? 'Pausa' : 'Play';
+            pb.classList.toggle('activo', !!r.playing);
+        }
+        const tl = byId('rondo-replay-tiempo');
+        if (tl) {
+            const finM = r.msgs[r.msgs.length - 1];
+            tl.textContent = rxReplayHHMM(m.t) + ' / ' + rxReplayHHMM(finM ? finM.t : m.t);
+        }
         if (r.mapa) {
             r.mapa.setPos(m.lat, m.lon);
             rxReplayMarcarViajado();
@@ -545,7 +557,7 @@
         if (r) rxReplayMapaCrear();
         else {
             const cont = byId('rondo-replay-mapa');
-            if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
+            if (cont) cont.innerHTML = '<div class="rondo-replay-vacio"><span class="rondo-usym rv-ico">' + UIS.map + '</span><span>Carga un recorrido para verlo en el mapa</span></div>';
         }
         const sl = byId('rondo-replay-slider');
         if (sl && r) { sl.min = 0; sl.max = Math.max(0, r.msgs.length - 1); sl.value = r.idx; }
@@ -672,7 +684,7 @@
         if (r && r.mapa) { try { r.mapa.destruir(); } catch (_) { /* noop */ } }
         RX_REPLAY = null;
         const cont = byId('rondo-replay-mapa');
-        if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
+        if (cont) cont.innerHTML = '<div class="rondo-replay-vacio"><span class="rondo-usym rv-ico">' + UIS.map + '</span><span>Carga un recorrido para verlo en el mapa</span></div>';
         const chart = byId('rondo-replay-chart');
         if (chart) chart.innerHTML = '<div class="rondo-replay-vacio">Perfil de velocidad</div>';
         const info = byId('rondo-replay-info');

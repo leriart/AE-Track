@@ -103,8 +103,15 @@
             '<div class="tabla" id="rondo-wrap-dash">' +
             '<div id="rondo-dash">' +
             '<div class="rondo-dash-head">' +
-            '<b>Centro de monitoreo</b>' +
+            '<b>Resumen general de la flota</b>' +
             '<span class="rondo-dash-vel" id="rondo-dash-vel"></span>' +
+            '</div>' +
+            // v6.0.13: accesos rapidos a las secciones relacionadas.
+            '<div class="rondo-dash-nav">' +
+            '<button class="rondo-dash-go" data-go="unidades" title="Ir a la lista de unidades"><span class="rondo-usym">' + UIS.panel + '</span> Unidades</button>' +
+            '<button class="rondo-dash-go" data-go="alertas" title="Ir al historial de avisos"><span class="rondo-usym">' + UIS.alertas + '</span> Avisos</button>' +
+            '<button class="rondo-dash-go" data-go="rutas" title="Ir a las rutas planificadas"><span class="rondo-usym">' + UIS.route + '</span> Rutas</button>' +
+            '<button class="rondo-dash-go" data-go="zonas" title="Ir a geocercas y zonas de riesgo"><span class="rondo-usym">' + UIS.map + '</span> Zonas</button>' +
             '</div>' +
             '<div class="rondo-dash-block rondo-salud" id="rondo-salud">' +
             '<div class="rondo-salud-top">' +
@@ -122,6 +129,11 @@
             '</div>' +
             '<div class="rondo-dash-dist-legend" id="rondo-dist-legend"></div>' +
             '</div>' +
+            // v6.0.13: tendencia de la flota (en linea / sin senal) en el tiempo.
+            '<div class="rondo-dash-block rondo-dash-trend">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.online + '</span> Tendencia (en linea / sin senal)</div>' +
+            '<svg class="sparkline" id="rondo-spark" viewBox="0 0 200 32" preserveAspectRatio="none" role="img" aria-label="Tendencia de unidades en linea y sin senal"></svg>' +
+            '</div>' +
             '<div class="rondo-dash-kpis">' +
             '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.online + '</span><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
             '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo ultimo reporte supero el umbral · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.offline + '</span><span class="kpi-etq">Sin senal</span><span class="kpi-val" id="rondo-kpi-off">0</span><span class="kpi-pct" id="rondo-kpi-off-pct"></span></div>' +
@@ -129,6 +141,9 @@
             '<div class="kpi sub" data-kpi="moviendo" title="Unidades en linea con velocidad normal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.moving + '</span><span class="kpi-etq">En mov.</span><span class="kpi-val" id="rondo-kpi-mov">0</span></div>' +
             '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.map + '</span><span class="kpi-etq">En zonas</span><span class="kpi-val" id="rondo-kpi-zonas">0</span><span class="kpi-pct" id="rondo-kpi-zonas-pct"></span></div>' +
             '<div class="kpi" data-kpi="alertas" title="Avisos desde la medianoche · clic para verlos"><span class="kpi-ico rondo-usym">' + UIS.alertas + '</span><span class="kpi-etq">Avisos hoy</span><span class="kpi-val" id="rondo-kpi-aho">0</span><span class="kpi-pct" id="rondo-kpi-criticos"></span></div>' +
+            '<div class="kpi sub" data-kpi="ruta" title="Unidades con ruta activa en curso · clic para ver las rutas"><span class="kpi-ico rondo-usym">' + UIS.route + '</span><span class="kpi-etq">En ruta</span><span class="kpi-val" id="rondo-kpi-ruta">0</span><span class="kpi-pct" id="rondo-kpi-ruta-pct"></span></div>' +
+            '<div class="kpi warn" data-kpi="exceso" title="Unidades en linea por encima de su limite de velocidad · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.speed + '</span><span class="kpi-etq">Exceso</span><span class="kpi-val" id="rondo-kpi-exc">0</span><span class="kpi-pct" id="rondo-kpi-exc-pct"></span></div>' +
+            '<div class="kpi sub" data-kpi="silenciadas" title="Unidades vigiladas silenciadas (no generan avisos)"><span class="kpi-ico rondo-usym">' + UIS.mute + '</span><span class="kpi-etq">Silenciadas</span><span class="kpi-val" id="rondo-kpi-sil">0</span></div>' +
             '</div>' +
             '<div class="rondo-dash-block">' +
             '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.warn + '</span> Requieren atencion<span class="rondo-dash-chip" id="rondo-atencion-n">0</span></div>' +
@@ -145,6 +160,11 @@
             '<div class="rondo-dash-block">' +
             '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.alertas + '</span> Avisos recientes</div>' +
             '<div id="rondo-kpi-recientes" class="rondo-dash-list"></div>' +
+            '</div>' +
+            // v6.0.13: ranking de unidades por avisos de hoy (clic -> filtra Avisos).
+            '<div class="rondo-dash-block">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.warn + '</span> Unidades con mas avisos hoy<span class="rondo-dash-chip" id="rondo-top-n">0</span></div>' +
+            '<div id="rondo-dash-top" class="rondo-dash-list"></div>' +
             '</div>' +
             '</div>' +
             '</div>' +
@@ -196,25 +216,30 @@
              '<div class="rondo-caravana-bar">' +
              '<label for="rondo-caravana-sel" style="font-size:11px;color:var(--rondo-fg-dim)">Unidad vigilada:</label>' +
              '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
+             '<span class="rondo-caravana-resumen" id="rondo-caravana-resumen"></span>' +
              '</div>' +
              '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
              '</div>' +
              // v6.0.11: tab de replay. Reproduce el recorrido de una unidad
              // entre una fecha/hora de inicio y una de fin (permite multidia).
+             // v6.0.12: tab de replay en tarjetas (consulta, mapa, reproduccion
+             // y listas) para que la jerarquia visual sea clara.
              '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
-             '<div class="rondo-replay-bar">' +
+             // 1) Consulta: unidad, rango (fecha/hora inicio y fin) y rangos rapidos.
+             '<div class="rondo-replay-card">' +
+             '<div class="rrc-head"><span class="rrc-title">Unidad y rango</span><span class="rrc-sub">Del inicio al fin</span></div>' +
              '<div class="rondo-replay-buscar">' +
              '<input type="text" id="rondo-replay-buscar" class="filtro" placeholder="Buscar unidad (eco, placa, nombre)..." autocomplete="off" spellcheck="false" title="Buscar la unidad a reproducir">' +
              '<input type="hidden" id="rondo-replay-eco">' +
              '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
              '</div>' +
+             '<div class="rrc-range">' +
+             '<label class="rrc-field"><span class="rrc-lbl">Desde</span>' +
              '<input type="date" id="rondo-replay-fecha" class="filtro" title="Fecha de inicio">' +
-             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora de inicio" value="00:00">' +
-             '<span class="rq-lbl">a</span>' +
-             '<input type="date" id="rondo-replay-fecha2" class="filtro" title="Fecha de fin (si se deja igual al inicio, es el mismo dia)">' +
-             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora de fin" value="23:59">' +
-             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
-             '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora de inicio" value="00:00"></label>' +
+             '<label class="rrc-field"><span class="rrc-lbl">Hasta</span>' +
+             '<input type="date" id="rondo-replay-fecha2" class="filtro" title="Fecha de fin (si es igual al inicio, es el mismo dia)">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora de fin" value="23:59"></label>' +
              '</div>' +
              '<div class="rondo-replay-quick">' +
              '<span class="rq-lbl">Rango:</span>' +
@@ -224,23 +249,40 @@
              '<button class="mini" data-rango="dia">Turno dia</button>' +
              '<button class="mini" data-rango="noche">Turno noche</button>' +
              '</div>' +
+             '<div class="rrc-actions">' +
+             '<button class="accbtn" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar recorrido</button>' +
+             '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '</div>' +
+             '</div>' +
+             // 2) Resumen (chips) y mapa, con leyenda y detalle del punto actual.
              '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
-             '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
+             '<div class="rondo-replay-card">' +
+             '<div class="rrc-head"><span class="rrc-title">Mapa del recorrido</span></div>' +
+             '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio"><span class="rondo-usym rv-ico">' + UIS.map + '</span><span>Carga un recorrido para verlo en el mapa</span></div></div>' +
+             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
+             '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
+             '</div>' +
+             // 3) Reproduccion: play, velocidad, progreso y perfil de velocidad.
+             '<div class="rondo-replay-card">' +
+             '<div class="rrc-head"><span class="rrc-title">Reproduccion</span><span class="rrc-time" id="rondo-replay-tiempo">--:-- / --:--</span></div>' +
              '<div class="rondo-replay-ctrl">' +
-             '<button class="mini" id="rondo-replay-play" title="Reproducir o pausar">Play</button>' +
+             '<button class="accbtn" id="rondo-replay-play" title="Reproducir o pausar"><span class="rondo-usym">' + UIS.moving + '</span> <span class="rrc-play-txt">Play</span></button>' +
+             '<label class="rrc-vel"><span class="rrc-lbl">Velocidad</span>' +
              '<select id="rondo-replay-vel" class="filtro" title="Velocidad de reproduccion">' +
              '<option value="60">1 min/s</option>' +
              '<option value="300" selected>5 min/s</option>' +
              '<option value="900">15 min/s</option>' +
              '<option value="3600">1 h/s</option>' +
-             '</select>' +
-             '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
+             '</select></label>' +
              '</div>' +
+             '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0">' +
              '<div class="rondo-replay-chart" id="rondo-replay-chart" title="Velocidad en el tiempo; clic para saltar"><div class="rondo-replay-vacio">Perfil de velocidad</div></div>' +
-             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
-             '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
+             '</div>' +
+             // 4) Paradas y eventos del recorrido.
+             '<div class="rondo-replay-card">' +
              '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
              '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
+             '</div>' +
              '<div class="rondo-replay-acciones">' +
              '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido (resumen, paradas y eventos)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
              '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
@@ -408,6 +450,7 @@
             '<button class="mini" id="rondo-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
             '</div>' +
             '<div class="rondo-modal-sec"><span class="rondo-usym sm">' + UIS.watch + '</span> Unidades en la lista<span class="rondo-count" id="rondo-modal-count">0</span></div>' +
+            '<input type="search" id="rondo-modal-buscar" class="rondo-modal-buscar" placeholder="Buscar unidad o destino en la lista..." autocomplete="off" spellcheck="false" title="Filtra la lista por eco, placa o destino">' +
             '<div id="rondo-modal-lista-wrap">' +
                 '<div id="rondo-modal-lista"></div>' +
             '</div>' +
@@ -563,11 +606,15 @@
             '<option value="1.5">Enorme (150%)</option>' +
             '</select></label>' +
             '<label>Color de acento <input type="color" id="c-acento"></label>' +
+            checkRow('c-tema-plat', 'Usar el color de acento de la plataforma') +
+            '<span id="rondo-plat-info" style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin:-2px 0 6px"></span>' +
+            checkRow('c-estilo-pag', 'Aplicar el estilo de Rondo a la pagina (experimental)') +
+            checkRow('c-idioma-plat', 'Usar el idioma de la plataforma para la voz') +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
             numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..7</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>?</b> ayuda · <b>Esc</b> cierra el dialogo superior</span>' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..8</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>?</b> ayuda · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Barra lateral</h4>' +
@@ -713,12 +760,13 @@
             '</div>' +
             '<h4>Que hace cada pestana</h4>' +
             '<ul>' +
-            '<li><b>Dashboard</b>: salud de la flota, 6 KPIs (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy), unidades que requieren atencion, zonas con unidades, rutas activas y avisos recientes. Todo en una sola pantalla.</li>' +
+            '<li><b>Dashboard</b>: resumen general de la flota. Cabecera con velocidad promedio, <b>accesos rapidos</b> (Unidades, Avisos, Rutas, Zonas) y <b>9 KPIs</b> (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy, en ruta, exceso, silenciadas) clicables. Incluye la salud de la flota, la barra de distribucion, la <b>tendencia</b> de unidades en linea/sin senal, "Requieren atencion", el <b>ranking de unidades con mas avisos hoy</b> y los avisos recientes.</li>' +
             '<li><b>Unidades</b>: lista de tarjetas con estado, velocidad, zona y acciones. Clic para abrir su ventana; clic derecho para mas opciones (ruta, geocerca, odometro, etc.).</li>' +
             '<li><b>Avisos</b>: historial filtrable por severidad (criticas, altas, medias, bajas). Exportable a CSV.</li>' +
             '<li><b>Rutas</b>: progreso de cada ruta trazada (OSRM o A*) con ETA. Se planea desde el clic derecho de una unidad.</li>' +
-            '<li><b>Zonas</b>: segmentado con dos vistas: <b>Geocercas</b> de la plataforma (unidades dentro) y <b>Zonas de riesgo</b> (dona, histograma, KPIs, filtros, export). Las alertas por zonas de riesgo se ven como la regla <i>riesgoSinSenal</i>.</li>' +
-            '<li><b>Caravana</b>: unidades (vigiladas o no) cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada.</li>' +
+            '<li><b>Zonas</b>: segmentado con dos vistas: <b>Geocercas</b> de la plataforma (unidades dentro) y <b>Zonas de riesgo</b> (dona, histograma, KPIs, filtros, export).</li>' +
+            '<li><b>Caravana</b>: unidades (vigiladas o no) cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania.</li>' +
+            '<li><b>Replay</b>: reproduce el recorrido de una unidad entre una <b>fecha/hora de inicio y una de fin</b> (permite multidia), con mini-mapa de OpenStreetMap, perfil de velocidad, resumen, <b>paradas</b> (con motor encendido/apagado) y eventos (geocercas, excesos, desvios). Exporta GeoJSON, CSV de paradas y un reporte PDF. Solo lectura.</li>' +
             '<li><b>Chat IA</b>: consultas libres a la IA (solo si la IA esta habilitada con API key). Pregunta por el estado de la flota ("que unidades estan sin senal", "cual es la alerta mas urgente") o por el uso del propio Rondo ("como activo la regla de destino"). Tiene un selector <b>Toda la flota</b> / solo vigiladas y un boton <b>Limpiar</b>.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +

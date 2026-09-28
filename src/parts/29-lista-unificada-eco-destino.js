@@ -140,17 +140,31 @@
         if (!body) return;
         sincronizarOrden();
         marcarModoOrden(APP.ordenModo || '');
-        const ecos = APP.orden.slice();
+        const todos = APP.orden.slice();
         const cnt = byId('rondo-modal-count');
-        if (cnt) cnt.textContent = ecos.length;
-        if (!ecos.length) {
-            body.innerHTML = '<div class="lista-empty">Lista vacía. Pega arriba o añade una unidad.</div>';
+        // v6.0.13: buscador de la lista (por eco, placa, nombre o destino).
+        const buscaEl = byId('rondo-modal-buscar');
+        const q = norm(buscaEl ? buscaEl.value : '');
+        const ecos = q ? todos.filter((eco) => {
+            const it = unitByEco(eco);
+            const info = it ? parseUnitName(it.u) : { eco: eco, placa: '', nombre: '' };
+            const plan = planDe(info);
+            const destino = plan ? planATexto(plan) : (APP.watchMap[eco] || '');
+            return norm([eco, info.placa, info.nombre, destino].join(' ')).indexOf(q) >= 0;
+        }) : todos;
+        if (cnt) cnt.textContent = q ? (ecos.length + ' de ' + todos.length) : String(todos.length);
+        if (!todos.length) {
+            body.innerHTML = '<div class="lista-empty"><span class="rondo-usym">' + UIS.watch + '</span><div>Lista vacía. Pega unidades arriba o añade una con el campo de abajo.</div></div>';
             return;
         }
-        body.innerHTML = ecos.map((eco, i) => (
+        if (!ecos.length) {
+            body.innerHTML = '<div class="lista-empty"><span class="rondo-usym">' + UIS.filter + '</span><div>Ninguna unidad coincide con <b>' + esc(buscaEl ? buscaEl.value : '') + '</b>.</div></div>';
+            return;
+        }
+        body.innerHTML = ecos.map((eco) => (
             '<div class="lista-row" data-eco="' + esc(eco) + '">' +
             '<span class="rondo-drag-handle" draggable="true" title="Arrastrar para cambiar el orden">⠿</span>' +
-            '<span class="orden-num">' + (i + 1) + '</span>' +
+            '<span class="orden-num">' + (todos.indexOf(eco) + 1) + '</span>' +
             '<span class="eco">' + esc(eco) + '</span>' +
             '<span class="rondo-dest-resumen">' + resumenPlanHTML(eco) + '</span>' +
             '<button class="mini rondo-plan-open" data-eco="' + esc(eco) + '" title="Editar destinos y paradas (geocercas, municipios, lugares)"><span class="rondo-usym">' + UIS.route + '</span> Paradas</button>' +
@@ -188,7 +202,9 @@
             if (dragging) dragging.classList.remove('arrastrando');
             dragEco = null;
             const ecos = Array.prototype.slice.call(cont.querySelectorAll('.lista-row')).map((r) => r.dataset.eco).filter(Boolean);
-            if (ecos.length) {
+            // Con el buscador activo solo se ven algunas filas: no reordenamos
+            // la lista completa para no perder unidades.
+            if (ecos.length && ecos.length === APP.orden.length) {
                 APP.orden = ecos;
                 APP.ordenModo = '';
                 guardarOrden();

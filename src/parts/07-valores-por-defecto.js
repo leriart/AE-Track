@@ -73,6 +73,13 @@
         theme: 'oscuro',
         density: 'normal',
         acento: '#850D22',
+        // v6.0.14: heredar el color de acento del skin de la plataforma
+        // (AE-Track/Wialon) para que el panel combine con la pagina. Opt-in.
+        temaPlataforma: false,
+        // v6.0.14: reestiliza la pagina de la plataforma con la paleta de
+        // Rondo (experimental, opt-in) y usa el idioma del sitio para la voz.
+        estiloPagina: false,
+        idiomaPlataforma: false,
         escalaUI: 1,
         contornos: true,
         contornoHoras: 24,
