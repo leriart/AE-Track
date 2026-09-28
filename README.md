@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.6.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.6.0.md)
-[![tests](https://img.shields.io/badge/tests-1215%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1225%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -285,7 +285,7 @@ con `Alt+L`.
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
 | **Zonas** | Fusiona las geocercas de la plataforma (con las unidades dentro, boton Recargar) y las zonas de riesgo (dona, histograma, KPIs, filtros, export y lista). |
 | **Caravana** | Unidades (vigiladas o no) que acompanian a una unidad "lider" en la misma ruta (distancia firmada delante/detras) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada. |
-| **Replay** | Reproduce el recorrido de una unidad entre una **fecha/hora de inicio** y una **fecha/hora de fin** (o un dia completo): mini-mapa propio de OpenStreetMap, perfil de velocidad, paradas (con motor encendido/apagado) y eventos. Botones de **Cargar** con progreso y resumen, y **Play/Pausa/Reiniciar** (con barra espaciadora). Exporta GeoJSON, CSV de paradas y PDF. |
+| **Replay** | Reproduce el recorrido de una unidad entre una **fecha/hora de inicio** y una **fecha/hora de fin** (o un dia completo): mini-mapa propio de OpenStreetMap, perfil de velocidad, paradas (con motor encendido/apagado) y eventos. Botones de **Cargar** con progreso y resumen, y **Play/Pausa/Reiniciar** (con barra espaciadora). **Opciones del reporte** (mapa, KPIs, paradas, eventos, puntos, coordenadas, solo motor apagado) y exporta GeoJSON, CSV de paradas y PDF. |
 | **Chat IA** | Asistente conversacional (solo si la IA esta configurada) que conoce el manual y el estado de la flota. Switch *Toda la flota* / solo vigiladas. |
 
 Atajos de teclado: `Alt+1..8` cambian de pestana, `Alt+P` / `Alt+L` muestran u
@@ -381,7 +381,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**18 suites, ~1215 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**18 suites, ~1225 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

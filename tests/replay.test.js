@@ -107,7 +107,7 @@ ok('informe del recorrido: KPI de paradas con motor apagado',
 ok('informe del recorrido: filas con fecha/hora y coordenadas',
     /rxFechaHora\(p\.t, true\)/.test(src) && /coords\(p\.lat, p\.lon\)/.test(src) && /coords\(e2\.lat, e2\.lon\)/.test(src));
 ok('informe del recorrido: seccion Puntos del recorrido',
-    /seccion\('4\. Puntos del recorrido'/.test(src) && /filasPuntos/.test(src));
+    /add\('Puntos del recorrido'/.test(src) && /filasPuntos/.test(src));
 ok('informe del recorrido: KPI de Puntos',
     /kpi\(\(r\.msgs \|\| \[\]\)\.length, 'Puntos'\)/.test(src));
 

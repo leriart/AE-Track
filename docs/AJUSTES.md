@@ -6,7 +6,7 @@ Referencia generada automaticamente desde `DEFAULTS`
 usa `APP.config`, asi que puedes consultarla desde la consola del navegador
 (`APP.config.pollMs`).
 
-Total: **102 claves**.
+Total: **103 claves**.
 
 | Clave | Tipo | Valor por defecto | Descripcion |
 | --- | --- | --- | --- |
@@ -87,6 +87,7 @@ Total: **102 claves**.
 | `partidaHoras` | number | `6` |  |
 | `paradaMin` | number | `15` |  |
 | `replayGapMin` | number | `15` | igual se interpreta como parada con el motor apagado (la unidad dejo de reportar). Sirve para clasificar las paradas cuando la instalacion no expone un sensor de motor. |
+| `replayReporte` | object | `{ mapa: true, kpis: true, paradas: true, eventos: true, puntos: true, coords: true, soloOff: false }` | Opciones del reporte PDF del recorrido (checkboxes de la pestana Replay). Cada clave decide si esa parte aparece en el PDF. |
 | `historialHoras` | number | `168` |  |
 | `analizarAuto` | boolean | `true` |  |
 | `autoRuta` | boolean | `false` |  |

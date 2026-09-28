@@ -207,6 +207,12 @@
             "#rondo-panel .rondo-replay-card .rrc-estado.warn{color:var(--rondo-warn-fg)}\n" +
             "#rondo-panel .rondo-replay-card .rrc-estado.err{color:var(--rondo-bad-fg)}\n" +
             "#rondo-panel .rondo-replay-card .rrc-estado.cargando{color:var(--rondo-accent-2)}\n" +
+            // v6.11.1: opciones del reporte del recorrido (checkboxes).
+            "#rondo-panel .rondo-replay-card .rrc-checks{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--rondo-fg);cursor:pointer;min-width:0;line-height:1.3}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk input{flex:0 0 auto;accent-color:var(--rondo-accent-2);cursor:pointer;margin:0;width:14px;height:14px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk:hover{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk:last-child{grid-column:1 / -1}\n" +
             "#rondo-panel .rrc-play{min-width:104px;font-weight:700;justify-content:center}\n" +
             "#rondo-panel .rrc-play .rrc-play-ico{font-size:15px}\n" +
             "#rondo-panel .rrc-btn-ico{width:36px;flex:0 0 auto;padding:0;display:inline-flex;align-items:center;justify-content:center}\n" +
@@ -1509,8 +1515,22 @@
              '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
              '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
              '</div>' +
+             // v6.11.1: opciones del reporte del recorrido. Cada check decide
+             // si esa parte aparece en el PDF generado.
+             '<div class="rondo-replay-card">' +
+             '<div class="rrc-head"><span class="rrc-title">Opciones del reporte</span><span class="rrc-sub">que incluir en el PDF</span></div>' +
+             '<div class="rrc-checks">' +
+             '<label class="rrc-chk"><input type="checkbox" id="rondo-rep-mapa"> Mapa del recorrido</label>' +
+             '<label class="rrc-chk"><input type="checkbox" id="rondo-rep-kpis"> Resumen (KPIs)</label>' +
+             '<label class="rrc-chk"><input type="checkbox" id="rondo-rep-paradas"> Paradas</label>' +
+             '<label class="rrc-chk"><input type="checkbox" id="rondo-rep-eventos"> Eventos</label>' +
+             '<label class="rrc-chk"><input type="checkbox" id="rondo-rep-puntos"> Puntos del recorrido</label>' +
+             '<label class="rrc-chk"><input type="checkbox" id="rondo-rep-coords"> Coordenadas</label>' +
+             '<label class="rrc-chk"><input type="checkbox" id="rondo-rep-solooff"> Solo paradas con motor apagado</label>' +
+             '</div>' +
+             '</div>' +
              '<div class="rondo-replay-acciones">' +
-             '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido (resumen, paradas y eventos)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+             '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido con las opciones elegidas"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
              '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
              '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
              '</div>' +
@@ -7427,8 +7447,24 @@
             n.classList.toggle('activo', r.idx >= a && r.idx <= b);
         });
     }
+    // v6.11.1: opciones del reporte del recorrido (que incluir en el PDF).
+    // Devuelve siempre todas las claves (con sus defaults) aunque la config
+    // guardada sea parcial.
+    function rxReplayReporteOpts() {
+        const def = { mapa: true, kpis: true, paradas: true, eventos: true, puntos: true, coords: true, soloOff: false };
+        const c = (APP.config && APP.config.replayReporte) || {};
+        const o = {};
+        Object.keys(def).forEach((k) => { o[k] = (c[k] === undefined) ? def[k] : !!c[k]; });
+        return o;
+    }
+    function rxReplayOpcionesSync() {
+        const o = rxReplayReporteOpts();
+        const map = { 'rondo-rep-mapa': 'mapa', 'rondo-rep-kpis': 'kpis', 'rondo-rep-paradas': 'paradas', 'rondo-rep-eventos': 'eventos', 'rondo-rep-puntos': 'puntos', 'rondo-rep-coords': 'coords', 'rondo-rep-solooff': 'soloOff' };
+        Object.keys(map).forEach((id) => { const el = byId(id); if (el) el.checked = !!o[map[id]]; });
+    }
     function rxReplayPintar() {
         const r = RX_REPLAY;
+        rxReplayOpcionesSync();
         const resumen = byId('rondo-replay-resumen');
         if (resumen) resumen.innerHTML = rxReplayResumenHTML();
         const pars = byId('rondo-replay-paradas');
@@ -7815,6 +7851,18 @@
             if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();
             rxReplayIrA(+n.dataset.idx);
         });
+        // v6.11.1: opciones del reporte (checkboxes). Se guardan en la config.
+        rxReplayOpcionesSync();
+        [['rondo-rep-mapa', 'mapa'], ['rondo-rep-kpis', 'kpis'], ['rondo-rep-paradas', 'paradas'],
+         ['rondo-rep-eventos', 'eventos'], ['rondo-rep-puntos', 'puntos'],
+         ['rondo-rep-coords', 'coords'], ['rondo-rep-solooff', 'soloOff']].forEach((par) => {
+            const el = byId(par[0]);
+            if (!el) return;
+            el.addEventListener('change', () => {
+                APP.config.replayReporte = Object.assign({}, APP.config.replayReporte, { [par[1]]: !!el.checked });
+                try { writeJSON(LS.cfg, APP.config); } catch (_) { /* noop */ }
+            });
+        });
     }
     /* ====================== REPORTE PDF (v6.0.13) ======================
      * Genera un informe operativo completo y lo abre en el dialogo de
@@ -8138,6 +8186,9 @@
     function rxReplayInformeHTML() {
         const r = RX_REPLAY;
         if (!r) return '';
+        const o = (typeof rxReplayReporteOpts === 'function')
+            ? rxReplayReporteOpts()
+            : { mapa: true, kpis: true, paradas: true, eventos: true, puntos: true, coords: true, soloOff: false };
         const s = r.resumen || {};
         const fecha = new Date((s.inicio || 0) * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
         // Rango completo con fecha y hora (el recorrido puede cruzar medianoche).
@@ -8158,37 +8209,43 @@
         const coords = (lat, lon) => (lat == null || lon == null)
             ? '<span class="muted">-</span>'
             : '<span class="mono">' + esc(rxCoord(lat, lon, 5)) + '</span>';
-        const filasParadas = (r.paradas || []).map((p, i) => [
-            String(i + 1),
-            esc(rxFechaHora(p.t, true)),
-            esc(rxFmtDur(p.dur)),
-            (p.motor ? (p.motor === 'off' ? '<span class="muted">Apagado</span>' : '<span class="ok">Encendido</span>') + (p.motorFuente === 'estimado' ? ' <span class="pill">est.</span>' : '') : '-'),
-            '<b>' + esc(rxReplayParadaEtiqueta(p)) + '</b>',
-            esc(p.direccion || ''),
-            esc(p.zona || ''),
-            esc(p.municipio || ''),
-            coords(p.lat, p.lon)
-        ]);
-        const filasEventos = (r.eventos || []).map((e2) => [
-            esc(rxFechaHora(e2.t, true)),
-            '<span class="pill">' + esc(e2.tipo) + '</span>',
-            esc(e2.txt),
-            coords(e2.lat, e2.lon)
-        ]);
+        const paradasSel = (r.paradas || []).filter((p) => !o.soloOff || p.motor === 'off');
+        const cabParadas = ['#', 'Fecha y hora', 'Duracion', 'Motor', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio'];
+        if (o.coords) cabParadas.push('Coordenadas');
+        const filasParadas = paradasSel.map((p, i) => {
+            const row = [
+                String(i + 1),
+                esc(rxFechaHora(p.t, true)),
+                esc(rxFmtDur(p.dur)),
+                (p.motor ? (p.motor === 'off' ? '<span class="muted">Apagado</span>' : '<span class="ok">Encendido</span>') + (p.motorFuente === 'estimado' ? ' <span class="pill">est.</span>' : '') : '-'),
+                '<b>' + esc(rxReplayParadaEtiqueta(p)) + '</b>',
+                esc(p.direccion || ''),
+                esc(p.zona || ''),
+                esc(p.municipio || '')
+            ];
+            if (o.coords) row.push(coords(p.lat, p.lon));
+            return row;
+        });
+        const cabEventos = ['Fecha y hora', 'Tipo', 'Detalle'];
+        if (o.coords) cabEventos.push('Coordenadas');
+        const filasEventos = (r.eventos || []).map((e2) => {
+            const row = [esc(rxFechaHora(e2.t, true)), '<span class="pill">' + esc(e2.tipo) + '</span>', esc(e2.txt)];
+            if (o.coords) row.push(coords(e2.lat, e2.lon));
+            return row;
+        });
         // Puntos del recorrido (muestreados para no generar miles de filas).
         const msgs = r.msgs || [];
         const paso = Math.max(1, Math.ceil(msgs.length / 400));
+        const cabPuntos = ['#', 'Fecha y hora'];
+        if (o.coords) cabPuntos.push('Coordenadas');
+        cabPuntos.push('Velocidad', 'Rumbo', 'Acumulado');
         const filasPuntos = [];
         for (let i = 0; i < msgs.length; i += paso) {
             const m = msgs[i];
-            filasPuntos.push([
-                String(i + 1),
-                esc(rxFechaHora(m.t, true)),
-                coords(m.lat, m.lon),
-                Math.round(m.s || 0) + ' km/h',
-                (m.c != null ? Math.round(m.c) + '\u00b0' : '-'),
-                Math.round((m.km || 0) / 1000) + ' km'
-            ]);
+            const row = [String(i + 1), esc(rxFechaHora(m.t, true))];
+            if (o.coords) row.push(coords(m.lat, m.lon));
+            row.push(Math.round(m.s || 0) + ' km/h', (m.c != null ? Math.round(m.c) + '\u00b0' : '-'), Math.round((m.km || 0) / 1000) + ' km');
+            filasPuntos.push(row);
         }
         // Mapa del recorrido con los puntos marcados (tiles de OSM + trazo SVG).
         const marcasMapa = [];
@@ -8205,20 +8262,27 @@
             '<span><i style="background:#b71c1c"></i>Exceso</span>' +
             '<span><i style="background:#e65100"></i>Desvio</span>' +
             '<span class="muted">Mapa: OpenStreetMap</span></div>';
-        const seccion = (titulo, contenido) => '<h2 class="seccion">' + esc(titulo) + '</h2>' + contenido;
         const notaPuntos = paso > 1
-            ? '<div class="callout">Se listan ' + filasPuntos.length + ' de ' + msgs.length + ' puntos (cada ' + paso + ' registros) con fecha, hora y coordenadas. El total de puntos aparece en los KPIs.</div>'
-            : '<div class="callout">Se listan los ' + filasPuntos.length + ' puntos del recorrido con fecha, hora y coordenadas.</div>';
+            ? '<div class="callout">Se listan ' + filasPuntos.length + ' de ' + msgs.length + ' puntos (cada ' + paso + ' registros)' + (o.coords ? ' con fecha, hora y coordenadas' : ' con fecha y hora') + '. El total de puntos aparece en los KPIs.</div>'
+            : '<div class="callout">Se listan los ' + filasPuntos.length + ' puntos del recorrido' + (o.coords ? ' con fecha, hora y coordenadas' : ' con fecha y hora') + '.</div>';
+        // Secciones elegidas en las opciones del reporte, numeradas.
+        const secciones = [];
+        let num = 0;
+        const add = (titulo, contenido) => { num++; secciones.push('<h2 class="seccion">' + esc(num + '. ' + titulo) + '</h2>' + contenido); };
+        if (o.mapa) add('Mapa del recorrido', mapa + leyenda);
+        if (o.paradas) add('Paradas (' + filasParadas.length + ')', rxInfTabla(cabParadas, filasParadas));
+        if (o.eventos) add('Eventos (' + filasEventos.length + ')', rxInfTabla(cabEventos, filasEventos));
+        if (o.puntos) add('Puntos del recorrido', notaPuntos + rxInfTabla(cabPuntos, filasPuntos));
+        const cuerpo = secciones.length
+            ? secciones.join('')
+            : '<div class="vacio">No seleccionaste ninguna seccion para el reporte. Marca al menos una en "Opciones del reporte" (pestana Replay).</div>';
         return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
             '<title>Recorrido ' + esc(r.eco) + ' ' + esc(fecha) + '</title>' +
             '<style>' + rxInfEstilo() + '</style></head><body>' +
             rxInfCabecera('Rondo', 'Recorrido de la unidad',
                 'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(rango) + '<br>Documento de solo lectura') +
-            '<div class="kpis">' + kpis + '</div>' +
-            seccion('1. Mapa del recorrido', mapa + leyenda) +
-            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Fecha y hora', 'Duracion', 'Motor', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
-            seccion('3. Eventos (' + filasEventos.length + ')', rxInfTabla(['Fecha y hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
-            seccion('4. Puntos del recorrido', notaPuntos + rxInfTabla(['#', 'Fecha y hora', 'Coordenadas', 'Velocidad', 'Rumbo', 'Acumulado'], filasPuntos)) +
+            (o.kpis ? '<div class="kpis">' + kpis + '</div>' : '') +
+            cuerpo +
             (r.truncado ? '<p class="muted">Nota: el historial se trunco al limite de mensajes; el resumen puede ser parcial.</p>' : '') +
             rxInfPie() +
             '</body></html>';

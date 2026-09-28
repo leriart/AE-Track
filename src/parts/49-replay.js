@@ -560,8 +560,24 @@
             n.classList.toggle('activo', r.idx >= a && r.idx <= b);
         });
     }
+    // v6.11.1: opciones del reporte del recorrido (que incluir en el PDF).
+    // Devuelve siempre todas las claves (con sus defaults) aunque la config
+    // guardada sea parcial.
+    function rxReplayReporteOpts() {
+        const def = { mapa: true, kpis: true, paradas: true, eventos: true, puntos: true, coords: true, soloOff: false };
+        const c = (APP.config && APP.config.replayReporte) || {};
+        const o = {};
+        Object.keys(def).forEach((k) => { o[k] = (c[k] === undefined) ? def[k] : !!c[k]; });
+        return o;
+    }
+    function rxReplayOpcionesSync() {
+        const o = rxReplayReporteOpts();
+        const map = { 'rondo-rep-mapa': 'mapa', 'rondo-rep-kpis': 'kpis', 'rondo-rep-paradas': 'paradas', 'rondo-rep-eventos': 'eventos', 'rondo-rep-puntos': 'puntos', 'rondo-rep-coords': 'coords', 'rondo-rep-solooff': 'soloOff' };
+        Object.keys(map).forEach((id) => { const el = byId(id); if (el) el.checked = !!o[map[id]]; });
+    }
     function rxReplayPintar() {
         const r = RX_REPLAY;
+        rxReplayOpcionesSync();
         const resumen = byId('rondo-replay-resumen');
         if (resumen) resumen.innerHTML = rxReplayResumenHTML();
         const pars = byId('rondo-replay-paradas');
@@ -947,5 +963,17 @@
             if (!n) return;
             if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();
             rxReplayIrA(+n.dataset.idx);
+        });
+        // v6.11.1: opciones del reporte (checkboxes). Se guardan en la config.
+        rxReplayOpcionesSync();
+        [['rondo-rep-mapa', 'mapa'], ['rondo-rep-kpis', 'kpis'], ['rondo-rep-paradas', 'paradas'],
+         ['rondo-rep-eventos', 'eventos'], ['rondo-rep-puntos', 'puntos'],
+         ['rondo-rep-coords', 'coords'], ['rondo-rep-solooff', 'soloOff']].forEach((par) => {
+            const el = byId(par[0]);
+            if (!el) return;
+            el.addEventListener('change', () => {
+                APP.config.replayReporte = Object.assign({}, APP.config.replayReporte, { [par[1]]: !!el.checked });
+                try { writeJSON(LS.cfg, APP.config); } catch (_) { /* noop */ }
+            });
         });
     }

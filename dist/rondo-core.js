@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '6.6.0-dev.26';
+    const VER = '6.6.0-dev.27';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -717,6 +717,12 @@
         // dejo de reportar). Sirve para clasificar las paradas cuando la
         // instalacion no expone un sensor de motor.
         replayGapMin: 15,
+        // Opciones del reporte PDF del recorrido (checkboxes de la pestana
+        // Replay). Cada clave decide si esa parte aparece en el PDF.
+        replayReporte: Object.freeze({
+            mapa: true, kpis: true, paradas: true, eventos: true,
+            puntos: true, coords: true, soloOff: false
+        }),
         historialHoras: 168,
         analizarAuto: true,
         autoRuta: false,

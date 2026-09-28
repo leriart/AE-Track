@@ -629,10 +629,15 @@ La pestana **Replay** reproduce el recorrido de una unidad:
    municipio). Con **Overpass** activado en Ajustes se afinan mas los nombres de
    comercios. Haz clic en una parada o en un evento para saltar a ese momento.
 5. Arriba veras un **resumen** (rango de horas, distancia, duracion, paradas,
-   tiempo en movimiento y detenido, velocidad maxima y excesos) y, abajo, junto
-   a **GeoJSON** y **Paradas CSV**, el boton **Reporte PDF** genera un PDF del
-   recorrido con la **imagen del mapa** (recorrido y puntos marcados), el
-   resumen, las paradas con su lugar y los eventos.
+   tiempo en movimiento y detenido, velocidad maxima y excesos) y, abajo, la
+   tarjeta **Opciones del reporte** con casillas para elegir que incluir en el
+   PDF: **Mapa del recorrido**, **Resumen (KPIs)**, **Paradas**, **Eventos**,
+   **Puntos del recorrido**, **Coordenadas** y **Solo paradas con motor
+   apagado**. Cada opcion se recuerda entre sesiones.
+6. Junto a **GeoJSON** y **Paradas CSV**, el boton **Reporte PDF** genera un PDF
+   del recorrido con las secciones marcadas (mapa con los puntos marcados,
+   resumen, paradas con su lugar, eventos y puntos del recorrido). Si no marcas
+   ninguna seccion, el PDF avisa de que no hay nada que incluir.
 
 Es solo lectura (historial de la plataforma). Atajo: **Alt + 8**. Tambien puedes
 abrirla desde el **clic derecho** sobre una unidad, en **Reproducir el dia
@@ -928,9 +933,11 @@ te pedirá confirmación.
   regla, unidades con mas alertas, una **tabla de unidades** (con fecha/hora y
   coordenadas), las **unidades sin senal** (con coordenadas) y los **ultimos
   avisos** con fecha/hora y coordenadas.
-- **Reporte PDF del recorrido** (pestana Replay): ademas del mapa, las paradas y
-  los eventos, incluye una seccion **Puntos del recorrido** con fecha, hora,
-  coordenadas, velocidad, rumbo y km acumulado de cada punto (muestreado). Ver
+- **Reporte PDF del recorrido** (pestana Replay): incluye el mapa, los KPIs, las
+  paradas, los eventos y una seccion **Puntos del recorrido** con fecha, hora,
+  coordenadas, velocidad, rumbo y km acumulado de cada punto (muestreado). Que
+  secciones aparecen se elige con las casillas de **Opciones del reporte** en la
+  propia pestana. Ver
   [Reproducir el recorrido](#reproducir-el-recorrido-replay).
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y
   prueba; descarga un JSON con toda tu configuracion, listas, limites y rutas.

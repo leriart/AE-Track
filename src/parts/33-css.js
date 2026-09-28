@@ -206,6 +206,12 @@
             "#rondo-panel .rondo-replay-card .rrc-estado.warn{color:var(--rondo-warn-fg)}\n" +
             "#rondo-panel .rondo-replay-card .rrc-estado.err{color:var(--rondo-bad-fg)}\n" +
             "#rondo-panel .rondo-replay-card .rrc-estado.cargando{color:var(--rondo-accent-2)}\n" +
+            // v6.11.1: opciones del reporte del recorrido (checkboxes).
+            "#rondo-panel .rondo-replay-card .rrc-checks{display:grid;grid-template-columns:1fr 1fr;gap:5px 12px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--rondo-fg);cursor:pointer;min-width:0;line-height:1.3}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk input{flex:0 0 auto;accent-color:var(--rondo-accent-2);cursor:pointer;margin:0;width:14px;height:14px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk:hover{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-chk:last-child{grid-column:1 / -1}\n" +
             "#rondo-panel .rrc-play{min-width:104px;font-weight:700;justify-content:center}\n" +
             "#rondo-panel .rrc-play .rrc-play-ico{font-size:15px}\n" +
             "#rondo-panel .rrc-btn-ico{width:36px;flex:0 0 auto;padding:0;display:inline-flex;align-items:center;justify-content:center}\n" +

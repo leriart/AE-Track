@@ -78,6 +78,38 @@ ok('recorrido: tabla de puntos con fecha/hora y coordenadas',
 ok('recorrido: muestreo de puntos para no explotar',
     /Math\.ceil\(msgs\.length \/ 400\)/.test(src));
 
+// ── Opciones del reporte del recorrido (checkboxes) ─────────────────────
+ok('DEFAULTS declara replayReporte con todas las claves',
+    /replayReporte: Object\.freeze\(\{/.test(src) &&
+    /mapa: true, kpis: true, paradas: true, eventos: true/.test(src) &&
+    /puntos: true, coords: true, soloOff: false/.test(src));
+ok('Replay UI: checkboxes de las opciones del reporte',
+    /id="rondo-rep-mapa"/.test(src) && /id="rondo-rep-kpis"/.test(src) &&
+    /id="rondo-rep-paradas"/.test(src) && /id="rondo-rep-eventos"/.test(src) &&
+    /id="rondo-rep-puntos"/.test(src) && /id="rondo-rep-coords"/.test(src) &&
+    /id="rondo-rep-solooff"/.test(src));
+ok('helper rxReplayReporteOpts existe y normaliza defaults',
+    /function rxReplayReporteOpts\(/.test(src) && /c\[k\] === undefined\) \? def\[k\] : !!c\[k\]/.test(src));
+ok('helper rxReplayOpcionesSync marca los checkboxes',
+    /function rxReplayOpcionesSync\(/.test(src) && /el\.checked = !!o\[map\[id\]\]/.test(src));
+ok('bindings: guardan las opciones en la config',
+    /APP\.config\.replayReporte = Object\.assign\(\{\}, APP\.config\.replayReporte, \{ \[par\[1\]\]: !!el\.checked \}\)/.test(src) &&
+    /writeJSON\(LS\.cfg, APP\.config\)/.test(src));
+ok('rxReplayPintar sincroniza las opciones', /function rxReplayPintar\(\) \{\s*const r = RX_REPLAY;\s*rxReplayOpcionesSync\(\)/.test(src));
+ok('reporte respeta las opciones (mapa/kpis/paradas/eventos/puntos)',
+    /if \(o\.mapa\) add\('Mapa del recorrido'/.test(src) &&
+    /if \(o\.paradas\) add\('Paradas/.test(src) &&
+    /if \(o\.eventos\) add\('Eventos/.test(src) &&
+    /if \(o\.puntos\) add\('Puntos del recorrido'/.test(src) &&
+    /\(o\.kpis \? '<div class="kpis">'/.test(src));
+ok('reporte respeta las coordenadas opcionales',
+    /if \(o\.coords\) cabParadas\.push\('Coordenadas'\)/.test(src) &&
+    /if \(o\.coords\) cabEventos\.push\('Coordenadas'\)/.test(src) &&
+    /if \(o\.coords\) cabPuntos\.push\('Coordenadas'\)/.test(src));
+ok('reporte respeta "solo paradas con motor apagado"',
+    /\.filter\(\(p\) => !o\.soloOff \|\| p\.motor === 'off'\)/.test(src));
+ok('CSS de las opciones del reporte', /\.rrc-checks\{display:grid/.test(src) && /\.rrc-chk\{display:flex/.test(src));
+
 // ── CSV ─────────────────────────────────────────────────────────────────
 ok('CSV unidades: columna Ultimo (fecha/hora) y Lat/Lon',
     /'Estado', 'Ultimo', 'Ultimo\(min\)'/.test(src) && /'Lat', 'Lon', 'Zona'/.test(src));
