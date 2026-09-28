@@ -148,8 +148,18 @@ ok('replay: el boton Cargar pasa a "Recargar" tras cargar', /t\.textContent = 'R
 ok('replay: limpiar no rompe el icono del Play (usa el helper)',
     /function rxReplayLimpiar\([\s\S]{0,2000}rxReplaySetPlayBtn\(false, false\)/.test(src));
 ok('replay: CSS de estado y controles',
-    /\.rrc-estado\{font-size:11px/.test(src) && /\.rrc-play\{min-width:100px/.test(src) &&
-    /\.rrc-play:disabled/.test(src));
+    /\.rrc-estado\{font-size:11px/.test(src) && /\.rrc-play\{min-width:104px/.test(src) &&
+    /\.rrc-btn-ico:disabled/.test(src));
+
+// 11) v6.9.2: los .accbtn del panel comparten la base de boton primario.
+ok('replay: base de boton primario .accbtn dentro del panel',
+    /#rondo-panel button\.accbtn\{display:inline-flex[\s\S]{0,240}accent-grad/.test(src));
+ok('replay: .accbtn del panel con hover/active/disabled',
+    /#rondo-panel button\.accbtn:hover:not\(:disabled\)/.test(src) &&
+    /#rondo-panel button\.accbtn:active:not\(:disabled\)/.test(src) &&
+    /#rondo-panel button\.accbtn:disabled/.test(src));
+ok('replay: Play activo se distingue con halo',
+    /#rondo-panel #rondo-replay-play\.activo\{box-shadow/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

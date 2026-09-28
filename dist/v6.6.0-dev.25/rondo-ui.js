@@ -148,7 +148,10 @@
             "#rondo-panel .rondo-replay-card .rrc-vel select{flex:1;min-width:0}\n" +
             "#rondo-panel .rondo-replay-card .rondo-replay-chart{margin:0;height:78px}\n" +
             "#rondo-panel #rondo-replay-slider{width:100%;box-sizing:border-box;margin:0}\n" +
-            "#rondo-panel #rondo-replay-play.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            // v6.9.2: cuando esta reproduciendo, el boton Play se marca con un
+            // halo (el color base ya es el acento, asi que el cambio de fondo
+            // no bastaba para distinguir el estado).
+            "#rondo-panel #rondo-replay-play.activo{box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.5),0 6px 16px rgba(var(--rondo-accent-rgb),.35);filter:brightness(1.08)}\n" +
             "#rondo-panel .rondo-replay-mapa{width:100%;height:240px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;overflow:hidden;margin:8px 0}\n" +
             "#rondo-panel .rondo-replay-mapa svg{width:100%;height:100%;display:block}\n" +
             "#rondo-panel .rondo-replay-vacio{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
@@ -204,9 +207,10 @@
             "#rondo-panel .rondo-replay-card .rrc-estado.warn{color:var(--rondo-warn-fg)}\n" +
             "#rondo-panel .rondo-replay-card .rrc-estado.err{color:var(--rondo-bad-fg)}\n" +
             "#rondo-panel .rondo-replay-card .rrc-estado.cargando{color:var(--rondo-accent-2)}\n" +
-            "#rondo-panel .rrc-play{min-width:100px;font-weight:700;justify-content:center}\n" +
-            "#rondo-panel .rrc-play:disabled,#rondo-panel .rrc-btn-ico:disabled{opacity:.5;cursor:not-allowed;filter:none}\n" +
+            "#rondo-panel .rrc-play{min-width:104px;font-weight:700;justify-content:center}\n" +
+            "#rondo-panel .rrc-play .rrc-play-ico{font-size:15px}\n" +
             "#rondo-panel .rrc-btn-ico{width:36px;flex:0 0 auto;padding:0;display:inline-flex;align-items:center;justify-content:center}\n" +
+            "#rondo-panel .rrc-btn-ico:disabled{opacity:.45;cursor:not-allowed;filter:none;transform:none}\n" +
             "#rondo-panel .rondo-busy-lbl{margin-left:6px;font-weight:600}\n" +
             // v6.0.11: mini-mapa propio (global: se usa en el panel y en el dialogo de ruta).
             ".rondo-minimapa{height:min(64vh,560px);border-radius:10px;overflow:hidden}\n" +
@@ -313,6 +317,15 @@
             "#rondo-panel .estadoicon.on{color:var(--rondo-ok-fg)}\n" +
             "#rondo-panel .mini{display:inline-flex;align-items:center;justify-content:center;gap:3px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:var(--rondo-radius-sm);cursor:pointer;padding:3px 8px;font-size:11px;transition:background .15s,color .15s,transform .1s,border-color .15s}\n" +
             "#rondo-panel .mini:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            // v6.9.2: base de boton primario DENTRO del panel. Antes solo
+            // existia `button.accbtn` para #rondo-config/#rondo-modal/#rondo-ayuda,
+            // asi que los .accbtn del panel (Cargar recorrido, Play) salian con
+            // el aspecto nativo del navegador. Aqui se les da la misma base.
+            "#rondo-panel button.accbtn{display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-accent-grad);color:#fff;border:none;border-radius:var(--rondo-radius-sm);cursor:pointer;padding:6px 12px;font:600 12px var(--rondo-font);line-height:1.2;transition:transform .12s,box-shadow .15s,filter .15s,opacity .15s}\n" +
+            "#rondo-panel button.accbtn .rondo-usym{font-size:14px}\n" +
+            "#rondo-panel button.accbtn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 6px 16px rgba(var(--rondo-accent-rgb),.4);filter:brightness(1.05)}\n" +
+            "#rondo-panel button.accbtn:active:not(:disabled){transform:translateY(0);filter:brightness(.96)}\n" +
+            "#rondo-panel button.accbtn:disabled{opacity:.45;cursor:not-allowed;filter:grayscale(.25);box-shadow:none;transform:none}\n" +
             "#rondo-panel .minusil.on{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
             "#rondo-panel .alerta{display:flex;gap:9px;padding:8px 10px;border-bottom:1px solid var(--rondo-border-soft);align-items:flex-start;transition:background .1s}\n" +
             "#rondo-panel .alerta:hover{background:var(--rondo-bg-soft)}\n" +
