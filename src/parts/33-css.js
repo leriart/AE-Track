@@ -127,17 +127,35 @@
             "#rondo-lista-rutas .rr-mini-abs{position:absolute;left:0;top:0;z-index:1}\n" +
             "#rondo-lista-rutas .rr-mini-abs.rondo-mm{position:absolute}\n" +
             // v6.0.11: replay del dia.
-            "#rondo-panel .rondo-replay-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}\n" +
-            "#rondo-panel .rondo-replay-bar .filtro{min-width:0;width:100%;box-sizing:border-box}\n" +
-            "#rondo-panel .rondo-replay-bar .mini{width:100%;text-align:center}\n" +
-            "#rondo-panel .rondo-replay-bar > input[type=date]{grid-column:1 / -1}\n" +
+            // v6.0.12: replay en tarjetas (consulta, mapa, reproduccion y listas).
+            "#rondo-panel .rondo-replay-card{display:flex;flex-direction:column;gap:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;padding:10px;margin-bottom:8px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:16px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-title{font:700 11px var(--rondo-font);text-transform:uppercase;letter-spacing:.6px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-sub{font-size:10.5px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-time{font:700 12px var(--rondo-font);font-variant-numeric:tabular-nums;color:var(--rondo-fg);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;padding:1px 7px}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-buscar{position:relative;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-buscar input{width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-range{display:grid;grid-template-columns:1fr 1fr;gap:7px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-field{display:flex;flex-direction:column;gap:3px;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-field input{width:100%;box-sizing:border-box;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-actions{display:grid;grid-template-columns:1.6fr 1fr;gap:6px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-actions .accbtn,#rondo-panel .rondo-replay-card .rrc-actions .mini{width:100%;text-align:center;justify-content:center}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-mapa{margin:0}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-ctrl{margin:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-vel{display:flex;align-items:center;gap:6px;flex:1;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-vel select{flex:1;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-chart{margin:0;height:78px}\n" +
+            "#rondo-panel #rondo-replay-slider{width:100%;box-sizing:border-box;margin:0}\n" +
+            "#rondo-panel #rondo-replay-play.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
             "#rondo-panel .rondo-replay-mapa{width:100%;height:240px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;overflow:hidden;margin:8px 0}\n" +
             "#rondo-panel .rondo-replay-mapa svg{width:100%;height:100%;display:block}\n" +
-            "#rondo-panel .rondo-replay-vacio{display:flex;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-vacio{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-vacio .rv-ico{font-size:22px;opacity:.55}\n" +
             "#rondo-panel .rondo-replay-ctrl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
             "#rondo-panel .rondo-replay-ctrl input[type=range]{flex:1;min-width:110px}\n" +
             "#rondo-panel .rondo-replay-info{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}\n" +
-            "#rondo-panel .rondo-replay-info .rr-chip{font:600 11px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 7px}\n" +
+            "#rondo-panel .rondo-replay-info .rr-chip{font:600 11px var(--rondo-font);font-variant-numeric:tabular-nums;color:var(--rondo-fg);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 8px}\n" +
             "#rondo-panel .rondo-replay-eventos{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}\n" +
             "#rondo-panel .rondo-replay-ev{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
             "#rondo-panel .rondo-replay-ev:hover{border-color:var(--rondo-fg-mute)}\n" +
@@ -150,7 +168,7 @@
             "#rondo-panel .rondo-replay-ev .ev-zona{color:var(--rondo-accent-2)}\n" +
             "#rondo-panel .rondo-replay-ev .ev-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .rondo-replay-sec{margin-top:8px}\n" +
-            "#rondo-panel .rondo-replay-sec h5{margin:0 0 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-sec h5{margin:0 0 5px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-accent-2)}\n" +
             "#rondo-panel .rondo-replay-lista{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}\n" +
             "#rondo-panel .rondo-replay-par{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
             "#rondo-panel .rondo-replay-par:hover{border-color:var(--rondo-fg-mute)}\n" +
@@ -299,6 +317,18 @@
             "#rondo-dash .rondo-dash-head{display:flex;align-items:baseline;gap:6px;padding:2px 2px 6px;font:700 13px var(--rondo-font);color:var(--rondo-fg);border-bottom:1px solid var(--rondo-border-soft);margin-bottom:2px}\n" +
             "#rondo-dash .rondo-dash-head b{letter-spacing:.2px}\n" +
             "#rondo-dash .rondo-dash-vel{margin-left:auto;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            // v6.0.13: dashboard ampliado (accesos rapidos, tendencia y ranking).
+            "#rondo-dash .rondo-dash-nav{display:flex;gap:6px;flex-wrap:wrap}\n" +
+            "#rondo-dash .rondo-dash-go{display:inline-flex;align-items:center;gap:5px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:999px;padding:3px 10px;font:600 10.5px var(--rondo-font);cursor:pointer;transition:background .15s,color .15s,border-color .15s,transform .1s}\n" +
+            "#rondo-dash .rondo-dash-go:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-border);transform:translateY(-1px)}\n" +
+            "#rondo-dash .rondo-dash-go:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
+            "#rondo-dash .rondo-dash-go .rondo-usym{font-size:12px;opacity:.85}\n" +
+            "#rondo-dash .rondo-dash-trend .sparkline{margin-top:2px}\n" +
+            "#rondo-dash .rondo-top-item{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer;font-size:11.5px}\n" +
+            "#rondo-dash .rondo-top-item:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dash .rondo-top-item .eco{color:var(--rondo-warn-fg);flex:0 0 auto}\n" +
+            "#rondo-dash .rondo-top-item .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}\n" +
+            "#rondo-dash .rondo-top-item .pct{font:700 11.5px var(--rondo-font);color:var(--rondo-fg);flex:0 0 auto;font-variant-numeric:tabular-nums}\n" +
             "#rondo-dash .rondo-dash-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}\n" +
             "#rondo-dash .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:6px 8px;display:flex;flex-direction:column;gap:1px;min-width:0;position:relative;overflow:hidden;transition:border-color .15s,transform .12s,box-shadow .15s;cursor:pointer}\n" +
             "#rondo-dash .kpi:hover{border-color:var(--rondo-border);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
@@ -432,7 +462,9 @@
             "#rondo-panel .rondo-cv-card .cv-meta .pill.alerta{background:rgba(var(--rondo-warn-rgb),.18);color:var(--rondo-warn-fg)}\n" +
             "#rondo-panel .rondo-cv-card .cv-meta .pill.dim{opacity:.75}\n" +
             "#rondo-panel .rondo-cv-card.contrario{border-color:rgba(var(--rondo-crit-rgb),.6)}\n" +
-            "#rondo-panel .rondo-cv-empty{padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
+            "#rondo-panel .rondo-cv-empty{display:flex;flex-direction:column;gap:6px;align-items:center;padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
+            "#rondo-panel .rondo-cv-empty .rondo-usym{font-size:22px;opacity:.55}\n" +
+            "#rondo-panel .rondo-caravana-resumen{margin-left:auto;font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);white-space:nowrap}\n" +
             /* ── Pestaña Riesgo ───────────────────────────────────── */
             /* La pestana Zonas tiene un segmentado fijo arriba y dos paneles
              * (Geocercas / Riesgo) que scrollean por separado. */
@@ -710,7 +742,7 @@
             "#rondo-panel .kpi.bad .valor{color:var(--rondo-bad-fg)}\n" +
             "#rondo-panel .kpi.sub .valor{color:var(--rondo-fg)}\n" +
             "#rondo-panel .kpi .resumen{font-size:11px;color:var(--rondo-fg-dim)}\n" +
-            "#rondo-dash .sparkline{display:none}\n" +
+            "#rondo-dash .sparkline{display:block;width:100%;height:46px}\n" +
             "#rondo-dash .sparkline path{fill:none;stroke-width:1.6}\n" +
             "#rondo-dash .recent{padding:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
             "#rondo-dash .recent h4{margin:0 0 6px;font-size:11px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
@@ -780,7 +812,11 @@
             "#rondo-modal-lista .lista-row .rondo-dest:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
             "#rondo-modal-lista .lista-row button{background:transparent;border:1px solid var(--rondo-border);color:var(--rondo-fg-dim);border-radius:5px;padding:2px 9px;cursor:pointer;font-size:11px}\n" +
             "#rondo-modal-lista .lista-row button:hover{color:var(--rondo-bad-fg);border-color:var(--rondo-bad-fg)}\n" +
-            "#rondo-modal-lista .lista-empty{padding:14px;text-align:center;color:var(--rondo-fg-mute);font-size:12px}\n" +
+            "#rondo-modal-lista .lista-empty{display:flex;flex-direction:column;gap:6px;align-items:center;padding:14px;text-align:center;color:var(--rondo-fg-mute);font-size:12px}\n" +
+            "#rondo-modal-lista .lista-empty .rondo-usym{font-size:20px;opacity:.5}\n" +
+            "#rondo-modal .rondo-modal-buscar{width:100%;box-sizing:border-box;margin:0 0 8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:7px;color:var(--rondo-fg);padding:6px 9px;font:400 12px var(--rondo-font)}\n" +
+            "#rondo-modal .rondo-modal-buscar::placeholder{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-modal .rondo-modal-buscar:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
             "#rondo-modal-lista .lista-row.arrastrando{opacity:.5;background:var(--rondo-bg-strong)}\n" +
             "#rondo-modal-lista .rondo-drag-handle{cursor:grab;color:var(--rondo-fg-mute);font-size:14px;letter-spacing:-2px;padding:0 4px;user-select:none;touch-action:none}\n" +
             "#rondo-modal-lista .rondo-drag-handle:active{cursor:grabbing}\n" +
@@ -982,6 +1018,7 @@
             "  #rondo-modal{width:min(96vw,520px)}\n" +
             "  #rondo-panel .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}\n" +
             "  #rondo-config .row-grid{grid-template-columns:1fr}\n" +
+            "  #rondo-panel .rrc-range,#rondo-panel .rrc-actions{grid-template-columns:1fr}\n" +
             "  #rondo-dash{padding:10px}\n" +
             "  #rondo-toasts{width:min(92vw,330px);right:8px;bottom:8px}\n" +
             "}\n" +

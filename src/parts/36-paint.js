@@ -176,11 +176,23 @@
         const aho = APP.historial.filter((a) => a.ts >= inicio.getTime()).length;
         const critAho = APP.historial.filter((a) => a.sev === 'critico' && a.ts >= inicio.getTime()).length;
         const kv = (id, v) => { const e = byId(id); if (e) e.textContent = v; };
+        // v6.0.13: la velocidad promedio vive en la cabecera (antes se escribia
+        // en un elemento inexistente) y se anaden KPIs de exceso y silenciadas.
+        kv('rondo-dash-vel', total ? (on ? Math.round(vel) + ' km/h prom.' : 'sin unidades en linea') : 'sin unidades vigiladas');
+        let exceso = 0, silenciadas = 0;
+        for (let i = 0; i < watched.length; i++) {
+            const info = parseUnitName(watched[i]);
+            const s = estados[i] || {};
+            if (info.eco && APP.dismissed.has(info.eco)) silenciadas++;
+            if (s.online && s.vel > limiteDe(info)) exceso++;
+        }
         kv('rondo-kpi-on', on);
         kv('rondo-kpi-off', off);
         kv('rondo-kpi-det', det);
         kv('rondo-kpi-mov', mov);
-        kv('rondo-kpi-vel', on ? Math.round(vel) + ' km/h prom.' : '');
+        kv('rondo-kpi-exc', exceso);
+        kv('rondo-kpi-exc-pct', total ? ((exceso / total) * 100).toFixed(0) + '%' : '');
+        kv('rondo-kpi-sil', silenciadas);
         kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-zonas', enZona.size);
@@ -221,6 +233,27 @@
                     '</div>'
                 )).join('')
                 : '<div class="rondo-dash-empty">' + LANG.recientesNone + '</div>');
+        }
+        // v6.0.13: ranking de unidades por avisos de hoy (clic -> filtra Avisos).
+        const topEl = byId('rondo-dash-top');
+        if (topEl) {
+            const hoyConEco = APP.historial.filter((a) => a.ts >= inicio.getTime() && a.eco);
+            const cuenta = new Map();
+            hoyConEco.forEach((a) => { cuenta.set(a.eco, (cuenta.get(a.eco) || 0) + 1); });
+            const top = Array.from(cuenta.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const nTop = byId('rondo-top-n');
+            if (nTop) nTop.textContent = cuenta.size;
+            const max = top.length ? top[0][1] : 1;
+            rxSetHtmlKeepScroll(topEl, top.length
+                ? top.map(([eco, n]) => (
+                    '<div class="rondo-top-item" data-eco="' + esc(eco) + '" title="Ver los avisos de ' + esc(eco) + '">' +
+                    '<span class="eco rondo-usym">' + UIS.warn + '</span>' +
+                    '<div class="body"><b>' + esc(eco) + '</b>' +
+                    '<div class="ruta-bar"><div class="ruta-bar-fill" style="width:' + Math.round((n / Math.max(1, max)) * 100) + '%"></div></div></div>' +
+                    '<span class="pct">' + n + '</span>' +
+                    '</div>'
+                )).join('')
+                : '<div class="rondo-dash-empty">Sin avisos hoy.</div>');
         }
         paintSparkline();
     }
@@ -302,6 +335,12 @@
         items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
         const top = items.slice(0, 6);
         if (countEl) countEl.textContent = items.length;
+        // v6.0.13: KPI "En ruta" (unidades con ruta en curso o desviadas).
+        const enCurso = items.filter((it) => it.estado === 'EN RUTA' || it.estado === 'DESV').length;
+        const kvR = byId('rondo-kpi-ruta');
+        if (kvR) kvR.textContent = enCurso;
+        const kvRp = byId('rondo-kpi-ruta-pct');
+        if (kvRp) kvRp.textContent = items.length ? items.length + ' activas' : '';
         rxSetHtmlKeepScroll(cont, top.length
             ? top.map((it) => {
                 const etaTxt = (it.etaSeg != null && isFinite(it.etaSeg)) ? (Math.round(it.etaSeg / 60) + ' min') : '\u2014';

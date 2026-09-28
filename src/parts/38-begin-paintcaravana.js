@@ -4,9 +4,11 @@
         const body = byId('rondo-caravana-body');
         if (!sel || !body) return;
         const vigiladas = (APP.unidades || []).filter(shouldWatch);
+        const resEl = byId('rondo-caravana-resumen');
         if (!vigiladas.length) {
             sel.innerHTML = '';
-            body.innerHTML = '<div class="rondo-cv-empty">No hay unidades vigiladas. Agrega unidades desde la lista para usar el modo caravana.</div>';
+            if (resEl) resEl.textContent = '';
+            body.innerHTML = '<div class="rondo-cv-empty"><span class="rondo-usym">' + UIS.caravana + '</span><div>No hay unidades vigiladas. Agrega unidades desde la lista para usar el modo caravana.</div></div>';
             return;
         }
         // Reconstruye el <select> solo si cambia la lista de economicos (asi
@@ -40,11 +42,16 @@
         // Tarjeta del lider
         html.push(renderCaravanaLider(info, st, ruta, res.snapLider));
         if (!miembros.length) {
-            html.push('<div class="rondo-cv-empty">Ninguna unidad vigilada cercana a ' + esc(APP.caravanaEco) + '.</div>');
+            html.push('<div class="rondo-cv-empty"><span class="rondo-usym">' + UIS.caravana + '</span><div>Ninguna unidad vigilada cercana a ' + esc(APP.caravanaEco) + '.</div></div>');
         } else {
             miembros.forEach((m) => { html.push(renderCaravanaMiembro(m)); });
         }
         setHtml(body, html.join(''));
+        if (resEl) {
+            resEl.textContent = miembros.length
+                ? (miembros.length + ' cerca \u00b7 ' + miembros.filter((m) => !m.vigilada).length + ' sin vigilar')
+                : '';
+        }
         const cCv = byId('rondo-c-cv');
         if (cCv) cCv.textContent = miembros.length;
     }

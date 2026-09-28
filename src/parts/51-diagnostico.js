@@ -45,6 +45,16 @@
         return {
             ver: (typeof VER !== 'undefined') ? VER : '',
             online: (typeof navigator !== 'undefined') ? navigator.onLine : null,
+            // v6.0.14: identidad de la plataforma (sitio, skin, API, idioma).
+            plataforma: {
+                nombre: rxPlatNombre(),
+                api: rxPlatApiUrl(),
+                idioma: rxPlatIdioma(),
+                skin: rxPlatSkin(),
+                acento: rxPlatAcento(),
+                webgis: rxPlatWebgis(),
+                pos: rxPlatPosDefecto()
+            },
             storage: rxDiagStorage(),
             caches: {
                 memo: Object.keys(APP.memo || {}).length,
@@ -75,6 +85,14 @@
         if (!d) d = rxDiagRecolectar();
         const L = [];
         L.push('Rondo ' + d.ver + ' \u00b7 ' + (d.online === false ? 'sin conexion' : 'en linea'));
+        const plat = d.plataforma || {};
+        L.push('Plataforma: ' + (plat.nombre || 'n/d') +
+            (plat.skin ? ' \u00b7 skin ' + plat.skin : '') +
+            (plat.acento ? ' \u00b7 acento ' + plat.acento : '') +
+            (plat.idioma ? ' \u00b7 idioma ' + plat.idioma : '') +
+            (plat.webgis ? ' \u00b7 webgis ' + plat.webgis : '') +
+            (plat.pos ? ' \u00b7 pos ' + plat.pos : '') +
+            (plat.api ? ' \u00b7 ' + plat.api : ''));
         L.push('Unidades: ' + d.unidades + ' \u00b7 avisos: ' + d.historial + ' \u00b7 geocercas: ' + d.zonas);
         L.push('Storage local: ' + rxDiagBytes(d.storage.totalLocal) + ' (' + d.storage.local.length +
             ' claves) \u00b7 sesion: ' + rxDiagBytes(d.storage.totalSession) + ' (' + d.storage.session.length + ' claves)');

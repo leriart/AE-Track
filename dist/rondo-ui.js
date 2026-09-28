@@ -128,17 +128,35 @@
             "#rondo-lista-rutas .rr-mini-abs{position:absolute;left:0;top:0;z-index:1}\n" +
             "#rondo-lista-rutas .rr-mini-abs.rondo-mm{position:absolute}\n" +
             // v6.0.11: replay del dia.
-            "#rondo-panel .rondo-replay-bar{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}\n" +
-            "#rondo-panel .rondo-replay-bar .filtro{min-width:0;width:100%;box-sizing:border-box}\n" +
-            "#rondo-panel .rondo-replay-bar .mini{width:100%;text-align:center}\n" +
-            "#rondo-panel .rondo-replay-bar > input[type=date]{grid-column:1 / -1}\n" +
+            // v6.0.12: replay en tarjetas (consulta, mapa, reproduccion y listas).
+            "#rondo-panel .rondo-replay-card{display:flex;flex-direction:column;gap:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;padding:10px;margin-bottom:8px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-head{display:flex;align-items:baseline;justify-content:space-between;gap:8px;min-height:16px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-title{font:700 11px var(--rondo-font);text-transform:uppercase;letter-spacing:.6px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-sub{font-size:10.5px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-time{font:700 12px var(--rondo-font);font-variant-numeric:tabular-nums;color:var(--rondo-fg);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;padding:1px 7px}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-buscar{position:relative;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-buscar input{width:100%;box-sizing:border-box}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-range{display:grid;grid-template-columns:1fr 1fr;gap:7px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-field{display:flex;flex-direction:column;gap:3px;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-lbl{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-field input{width:100%;box-sizing:border-box;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-actions{display:grid;grid-template-columns:1.6fr 1fr;gap:6px}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-actions .accbtn,#rondo-panel .rondo-replay-card .rrc-actions .mini{width:100%;text-align:center;justify-content:center}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-mapa{margin:0}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-ctrl{margin:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-vel{display:flex;align-items:center;gap:6px;flex:1;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-vel select{flex:1;min-width:0}\n" +
+            "#rondo-panel .rondo-replay-card .rondo-replay-chart{margin:0;height:78px}\n" +
+            "#rondo-panel #rondo-replay-slider{width:100%;box-sizing:border-box;margin:0}\n" +
+            "#rondo-panel #rondo-replay-play.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
             "#rondo-panel .rondo-replay-mapa{width:100%;height:240px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:10px;overflow:hidden;margin:8px 0}\n" +
             "#rondo-panel .rondo-replay-mapa svg{width:100%;height:100%;display:block}\n" +
-            "#rondo-panel .rondo-replay-vacio{display:flex;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-vacio{display:flex;flex-direction:column;gap:6px;align-items:center;justify-content:center;height:100%;font-size:11.5px;color:var(--rondo-fg-mute);padding:10px;text-align:center}\n" +
+            "#rondo-panel .rondo-replay-vacio .rv-ico{font-size:22px;opacity:.55}\n" +
             "#rondo-panel .rondo-replay-ctrl{display:flex;gap:6px;align-items:center;flex-wrap:wrap}\n" +
             "#rondo-panel .rondo-replay-ctrl input[type=range]{flex:1;min-width:110px}\n" +
             "#rondo-panel .rondo-replay-info{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}\n" +
-            "#rondo-panel .rondo-replay-info .rr-chip{font:600 11px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 7px}\n" +
+            "#rondo-panel .rondo-replay-info .rr-chip{font:600 11px var(--rondo-font);font-variant-numeric:tabular-nums;color:var(--rondo-fg);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:9px;padding:2px 8px}\n" +
             "#rondo-panel .rondo-replay-eventos{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow:auto}\n" +
             "#rondo-panel .rondo-replay-ev{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
             "#rondo-panel .rondo-replay-ev:hover{border-color:var(--rondo-fg-mute)}\n" +
@@ -151,7 +169,7 @@
             "#rondo-panel .rondo-replay-ev .ev-zona{color:var(--rondo-accent-2)}\n" +
             "#rondo-panel .rondo-replay-ev .ev-txt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .rondo-replay-sec{margin-top:8px}\n" +
-            "#rondo-panel .rondo-replay-sec h5{margin:0 0 4px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-replay-sec h5{margin:0 0 5px;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-accent-2)}\n" +
             "#rondo-panel .rondo-replay-lista{display:flex;flex-direction:column;gap:4px;max-height:220px;overflow:auto}\n" +
             "#rondo-panel .rondo-replay-par{display:flex;gap:8px;align-items:center;font-size:11.5px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer}\n" +
             "#rondo-panel .rondo-replay-par:hover{border-color:var(--rondo-fg-mute)}\n" +
@@ -300,6 +318,18 @@
             "#rondo-dash .rondo-dash-head{display:flex;align-items:baseline;gap:6px;padding:2px 2px 6px;font:700 13px var(--rondo-font);color:var(--rondo-fg);border-bottom:1px solid var(--rondo-border-soft);margin-bottom:2px}\n" +
             "#rondo-dash .rondo-dash-head b{letter-spacing:.2px}\n" +
             "#rondo-dash .rondo-dash-vel{margin-left:auto;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            // v6.0.13: dashboard ampliado (accesos rapidos, tendencia y ranking).
+            "#rondo-dash .rondo-dash-nav{display:flex;gap:6px;flex-wrap:wrap}\n" +
+            "#rondo-dash .rondo-dash-go{display:inline-flex;align-items:center;gap:5px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:999px;padding:3px 10px;font:600 10.5px var(--rondo-font);cursor:pointer;transition:background .15s,color .15s,border-color .15s,transform .1s}\n" +
+            "#rondo-dash .rondo-dash-go:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-border);transform:translateY(-1px)}\n" +
+            "#rondo-dash .rondo-dash-go:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
+            "#rondo-dash .rondo-dash-go .rondo-usym{font-size:12px;opacity:.85}\n" +
+            "#rondo-dash .rondo-dash-trend .sparkline{margin-top:2px}\n" +
+            "#rondo-dash .rondo-top-item{display:flex;align-items:center;gap:8px;padding:5px 7px;border-radius:7px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer;font-size:11.5px}\n" +
+            "#rondo-dash .rondo-top-item:hover{border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dash .rondo-top-item .eco{color:var(--rondo-warn-fg);flex:0 0 auto}\n" +
+            "#rondo-dash .rondo-top-item .body{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}\n" +
+            "#rondo-dash .rondo-top-item .pct{font:700 11.5px var(--rondo-font);color:var(--rondo-fg);flex:0 0 auto;font-variant-numeric:tabular-nums}\n" +
             "#rondo-dash .rondo-dash-kpis{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}\n" +
             "#rondo-dash .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:6px 8px;display:flex;flex-direction:column;gap:1px;min-width:0;position:relative;overflow:hidden;transition:border-color .15s,transform .12s,box-shadow .15s;cursor:pointer}\n" +
             "#rondo-dash .kpi:hover{border-color:var(--rondo-border);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
@@ -433,7 +463,9 @@
             "#rondo-panel .rondo-cv-card .cv-meta .pill.alerta{background:rgba(var(--rondo-warn-rgb),.18);color:var(--rondo-warn-fg)}\n" +
             "#rondo-panel .rondo-cv-card .cv-meta .pill.dim{opacity:.75}\n" +
             "#rondo-panel .rondo-cv-card.contrario{border-color:rgba(var(--rondo-crit-rgb),.6)}\n" +
-            "#rondo-panel .rondo-cv-empty{padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
+            "#rondo-panel .rondo-cv-empty{display:flex;flex-direction:column;gap:6px;align-items:center;padding:18px 8px;text-align:center;color:var(--rondo-fg-dim);font-size:12px}\n" +
+            "#rondo-panel .rondo-cv-empty .rondo-usym{font-size:22px;opacity:.55}\n" +
+            "#rondo-panel .rondo-caravana-resumen{margin-left:auto;font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);white-space:nowrap}\n" +
             /* ── Pestaña Riesgo ───────────────────────────────────── */
             /* La pestana Zonas tiene un segmentado fijo arriba y dos paneles
              * (Geocercas / Riesgo) que scrollean por separado. */
@@ -711,7 +743,7 @@
             "#rondo-panel .kpi.bad .valor{color:var(--rondo-bad-fg)}\n" +
             "#rondo-panel .kpi.sub .valor{color:var(--rondo-fg)}\n" +
             "#rondo-panel .kpi .resumen{font-size:11px;color:var(--rondo-fg-dim)}\n" +
-            "#rondo-dash .sparkline{display:none}\n" +
+            "#rondo-dash .sparkline{display:block;width:100%;height:46px}\n" +
             "#rondo-dash .sparkline path{fill:none;stroke-width:1.6}\n" +
             "#rondo-dash .recent{padding:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px}\n" +
             "#rondo-dash .recent h4{margin:0 0 6px;font-size:11px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
@@ -781,7 +813,11 @@
             "#rondo-modal-lista .lista-row .rondo-dest:focus{outline:none;border-color:var(--rondo-accent-2)}\n" +
             "#rondo-modal-lista .lista-row button{background:transparent;border:1px solid var(--rondo-border);color:var(--rondo-fg-dim);border-radius:5px;padding:2px 9px;cursor:pointer;font-size:11px}\n" +
             "#rondo-modal-lista .lista-row button:hover{color:var(--rondo-bad-fg);border-color:var(--rondo-bad-fg)}\n" +
-            "#rondo-modal-lista .lista-empty{padding:14px;text-align:center;color:var(--rondo-fg-mute);font-size:12px}\n" +
+            "#rondo-modal-lista .lista-empty{display:flex;flex-direction:column;gap:6px;align-items:center;padding:14px;text-align:center;color:var(--rondo-fg-mute);font-size:12px}\n" +
+            "#rondo-modal-lista .lista-empty .rondo-usym{font-size:20px;opacity:.5}\n" +
+            "#rondo-modal .rondo-modal-buscar{width:100%;box-sizing:border-box;margin:0 0 8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:7px;color:var(--rondo-fg);padding:6px 9px;font:400 12px var(--rondo-font)}\n" +
+            "#rondo-modal .rondo-modal-buscar::placeholder{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-modal .rondo-modal-buscar:focus-visible{outline:2px solid var(--rondo-accent-2);outline-offset:1px}\n" +
             "#rondo-modal-lista .lista-row.arrastrando{opacity:.5;background:var(--rondo-bg-strong)}\n" +
             "#rondo-modal-lista .rondo-drag-handle{cursor:grab;color:var(--rondo-fg-mute);font-size:14px;letter-spacing:-2px;padding:0 4px;user-select:none;touch-action:none}\n" +
             "#rondo-modal-lista .rondo-drag-handle:active{cursor:grabbing}\n" +
@@ -983,6 +1019,7 @@
             "  #rondo-modal{width:min(96vw,520px)}\n" +
             "  #rondo-panel .kpi-grid{grid-template-columns:repeat(auto-fit,minmax(140px,1fr))}\n" +
             "  #rondo-config .row-grid{grid-template-columns:1fr}\n" +
+            "  #rondo-panel .rrc-range,#rondo-panel .rrc-actions{grid-template-columns:1fr}\n" +
             "  #rondo-dash{padding:10px}\n" +
             "  #rondo-toasts{width:min(92vw,330px);right:8px;bottom:8px}\n" +
             "}\n" +
@@ -1266,8 +1303,15 @@
             '<div class="tabla" id="rondo-wrap-dash">' +
             '<div id="rondo-dash">' +
             '<div class="rondo-dash-head">' +
-            '<b>Centro de monitoreo</b>' +
+            '<b>Resumen general de la flota</b>' +
             '<span class="rondo-dash-vel" id="rondo-dash-vel"></span>' +
+            '</div>' +
+            // v6.0.13: accesos rapidos a las secciones relacionadas.
+            '<div class="rondo-dash-nav">' +
+            '<button class="rondo-dash-go" data-go="unidades" title="Ir a la lista de unidades"><span class="rondo-usym">' + UIS.panel + '</span> Unidades</button>' +
+            '<button class="rondo-dash-go" data-go="alertas" title="Ir al historial de avisos"><span class="rondo-usym">' + UIS.alertas + '</span> Avisos</button>' +
+            '<button class="rondo-dash-go" data-go="rutas" title="Ir a las rutas planificadas"><span class="rondo-usym">' + UIS.route + '</span> Rutas</button>' +
+            '<button class="rondo-dash-go" data-go="zonas" title="Ir a geocercas y zonas de riesgo"><span class="rondo-usym">' + UIS.map + '</span> Zonas</button>' +
             '</div>' +
             '<div class="rondo-dash-block rondo-salud" id="rondo-salud">' +
             '<div class="rondo-salud-top">' +
@@ -1285,6 +1329,11 @@
             '</div>' +
             '<div class="rondo-dash-dist-legend" id="rondo-dist-legend"></div>' +
             '</div>' +
+            // v6.0.13: tendencia de la flota (en linea / sin senal) en el tiempo.
+            '<div class="rondo-dash-block rondo-dash-trend">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.online + '</span> Tendencia (en linea / sin senal)</div>' +
+            '<svg class="sparkline" id="rondo-spark" viewBox="0 0 200 32" preserveAspectRatio="none" role="img" aria-label="Tendencia de unidades en linea y sin senal"></svg>' +
+            '</div>' +
             '<div class="rondo-dash-kpis">' +
             '<div class="kpi ok" data-kpi="online" title="Unidades que reportaron dentro del umbral de sin senal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.online + '</span><span class="kpi-etq">En linea</span><span class="kpi-val" id="rondo-kpi-on">0</span><span class="kpi-pct" id="rondo-kpi-on-pct"></span></div>' +
             '<div class="kpi bad" data-kpi="offline" title="Unidades cuyo ultimo reporte supero el umbral · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.offline + '</span><span class="kpi-etq">Sin senal</span><span class="kpi-val" id="rondo-kpi-off">0</span><span class="kpi-pct" id="rondo-kpi-off-pct"></span></div>' +
@@ -1292,6 +1341,9 @@
             '<div class="kpi sub" data-kpi="moviendo" title="Unidades en linea con velocidad normal · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.moving + '</span><span class="kpi-etq">En mov.</span><span class="kpi-val" id="rondo-kpi-mov">0</span></div>' +
             '<div class="kpi sub" data-kpi="zonas" title="Geocercas ocupadas · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.map + '</span><span class="kpi-etq">En zonas</span><span class="kpi-val" id="rondo-kpi-zonas">0</span><span class="kpi-pct" id="rondo-kpi-zonas-pct"></span></div>' +
             '<div class="kpi" data-kpi="alertas" title="Avisos desde la medianoche · clic para verlos"><span class="kpi-ico rondo-usym">' + UIS.alertas + '</span><span class="kpi-etq">Avisos hoy</span><span class="kpi-val" id="rondo-kpi-aho">0</span><span class="kpi-pct" id="rondo-kpi-criticos"></span></div>' +
+            '<div class="kpi sub" data-kpi="ruta" title="Unidades con ruta activa en curso · clic para ver las rutas"><span class="kpi-ico rondo-usym">' + UIS.route + '</span><span class="kpi-etq">En ruta</span><span class="kpi-val" id="rondo-kpi-ruta">0</span><span class="kpi-pct" id="rondo-kpi-ruta-pct"></span></div>' +
+            '<div class="kpi warn" data-kpi="exceso" title="Unidades en linea por encima de su limite de velocidad · clic para verlas"><span class="kpi-ico rondo-usym">' + UIS.speed + '</span><span class="kpi-etq">Exceso</span><span class="kpi-val" id="rondo-kpi-exc">0</span><span class="kpi-pct" id="rondo-kpi-exc-pct"></span></div>' +
+            '<div class="kpi sub" data-kpi="silenciadas" title="Unidades vigiladas silenciadas (no generan avisos)"><span class="kpi-ico rondo-usym">' + UIS.mute + '</span><span class="kpi-etq">Silenciadas</span><span class="kpi-val" id="rondo-kpi-sil">0</span></div>' +
             '</div>' +
             '<div class="rondo-dash-block">' +
             '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.warn + '</span> Requieren atencion<span class="rondo-dash-chip" id="rondo-atencion-n">0</span></div>' +
@@ -1308,6 +1360,11 @@
             '<div class="rondo-dash-block">' +
             '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.alertas + '</span> Avisos recientes</div>' +
             '<div id="rondo-kpi-recientes" class="rondo-dash-list"></div>' +
+            '</div>' +
+            // v6.0.13: ranking de unidades por avisos de hoy (clic -> filtra Avisos).
+            '<div class="rondo-dash-block">' +
+            '<div class="rondo-dash-block-head"><span class="rondo-usym sm">' + UIS.warn + '</span> Unidades con mas avisos hoy<span class="rondo-dash-chip" id="rondo-top-n">0</span></div>' +
+            '<div id="rondo-dash-top" class="rondo-dash-list"></div>' +
             '</div>' +
             '</div>' +
             '</div>' +
@@ -1359,25 +1416,30 @@
              '<div class="rondo-caravana-bar">' +
              '<label for="rondo-caravana-sel" style="font-size:11px;color:var(--rondo-fg-dim)">Unidad vigilada:</label>' +
              '<select id="rondo-caravana-sel" class="filtro" style="flex:1"></select>' +
+             '<span class="rondo-caravana-resumen" id="rondo-caravana-resumen"></span>' +
              '</div>' +
              '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
              '</div>' +
              // v6.0.11: tab de replay. Reproduce el recorrido de una unidad
              // entre una fecha/hora de inicio y una de fin (permite multidia).
+             // v6.0.12: tab de replay en tarjetas (consulta, mapa, reproduccion
+             // y listas) para que la jerarquia visual sea clara.
              '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
-             '<div class="rondo-replay-bar">' +
+             // 1) Consulta: unidad, rango (fecha/hora inicio y fin) y rangos rapidos.
+             '<div class="rondo-replay-card">' +
+             '<div class="rrc-head"><span class="rrc-title">Unidad y rango</span><span class="rrc-sub">Del inicio al fin</span></div>' +
              '<div class="rondo-replay-buscar">' +
              '<input type="text" id="rondo-replay-buscar" class="filtro" placeholder="Buscar unidad (eco, placa, nombre)..." autocomplete="off" spellcheck="false" title="Buscar la unidad a reproducir">' +
              '<input type="hidden" id="rondo-replay-eco">' +
              '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
              '</div>' +
+             '<div class="rrc-range">' +
+             '<label class="rrc-field"><span class="rrc-lbl">Desde</span>' +
              '<input type="date" id="rondo-replay-fecha" class="filtro" title="Fecha de inicio">' +
-             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora de inicio" value="00:00">' +
-             '<span class="rq-lbl">a</span>' +
-             '<input type="date" id="rondo-replay-fecha2" class="filtro" title="Fecha de fin (si se deja igual al inicio, es el mismo dia)">' +
-             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora de fin" value="23:59">' +
-             '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
-             '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora de inicio" value="00:00"></label>' +
+             '<label class="rrc-field"><span class="rrc-lbl">Hasta</span>' +
+             '<input type="date" id="rondo-replay-fecha2" class="filtro" title="Fecha de fin (si es igual al inicio, es el mismo dia)">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora de fin" value="23:59"></label>' +
              '</div>' +
              '<div class="rondo-replay-quick">' +
              '<span class="rq-lbl">Rango:</span>' +
@@ -1387,23 +1449,40 @@
              '<button class="mini" data-rango="dia">Turno dia</button>' +
              '<button class="mini" data-rango="noche">Turno noche</button>' +
              '</div>' +
+             '<div class="rrc-actions">' +
+             '<button class="accbtn" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar recorrido</button>' +
+             '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
+             '</div>' +
+             '</div>' +
+             // 2) Resumen (chips) y mapa, con leyenda y detalle del punto actual.
              '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
-             '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div></div>' +
+             '<div class="rondo-replay-card">' +
+             '<div class="rrc-head"><span class="rrc-title">Mapa del recorrido</span></div>' +
+             '<div class="rondo-replay-mapa" id="rondo-replay-mapa"><div class="rondo-replay-vacio"><span class="rondo-usym rv-ico">' + UIS.map + '</span><span>Carga un recorrido para verlo en el mapa</span></div></div>' +
+             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
+             '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
+             '</div>' +
+             // 3) Reproduccion: play, velocidad, progreso y perfil de velocidad.
+             '<div class="rondo-replay-card">' +
+             '<div class="rrc-head"><span class="rrc-title">Reproduccion</span><span class="rrc-time" id="rondo-replay-tiempo">--:-- / --:--</span></div>' +
              '<div class="rondo-replay-ctrl">' +
-             '<button class="mini" id="rondo-replay-play" title="Reproducir o pausar">Play</button>' +
+             '<button class="accbtn" id="rondo-replay-play" title="Reproducir o pausar"><span class="rondo-usym">' + UIS.moving + '</span> <span class="rrc-play-txt">Play</span></button>' +
+             '<label class="rrc-vel"><span class="rrc-lbl">Velocidad</span>' +
              '<select id="rondo-replay-vel" class="filtro" title="Velocidad de reproduccion">' +
              '<option value="60">1 min/s</option>' +
              '<option value="300" selected>5 min/s</option>' +
              '<option value="900">15 min/s</option>' +
              '<option value="3600">1 h/s</option>' +
-             '</select>' +
-             '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0" style="flex:1">' +
+             '</select></label>' +
              '</div>' +
+             '<input type="range" id="rondo-replay-slider" min="0" max="0" value="0">' +
              '<div class="rondo-replay-chart" id="rondo-replay-chart" title="Velocidad en el tiempo; clic para saltar"><div class="rondo-replay-vacio">Perfil de velocidad</div></div>' +
-             '<div class="rondo-replay-leyenda"><span class="lg"><i style="background:#7d8595"></i>parada</span><span class="lg"><i style="background:#1565c0"></i>geocerca</span><span class="lg"><i style="background:#b71c1c"></i>exceso</span><span class="lg"><i style="background:#e65100"></i>desvio</span></div>' +
-             '<div id="rondo-replay-info" class="rondo-replay-info"></div>' +
+             '</div>' +
+             // 4) Paradas y eventos del recorrido.
+             '<div class="rondo-replay-card">' +
              '<div class="rondo-replay-sec"><h5>Paradas</h5><div id="rondo-replay-paradas" class="rondo-replay-lista"></div></div>' +
              '<div class="rondo-replay-sec"><h5>Eventos</h5><div id="rondo-replay-eventos" class="rondo-replay-lista"></div></div>' +
+             '</div>' +
              '<div class="rondo-replay-acciones">' +
              '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido (resumen, paradas y eventos)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
              '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
@@ -1571,6 +1650,7 @@
             '<button class="mini" id="rondo-orden-invertir" title="Invertir el orden actual">Invertir</button>' +
             '</div>' +
             '<div class="rondo-modal-sec"><span class="rondo-usym sm">' + UIS.watch + '</span> Unidades en la lista<span class="rondo-count" id="rondo-modal-count">0</span></div>' +
+            '<input type="search" id="rondo-modal-buscar" class="rondo-modal-buscar" placeholder="Buscar unidad o destino en la lista..." autocomplete="off" spellcheck="false" title="Filtra la lista por eco, placa o destino">' +
             '<div id="rondo-modal-lista-wrap">' +
                 '<div id="rondo-modal-lista"></div>' +
             '</div>' +
@@ -1726,11 +1806,15 @@
             '<option value="1.5">Enorme (150%)</option>' +
             '</select></label>' +
             '<label>Color de acento <input type="color" id="c-acento"></label>' +
+            checkRow('c-tema-plat', 'Usar el color de acento de la plataforma') +
+            '<span id="rondo-plat-info" style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin:-2px 0 6px"></span>' +
+            checkRow('c-estilo-pag', 'Aplicar el estilo de Rondo a la pagina (experimental)') +
+            checkRow('c-idioma-plat', 'Usar el idioma de la plataforma para la voz') +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
             numRow('c-contorno-horas', 'Antigüedad de contornos (h)') +
             '<h4>Informacion</h4>' +
-            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..7</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>?</b> ayuda · <b>Esc</b> cierra el dialogo superior</span>' +
+            '<span style="font-size:11.5px;color:var(--rondo-fg-dim)">Atajos: <b>Alt+1..8</b> cambia pestañas · <b>Alt+P</b> barra · <b>Alt+L</b> barra · <b>Alt+H</b> pliega barra · <b>?</b> ayuda · <b>Esc</b> cierra el dialogo superior</span>' +
             '</div>' +
             '<div class="cfg-pane" data-cfg="ventanas" style="display:none">' +
             '<h4>Barra lateral</h4>' +
@@ -1876,12 +1960,13 @@
             '</div>' +
             '<h4>Que hace cada pestana</h4>' +
             '<ul>' +
-            '<li><b>Dashboard</b>: salud de la flota, 6 KPIs (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy), unidades que requieren atencion, zonas con unidades, rutas activas y avisos recientes. Todo en una sola pantalla.</li>' +
+            '<li><b>Dashboard</b>: resumen general de la flota. Cabecera con velocidad promedio, <b>accesos rapidos</b> (Unidades, Avisos, Rutas, Zonas) y <b>9 KPIs</b> (en linea, sin senal, detenidas, en mov., en zonas, avisos hoy, en ruta, exceso, silenciadas) clicables. Incluye la salud de la flota, la barra de distribucion, la <b>tendencia</b> de unidades en linea/sin senal, "Requieren atencion", el <b>ranking de unidades con mas avisos hoy</b> y los avisos recientes.</li>' +
             '<li><b>Unidades</b>: lista de tarjetas con estado, velocidad, zona y acciones. Clic para abrir su ventana; clic derecho para mas opciones (ruta, geocerca, odometro, etc.).</li>' +
             '<li><b>Avisos</b>: historial filtrable por severidad (criticas, altas, medias, bajas). Exportable a CSV.</li>' +
             '<li><b>Rutas</b>: progreso de cada ruta trazada (OSRM o A*) con ETA. Se planea desde el clic derecho de una unidad.</li>' +
-            '<li><b>Zonas</b>: segmentado con dos vistas: <b>Geocercas</b> de la plataforma (unidades dentro) y <b>Zonas de riesgo</b> (dona, histograma, KPIs, filtros, export). Las alertas por zonas de riesgo se ven como la regla <i>riesgoSinSenal</i>.</li>' +
-            '<li><b>Caravana</b>: unidades (vigiladas o no) cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada.</li>' +
+            '<li><b>Zonas</b>: segmentado con dos vistas: <b>Geocercas</b> de la plataforma (unidades dentro) y <b>Zonas de riesgo</b> (dona, histograma, KPIs, filtros, export).</li>' +
+            '<li><b>Caravana</b>: unidades (vigiladas o no) cerca de una unidad "lider" en la misma ruta (distancia firmada) o dentro del radio de cercania.</li>' +
+            '<li><b>Replay</b>: reproduce el recorrido de una unidad entre una <b>fecha/hora de inicio y una de fin</b> (permite multidia), con mini-mapa de OpenStreetMap, perfil de velocidad, resumen, <b>paradas</b> (con motor encendido/apagado) y eventos (geocercas, excesos, desvios). Exporta GeoJSON, CSV de paradas y un reporte PDF. Solo lectura.</li>' +
             '<li><b>Chat IA</b>: consultas libres a la IA (solo si la IA esta habilitada con API key). Pregunta por el estado de la flota ("que unidades estan sin senal", "cual es la alerta mas urgente") o por el uso del propio Rondo ("como activo la regla de destino"). Tiene un selector <b>Toda la flota</b> / solo vigiladas y un boton <b>Limpiar</b>.</li>' +
             '</ul>' +
             '<h4>Alertas de ruta</h4>' +
@@ -2284,11 +2369,23 @@
         const aho = APP.historial.filter((a) => a.ts >= inicio.getTime()).length;
         const critAho = APP.historial.filter((a) => a.sev === 'critico' && a.ts >= inicio.getTime()).length;
         const kv = (id, v) => { const e = byId(id); if (e) e.textContent = v; };
+        // v6.0.13: la velocidad promedio vive en la cabecera (antes se escribia
+        // en un elemento inexistente) y se anaden KPIs de exceso y silenciadas.
+        kv('rondo-dash-vel', total ? (on ? Math.round(vel) + ' km/h prom.' : 'sin unidades en linea') : 'sin unidades vigiladas');
+        let exceso = 0, silenciadas = 0;
+        for (let i = 0; i < watched.length; i++) {
+            const info = parseUnitName(watched[i]);
+            const s = estados[i] || {};
+            if (info.eco && APP.dismissed.has(info.eco)) silenciadas++;
+            if (s.online && s.vel > limiteDe(info)) exceso++;
+        }
         kv('rondo-kpi-on', on);
         kv('rondo-kpi-off', off);
         kv('rondo-kpi-det', det);
         kv('rondo-kpi-mov', mov);
-        kv('rondo-kpi-vel', on ? Math.round(vel) + ' km/h prom.' : '');
+        kv('rondo-kpi-exc', exceso);
+        kv('rondo-kpi-exc-pct', total ? ((exceso / total) * 100).toFixed(0) + '%' : '');
+        kv('rondo-kpi-sil', silenciadas);
         kv('rondo-kpi-on-pct', total ? ((on / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-off-pct', total ? ((off / total) * 100).toFixed(0) + '%' : '');
         kv('rondo-kpi-zonas', enZona.size);
@@ -2329,6 +2426,27 @@
                     '</div>'
                 )).join('')
                 : '<div class="rondo-dash-empty">' + LANG.recientesNone + '</div>');
+        }
+        // v6.0.13: ranking de unidades por avisos de hoy (clic -> filtra Avisos).
+        const topEl = byId('rondo-dash-top');
+        if (topEl) {
+            const hoyConEco = APP.historial.filter((a) => a.ts >= inicio.getTime() && a.eco);
+            const cuenta = new Map();
+            hoyConEco.forEach((a) => { cuenta.set(a.eco, (cuenta.get(a.eco) || 0) + 1); });
+            const top = Array.from(cuenta.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            const nTop = byId('rondo-top-n');
+            if (nTop) nTop.textContent = cuenta.size;
+            const max = top.length ? top[0][1] : 1;
+            rxSetHtmlKeepScroll(topEl, top.length
+                ? top.map(([eco, n]) => (
+                    '<div class="rondo-top-item" data-eco="' + esc(eco) + '" title="Ver los avisos de ' + esc(eco) + '">' +
+                    '<span class="eco rondo-usym">' + UIS.warn + '</span>' +
+                    '<div class="body"><b>' + esc(eco) + '</b>' +
+                    '<div class="ruta-bar"><div class="ruta-bar-fill" style="width:' + Math.round((n / Math.max(1, max)) * 100) + '%"></div></div></div>' +
+                    '<span class="pct">' + n + '</span>' +
+                    '</div>'
+                )).join('')
+                : '<div class="rondo-dash-empty">Sin avisos hoy.</div>');
         }
         paintSparkline();
     }
@@ -2410,6 +2528,12 @@
         items.sort((a, b) => (b.pct || 0) - (a.pct || 0));
         const top = items.slice(0, 6);
         if (countEl) countEl.textContent = items.length;
+        // v6.0.13: KPI "En ruta" (unidades con ruta en curso o desviadas).
+        const enCurso = items.filter((it) => it.estado === 'EN RUTA' || it.estado === 'DESV').length;
+        const kvR = byId('rondo-kpi-ruta');
+        if (kvR) kvR.textContent = enCurso;
+        const kvRp = byId('rondo-kpi-ruta-pct');
+        if (kvRp) kvRp.textContent = items.length ? items.length + ' activas' : '';
         rxSetHtmlKeepScroll(cont, top.length
             ? top.map((it) => {
                 const etaTxt = (it.etaSeg != null && isFinite(it.etaSeg)) ? (Math.round(it.etaSeg / 60) + ' min') : '\u2014';
@@ -3266,9 +3390,11 @@
         const body = byId('rondo-caravana-body');
         if (!sel || !body) return;
         const vigiladas = (APP.unidades || []).filter(shouldWatch);
+        const resEl = byId('rondo-caravana-resumen');
         if (!vigiladas.length) {
             sel.innerHTML = '';
-            body.innerHTML = '<div class="rondo-cv-empty">No hay unidades vigiladas. Agrega unidades desde la lista para usar el modo caravana.</div>';
+            if (resEl) resEl.textContent = '';
+            body.innerHTML = '<div class="rondo-cv-empty"><span class="rondo-usym">' + UIS.caravana + '</span><div>No hay unidades vigiladas. Agrega unidades desde la lista para usar el modo caravana.</div></div>';
             return;
         }
         // Reconstruye el <select> solo si cambia la lista de economicos (asi
@@ -3302,11 +3428,16 @@
         // Tarjeta del lider
         html.push(renderCaravanaLider(info, st, ruta, res.snapLider));
         if (!miembros.length) {
-            html.push('<div class="rondo-cv-empty">Ninguna unidad vigilada cercana a ' + esc(APP.caravanaEco) + '.</div>');
+            html.push('<div class="rondo-cv-empty"><span class="rondo-usym">' + UIS.caravana + '</span><div>Ninguna unidad vigilada cercana a ' + esc(APP.caravanaEco) + '.</div></div>');
         } else {
             miembros.forEach((m) => { html.push(renderCaravanaMiembro(m)); });
         }
         setHtml(body, html.join(''));
+        if (resEl) {
+            resEl.textContent = miembros.length
+                ? (miembros.length + ' cerca \u00b7 ' + miembros.filter((m) => !m.vigilada).length + ' sin vigilar')
+                : '';
+        }
         const cCv = byId('rondo-c-cv');
         if (cCv) cCv.textContent = miembros.length;
     }
@@ -4489,6 +4620,9 @@
         // unificado "Paradas" de cada fila (abrirEditorParadas), no en un
         // input en linea. Pegar texto sigue soportando "eco=destino" y
         // "eco=A | B | C".
+        // v6.0.13: buscador de la lista de unidades de la ventana.
+        const modalBuscar = byId('rondo-modal-buscar');
+        if (modalBuscar) modalBuscar.addEventListener('input', () => pintarModalLista());
         byId('rondo-ejecutar').addEventListener('click', async () => {
             const ta = byId('rondo-txt');
             const texto = ta ? ta.value : '';
@@ -4640,11 +4774,26 @@
             dashEl.addEventListener('click', (e) => {
                 const item = e.target.closest && e.target.closest('.rondo-atencion-item');
                 if (item && item.dataset.eco) { openUnitWindow(item.dataset.eco); return; }
+                // v6.0.13: accesos rapidos del dashboard.
+                const go = e.target.closest && e.target.closest('.rondo-dash-go');
+                if (go && go.dataset.go) { setTab(go.dataset.go); return; }
+                // v6.0.13: ranking por avisos -> filtra la pestana de Avisos.
+                const topIt = e.target.closest && e.target.closest('.rondo-top-item');
+                if (topIt && topIt.dataset.eco) {
+                    APP.filtro = topIt.dataset.eco;
+                    const inp = byId('rondo-filtro');
+                    if (inp) inp.value = topIt.dataset.eco;
+                    setTab('alertas');
+                    return;
+                }
                 const kpi = e.target.closest && e.target.closest('.kpi[data-kpi]');
                 if (!kpi) return;
                 const acc = kpi.dataset.kpi;
                 if (acc === 'alertas') { setTab('alertas'); return; }
                 if (acc === 'zonas') { setTab('zonas'); return; }
+                // v6.0.13: los KPIs nuevos no son estados de unidad; navegan.
+                if (acc === 'ruta') { setTab('rutas'); return; }
+                if (acc === 'exceso' || acc === 'silenciadas') { setTab('unidades'); return; }
                 APP.filtEstado = (acc === 'online') ? 'todas' : acc;
                 const selF = byId('rondo-filtro-estado');
                 if (selF) selF.value = APP.filtEstado;
@@ -5032,6 +5181,22 @@
             g('c-dens').value = APP.config.density;
             g('c-escala').value = String(normalizarEscala(APP.config.escalaUI));
             g('c-acento').value = APP.config.acento || '#850D22';
+            // v6.0.14: tema heredado de la plataforma + info de lo detectado.
+            const cTemaPlat = g('c-tema-plat');
+            if (cTemaPlat) cTemaPlat.checked = !!APP.config.temaPlataforma;
+            const platInfo = g('rondo-plat-info');
+            if (platInfo) {
+                const ac = rxPlatAcento();
+                const nom = rxPlatNombre();
+                const idi = rxPlatIdioma();
+                platInfo.textContent = (nom || ac)
+                    ? ('Plataforma detectada: ' + (nom || 'sin nombre') + (ac ? ' · acento ' + ac : '') + (idi ? ' · idioma ' + idi : ''))
+                    : 'No se detectaron datos de la plataforma (no pasa nada: usa tu propio color de acento).';
+            }
+            const cEstiloPag = g('c-estilo-pag');
+            if (cEstiloPag) cEstiloPag.checked = !!APP.config.estiloPagina;
+            const cIdiomaPlat = g('c-idioma-plat');
+            if (cIdiomaPlat) cIdiomaPlat.checked = !!APP.config.idiomaPlataforma;
             g('c-coords').checked = !!APP.config.mostrarCoords;
             g('c-contornos').checked = !!APP.config.contornos;
             g('c-contorno-horas').value = APP.config.contornoHoras;
@@ -5306,6 +5471,17 @@
             cf.density = g('c-dens').value;
             cf.escalaUI = normalizarEscala(g('c-escala').value);
             cf.acento = g('c-acento').value;
+            const cTemaPlat2 = g('c-tema-plat');
+            cf.temaPlataforma = !!(cTemaPlat2 && cTemaPlat2.checked);
+            const cEstiloPag2 = g('c-estilo-pag');
+            cf.estiloPagina = !!(cEstiloPag2 && cEstiloPag2.checked);
+            const cIdiomaPlat2 = g('c-idioma-plat');
+            cf.idiomaPlataforma = !!(cIdiomaPlat2 && cIdiomaPlat2.checked);
+            // v6.0.14: si se usa el idioma de la plataforma, ajusta la voz.
+            if (cf.idiomaPlataforma) {
+                const vl = rxVoiceLangPlataforma();
+                if (vl) cf.voiceLang = vl;
+            }
             cf.mostrarCoords = g('c-coords').checked;
             cf.contornos = g('c-contornos').checked;
             cf.contornoHoras = Math.max(1, isoNum(g('c-contorno-horas').value, cf.contornoHoras));
@@ -6162,7 +6338,12 @@
 
         const ok = await wialonReady();
         if (!ok) {
-            avisoEl.textContent = 'No se encontró la API de Wialon (wialon.core) en esta página.';
+            // v6.0.14: en la pantalla de login es normal que la API aun no
+            // exista, asi que se pide iniciar sesion en vez de avisar de que
+            // falta la API.
+            avisoEl.textContent = rxEnLogin()
+                ? 'Inicia sesión en la plataforma para que Rondo pueda monitorear.'
+                : 'No se encontró la API de Wialon (wialon.core) en esta página.';
             avisoEl.style.display = 'block';
             APP.unlocked = true;
             return;
@@ -7143,7 +7324,19 @@
         const sl = byId('rondo-replay-slider');
         if (sl) sl.value = r.idx;
         const pb = byId('rondo-replay-play');
-        if (pb) pb.textContent = r.playing ? 'Pausa' : 'Play';
+        if (pb) {
+            // El boton lleva icono + texto: actualizamos solo el texto para no
+            // borrar el icono, y marcamos el estado de reproduccion.
+            const txt = pb.querySelector('.rrc-play-txt');
+            if (txt) txt.textContent = r.playing ? 'Pausa' : 'Play';
+            else pb.textContent = r.playing ? 'Pausa' : 'Play';
+            pb.classList.toggle('activo', !!r.playing);
+        }
+        const tl = byId('rondo-replay-tiempo');
+        if (tl) {
+            const finM = r.msgs[r.msgs.length - 1];
+            tl.textContent = rxReplayHHMM(m.t) + ' / ' + rxReplayHHMM(finM ? finM.t : m.t);
+        }
         if (r.mapa) {
             r.mapa.setPos(m.lat, m.lon);
             rxReplayMarcarViajado();
@@ -7169,7 +7362,7 @@
         if (r) rxReplayMapaCrear();
         else {
             const cont = byId('rondo-replay-mapa');
-            if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
+            if (cont) cont.innerHTML = '<div class="rondo-replay-vacio"><span class="rondo-usym rv-ico">' + UIS.map + '</span><span>Carga un recorrido para verlo en el mapa</span></div>';
         }
         const sl = byId('rondo-replay-slider');
         if (sl && r) { sl.min = 0; sl.max = Math.max(0, r.msgs.length - 1); sl.value = r.idx; }
@@ -7296,7 +7489,7 @@
         if (r && r.mapa) { try { r.mapa.destruir(); } catch (_) { /* noop */ } }
         RX_REPLAY = null;
         const cont = byId('rondo-replay-mapa');
-        if (cont) cont.innerHTML = '<div class="rondo-replay-vacio">Carga un recorrido para verlo aqui.</div>';
+        if (cont) cont.innerHTML = '<div class="rondo-replay-vacio"><span class="rondo-usym rv-ico">' + UIS.map + '</span><span>Carga un recorrido para verlo en el mapa</span></div>';
         const chart = byId('rondo-replay-chart');
         if (chart) chart.innerHTML = '<div class="rondo-replay-vacio">Perfil de velocidad</div>';
         const info = byId('rondo-replay-info');
@@ -7841,6 +8034,16 @@
         return {
             ver: (typeof VER !== 'undefined') ? VER : '',
             online: (typeof navigator !== 'undefined') ? navigator.onLine : null,
+            // v6.0.14: identidad de la plataforma (sitio, skin, API, idioma).
+            plataforma: {
+                nombre: rxPlatNombre(),
+                api: rxPlatApiUrl(),
+                idioma: rxPlatIdioma(),
+                skin: rxPlatSkin(),
+                acento: rxPlatAcento(),
+                webgis: rxPlatWebgis(),
+                pos: rxPlatPosDefecto()
+            },
             storage: rxDiagStorage(),
             caches: {
                 memo: Object.keys(APP.memo || {}).length,
@@ -7871,6 +8074,14 @@
         if (!d) d = rxDiagRecolectar();
         const L = [];
         L.push('Rondo ' + d.ver + ' \u00b7 ' + (d.online === false ? 'sin conexion' : 'en linea'));
+        const plat = d.plataforma || {};
+        L.push('Plataforma: ' + (plat.nombre || 'n/d') +
+            (plat.skin ? ' \u00b7 skin ' + plat.skin : '') +
+            (plat.acento ? ' \u00b7 acento ' + plat.acento : '') +
+            (plat.idioma ? ' \u00b7 idioma ' + plat.idioma : '') +
+            (plat.webgis ? ' \u00b7 webgis ' + plat.webgis : '') +
+            (plat.pos ? ' \u00b7 pos ' + plat.pos : '') +
+            (plat.api ? ' \u00b7 ' + plat.api : ''));
         L.push('Unidades: ' + d.unidades + ' \u00b7 avisos: ' + d.historial + ' \u00b7 geocercas: ' + d.zonas);
         L.push('Storage local: ' + rxDiagBytes(d.storage.totalLocal) + ' (' + d.storage.local.length +
             ' claves) \u00b7 sesion: ' + rxDiagBytes(d.storage.totalSession) + ' (' + d.storage.session.length + ' claves)');

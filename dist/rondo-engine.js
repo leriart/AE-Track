@@ -4167,17 +4167,31 @@ ta.value = '';
         if (!body) return;
         sincronizarOrden();
         marcarModoOrden(APP.ordenModo || '');
-        const ecos = APP.orden.slice();
+        const todos = APP.orden.slice();
         const cnt = byId('rondo-modal-count');
-        if (cnt) cnt.textContent = ecos.length;
-        if (!ecos.length) {
-            body.innerHTML = '<div class="lista-empty">Lista vacía. Pega arriba o añade una unidad.</div>';
+        // v6.0.13: buscador de la lista (por eco, placa, nombre o destino).
+        const buscaEl = byId('rondo-modal-buscar');
+        const q = norm(buscaEl ? buscaEl.value : '');
+        const ecos = q ? todos.filter((eco) => {
+            const it = unitByEco(eco);
+            const info = it ? parseUnitName(it.u) : { eco: eco, placa: '', nombre: '' };
+            const plan = planDe(info);
+            const destino = plan ? planATexto(plan) : (APP.watchMap[eco] || '');
+            return norm([eco, info.placa, info.nombre, destino].join(' ')).indexOf(q) >= 0;
+        }) : todos;
+        if (cnt) cnt.textContent = q ? (ecos.length + ' de ' + todos.length) : String(todos.length);
+        if (!todos.length) {
+            body.innerHTML = '<div class="lista-empty"><span class="rondo-usym">' + UIS.watch + '</span><div>Lista vacía. Pega unidades arriba o añade una con el campo de abajo.</div></div>';
             return;
         }
-        body.innerHTML = ecos.map((eco, i) => (
+        if (!ecos.length) {
+            body.innerHTML = '<div class="lista-empty"><span class="rondo-usym">' + UIS.filter + '</span><div>Ninguna unidad coincide con <b>' + esc(buscaEl ? buscaEl.value : '') + '</b>.</div></div>';
+            return;
+        }
+        body.innerHTML = ecos.map((eco) => (
             '<div class="lista-row" data-eco="' + esc(eco) + '">' +
             '<span class="rondo-drag-handle" draggable="true" title="Arrastrar para cambiar el orden">⠿</span>' +
-            '<span class="orden-num">' + (i + 1) + '</span>' +
+            '<span class="orden-num">' + (todos.indexOf(eco) + 1) + '</span>' +
             '<span class="eco">' + esc(eco) + '</span>' +
             '<span class="rondo-dest-resumen">' + resumenPlanHTML(eco) + '</span>' +
             '<button class="mini rondo-plan-open" data-eco="' + esc(eco) + '" title="Editar destinos y paradas (geocercas, municipios, lugares)"><span class="rondo-usym">' + UIS.route + '</span> Paradas</button>' +
@@ -4215,7 +4229,9 @@ ta.value = '';
             if (dragging) dragging.classList.remove('arrastrando');
             dragEco = null;
             const ecos = Array.prototype.slice.call(cont.querySelectorAll('.lista-row')).map((r) => r.dataset.eco).filter(Boolean);
-            if (ecos.length) {
+            // Con el buscador activo solo se ven algunas filas: no reordenamos
+            // la lista completa para no perder unidades.
+            if (ecos.length && ecos.length === APP.orden.length) {
                 APP.orden = ecos;
                 APP.ordenModo = '';
                 guardarOrden();
@@ -4816,6 +4832,60 @@ ta.value = '';
         const n = parseInt(h, 16);
         return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
     }
+    function oscurecer(hex, f) {
+        const h = String(hex || '').replace('#', '');
+        if (h.length !== 6) return hex;
+        const n = parseInt(h, 16);
+        const mix = (x) => Math.round(x * (1 - f));
+        return '#' + [mix((n >> 16) & 255), mix((n >> 8) & 255), mix(n & 255)]
+            .map((x) => x.toString(16).padStart(2, '0')).join('');
+    }
+    // v6.0.14: reestiliza la pagina de la plataforma con la paleta de Rondo.
+    // Se apoya en las PROPIAS variables CSS del skin (las del objeto de
+    // configuracion del CMS), asi que no reescribe el DOM: solo pinta. Es
+    // opt-in y reversible (al desactivarlo se elimina la hoja).
+    const RX_PAGINA_VARS = [
+        'horizontal-bar-item-active-background', 'horizontal-bar-item-hover-background',
+        'tabs-item-text-color', 'tabs-selected-item-text-color', 'tabs-item-hover-text-color',
+        'tabs-selected-item-line-color', 'tab-color-active',
+        'button-color', 'button-hover-color',
+        'execute-button-background', 'execute-button-hover-background', 'execute-button-hover-border-color',
+        'accordion-active-background',
+        'list-table-tab_button-active-background', 'list-table-tab_button-color', 'list-table-tab_button-hover-color',
+        'wizard-dialog-header-background', 'help-window-header-background',
+        'monitoring-login-primary-button-color', 'monitoring-login-primary-button-hover-color',
+        'monitoring-login-secondary-button-color', 'monitoring-login-forgot-pwd-color',
+        'monitoring-login-forgot-pwd-hover-color'
+    ];
+    // Las variables que representan un borde necesitan "1px solid <color>".
+    const RX_PAGINA_BORDES = ['execute-button-border-color', 'list-table-tab_button-active-border',
+        'monitoring-login-primary-button-border-color', 'monitoring-login-primary-button-hover-border-color',
+        'monitoring-login-secondary-button-border-color'];
+    function rxAplicarEstiloPagina() {
+        const elPrev = document.getElementById('rondo-estilo-pagina');
+        if (!(APP.config && APP.config.estiloPagina)) {
+            if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
+            return;
+        }
+        const acc = rxPlatAcento() || APP.config.acento || '#850D22';
+        const acc2 = aclarar(acc, 0.28);
+        const accD = oscurecer(acc, 0.14);
+        const decl = [];
+        RX_PAGINA_VARS.forEach((v) => {
+            if (RX_PAGINA_BORDES.indexOf(v) >= 0) decl.push('  --' + v + ':1px solid ' + acc + ';');
+            else if (/hover/.test(v)) decl.push('  --' + v + ':' + accD + ';');
+            else decl.push('  --' + v + ':' + acc + ';');
+        });
+        decl.push('  --accent-bg-color:' + acc2 + '22;');
+        decl.push('  --accent-bg-color-hover:' + acc2 + '33;');
+        let el = elPrev;
+        if (!el) {
+            el = document.createElement('style');
+            el.id = 'rondo-estilo-pagina';
+            (document.head || document.documentElement).appendChild(el);
+        }
+        el.textContent = ':root{\n' + decl.join('\n') + '\n}\n';
+    }
     function applyTheme() {
         const c = APP.config;
         const theme = (c.theme === 'auto')
@@ -4827,18 +4897,22 @@ ta.value = '';
         if (ti) ti.innerHTML = UIS.theme;
         const btnTema = byId('rondo-tema');
         if (btnTema) btnTema.title = 'Tema: ' + theme;
-        if (c.acento) {
-            const a2 = aclarar(c.acento, 0.28);
-            document.documentElement.style.setProperty('--rondo-accent', c.acento);
+        // v6.0.14: si esta activo, el acento sale del skin de la plataforma.
+        const acento = (c.temaPlataforma && rxPlatAcento()) ? rxPlatAcento() : c.acento;
+        if (acento) {
+            const a2 = aclarar(acento, 0.28);
+            document.documentElement.style.setProperty('--rondo-accent', acento);
             document.documentElement.style.setProperty('--rondo-accent-2', a2);
-            document.documentElement.style.setProperty('--rondo-accent-grad', 'linear-gradient(135deg,' + c.acento + ',' + a2 + ')');
-            const rgb = hexToRgb(c.acento);
+            document.documentElement.style.setProperty('--rondo-accent-grad', 'linear-gradient(135deg,' + acento + ',' + a2 + ')');
+            const rgb = hexToRgb(acento);
             if (rgb) document.documentElement.style.setProperty('--rondo-accent-rgb', rgb.r + ',' + rgb.g + ',' + rgb.b);
         }
         const p = byId('rondo-panel');
         if (p) p.classList.toggle('density-compact', c.density === 'compact');
         // Escala de interfaz: un solo factor multiplica textos y controles.
         document.documentElement.style.setProperty('--rondo-esc', String(normalizarEscala(c.escalaUI)));
+        // v6.0.14: aplica/quita el reestilizado de la pagina de la plataforma.
+        try { rxAplicarEstiloPagina(); } catch (_) { /* noop */ }
     }
     // Normaliza el factor de escala de UI a uno de los valores permitidos.
     const ESCALAS_UI = [1, 1.15, 1.3, 1.5];

@@ -104,5 +104,27 @@ ok('informe del recorrido: columna Motor en las paradas',
 ok('informe del recorrido: KPI de paradas con motor apagado',
     /Paradas con motor apagado|filter\(\(p\) => p\.motor === 'off'\)\.length, 'Con motor apagado'/.test(src));
 
+// 9) Apariencia: la pestaña se organiza en tarjetas con jerarquia clara.
+const nCards = (src.match(/class="rondo-replay-card"/g) || []).length;
+ok('replay: tarjetas de seccion (consulta, mapa, reproduccion, listas)', nCards >= 4, 'n=' + nCards);
+ok('replay: campos de rango etiquetados (Desde / Hasta)',
+    /class="rrc-field"><span class="rrc-lbl">Desde<\/span>/.test(src) &&
+    /class="rrc-field"><span class="rrc-lbl">Hasta<\/span>/.test(src));
+ok('replay: titulos de seccion', /class="rrc-title">Unidad y rango</.test(src) &&
+    /class="rrc-title">Mapa del recorrido</.test(src) && /class="rrc-title">Reproduccion</.test(src));
+ok('replay: indicador de tiempo actual/total',
+    /id="rondo-replay-tiempo"/.test(src) && /rxReplayHHMM\(m\.t\) \+ ' \/ ' \+ rxReplayHHMM\(finM/.test(src));
+ok('replay: el boton Play conserva el icono (span .rrc-play-txt)',
+    /class="rrc-play-txt"/.test(src) && /querySelector\('\.rrc-play-txt'\)/.test(src));
+ok('replay: el boton Play marca el estado activo', /pb\.classList\.toggle\('activo', !!r\.playing\)/.test(src));
+ok('replay: ya no se usa la antigua barra .rondo-replay-bar', src.indexOf('rondo-replay-bar') < 0);
+ok('replay: estado vacio del mapa con icono',
+    /rondo-replay-vacio"><span class="rondo-usym rv-ico">/.test(src));
+ok('replay: estilos de tarjeta/campos/tiempo en el CSS',
+    /\.rondo-replay-card\{display:flex/.test(src) && /\.rrc-range\{display:grid/.test(src) &&
+    /\.rrc-time\{/.test(src) && /\.rrc-field\{/.test(src));
+ok('replay: rango y acciones a una columna en paneles estrechos',
+    /\.rrc-range,#rondo-panel \.rrc-actions\{grid-template-columns:1fr\}/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

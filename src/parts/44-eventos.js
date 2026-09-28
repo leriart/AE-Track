@@ -85,6 +85,9 @@
         // unificado "Paradas" de cada fila (abrirEditorParadas), no en un
         // input en linea. Pegar texto sigue soportando "eco=destino" y
         // "eco=A | B | C".
+        // v6.0.13: buscador de la lista de unidades de la ventana.
+        const modalBuscar = byId('rondo-modal-buscar');
+        if (modalBuscar) modalBuscar.addEventListener('input', () => pintarModalLista());
         byId('rondo-ejecutar').addEventListener('click', async () => {
             const ta = byId('rondo-txt');
             const texto = ta ? ta.value : '';
@@ -236,11 +239,26 @@
             dashEl.addEventListener('click', (e) => {
                 const item = e.target.closest && e.target.closest('.rondo-atencion-item');
                 if (item && item.dataset.eco) { openUnitWindow(item.dataset.eco); return; }
+                // v6.0.13: accesos rapidos del dashboard.
+                const go = e.target.closest && e.target.closest('.rondo-dash-go');
+                if (go && go.dataset.go) { setTab(go.dataset.go); return; }
+                // v6.0.13: ranking por avisos -> filtra la pestana de Avisos.
+                const topIt = e.target.closest && e.target.closest('.rondo-top-item');
+                if (topIt && topIt.dataset.eco) {
+                    APP.filtro = topIt.dataset.eco;
+                    const inp = byId('rondo-filtro');
+                    if (inp) inp.value = topIt.dataset.eco;
+                    setTab('alertas');
+                    return;
+                }
                 const kpi = e.target.closest && e.target.closest('.kpi[data-kpi]');
                 if (!kpi) return;
                 const acc = kpi.dataset.kpi;
                 if (acc === 'alertas') { setTab('alertas'); return; }
                 if (acc === 'zonas') { setTab('zonas'); return; }
+                // v6.0.13: los KPIs nuevos no son estados de unidad; navegan.
+                if (acc === 'ruta') { setTab('rutas'); return; }
+                if (acc === 'exceso' || acc === 'silenciadas') { setTab('unidades'); return; }
                 APP.filtEstado = (acc === 'online') ? 'todas' : acc;
                 const selF = byId('rondo-filtro-estado');
                 if (selF) selF.value = APP.filtEstado;
@@ -628,6 +646,22 @@
             g('c-dens').value = APP.config.density;
             g('c-escala').value = String(normalizarEscala(APP.config.escalaUI));
             g('c-acento').value = APP.config.acento || '#850D22';
+            // v6.0.14: tema heredado de la plataforma + info de lo detectado.
+            const cTemaPlat = g('c-tema-plat');
+            if (cTemaPlat) cTemaPlat.checked = !!APP.config.temaPlataforma;
+            const platInfo = g('rondo-plat-info');
+            if (platInfo) {
+                const ac = rxPlatAcento();
+                const nom = rxPlatNombre();
+                const idi = rxPlatIdioma();
+                platInfo.textContent = (nom || ac)
+                    ? ('Plataforma detectada: ' + (nom || 'sin nombre') + (ac ? ' · acento ' + ac : '') + (idi ? ' · idioma ' + idi : ''))
+                    : 'No se detectaron datos de la plataforma (no pasa nada: usa tu propio color de acento).';
+            }
+            const cEstiloPag = g('c-estilo-pag');
+            if (cEstiloPag) cEstiloPag.checked = !!APP.config.estiloPagina;
+            const cIdiomaPlat = g('c-idioma-plat');
+            if (cIdiomaPlat) cIdiomaPlat.checked = !!APP.config.idiomaPlataforma;
             g('c-coords').checked = !!APP.config.mostrarCoords;
             g('c-contornos').checked = !!APP.config.contornos;
             g('c-contorno-horas').value = APP.config.contornoHoras;
@@ -902,6 +936,17 @@
             cf.density = g('c-dens').value;
             cf.escalaUI = normalizarEscala(g('c-escala').value);
             cf.acento = g('c-acento').value;
+            const cTemaPlat2 = g('c-tema-plat');
+            cf.temaPlataforma = !!(cTemaPlat2 && cTemaPlat2.checked);
+            const cEstiloPag2 = g('c-estilo-pag');
+            cf.estiloPagina = !!(cEstiloPag2 && cEstiloPag2.checked);
+            const cIdiomaPlat2 = g('c-idioma-plat');
+            cf.idiomaPlataforma = !!(cIdiomaPlat2 && cIdiomaPlat2.checked);
+            // v6.0.14: si se usa el idioma de la plataforma, ajusta la voz.
+            if (cf.idiomaPlataforma) {
+                const vl = rxVoiceLangPlataforma();
+                if (vl) cf.voiceLang = vl;
+            }
             cf.mostrarCoords = g('c-coords').checked;
             cf.contornos = g('c-contornos').checked;
             cf.contornoHoras = Math.max(1, isoNum(g('c-contorno-horas').value, cf.contornoHoras));

@@ -165,7 +165,21 @@ ok('herramientas declaran data-tabs', (src.match(/class="[^"]*rondo-tool[^"]*"[^
 ok('dash usa rondo-dash-kpis', src.indexOf('rondo-dash-kpis') >= 0);
 ok('dash usa rondo-dash-block', src.indexOf('rondo-dash-block') >= 0);
 ok('dash sin kpi-grid viejo', src.indexOf('class="kpi-grid"') < 0);
-ok('dash sin sparkline visible en HTML', src.indexOf('id="rondo-spark"') < 0);
+// v6.0.13: el sparkline de tendencia ya esta activo (antes estaba oculto).
+ok('dash con sparkline de tendencia visible',
+    src.indexOf('id="rondo-spark"') >= 0 && /#rondo-dash \.sparkline\{display:block/.test(src) &&
+    /function paintSparkline\(/.test(src));
+ok('dash: accesos rapidos a secciones', /class="rondo-dash-go" data-go="unidades"/.test(src) &&
+    (src.match(/class="rondo-dash-go"/g) || []).length >= 4);
+ok('dash: KPIs de exceso y silenciadas', /id="rondo-kpi-exc"/.test(src) && /id="rondo-kpi-sil"/.test(src) &&
+    /id="rondo-kpi-ruta"/.test(src) && /kv\('rondo-kpi-exc', exceso\)/.test(src));
+ok('dash: cabecera muestra la velocidad promedio', /id="rondo-dash-vel"/.test(src) &&
+    /kv\('rondo-dash-vel', total \?/.test(src));
+ok('dash: ranking de unidades por avisos de hoy', /id="rondo-dash-top"/.test(src) &&
+    /class="rondo-top-item" data-eco=/.test(src) && /sort\(\(a, b\) => b\[1\] - a\[1\]\)/.test(src));
+ok('dash: KPIs nuevos navegan sin romper el filtro de estado',
+    /acc === 'ruta'\) \{ setTab\('rutas'\)/.test(src) && /acc === 'exceso' \|\| acc === 'silenciadas'/.test(src));
+ok('dash: el ranking filtra Avisos por unidad', /closest\('\.rondo-top-item'\)/.test(src) && /setTab\('alertas'\)/.test(src));
 
 // Sin tarjeta de actualizaciones en el Dashboard (se quito).
 ok('dash sin tarjeta de update', src.indexOf('rondo-upd-card') < 0);
@@ -885,6 +899,41 @@ ok('panel: recuerda la ultima pestaña',
 ok('Ajustes: recuerda la ultima seccion abierta',
     /cfgTab: 'rondo\.api\.s\.cfgTab'/.test(src) && /writeSession\(SS\.cfgTab, sel\)/.test(src) &&
     /rxCfgTab\(readSession\(SS\.cfgTab, 'general'\)\)/.test(src));
+
+// v6.0.13: UI de ventanas y pestanas ampliada.
+ok('modal: buscador de la lista de unidades',
+    /id="rondo-modal-buscar"/.test(src) && /\.rondo-modal-buscar\{/.test(src) &&
+    /addEventListener\('input', \(\) => pintarModalLista\(\)\)/.test(src));
+ok('modal: filtra por eco/placa/destino y cuenta resultados',
+    /const ecos = q \? todos\.filter/.test(src) && /ecos\.length \+ ' de ' \+ todos\.length/.test(src));
+ok('modal: el arrastre no reordena la lista con el filtro activo',
+    /ecos\.length && ecos\.length === APP\.orden\.length/.test(src));
+ok('modal: estados vacios con icono', /class="lista-empty"><span class="rondo-usym"/.test(src));
+ok('ayuda: describe la pestana Replay', /<li><b>Replay<\/b>/.test(src));
+ok('ayuda: describe el dashboard ampliado',
+    /<li><b>Dashboard<\/b>: resumen general de la flota/.test(src) && /9 KPIs/.test(src));
+ok('caravana: resumen de unidades cerca y estado vacio con icono',
+    /id="rondo-caravana-resumen"/.test(src) && /resEl\.textContent = miembros\.length/.test(src) &&
+    /class="rondo-cv-empty"><span class="rondo-usym"/.test(src));
+ok('rutas: estado vacio con accion a Unidades',
+    /Sin rutas planificadas/.test(src) && /data-acc="tab-unidades"/.test(src));
+
+// v6.0.14: integracion con la plataforma (skin/acento/idioma) y atajos al dia.
+ok('Ajustes: opcion de tema de la plataforma',
+    /'c-tema-plat'/.test(src) && /id="rondo-plat-info"/.test(src) &&
+    /Usar el color de acento de la plataforma/.test(src));
+ok('Ajustes: guarda temaPlataforma',
+    /cf\.temaPlataforma = !!\(cTemaPlat2 && cTemaPlat2\.checked\)/.test(src));
+ok('Ajustes: muestra la plataforma detectada', /Plataforma detectada: /.test(src));
+ok('Ajustes: opciones de estilo de pagina e idioma de la plataforma',
+    /'c-estilo-pag'/.test(src) && /'c-idioma-plat'/.test(src) &&
+    /Aplicar el estilo de Rondo a la pagina/.test(src) && /Usar el idioma de la plataforma para la voz/.test(src));
+ok('Ajustes: guarda estiloPagina/idiomaPlataforma y ajusta la voz',
+    /cf\.estiloPagina = !!\(cEstiloPag2 && cEstiloPag2\.checked\)/.test(src) &&
+    /cf\.idiomaPlataforma = !!\(cIdiomaPlat2/.test(src) && /if \(vl\) cf\.voiceLang = vl;/.test(src));
+ok('Ajustes: el atajo Alt+1..8 esta al dia', /Atajos: <b>Alt\+1\.\.8<\/b>/.test(src));
+ok('diagnostico: incluye la identidad de la plataforma',
+    /plataforma: \{/.test(src) && /Plataforma: ' \+ \(plat\.nombre/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

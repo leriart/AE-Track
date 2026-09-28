@@ -120,14 +120,17 @@ cerrada. Al recargar la pagina se restaura en ese estado.
 
 En la parte superior del panel:
 
-- **Dashboard**: resumen de la flota. Tarjetas con en línea, sin señal,
-  detenidas, en movimiento, en zonas y avisos del día. Las tarjetas son
-  **clicables**: al pulsar una se abre la pestaña Unidades filtrada por ese
-  estado (o Avisos / Zonas). Incluye una **barra de distribución** de la
-  flota (en movimiento / detenidas / sin señal), la gráfica de unidades en
-  línea, una lista de **"Requieren atención"** con las 5 unidades más
-  urgentes (sin señal, exceso, desviadas o detenidas) que abren su ventana
-  al pulsarlas, y los avisos recientes.
+- **Dashboard**: resumen general de la flota. **Nueve tarjetas KPI** (en línea,
+  sin señal, detenidas, en movimiento, en zonas, avisos de hoy, en ruta, exceso
+  de velocidad y silenciadas). Son **clicables**: abren la pestaña Unidades
+  filtrada por ese estado, o Avisos / Rutas / Zonas. Incluye una fila de
+  **accesos rápidos** (Unidades, Avisos, Rutas, Zonas), la **barra de
+  distribución** de la flota (en movimiento / detenidas / sin señal), la
+  **gráfica de tendencia** de unidades en línea y sin señal, una lista de
+  **"Requieren atención"** con las 5 unidades más urgentes (sin señal, exceso,
+  desviadas o detenidas) que abren su ventana al pulsarlas, un **ranking de
+  unidades con más avisos hoy** (clic para filtrar Avisos por esa unidad) y los
+  avisos recientes.
 - **Unidades**: lista de **tarjetas** de las unidades vigiladas, con estado,
   economico, placa, velocidad, ultimo reporte, zona y ruta. Cada tarjeta tiene
   **botones rapidos** (abrir ventana, paradas/ruta, ver en mapa, vigilar y
@@ -168,7 +171,9 @@ En la parte superior del panel:
 
 Pulsa **Automatizar Unidades** en la barra (o **Unidades y rutas** en la barra
 de herramientas de la pestana Unidades). Se abre el menu **Unidades y rutas**,
-que reune todo en una sola pantalla:
+que reune todo en una sola pantalla. El campo **Buscar unidad o destino** filtra
+la lista por economico, placa o destino, y el contador muestra cuantas quedan
+visibles ("3 de 12"):
 
 - **Pegar varias unidades** a la vez, una por linea, con el formato `eco`,
   `eco=destino` o `eco=A | B | C`. Puedes indicar el tipo con los prefijos
@@ -934,7 +939,14 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   interfaz** (Normal, Grande, Muy grande, Enorme), color de acento y
   mostrar coordenadas. El tamaño de la interfaz agranda el texto y los
   controles de todo el panel, útil si te cuesta ver; se previsualiza al
-  elegirlo y se aplica al guardar.
+  elegirlo y se aplica al guardar. La casilla **Usar el color de acento de
+  la plataforma** hereda el acento del skin de AE-Track/Wialon (debajo se
+  indica qué sitio y color se detectaron), para que el panel combine con la
+  pagina. Tambien hay **Aplicar el estilo de Rondo a la pagina**
+  (experimental: reescribe los colores de la plataforma con la paleta de Rondo
+  apoyandose en sus propias variables CSS; al desactivarlo se restaura) y
+  **Usar el idioma de la plataforma para la voz** (ajusta el idioma de la voz
+  al del sitio).
 - **Ventanas**: lado y ancho de la barra lateral, ocultar al hacer clic
   fuera, confirmacion al cerrar todas las ventanas, verificacion automatica y
   tamano del panel.

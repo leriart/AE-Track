@@ -75,7 +75,7 @@ Lee `ARCHITECTURE.md` para el mapa completo y `CONTRIBUTING.md` para el flujo.
 | `scripts/bump-readme.mjs` | Actualiza el badge de version del README | Si |
 | `scripts/test-all.mjs` | Runner de las suites (Node puro) + total de checks | Si |
 | `scripts/check-docs.mjs` | Verifica/sincroniza cifras y enlaces de la documentacion | Si |
-| `tests/*.test.js` | 16 suites; `tests/_source.js` es el cargador comun | Si |
+| `tests/*.test.js` | 17 suites; `tests/_source.js` es el cargador comun | Si |
 | `rondo.user.js` | **Generado**: bootstrap hibrido (o bundle) | **Nunca** |
 | `dist/*.js` | **Generado**: `rondo-core/engine/ui.js` (se commitean) | **Nunca** |
 | `build/` | Bundle temporal para tests (gitignored) | Nunca |
@@ -109,7 +109,7 @@ node scripts/build.mjs --mode=require --channel=dev --version 6.7.0-dev.1 --out 
 
 | Workflow | Disparo | Que hace |
 | --- | --- | --- |
-| `ci.yml` | push/PR a `main`/`dev` | build bundle + 16 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/` |
+| `ci.yml` | push/PR a `main`/`dev` | build bundle + 17 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/` |
 | `release.yml` | push a `main` (o manual) | version, changelog, build, tests, badge, commit, tag, release y push |
 | `dev.yml` | push a `dev` | build con `X.Y.Z-dev.N`, tests y commit de `dist/` + bootstrap en `dev` |
 
@@ -135,7 +135,7 @@ commitear, asi que la doc no se desfasa sola.
   node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
   node scripts/test-all.mjs
   ```
-  Las 16 suites (~1108 checks) deben quedar en verde. Si añades logica nueva,
+  Las 17 suites (~1161 checks) deben quedar en verde. Si añades logica nueva,
   añade o amplia una suite.
 - La version se calcula **automaticamente** al hacer push a `main` (workflow
   Release, segun commits convencionales). No cambies `@version` a mano: usa
@@ -194,7 +194,7 @@ node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
 node scripts/test-all.mjs
 ```
 
-- **16 suites, ~1108 checks**. Ninguna usa red ni navegador: las suites extraen
+- **17 suites, ~1161 checks**. Ninguna usa red ni navegador: las suites extraen
   funciones del bundle con stubs de DOM/localStorage.
 - `tests/_source.js` reconstruye `build/rondo.bundle.js` solo si `src/`,
   `VERSION` o `build.mjs` estan mas nuevos, y expone `src` a cada suite.
@@ -221,6 +221,7 @@ node scripts/test-all.mjs
 | `replay.test.js` | rango fecha/hora inicio-fin del replay y clasificacion del motor |
 | `settings.test.js` | `docs/AJUSTES.md` lista todas las claves de `DEFAULTS` |
 | `diagnostico.test.js` | formato y texto del panel de Diagnostico tecnico |
+| `plataforma.test.js` | deteccion de metadatos de la plataforma (skin, acento, API, idioma) |
 
 ## Mapa de sectores
 
@@ -297,7 +298,7 @@ Evita refactors masivos o cambios de estilo globales que dificulten la revision.
 
 - [ ] Los cambios estan en `src/` (y `manifest.json` si se añadieron partes).
 - [ ] `node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js` sin errores.
-- [ ] Las 16 suites pasan (rojo = no cerrar el cambio).
+- [ ] Las 17 suites pasan (rojo = no cerrar el cambio).
 - [ ] Si hay logica nueva, hay suite nueva o ampliada.
 - [ ] El comportamiento por defecto no cambia (o la mejora es evidente y segura).
 - [ ] Sin dependencias, sin emojis, sin fugas a `window`, sin `eval` remoto.

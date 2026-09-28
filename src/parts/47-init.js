@@ -22,7 +22,12 @@
 
         const ok = await wialonReady();
         if (!ok) {
-            avisoEl.textContent = 'No se encontró la API de Wialon (wialon.core) en esta página.';
+            // v6.0.14: en la pantalla de login es normal que la API aun no
+            // exista, asi que se pide iniciar sesion en vez de avisar de que
+            // falta la API.
+            avisoEl.textContent = rxEnLogin()
+                ? 'Inicia sesión en la plataforma para que Rondo pueda monitorear.'
+                : 'No se encontró la API de Wialon (wialon.core) en esta página.';
             avisoEl.style.display = 'block';
             APP.unlocked = true;
             return;
