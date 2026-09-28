@@ -15,7 +15,7 @@ src/
 └─ parts/
    ├─ 00-… 22-…        chunk core
    ├─ 23-… 32-…        chunk engine
-   └─ 33-… 46-…        chunk ui
+   └─ 33-… 51-…        chunk ui
 ```
 
 Los fragmentos estan **ordenados** y su concatenacion reproduce exactamente el
@@ -47,7 +47,7 @@ node scripts/build.mjs --mode=require --channel=release --out rondo.user.js
 node scripts/build.mjs --mode=require --channel=dev --version 6.0.0-dev.3 --out rondo.user.js
 ```
 
-Opciones: `--version`, `--channel=release|dev`, `--dist=DIR`, `--out`, `--quiet`.
+Opciones: `--version`, `--channel=release|dev|main`, `--dist=DIR`, `--out`, `--quiet`.
 La version sale del archivo `VERSION` salvo que se pase `--version`.
 
 El build inyecta `@version` en la cabecera y `const VER` en el cuerpo, de modo
@@ -69,15 +69,14 @@ que ambos quedan siempre sincronizados.
 
 ## Pruebas
 
-`tests/_source.js` construye el bundle si `src/` cambio y lo expone a las 12
-suites. Asi las pruebas analizan el script completo aunque el repositorio guarde
+`tests/_source.js` construye el bundle si `src/` cambio y lo expone a las 16 suites. Asi las pruebas analizan el script completo aunque el repositorio guarde
 fragmentos.
 
 ## Automatizacion
 
 | Workflow | Disparo | Que hace |
 | --- | --- | --- |
-| `ci.yml` | push/PR a `main`/`dev` | build bundle + 12 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/`. |
+| `ci.yml` | push/PR a `main`/`dev` | build bundle + 16 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/`. |
 | `release.yml` | **push a `main`** (o manual) | calcula la version (conventional commits), genera el changelog, build, tests, actualiza el badge del README, commit de artefactos, tag, release con assets y push a `main`. |
 | `dev.yml` | push a `dev` | build con `X.Y.Z-dev.N`, tests y commit de `dist/` + bootstrap en `dev`. |
 

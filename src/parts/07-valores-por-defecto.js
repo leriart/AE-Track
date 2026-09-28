@@ -8,6 +8,11 @@
         descoMin: 25,
         velMax: 110,
         cooldownMin: 45,
+        // v6.0.11: regla "exceso de velocidad sostenido". A diferencia de
+        // `velocidad` (instantanea), exige mantener la velocidad por encima
+        // del umbral durante N minutos, asi que no avisa por picos puntuales.
+        velSostenidaKmh: 90,
+        velSostenidaMin: 5,
         voice: true,
         voiceLang: 'es-MX',
         voiceVoice: '',         // nombre exacto de la voz del navegador (opcional)
@@ -37,6 +42,11 @@
         iaResumenInforme: true, // anadir bloque "## Resumen IA" al informe Markdown diario
         iaLimiteDiario: 200,    // tope blando de llamadas IA/dia (cache + colas)
         iaCacheTTL: 21600,      // TTL del cache de respuestas IA (s, 6h por defecto)
+        // v6.0.11: topes del contexto que se manda a la IA (unidades y
+        // geocercas). Antes estaban fijos en el codigo; ahora son ajustables
+        // para ampliar o recortar el alcance del chat/analisis de flota.
+        iaMaxUnidades: 120,     // unidades incluidas en el contexto de la IA
+        iaMaxGeocercas: 1200,   // geocercas incluidas en el contexto de la IA
         // v6.0.9: la IA amplia el contexto consultando la API de Wialon
         // (campos personalizados e historial de las unidades mencionadas en
         // la pregunta). Solo lectura. El reporte del servidor es opcional
@@ -85,6 +95,11 @@
         trazadoMax: 500,
         partidaHoras: 6,
         paradaMin: 15,
+        // Replay: un hueco de reporte >= N min con la posicion practicamente
+        // igual se interpreta como parada con el motor apagado (la unidad
+        // dejo de reportar). Sirve para clasificar las paradas cuando la
+        // instalacion no expone un sensor de motor.
+        replayGapMin: 15,
         historialHoras: 168,
         analizarAuto: true,
         autoRuta: false,
@@ -137,6 +152,9 @@
             destino: false,
             desconexion: true,
             velocidad: false,
+            // v6.0.11: exceso sostenido (velocidad por encima del umbral
+            // durante velSostenidaMin minutos). Apagada por defecto.
+            velocidadSostenida: false,
             desvio: false,
             retorno: false,
             giroU: false,

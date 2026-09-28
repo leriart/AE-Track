@@ -892,7 +892,7 @@ AJUSTES (engranaje del panel):
 - IA: habilitar, proveedor (DeepSeek, NVIDIA NIM, Kimi for Coding, Moonshot, MiniMax, Personalizado), API key, endpoint/modelo opcionales, temperatura, max tokens, radio de POIs, timeout, limite diario, max avisos por lote, botones Probar conexion, Detectar patrones y Borrar API key.
 - Avanzado: buscar actualizaciones, perfiles de configuracion, exportar/importar config, probar avisos, limpiar historial, resets.
 
-ATAJOS: Alt+1..6 cambia de tab (Dashboard..Caravana), Alt+P y Alt+L muestran/ocultan el panel, Alt+H pliega la barra, Esc cierra dialogos.
+ATAJOS: Alt+1..8 cambia de tab (Dashboard..Replay y Chat IA), Alt+P y Alt+L muestran/ocultan el panel, Alt+H pliega la barra, Esc cierra dialogos.
 
 IA: opt-in. Se configura en Ajustes > IA con la API key del proveedor (solo se envia al endpoint del proveedor). El boton IA en cada aviso da un veredicto (falso_positivo/normal/sospechoso/critico). "Analizar lote" prioriza varios avisos. "Detectar patrones" propone ajustes de umbrales. El chat responde consultas libres y, si la pregunta menciona un economico, consulta por API su historial de 24 h y sus campos personalizados. El boton Ocultar (junto a Automatizar) oculta/muestra las ventanas de unidades abiertas sin cerrarlas; los botones + y - las agrandan o encogen. Los resultados de Analizar lote/flota se acotan al alto de la pantalla y hacen scroll.
 
@@ -1005,7 +1005,9 @@ Reglas:
                     if (!porZona.has(zona)) porZona.set(zona, []);
                     porZona.get(zona).push(eco);
                 }
-                if (detalle.length < 80) {
+                // v6.0.11: tope configurable (antes fijo en 80) para ampliar
+                // o recortar el alcance del contexto segun el modelo.
+                if (detalle.length < (Number(APP.config.iaMaxUnidades) || 120)) {
                     // v5.15: contexto enriquecido por unidad: posicion,
                     // municipio, limite, odometro, plan de ruta y estado de
                     // reglas, para que la IA pueda asistir de verdad.
@@ -1066,7 +1068,8 @@ Reglas:
                 };
             }) : [];
             const geocercasTotal = geocercasTodas.length;
-            const geocercas = geocercasTodas.slice(0, 800);
+            // v6.0.11: tope configurable (antes fijo en 800).
+            const geocercas = geocercasTodas.slice(0, Number(APP.config.iaMaxGeocercas) || 1200);
             const geocercasTruncado = geocercasTotal > geocercas.length;
             // Zonas de riesgo cargadas (resumen).
             const riesgoResumen = (APP.riesgo && APP.riesgo.length) ? {

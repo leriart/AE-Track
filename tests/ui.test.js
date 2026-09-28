@@ -584,7 +584,12 @@ ok('RONDO_DOC existe como String.raw', /const RONDO_DOC = String\.raw/.test(src)
 ok('RONDO_DOC describe el panel y las tabs', /RONDO_DOC[\s\S]{0,4000}Dashboard[\s\S]{0,2000}Unidades[\s\S]{0,2000}Chat IA/.test(src));
 ok('RONDO_DOC lista reglas', /Sin senal \(5 min\)[\s\S]{0,2000}Detenida en geocerca/.test(src));
 ok('RONDO_DOC lista ajustes', /AJUSTES \(engranaje[\s\S]{0,2000}IA: habilitar/.test(src));
-ok('RONDO_DOC lista atajos', /ATAJOS: Alt\+1..6/.test(src));
+// El rango de atajos debe coincidir con las pestañas reales (43-teclas.js),
+// no fijarse a mano: asi no se desfasa al añadir o quitar pestañas.
+const mTabsDoc = src.match(/const tabs = \{([^}]*)\}/);
+const nTabsDoc = mTabsDoc ? (mTabsDoc[1].match(/'[^']*'\s*:/g) || []).length : 0;
+ok('RONDO_DOC lista atajos', nTabsDoc > 0 && new RegExp('ATAJOS: Alt\\+1\\.\\.' + nTabsDoc).test(src),
+    'atajos=' + nTabsDoc);
 ok('CHAT_SYS inyecta RONDO_DOC', /=== MANUAL DE RONDO \(contexto de uso\) ===\n` \+ RONDO_DOC/.test(src));
 ok('CHAT_SYS menciona las dos fuentes', /Tienes DOS fuentes de informacion/.test(src));
 ok('chatContextoFlota incluye detalle por unidad', /detalle\.push\(\{[\s\S]{0,300}eco, placa: info\.placa/.test(src));
@@ -592,7 +597,8 @@ ok('chatContextoFlota incluye zona o null (fuera)', /zona: zona \|\| null/.test(
 ok('chatContextoFlota cuenta unidadesFueraDeGeocerca', /unidadesFueraDeGeocerca: fueraDeGeocerca\.length/.test(src));
 ok('chatContextoFlota lista offlineFueraDeGeocerca', /offlineFueraDeGeocerca: offlineFuera\.slice\(0, 40\)/.test(src));
 ok('chatContextoFlota devuelve unidades[]', /unidades: detalle/.test(src));
-ok('chatContextoFlota cap de detalle a 80', /detalle\.length < 80/.test(src));
+ok('chatContextoFlota cap de detalle configurable', /detalle\.length < \(Number\(APP\.config\.iaMaxUnidades\) \|\| 120\)/.test(src));
+ok('chatContextoFlota cap de geocercas configurable', /geocercasTodas\.slice\(0, Number\(APP\.config\.iaMaxGeocercas\) \|\| 1200\)/.test(src));
 ok('chatContextoFlota incluye geocercasCargadas', /geocercasCargadas: zonasCargadas/.test(src));
 ok('chatContextoFlota incluye ecosFueraDeGeocerca', /ecosFueraDeGeocerca: fueraDeGeocerca\.slice\(0, 40\)/.test(src));
 ok('chatContextoFlota lista TODAS las geocercas con unidades dentro', /geocercasTodas = zonasCargadas \? \(APP\.zonas \|\| \[\]\)\.map\(/.test(src) && /unidadesDentro: porZona\.get\(nom\)/.test(src) && /geocercasTotal/.test(src));
@@ -739,7 +745,15 @@ ok('menu contextual se ancla a la tarjeta', /function showMenu\(x, y, options, a
 ok('menu contextual recibe la tarjeta', /copy-coords', icon: UIS\.copy, label: 'Copiar coordenadas' \}\s*\]\s*, card\)/.test(src));
 ok('menu contextual con scroll y altura maxima', /#rondo-contexto\{[^}]*max-height:calc\(100vh - 16px\)/.test(src));
 ok('click de botones rapidos por closest(button)', /u-route[\s\S]{0,400}abrirEditorParadas\(eco\)/.test(src) && /cl\.contains\('u-watch'\)/.test(src));
-ok('velocidad suavizada (EMA)', /velSuave: \{\}/.test(src) && /function velSuavizada\(/.test(src) && /pv \* 0\.65 \+ st\.vel \* 0\.35/.test(src));
+ok('velocidad suavizada (EMA dependiente del tiempo)',
+    /velSuave: \{\}/.test(src) && /velSuaveTs: \{\}/.test(src) && /function velSuavizada\(/.test(src) &&
+    /function alphaEMA\(/.test(src) && /APP\.velSuave\[clave\] = pv \* \(1 - a\) \+ st\.vel \* a/.test(src));
+ok('alertas: exceso sostenido con histeresis y rearme',
+    /function reglaVelocidadSostenida\(/.test(src) && /vel < umbral - 5/.test(src) &&
+    /regla: 'velocidadSostenida'/.test(src) && /R\.velSostDesde = Date\.now\(\) \/ 1000/.test(src));
+ok('alertas: umbrales de exceso sostenido en Ajustes',
+    /'c-r-vel-sost'/.test(src) && /'c-vel-sost-kmh'/.test(src) && /'c-vel-sost-min'/.test(src) &&
+    /reglas\.velocidadSostenida/.test(src) && /cf\.velSostenidaKmh/.test(src) && /cf\.velSostenidaMin/.test(src));
 ok('area de geocerca: detecta poligono antes que circulo', /function _zonaEsCirculo\(/.test(src) && src.indexOf('if (z.t === 3 || (z.b && z.b.cen_x != null))') < 0);
 ok('area de geocerca: shoelace y linea', /formula del area \(shoelace\)/.test(src) && /longitud x ancho/.test(src));
 
@@ -839,6 +853,38 @@ ok('editor multipunto mas grande y ajustado a la pantalla', /width:min\(1120px,9
 ok('dialogo acotado a la pantalla con cuerpo desplazable', /#rondo-dialog\{[^}]*max-height:90vh/.test(src) && /\.dlg-body\{[^}]*overflow-y:auto/.test(src) && /el\.style\.width = 'min\('/.test(src));
 ok('resultados de IA con ancho propio', /ancho: 760/.test(src) && /ancho: 780/.test(src));
 ok('botones +/- para redimensionar ventanas (verticales, sin texto)', /id="rondo-sb-mas"/.test(src) && /id="rondo-sb-menos"/.test(src) && /rondo-tile-escala/.test(src) && /rondo-tile mini/.test(src) && !/id="rondo-sb-mas"[^\n]*tile-lbl/.test(src) && !/id="rondo-sb-menos"[^\n]*tile-lbl/.test(src) && /function rxAjustarVentanas\(/.test(src) && /RX_VENTANA_PASO/.test(src) && /mas: \[/.test(src) && /menos: \[/.test(src));
+
+// Accesibilidad de las pestañas: roles ARIA, tabindex y navegacion con flechas.
+ok('tabs: aplica role=tablist al contenedor', /setAttribute\('role', 'tablist'\)/.test(src));
+ok('tabs: cada pestaña es role=tab con aria-controls',
+    /setAttribute\('role', 'tab'\)/.test(src) && /setAttribute\('aria-controls', 'rondo-wrap-' \+ name\)/.test(src));
+ok('tabs: el panel es role=tabpanel con aria-labelledby',
+    /setAttribute\('role', 'tabpanel'\)/.test(src) && /aria-labelledby/.test(src));
+ok('tabs: navegacion con flechas y Home/End',
+    /ArrowRight/.test(src) && /ArrowLeft/.test(src) && /e\.key === 'Home'/.test(src) && /e\.key === 'End'/.test(src));
+ok('tabs: el tabindex sigue a la pestaña activa en setTab',
+    /t\.setAttribute\('tabindex', act \? '0' : '-1'\)/.test(src));
+
+// v6.0.11: usabilidad de Ajustes y memoria de la pestaña activa.
+ok('Ajustes: buscador de ajustes presente', /id="rondo-cfg-buscar"/.test(src) && /id="rondo-cfg-buscar-count"/.test(src));
+ok('Ajustes: el buscador filtra filas y cuenta resultados',
+    /function cfgBuscarAplicar|const cfgBuscarAplicar/.test(src) && /classList\.toggle\('oculto', !hay\)/.test(src) &&
+    /' ajuste\(s\)'/.test(src) && /'Sin resultados'/.test(src));
+ok('Ajustes: el buscador muestra el titulo de la seccion con coincidencias',
+    /prev\.tagName !== 'H4'/.test(src) && /grid\.classList\.toggle\('oculto', !hay\)/.test(src));
+ok('Ajustes: Escape limpia la busqueda',
+    /e\.key === 'Escape'\) \{ cfgBuscar\.value = ''; cfgBuscarAplicar\(\); \}/.test(src));
+ok('Ajustes: boton Restaurar valores por defecto',
+    /id="rondo-cfg-reset"/.test(src) && /APP\.config = deepMerge\(\{\}, DEFAULTS\)/.test(src) &&
+    /No se borran tus datos/.test(src));
+ok('Ajustes: estilos del buscador y filas ocultas',
+    /\.rondo-cfg-buscar\{/.test(src) && /label\.oculto,#rondo-config h4\.oculto,#rondo-config \.row-grid\.oculto\{display:none\}/.test(src));
+ok('panel: recuerda la ultima pestaña',
+    /tab: 'rondo\.api\.s\.tab'/.test(src) && /writeSession\(SS\.tab, name\)/.test(src) &&
+    /readSession\(SS\.tab, 'dash'\)/.test(src));
+ok('Ajustes: recuerda la ultima seccion abierta',
+    /cfgTab: 'rondo\.api\.s\.cfgTab'/.test(src) && /writeSession\(SS\.cfgTab, sel\)/.test(src) &&
+    /rxCfgTab\(readSession\(SS\.cfgTab, 'general'\)\)/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

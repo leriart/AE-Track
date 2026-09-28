@@ -26,7 +26,7 @@ const bloqueInZone = (iniInZone >= 0 && finInZone > iniInZone) ? src.slice(iniIn
 const code = 'const clamp=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);\n' +
     bloqueInZone + '\n' +
     src.slice(ini, fin) +
-    '\nreturn {haversine,bearing,difAngulo,distPuntoSegmento,simplificarRuta,precomputarRuta,snapRuta,MinHeap,aEstrella,sentidoOneWay,parseMaxspeed,VEL_POR_TIPO,inZone};';
+    '\nreturn {haversine,bearing,difAngulo,alphaEMA,distPuntoSegmento,simplificarRuta,precomputarRuta,snapRuta,MinHeap,aEstrella,sentidoOneWay,parseMaxspeed,VEL_POR_TIPO,inZone};';
 const mod = new Function(code)();
 
 let fallos = 0;
@@ -43,6 +43,15 @@ ok('bearing: norte ~0', casi(mod.bearing(0, 0, 1, 0), 0, 0.5));
 ok('bearing: este ~90', casi(mod.bearing(0, 0, 0, 1), 90, 0.5));
 ok('difAngulo: 350 vs 10 = 20', casi(mod.difAngulo(350, 10), 20, 0.001));
 ok('difAngulo: 0 vs 180 = 180', casi(mod.difAngulo(0, 180), 180, 0.001));
+
+// alphaEMA: factor de suavizado exponencial dependiente del tiempo.
+ok('alphaEMA: dt = tau -> ~0.63', casi(mod.alphaEMA(10, 10), 0.632, 0.01), mod.alphaEMA(10, 10).toFixed(3));
+ok('alphaEMA: dt muy pequeño -> acotado a 0.05', mod.alphaEMA(0.001, 10) === 0.05);
+ok('alphaEMA: dt muy grande -> acotado a 0.9', mod.alphaEMA(1000, 10) === 0.9);
+ok('alphaEMA: entrada invalida -> 0.35',
+    mod.alphaEMA(0, 10) === 0.35 && mod.alphaEMA(5, 0) === 0.35 && mod.alphaEMA('x', 10) === 0.35);
+ok('alphaEMA: monotono creciente con dt',
+    mod.alphaEMA(2, 10) < mod.alphaEMA(5, 10) && mod.alphaEMA(5, 10) < mod.alphaEMA(20, 10));
 
 const d0 = mod.distPuntoSegmento(0, 0.0009, 0, 0, 0, 0.0018);
 ok('distPuntoSegmento: punto sobre el segmento ~0', d0.dist < 5, d0.dist.toFixed(2));

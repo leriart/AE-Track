@@ -203,6 +203,10 @@
     {
       "file": "50-informe.js",
       "chunk": "ui"
+    },
+    {
+      "file": "51-diagnostico.js",
+      "chunk": "ui"
     }
   ]
 }

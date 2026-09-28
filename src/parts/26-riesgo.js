@@ -1150,6 +1150,35 @@
             });
         }
     }
+    // v6.0.11: exceso de velocidad SOSTENIDO. La regla `velocidad` avisa del
+    // pico instantaneo (util pero ruidosa); esta exige que la unidad (con la
+    // velocidad ya suavizada) se mantenga por encima del umbral durante
+    // `velSostenidaMin` minutos. Se rearma tras avisar, asi que un trayecto
+    // largo genera un aviso por ventana, no uno por refresco.
+    function reglaVelocidadSostenida(st, R, info, etq) {
+        if (!APP.config.reglas.velocidadSostenida) return;
+        if (!st.online || st.lat == null) { R.velSostDesde = 0; return; }
+        const umbral = +APP.config.velSostenidaKmh || 0;
+        const min = +APP.config.velSostenidaMin || 0;
+        if (!umbral || !min) return;
+        const vel = velSuavizada(info, st);
+        // Histeresis: para rearmar hay que bajar claramente del umbral, no
+        // basta con rozarlo (evita parpadeo en el limite).
+        if (vel < umbral - 5) { R.velSostDesde = 0; return; }
+        if (vel < umbral) return;
+        if (!R.velSostDesde) { R.velSostDesde = Date.now() / 1000; return; }
+        const minutos = (Date.now() / 1000 - R.velSostDesde) / 60;
+        if (minutos < min) return;
+        pushAlert({
+            regla: 'velocidadSostenida', sev: 'alto', clave: info.clave, eco: info.eco, soloHorario: true,
+            titulo: 'EXCESO SOSTENIDO · ' + etq,
+            detalle: Math.round(vel) + ' km/h durante ' + Math.round(minutos) + ' min (umbral ' + umbral + ')',
+            hablar: 'La unidad ' + etq + ' mantiene exceso de velocidad'
+        });
+        // Re-armar la ventana desde ahora (el cooldown de pushAlert evita
+        // duplicados si la ventana es mas corta que el cooldown).
+        R.velSostDesde = Date.now() / 1000;
+    }
     function reglaDemoraBase(st, R, info, etq) {
         if (!APP.config.reglas.demoraBase) return;
         if (!st.online || velSuavizada(info, st) > 1.5) { R.demoraBaseAlerta = 0; return; }
@@ -1267,9 +1296,21 @@
         const clave = info.clave;
         const etq = (info.eco || info.placa || info.nombre || info.id || '');
         // v5.15.2: media exponencial de velocidad (suaviza GPS y ETA).
+        // v6.0.11: el factor se pondera por el TIEMPO real entre muestras, no
+        // por el numero de refrescos (polling irregular, pestaña oculta).
         if (clave && Number.isFinite(st.vel)) {
             const pv = APP.velSuave[clave];
-            APP.velSuave[clave] = (pv == null) ? st.vel : (pv * 0.65 + st.vel * 0.35);
+            if (pv == null) {
+                APP.velSuave[clave] = st.vel;
+            } else {
+                const ahoraS = Date.now() / 1000;
+                const pollSeg = Math.max(1, (Number(APP.config.pollMs) || 10000) / 1000);
+                const dtSeg = APP.velSuaveTs[clave] ? (ahoraS - APP.velSuaveTs[clave]) : pollSeg;
+                const tau = pollSeg * 2.32; // equivale al antiguo alpha=0.35
+                const a = alphaEMA(dtSeg, tau);
+                APP.velSuave[clave] = pv * (1 - a) + st.vel * a;
+            }
+            APP.velSuaveTs[clave] = Date.now() / 1000;
         }
         const R = {
             estado: st.estado, t: st.t, vel: st.vel, lat: st.lat, lon: st.lon,
@@ -1283,6 +1324,8 @@
             zonaExt: prev ? prev.zonaExt : null,
             enDestino: prev ? prev.enDestino : false,
             descoAlerta: prev ? prev.descoAlerta : false,
+            // v6.0.11: inicio de la ventana de exceso sostenido.
+            velSostDesde: prev ? (prev.velSostDesde || 0) : 0,
             desviadoDesde: prev ? prev.desviadoDesde : null,
             progMax: prev ? prev.progMax : 0,
             retornoAlerta: prev ? prev.retornoAlerta : false,
@@ -1334,6 +1377,9 @@
             await reglaRiesgoSinSenal(st, prev, R, info, etq);
             await reglaRiesgoPredict(st, prev, R, info, etq);
             reglaVelocidad(st, R, info, etq);
+            // v6.0.11: exceso sostenido (velocidad suavizada por encima del
+            // umbral durante N minutos).
+            reglaVelocidadSostenida(st, R, info, etq);
             reglaDemoraBase(st, R, info, etq);
             reglaRuta(st, R, info, etq);
         } catch (e) {

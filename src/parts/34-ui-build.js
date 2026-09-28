@@ -199,7 +199,8 @@
              '</div>' +
              '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
              '</div>' +
-             // v6.0.11: tab de replay. Reproduce el recorrido de un dia.
+             // v6.0.11: tab de replay. Reproduce el recorrido de una unidad
+             // entre una fecha/hora de inicio y una de fin (permite multidia).
              '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
              '<div class="rondo-replay-bar">' +
              '<div class="rondo-replay-buscar">' +
@@ -207,9 +208,11 @@
              '<input type="hidden" id="rondo-replay-eco">' +
              '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
              '</div>' +
-             '<input type="date" id="rondo-replay-fecha" class="filtro" title="Dia a reproducir">' +
-             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora desde" value="00:00">' +
-             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora hasta" value="23:59">' +
+             '<input type="date" id="rondo-replay-fecha" class="filtro" title="Fecha de inicio">' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora de inicio" value="00:00">' +
+             '<span class="rq-lbl">a</span>' +
+             '<input type="date" id="rondo-replay-fecha2" class="filtro" title="Fecha de fin (si se deja igual al inicio, es el mismo dia)">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora de fin" value="23:59">' +
              '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
              '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
              '</div>' +
@@ -217,6 +220,7 @@
              '<span class="rq-lbl">Rango:</span>' +
              '<button class="mini" data-rango="hoy">Hoy</button>' +
              '<button class="mini" data-rango="ayer">Ayer</button>' +
+             '<button class="mini" data-rango="24h">Ult. 24 h</button>' +
              '<button class="mini" data-rango="dia">Turno dia</button>' +
              '<button class="mini" data-rango="noche">Turno noche</button>' +
              '</div>' +
@@ -423,6 +427,8 @@
         cfgWinEl = makeEl('div', { id: 'rondo-config' });
         cfgWinEl.innerHTML = (
             '<div class="cfg-head"><h3><span class="rondo-usym">' + UIS.gear + '</span> Configuración</h3>' +
+            '<input type="search" id="rondo-cfg-buscar" class="rondo-cfg-buscar" placeholder="Buscar ajuste..." autocomplete="off" spellcheck="false" title="Filtra los ajustes por nombre (p. ej. velocidad, IA, umbral, geocerca)">' +
+            '<span class="cfg-buscar-count" id="rondo-cfg-buscar-count"></span>' +
             '<button class="rondo-iconbtn" id="rondo-cfg-cerrar-x" title="Cerrar">×</button></div>' +
             '<div class="cfg-tabs" id="rondo-cfg-tabs">' +
             '<button class="cfg-tab activo" data-cfg="general">General</button>' +
@@ -469,6 +475,9 @@
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
+            checkRow('c-r-vel-sost', 'Exceso sostenido') +
+            numRow('c-vel-sost-kmh', 'Velocidad sostenida (km/h)') +
+            numRow('c-vel-sost-min', 'Minutos sobre el umbral') +
             checkRow('c-r-riesgo', 'Perdi\u00f3 se\u00f1al en zona de riesgo') +
             checkRow('c-r-riesgo-pre', 'Aproximaci\u00f3n a zona de riesgo (predictiva)') +
             '</div>' +
@@ -684,6 +693,7 @@
             '<div class="cfg-foot">' +
             '<span class="cfg-dirty" id="rondo-cfg-dirty" title="Tienes cambios sin guardar">Cambios sin guardar</span>' +
             '<div style="display:flex;gap:8px">' +
+            '<button class="cancel" id="rondo-cfg-reset" title="Restaurar todas las opciones a sus valores por defecto (no borra tus datos)">Restaurar</button>' +
             '<button class="cancel" id="rondo-cfg-cerrar">Cerrar</button>' +
             '<button class="accbtn" id="rondo-cfg-guardar">Guardar</button>' +
             '</div>' +

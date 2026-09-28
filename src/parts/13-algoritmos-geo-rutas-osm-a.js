@@ -51,6 +51,17 @@
     }
     function difAngulo(a, b) { return Math.abs(((a - b + 540) % 360) - 180); }
 
+    // Factor de suavizado exponencial para un intervalo dtSeg dado un tiempo
+    // caracteristico tauSeg: alpha = 1 - e^(-dt/tau), acotado a [0.05, 0.9].
+    // Permite que una media exponencial dependa del TIEMPO real entre muestras
+    // en vez del numero de refrescos (polling irregular, reintentos, pestaña
+    // en segundo plano). Con dt = tau el factor es ~0.63.
+    function alphaEMA(dtSeg, tauSeg) {
+        const dt = Number(dtSeg), tau = Number(tauSeg);
+        if (!isFinite(dt) || dt <= 0 || !isFinite(tau) || tau <= 0) return 0.35;
+        return clamp(1 - Math.exp(-dt / tau), 0.05, 0.9);
+    }
+
     // Distancia punto->segmento. Para segmentos cortos usa proyeccion
     // equirectangular local (barata, suficiente); para los largos usa la
     // formula de cross-track sobre la esfera (geodesica).
