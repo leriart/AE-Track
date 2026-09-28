@@ -500,6 +500,29 @@
         pts.push({ lat: r.msgs[r.idx].lat, lon: r.msgs[r.idx].lon });
         r.mapa.setLinea(1, pts, '#1565c0', 4, 0.95);
     }
+    // v6.9.1: centraliza el estado visual del boton Play/Pausa (icono + texto
+    // + color + habilitado) para no romper el icono al cambiar de estado.
+    // `enabled` es opcional: si se pasa, tambien ajusta el disabled.
+    function rxReplaySetPlayBtn(playing, enabled) {
+        const pb = byId('rondo-replay-play');
+        if (!pb) return;
+        if (enabled != null) pb.disabled = !enabled;
+        const txt = pb.querySelector('.rrc-play-txt');
+        if (txt) txt.textContent = playing ? 'Pausa' : 'Play';
+        else pb.textContent = playing ? 'Pausa' : 'Play';
+        const ico = pb.querySelector('.rrc-play-ico');
+        if (ico) ico.innerHTML = playing ? UIS.pause : UIS.play;
+        pb.classList.toggle('activo', !!playing);
+        pb.title = playing ? 'Pausar el recorrido' : 'Reproducir el recorrido';
+    }
+    // v6.9.1: habilita/deshabilita los controles de reproduccion y el
+    // reinicio segun haya o no un recorrido cargado.
+    function rxReplaySetControles(on) {
+        const pb = byId('rondo-replay-play');
+        if (pb) pb.disabled = !on;
+        const rb = byId('rondo-replay-reiniciar');
+        if (rb) rb.disabled = !on;
+    }
     function rxReplayActualizar() {
         const r = RX_REPLAY;
         if (!r) return;
@@ -518,15 +541,7 @@
         }
         const sl = byId('rondo-replay-slider');
         if (sl) sl.value = r.idx;
-        const pb = byId('rondo-replay-play');
-        if (pb) {
-            // El boton lleva icono + texto: actualizamos solo el texto para no
-            // borrar el icono, y marcamos el estado de reproduccion.
-            const txt = pb.querySelector('.rrc-play-txt');
-            if (txt) txt.textContent = r.playing ? 'Pausa' : 'Play';
-            else pb.textContent = r.playing ? 'Pausa' : 'Play';
-            pb.classList.toggle('activo', !!r.playing);
-        }
+        rxReplaySetPlayBtn(!!r.playing, true);
         const tl = byId('rondo-replay-tiempo');
         if (tl) {
             const finM = r.msgs[r.msgs.length - 1];
@@ -561,6 +576,8 @@
         }
         const sl = byId('rondo-replay-slider');
         if (sl && r) { sl.min = 0; sl.max = Math.max(0, r.msgs.length - 1); sl.value = r.idx; }
+        // v6.9.1: habilita Play/Reiniciar en cuanto hay un recorrido.
+        rxReplaySetControles(!!r);
         if (r) rxReplayActualizar();
     }
     function rxReplayTick() {
@@ -697,8 +714,27 @@
         if (evs) evs.innerHTML = '';
         const sl = byId('rondo-replay-slider');
         if (sl) { sl.max = 0; sl.value = 0; }
-        const pb = byId('rondo-replay-play');
-        if (pb) pb.textContent = 'Play';
+        const tl = byId('rondo-replay-tiempo');
+        if (tl) tl.textContent = '--:-- / --:--';
+        // v6.9.1: restaura el boton Play sin romper el icono y apaga los
+        // controles hasta que se cargue un recorrido.
+        rxReplaySetPlayBtn(false, false);
+        rxReplaySetControles(false);
+        const est = byId('rondo-replay-estado');
+        if (est) { est.textContent = ''; est.className = 'rrc-estado'; }
+        const cargarTxt = byId('rondo-replay-cargar');
+        if (cargarTxt) {
+            const t = cargarTxt.querySelector('.rrc-cargar-txt');
+            if (t) t.textContent = 'Cargar recorrido';
+        }
+    }
+    // v6.9.1: linea de estado bajo el boton Cargar (cargando / cargado /
+    // sin resultados / error). `tipo` cambia el color via CSS.
+    function rxReplayEstado(txt, tipo) {
+        const el = byId('rondo-replay-estado');
+        if (!el) return;
+        el.textContent = txt || '';
+        el.className = 'rrc-estado' + (tipo ? ' ' + tipo : '');
     }
     async function rxReplayCargar() {
         let eco = APP.replayEco || '';
@@ -707,9 +743,15 @@
             const t = inp ? inp.value.trim() : '';
             if (t) { const cand = rxReplayFiltrar(t)[0]; if (cand) eco = cand.eco; }
         }
-        if (!eco) { adviceWarn('Sin unidad', 'Busca y elige una unidad para reproducir.'); return; }
+        if (!eco) {
+            const inp = byId('rondo-replay-buscar');
+            if (inp) try { inp.focus(); } catch (_) { /* noop */ }
+            rxReplayEstado('Elige una unidad para reproducir.', 'warn');
+            adviceWarn('Sin unidad', 'Busca y elige una unidad para reproducir.');
+            return;
+        }
         const it = unitByEco(eco);
-        if (!it) { adviceWarn('Unidad no encontrada', eco); return; }
+        if (!it) { rxReplayEstado('Unidad no encontrada: ' + eco, 'err'); adviceWarn('Unidad no encontrada', eco); return; }
         const ucat = rxReplayUnidades().filter((x) => x.eco === eco)[0];
         rxReplaySetUnidad(eco, ucat ? ucat.etq : eco);
         const fechaEl = byId('rondo-replay-fecha');
@@ -719,9 +761,18 @@
         const fecha = (fechaEl && fechaEl.value) || rxReplayFechaHoy();
         const fecha2 = (fecha2El && fecha2El.value) || fecha;
         const rango = rxReplayRango(fecha, h1 ? h1.value : '', h2 ? h2.value : '', fecha2);
-        if (rango.hasta <= rango.desde) { adviceWarn('Rango invalido', 'El fin debe ser posterior al inicio.'); return; }
+        if (rango.hasta <= rango.desde) {
+            rxReplayEstado('El fin debe ser posterior al inicio.', 'warn');
+            adviceWarn('Rango invalido', 'El fin debe ser posterior al inicio.');
+            return;
+        }
         const btn = byId('rondo-replay-cargar');
-        if (btn) setBusy(btn, true);
+        const etq = ucat ? ucat.etq : eco;
+        rxReplayEstado('Cargando recorrido de ' + etq + '...', 'cargando');
+        // Mientras carga, Play/Reiniciar quedan deshabilitados para evitar
+        // estados raros (se re-habilitan al terminar, ver finally).
+        rxReplaySetControles(false);
+        if (btn) setBusy(btn, true, 'Cargando...');
         try {
             let crudos = [];
             try {
@@ -739,6 +790,7 @@
                 .sort((a, b) => a.t - b.t);
             if (!msgs.length) {
                 rxReplayLimpiar();
+                rxReplayEstado('Sin recorrido de ' + etq + ' en ese rango.', 'warn');
                 advice('Sin recorrido', 'No hay mensajes con posicion de ' + eco + ' en ese rango.');
                 return;
             }
@@ -760,10 +812,23 @@
             };
             rxReplayPintar();
             rxReplayUbicarParadas();
+            // Resumen visible bajo el boton (sin depender del toast).
+            rxReplayEstado(etq + ' \u00b7 ' + rxReplayHHMM(msgs[0].t) + '\u2013' + rxReplayHHMM(msgs[msgs.length - 1].t) +
+                ' \u00b7 ' + Math.round(acum / 1000) + ' km \u00b7 ' + an.paradas.length + ' parada(s)' +
+                (msgs.length >= 10000 ? ' \u00b7 truncado' : ''), 'ok');
+            // Cambia el texto del boton a "Recargar" tras la primera carga.
+            if (btn) {
+                const t = btn.querySelector('.rrc-cargar-txt');
+                if (t) t.textContent = 'Recargar recorrido';
+            }
             adviceOk('Recorrido cargado', eco + ' \u00b7 ' + rxReplayHHMM(msgs[0].t) + '-' + rxReplayHHMM(msgs[msgs.length - 1].t) +
                 ' \u00b7 ' + Math.round(acum / 1000) + ' km \u00b7 ' + an.paradas.length + ' parada(s)' + (msgs.length >= 10000 ? ' (truncado)' : ''));
+        } catch (e) {
+            rxReplayEstado('Error al cargar el recorrido: ' + ((e && e.message) || e), 'err');
         } finally {
             if (btn) setBusy(btn, false);
+            // Re-habilita los controles si quedo un recorrido cargado.
+            rxReplaySetControles(!!RX_REPLAY);
         }
     }
     function rxReplayAbrirUnidad(eco) {
@@ -818,6 +883,25 @@
         if (cargar) cargar.addEventListener('click', () => rxReplayCargar());
         const play = byId('rondo-replay-play');
         if (play) play.addEventListener('click', () => rxReplayAlternar());
+        // v6.9.1: reiniciar al inicio del recorrido.
+        const reiniciar = byId('rondo-replay-reiniciar');
+        if (reiniciar) reiniciar.addEventListener('click', () => {
+            if (!RX_REPLAY) return;
+            if (RX_REPLAY.playing) rxReplayPausar();
+            rxReplayIrA(0);
+        });
+        // v6.9.1: barra espaciadora = Play/Pausa cuando la tab Replay esta
+        // activa y el foco no esta en un campo de texto.
+        document.addEventListener('keydown', (e) => {
+            if (APP.tab !== 'replay') return;
+            const tag = ((e.target && e.target.tagName) || '').toLowerCase();
+            if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+            if (e.key === ' ' || e.key === 'Spacebar') {
+                if (!RX_REPLAY || RX_REPLAY.playing === undefined) return;
+                e.preventDefault();
+                rxReplayAlternar();
+            }
+        });
         const sl = byId('rondo-replay-slider');
         if (sl) sl.addEventListener('input', () => {
             if (RX_REPLAY && RX_REPLAY.playing) rxReplayPausar();

@@ -197,6 +197,16 @@
             "#rondo-panel .rondo-replay-leyenda .lg{display:inline-flex;align-items:center;gap:4px}\n" +
             "#rondo-panel .rondo-replay-leyenda .lg i{width:9px;height:9px;border-radius:50%;display:inline-block}\n" +
             "#rondo-panel .rondo-replay-hint{font-size:11px;color:var(--rondo-fg-mute)}\n" +
+            // v6.9.1: estado bajo el boton Cargar + controles de reproduccion.
+            "#rondo-panel .rondo-replay-card .rrc-estado{font-size:11px;color:var(--rondo-fg-dim);min-height:14px;line-height:1.35;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-estado.ok{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-estado.warn{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-estado.err{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-replay-card .rrc-estado.cargando{color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel .rrc-play{min-width:100px;font-weight:700;justify-content:center}\n" +
+            "#rondo-panel .rrc-play:disabled,#rondo-panel .rrc-btn-ico:disabled{opacity:.5;cursor:not-allowed;filter:none}\n" +
+            "#rondo-panel .rrc-btn-ico{width:36px;flex:0 0 auto;padding:0;display:inline-flex;align-items:center;justify-content:center}\n" +
+            "#rondo-panel .rondo-busy-lbl{margin-left:6px;font-weight:600}\n" +
             // v6.0.11: mini-mapa propio (global: se usa en el panel y en el dialogo de ruta).
             ".rondo-minimapa{height:min(64vh,560px);border-radius:10px;overflow:hidden}\n" +
             ".rondo-mm{position:relative;overflow:hidden;background:var(--rondo-bg-strong);cursor:grab;touch-action:none;border-radius:10px;border:1px solid var(--rondo-border-soft)}\n" +

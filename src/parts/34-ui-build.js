@@ -250,9 +250,11 @@
              '<button class="mini" data-rango="noche">Turno noche</button>' +
              '</div>' +
              '<div class="rrc-actions">' +
-             '<button class="accbtn" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar recorrido</button>' +
+             '<button class="accbtn" id="rondo-replay-cargar" title="Cargar el recorrido del rango elegido"><span class="rondo-usym">' + UIS.refresh + '</span> <span class="rrc-cargar-txt">Cargar recorrido</span></button>' +
              '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
              '</div>' +
+             // v6.9.1: linea de estado del recorrido (unidad/rango/km/paradas).
+             '<div class="rrc-estado" id="rondo-replay-estado" aria-live="polite"></div>' +
              '</div>' +
              // 2) Resumen (chips) y mapa, con leyenda y detalle del punto actual.
              '<div id="rondo-replay-resumen" class="rondo-replay-info"></div>' +
@@ -266,7 +268,8 @@
              '<div class="rondo-replay-card">' +
              '<div class="rrc-head"><span class="rrc-title">Reproduccion</span><span class="rrc-time" id="rondo-replay-tiempo">--:-- / --:--</span></div>' +
              '<div class="rondo-replay-ctrl">' +
-             '<button class="accbtn" id="rondo-replay-play" title="Reproducir o pausar"><span class="rondo-usym">' + UIS.moving + '</span> <span class="rrc-play-txt">Play</span></button>' +
+             '<button class="accbtn rrc-play" id="rondo-replay-play" title="Reproducir o pausar" disabled><span class="rondo-usym rrc-play-ico">' + UIS.play + '</span> <span class="rrc-play-txt">Play</span></button>' +
+             '<button class="mini rrc-btn-ico" id="rondo-replay-reiniciar" title="Volver al inicio del recorrido" disabled><span class="rondo-usym">' + UIS.refresh + '</span></button>' +
              '<label class="rrc-vel"><span class="rrc-lbl">Velocidad</span>' +
              '<select id="rondo-replay-vel" class="filtro" title="Velocidad de reproduccion">' +
              '<option value="60">1 min/s</option>' +

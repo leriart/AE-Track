@@ -611,9 +611,14 @@ La pestana **Replay** reproduce el recorrido de una unidad:
    economico y pulsar Enter) y elige el **dia** y el **rango de horas**
    (desde/hasta). Los botones **Hoy**, **Ayer**, **Turno dia** y **Turno noche**
    lo rellenan de un clic. Pulsa **Cargar**.
-2. Con **Play/Pausa** y la velocidad (**1 min/s** a **1 h/s**) se reproduce el
+2. **Cargar** muestra su progreso ("Cargando...") y, al terminar, la unidad,
+   el rango, los km y las paradas justo debajo del boton (que pasa a
+   **Recargar**). Con **Play/Pausa** (icono cambia entre ▶ y ⏸), **Reiniciar**
+   (vuelve al inicio) y la velocidad (**1 min/s** a **1 h/s**) se reproduce el
    tramo; la barra inferior y el **perfil de velocidad** (haz clic en la grafica)
-   permiten saltar a un momento concreto.
+   permiten saltar a un momento concreto. Los controles estan apagados hasta
+   que cargas un recorrido; con la pestana Replay activa, la **barra
+   espaciadora** alterna Play/Pausa.
 3. El **mini-mapa** (tiles de OpenStreetMap) muestra el trazo completo, el tramo
    ya recorrido y la posicion actual. Arrastra para moverlo, rueda para acercar
    y **Centrar** para volver a encuadrarlo.
@@ -944,7 +949,8 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   indica qué sitio y color se detectaron), para que el panel combine con la
   pagina. Tambien hay **Aplicar el estilo de Rondo a la pagina**
   (experimental: reescribe los colores de la plataforma con la paleta de Rondo
-  apoyandose en sus propias variables CSS; al desactivarlo se restaura) y
+  apoyandose en sus propias variables CSS; cubre acento, superficies, texto y
+  bordes, y respeta el tema oscuro/claro. Al desactivarlo se restaura) y
   **Usar el idioma de la plataforma para la voz** (ajusta el idioma de la voz
   al del sitio).
 - **Ventanas**: lado y ancho de la barra lateral, ocultar al hacer clic
