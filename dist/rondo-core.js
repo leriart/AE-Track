@@ -717,6 +717,12 @@
         // dejo de reportar). Sirve para clasificar las paradas cuando la
         // instalacion no expone un sensor de motor.
         replayGapMin: 15,
+        // Opciones del reporte PDF del recorrido (checkboxes de la pestana
+        // Replay). Cada clave decide si esa parte aparece en el PDF.
+        replayReporte: Object.freeze({
+            mapa: true, kpis: true, paradas: true, eventos: true,
+            puntos: true, coords: true, soloOff: false
+        }),
         historialHoras: 168,
         analizarAuto: true,
         autoRuta: false,

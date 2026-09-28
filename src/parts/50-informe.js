@@ -320,6 +320,9 @@
     function rxReplayInformeHTML() {
         const r = RX_REPLAY;
         if (!r) return '';
+        const o = (typeof rxReplayReporteOpts === 'function')
+            ? rxReplayReporteOpts()
+            : { mapa: true, kpis: true, paradas: true, eventos: true, puntos: true, coords: true, soloOff: false };
         const s = r.resumen || {};
         const fecha = new Date((s.inicio || 0) * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
         // Rango completo con fecha y hora (el recorrido puede cruzar medianoche).
@@ -340,37 +343,43 @@
         const coords = (lat, lon) => (lat == null || lon == null)
             ? '<span class="muted">-</span>'
             : '<span class="mono">' + esc(rxCoord(lat, lon, 5)) + '</span>';
-        const filasParadas = (r.paradas || []).map((p, i) => [
-            String(i + 1),
-            esc(rxFechaHora(p.t, true)),
-            esc(rxFmtDur(p.dur)),
-            (p.motor ? (p.motor === 'off' ? '<span class="muted">Apagado</span>' : '<span class="ok">Encendido</span>') + (p.motorFuente === 'estimado' ? ' <span class="pill">est.</span>' : '') : '-'),
-            '<b>' + esc(rxReplayParadaEtiqueta(p)) + '</b>',
-            esc(p.direccion || ''),
-            esc(p.zona || ''),
-            esc(p.municipio || ''),
-            coords(p.lat, p.lon)
-        ]);
-        const filasEventos = (r.eventos || []).map((e2) => [
-            esc(rxFechaHora(e2.t, true)),
-            '<span class="pill">' + esc(e2.tipo) + '</span>',
-            esc(e2.txt),
-            coords(e2.lat, e2.lon)
-        ]);
+        const paradasSel = (r.paradas || []).filter((p) => !o.soloOff || p.motor === 'off');
+        const cabParadas = ['#', 'Fecha y hora', 'Duracion', 'Motor', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio'];
+        if (o.coords) cabParadas.push('Coordenadas');
+        const filasParadas = paradasSel.map((p, i) => {
+            const row = [
+                String(i + 1),
+                esc(rxFechaHora(p.t, true)),
+                esc(rxFmtDur(p.dur)),
+                (p.motor ? (p.motor === 'off' ? '<span class="muted">Apagado</span>' : '<span class="ok">Encendido</span>') + (p.motorFuente === 'estimado' ? ' <span class="pill">est.</span>' : '') : '-'),
+                '<b>' + esc(rxReplayParadaEtiqueta(p)) + '</b>',
+                esc(p.direccion || ''),
+                esc(p.zona || ''),
+                esc(p.municipio || '')
+            ];
+            if (o.coords) row.push(coords(p.lat, p.lon));
+            return row;
+        });
+        const cabEventos = ['Fecha y hora', 'Tipo', 'Detalle'];
+        if (o.coords) cabEventos.push('Coordenadas');
+        const filasEventos = (r.eventos || []).map((e2) => {
+            const row = [esc(rxFechaHora(e2.t, true)), '<span class="pill">' + esc(e2.tipo) + '</span>', esc(e2.txt)];
+            if (o.coords) row.push(coords(e2.lat, e2.lon));
+            return row;
+        });
         // Puntos del recorrido (muestreados para no generar miles de filas).
         const msgs = r.msgs || [];
         const paso = Math.max(1, Math.ceil(msgs.length / 400));
+        const cabPuntos = ['#', 'Fecha y hora'];
+        if (o.coords) cabPuntos.push('Coordenadas');
+        cabPuntos.push('Velocidad', 'Rumbo', 'Acumulado');
         const filasPuntos = [];
         for (let i = 0; i < msgs.length; i += paso) {
             const m = msgs[i];
-            filasPuntos.push([
-                String(i + 1),
-                esc(rxFechaHora(m.t, true)),
-                coords(m.lat, m.lon),
-                Math.round(m.s || 0) + ' km/h',
-                (m.c != null ? Math.round(m.c) + '\u00b0' : '-'),
-                Math.round((m.km || 0) / 1000) + ' km'
-            ]);
+            const row = [String(i + 1), esc(rxFechaHora(m.t, true))];
+            if (o.coords) row.push(coords(m.lat, m.lon));
+            row.push(Math.round(m.s || 0) + ' km/h', (m.c != null ? Math.round(m.c) + '\u00b0' : '-'), Math.round((m.km || 0) / 1000) + ' km');
+            filasPuntos.push(row);
         }
         // Mapa del recorrido con los puntos marcados (tiles de OSM + trazo SVG).
         const marcasMapa = [];
@@ -387,20 +396,27 @@
             '<span><i style="background:#b71c1c"></i>Exceso</span>' +
             '<span><i style="background:#e65100"></i>Desvio</span>' +
             '<span class="muted">Mapa: OpenStreetMap</span></div>';
-        const seccion = (titulo, contenido) => '<h2 class="seccion">' + esc(titulo) + '</h2>' + contenido;
         const notaPuntos = paso > 1
-            ? '<div class="callout">Se listan ' + filasPuntos.length + ' de ' + msgs.length + ' puntos (cada ' + paso + ' registros) con fecha, hora y coordenadas. El total de puntos aparece en los KPIs.</div>'
-            : '<div class="callout">Se listan los ' + filasPuntos.length + ' puntos del recorrido con fecha, hora y coordenadas.</div>';
+            ? '<div class="callout">Se listan ' + filasPuntos.length + ' de ' + msgs.length + ' puntos (cada ' + paso + ' registros)' + (o.coords ? ' con fecha, hora y coordenadas' : ' con fecha y hora') + '. El total de puntos aparece en los KPIs.</div>'
+            : '<div class="callout">Se listan los ' + filasPuntos.length + ' puntos del recorrido' + (o.coords ? ' con fecha, hora y coordenadas' : ' con fecha y hora') + '.</div>';
+        // Secciones elegidas en las opciones del reporte, numeradas.
+        const secciones = [];
+        let num = 0;
+        const add = (titulo, contenido) => { num++; secciones.push('<h2 class="seccion">' + esc(num + '. ' + titulo) + '</h2>' + contenido); };
+        if (o.mapa) add('Mapa del recorrido', mapa + leyenda);
+        if (o.paradas) add('Paradas (' + filasParadas.length + ')', rxInfTabla(cabParadas, filasParadas));
+        if (o.eventos) add('Eventos (' + filasEventos.length + ')', rxInfTabla(cabEventos, filasEventos));
+        if (o.puntos) add('Puntos del recorrido', notaPuntos + rxInfTabla(cabPuntos, filasPuntos));
+        const cuerpo = secciones.length
+            ? secciones.join('')
+            : '<div class="vacio">No seleccionaste ninguna seccion para el reporte. Marca al menos una en "Opciones del reporte" (pestana Replay).</div>';
         return '<!doctype html><html lang="es"><head><meta charset="utf-8">' +
             '<title>Recorrido ' + esc(r.eco) + ' ' + esc(fecha) + '</title>' +
             '<style>' + rxInfEstilo() + '</style></head><body>' +
             rxInfCabecera('Rondo', 'Recorrido de la unidad',
                 'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(rango) + '<br>Documento de solo lectura') +
-            '<div class="kpis">' + kpis + '</div>' +
-            seccion('1. Mapa del recorrido', mapa + leyenda) +
-            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Fecha y hora', 'Duracion', 'Motor', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
-            seccion('3. Eventos (' + filasEventos.length + ')', rxInfTabla(['Fecha y hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
-            seccion('4. Puntos del recorrido', notaPuntos + rxInfTabla(['#', 'Fecha y hora', 'Coordenadas', 'Velocidad', 'Rumbo', 'Acumulado'], filasPuntos)) +
+            (o.kpis ? '<div class="kpis">' + kpis + '</div>' : '') +
+            cuerpo +
             (r.truncado ? '<p class="muted">Nota: el historial se trunco al limite de mensajes; el resumen puede ser parcial.</p>' : '') +
             rxInfPie() +
             '</body></html>';
