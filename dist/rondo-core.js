@@ -37,6 +37,89 @@
      */
     const PAGE = (typeof unsafeWindow !== 'undefined' && unsafeWindow) ? unsafeWindow : window;
 
+    // v6.0.14: metadatos de la plataforma (Wialon / AE-Track). El CMS publica
+    // un objeto global cuyo nombre lleva un hash que cambia entre instalaciones
+    // (p. ej. window._c59ac2e84d82e8bffef6), asi que lo localizamos por su
+    // FORMA y no por su nombre. De ahi salen el nombre del sitio, la URL de la
+    // API, el idioma y las variables del skin (colores): asi Rondo puede
+    // heredar la identidad visual de la plataforma.
+    let _rxMeta = null;
+    function rxPlataformaMeta() {
+        if (_rxMeta !== null) return _rxMeta || null;
+        _rxMeta = false;
+        try {
+            const claves = Object.keys(PAGE);
+            for (let i = 0; i < claves.length; i++) {
+                const k = claves[i];
+                if (k.charAt(0) !== '_') continue;
+                let o = null;
+                try { o = PAGE[k]; } catch (_) { continue; }
+                if (o && typeof o === 'object' && (o.api_url || o.wialon_sdk_url) && o._skin_data) { _rxMeta = o; break; }
+            }
+        } catch (_) { /* noop */ }
+        return _rxMeta || null;
+    }
+    function rxPlatVar(nombre) {
+        try {
+            const m = rxPlataformaMeta();
+            const v = m && m._skin_data && m._skin_data.major && m._skin_data.major.data && m._skin_data.major.data.variables;
+            return (v && v[nombre]) ? String(v[nombre]) : '';
+        } catch (_) { return ''; }
+    }
+    // Acento del skin de la plataforma (barra activa, pestaña activa o boton).
+    function rxPlatAcento() {
+        const cand = ['horizontal-bar-item-active-background', 'tabs-item-text-color', 'button-color', 'execute-button-background'];
+        for (let i = 0; i < cand.length; i++) {
+            const v = rxPlatVar(cand[i]);
+            if (/^#[0-9a-fA-F]{6}$/.test(v)) return v;
+        }
+        return '';
+    }
+    function rxPlatNombre() {
+        const m = rxPlataformaMeta();
+        return (m && (m.title || m.site_name || m.copyright_text)) || '';
+    }
+    function rxPlatApiUrl() {
+        const m = rxPlataformaMeta();
+        return (m && (m.api_url || m.wialon_sdk_url)) || '';
+    }
+    function rxPlatIdioma() {
+        const m = rxPlataformaMeta();
+        return (m && (m.http_lang || '')) || '';
+    }
+    function rxPlatSkin() {
+        const m = rxPlataformaMeta();
+        return (m && (m.skin || m.site_name || '')) || '';
+    }
+    function rxPlatWebgis() {
+        const m = rxPlataformaMeta();
+        return (m && m.allow_webgis != null) ? String(m.allow_webgis) : '';
+    }
+    function rxPlatPosDefecto() {
+        const m = rxPlataformaMeta();
+        return (m && m.default_pos) || '';
+    }
+    // true si la pantalla de login de la plataforma esta visible (la app aun
+    // no esta montada). Sirve para avisar "inicia sesion" en vez de
+    // "no se encontro la API".
+    function rxEnLogin() {
+        try {
+            const lb = document.getElementById('login_body');
+            if (!lb) return false;
+            const comp = (typeof getComputedStyle === 'function') ? getComputedStyle(lb) : null;
+            const visLogin = !comp || comp.display !== 'none';
+            const mb = document.getElementById('monitoring_body');
+            const mbComp = (mb && typeof getComputedStyle === 'function') ? getComputedStyle(mb) : null;
+            const visApp = !!(mb && mb.children.length && (!mbComp || mbComp.display !== 'none'));
+            return visLogin && !visApp;
+        } catch (_) { return false; }
+    }
+    // Idioma de voz sugerido por el idioma del sitio (http_lang).
+    function rxVoiceLangPlataforma() {
+        const l = String(rxPlatIdioma() || '').toLowerCase().slice(0, 2);
+        return ({ es: 'es-MX', en: 'en-US', ru: 'ru-RU', pt: 'pt-BR' })[l] || '';
+    }
+
     function gmXhr() {
         try {
             if (typeof GM_xmlhttpRequest === 'function') return GM_xmlhttpRequest;
@@ -401,7 +484,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '6.6.0-dev.22';
+    const VER = '6.6.0-dev.23';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -595,6 +678,13 @@
         theme: 'oscuro',
         density: 'normal',
         acento: '#850D22',
+        // v6.0.14: heredar el color de acento del skin de la plataforma
+        // (AE-Track/Wialon) para que el panel combine con la pagina. Opt-in.
+        temaPlataforma: false,
+        // v6.0.14: reestiliza la pagina de la plataforma con la paleta de
+        // Rondo (experimental, opt-in) y usa el idioma del sitio para la voz.
+        estiloPagina: false,
+        idiomaPlataforma: false,
         escalaUI: 1,
         contornos: true,
         contornoHoras: 24,
