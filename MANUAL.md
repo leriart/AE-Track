@@ -9,7 +9,7 @@ Indice:
 - [Primeros pasos](#primeros-pasos)
 - [La barra de botones](#la-barra-de-botones)
 - [El panel: barra lateral](#el-panel-barra-lateral)
-- [Las seis pestanas](#las-seis-pestanas)
+- [Las ocho pestanas](#las-ocho-pestanas)
 - [Vigilar unidades (lista vigilada)](#vigilar-unidades-lista-vigilada)
 - [Reglas de alerta](#reglas-de-alerta)
 - [Notificaciones](#notificaciones)
@@ -268,6 +268,7 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | Regreso a base | Completa un circuito (todas las paradas + vuelta al origen) | circuito del plan |
 | Desconexion | Sigue sin senal demasiado tiempo | 25 min |
 | Velocidad | Supera el limite (global o por unidad) | 110 km/h |
+| Exceso sostenido | Mantiene la velocidad por encima del umbral durante N min | 90 km/h · 5 min |
 | Desvio de ruta | Se aleja del trazado de la ruta | 250 m durante 5 min |
 | Giro en U | Toma rumbo opuesto al de la ruta | 130 grados durante 3 min |
 | Retorno / viaje cancelado | Retrocede o vuelve al origen | 25 % de retroceso o 400 m del origen |
@@ -948,6 +949,14 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   [Chat con la IA](#chat-con-la-ia).
 - **Avanzado**: versiones y busqueda de actualizaciones, perfiles de
   configuracion, limpiar bitacora y resets.
+
+> **Ajustes, mas rapidos.** El campo **Buscar ajuste...** de la cabecera filtra
+> las opciones de todas las secciones a la vez y salta a la primera con
+> coincidencias (vale el texto visible o el nombre interno, p. ej. `velMax`);
+> `Esc` limpia la busqueda. El boton **Restaurar** devuelve todas las opciones a
+> su valor por defecto **sin borrar tus datos** (lista vigilada, rutas, odometro
+> y perfiles). Al reabrir Ajustes se vuelve a la ultima seccion usada, y el
+> panel recuerda su ultima pestaña al recargar la pagina.
 
 ## Actualizaciones
 

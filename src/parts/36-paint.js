@@ -1,6 +1,8 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
+        // v6.0.11: recuerda la pestaña para retomarla al recargar la pagina.
+        try { writeSession(SS.tab, name); } catch (_) { /* noop */ }
         const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'replay', 'chat', 'zonas'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
@@ -10,6 +12,8 @@
             const act = t.dataset.tab === name;
             t.classList.toggle('activo', act);
             t.setAttribute('aria-selected', act ? 'true' : 'false');
+            // El tabindex sigue a la pestaña activa (patron ARIA de tablist).
+            if (t.getAttribute('role') === 'tab') t.setAttribute('tabindex', act ? '0' : '-1');
         });
         paintTools();
         if (name === 'dash') paintKPI();

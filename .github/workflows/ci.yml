@@ -16,14 +16,23 @@ jobs:
           node-version: 20
       - name: Construir bundle
         run: node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
-      - name: Pruebas (12 suites)
+      - name: Pruebas
+        run: node scripts/test-all.mjs --json-out build/tests.json
+
+  docs:
+    # Solo en PR. En los push a dev/main la sincronizan dev.yml y release.yml,
+    # que ya commitean artefactos: asi solo hay un committer por rama.
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Verificar documentacion sincronizada
         run: |
-          fallo=0
-          for t in tests/*.test.js; do
-            echo "== $t =="
-            node "$t" || fallo=1
-          done
-          exit $fallo
+          node scripts/test-all.mjs --json-out build/tests.json
+          node scripts/check-docs.mjs --tests build/tests.json
 
   sincronizado:
     # Solo en main: comprueba que el bootstrap y dist/ commiteados coinciden

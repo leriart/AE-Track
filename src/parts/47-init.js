@@ -18,6 +18,7 @@
         bindCaravanaSelect();
         bindReplay();
         bindRiesgo();
+        try { rxDiagBind(); } catch (_) { /* noop */ }
 
         const ok = await wialonReady();
         if (!ok) {

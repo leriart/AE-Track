@@ -42,7 +42,12 @@
         geoQueue: 0,
         geoLast: 0,
 
-        tab: 'dash',
+        // v6.0.11: se recuerda la ultima pestana usada (por pestaña del
+        // navegador) para retomar donde se dejo. Solo se aceptan conocidas.
+        tab: (function () {
+            const t = readSession(SS.tab, 'dash');
+            return ['dash', 'unidades', 'alertas', 'rutas', 'zonas', 'caravana', 'replay', 'chat'].indexOf(t) >= 0 ? t : 'dash';
+        })(),
         filtSever: 'todas',
         filtro: '',
         filtEstado: readJSON(LS.filtEstado, 'todas'),
@@ -56,6 +61,9 @@
         // v5.15.2: velocidad suavizada por unidad (media exponencial) para
         // ETAs y estados mas estables, sin depender del ultimo reporte.
         velSuave: {},
+        // v6.0.11: marca de tiempo (s) de la ultima muestra de velocidad; el
+        // suavizado se pondera por el tiempo real entre reportes.
+        velSuaveTs: {},
         // v6.0.6: cache de resolucion de paradas (texto -> tipo/coords) y
         // control de reintentos del trazado automatico (2 automaticos + manual).
         resolucionCache: {},

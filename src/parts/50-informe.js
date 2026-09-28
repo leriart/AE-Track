@@ -206,14 +206,21 @@
         const r = RX_REPLAY;
         if (!r) return '';
         const s = r.resumen || {};
+        const fdt = (t) => {
+            try {
+                return new Date((+t || 0) * 1000).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            } catch (_) { return '--'; }
+        };
         const fecha = new Date((s.inicio || 0) * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-        const rango = rxReplayHHMM(s.inicio) + ' - ' + rxReplayHHMM(s.fin);
+        // Rango completo con fecha y hora (el recorrido puede cruzar medianoche).
+        const rango = fdt(r.desde || s.inicio) + ' - ' + fdt(r.hasta || s.fin);
         const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
         const kpis = [
             kpi(r.eco, 'Unidad'),
             kpi(rxFmtDist(s.distM || 0), 'Distancia'),
             kpi(rxFmtDur(s.durSeg || 0), 'Duracion'),
-            kpi(s.paradas || 0, 'Paradas'),
+            kpi((r.paradas || []).length, 'Paradas'),
+            kpi((r.paradas || []).filter((p) => p.motor === 'off').length, 'Con motor apagado'),
             kpi(rxFmtDur(s.moviendoSeg || 0), 'En movimiento'),
             kpi(rxFmtDur(s.detenidoSeg || 0), 'Detenido'),
             kpi((s.velMax || 0) + ' km/h', 'Velocidad maxima'),
@@ -223,6 +230,7 @@
             String(i + 1),
             rxReplayHHMM(p.t),
             rxFmtDur(p.dur),
+            (p.motor ? (p.motor === 'off' ? 'Apagado' : 'Encendido') + (p.motorFuente === 'estimado' ? ' (est.)' : '') : ''),
             '<b>' + esc(rxReplayParadaEtiqueta(p)) + '</b>',
             esc(p.direccion || ''),
             esc(p.zona || ''),
@@ -255,10 +263,10 @@
             '<title>Recorrido ' + esc(r.eco) + ' ' + esc(fecha) + '</title>' +
             '<style>' + rxInfEstilo() + '</style></head><body>' +
             rxInfCabecera('Rondo', 'Recorrido de la unidad',
-                'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(fecha) + ' &middot; ' + esc(rango) + '<br>Documento de solo lectura') +
+                'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(rango) + '<br>Documento de solo lectura') +
             '<div class="kpis">' + kpis + '</div>' +
             seccion('1. Mapa del recorrido', mapa + leyenda) +
-            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
+            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Motor', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
             seccion('3. Eventos (' + filasEventos.length + ')', rxInfTabla(['Hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
             (r.truncado ? '<p class="muted">Nota: el historial se trunco al limite de mensajes; el resumen puede ser parcial.</p>' : '') +
             rxInfPie() +

@@ -462,10 +462,102 @@
             document.querySelectorAll('#rondo-config .cfg-pane').forEach((p) => {
                 p.style.display = (p.dataset.cfg === sel) ? '' : 'none';
             });
+            // v6.0.11: recuerda la seccion para reabrir Ajustes donde estaba.
+            writeSession(SS.cfgTab, sel);
         }));
+        // Activa una seccion de Ajustes por nombre (o General si no existe).
+        const rxCfgTab = (sel) => {
+            const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="' + sel + '"]') ||
+                document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="general"]');
+            if (tab) tab.click();
+        };
+
+        // v6.0.11: buscador de ajustes. Filtra las filas de todas las
+        // pestañas a la vez y salta a la primera que tenga coincidencias.
+        // Al vaciar el campo se restaura la pestaña activa y todas las filas.
+        const cfgBuscar = byId('rondo-cfg-buscar');
+        const cfgBuscarAplicar = () => {
+            if (!cfgBuscar) return;
+            const cont = byId('rondo-cfg-buscar-count');
+            const panes = Array.prototype.slice.call(document.querySelectorAll('#rondo-config .cfg-pane'));
+            const q = norm(cfgBuscar.value || '');
+            if (!q) {
+                panes.forEach((p) => {
+                    Array.prototype.forEach.call(p.querySelectorAll('label, h4, .row-grid'), (el) => el.classList.remove('oculto'));
+                });
+                const act = document.querySelector('#rondo-cfg-tabs .cfg-tab.activo') || document.querySelector('#rondo-cfg-tabs .cfg-tab');
+                if (act) act.click();
+                if (cont) cont.textContent = '';
+                return;
+            }
+            let total = 0, primera = null;
+            panes.forEach((p) => {
+                Array.prototype.forEach.call(p.querySelectorAll('h4'), (h) => h.classList.add('oculto'));
+                let visibles = 0;
+                Array.prototype.forEach.call(p.querySelectorAll('label'), (l) => {
+                    const inp = l.querySelector('input,select,textarea');
+                    const hay = norm(l.textContent).indexOf(q) >= 0 || (inp && norm(inp.id).indexOf(q) >= 0);
+                    l.classList.toggle('oculto', !hay);
+                    if (!hay) return;
+                    visibles++;
+                    // Muestra el titulo (h4) de la seccion a la que pertenece.
+                    let prev = l.previousElementSibling, guard = 0;
+                    while (prev && prev.tagName !== 'H4' && guard < 60) { prev = prev.previousElementSibling; guard++; }
+                    if (prev && prev.tagName === 'H4') prev.classList.remove('oculto');
+                });
+                // Los grupos (.row-grid) y su titulo se ocultan si no queda fila.
+                Array.prototype.forEach.call(p.querySelectorAll('.row-grid'), (grid) => {
+                    const hay = !!grid.querySelector('label:not(.oculto)');
+                    grid.classList.toggle('oculto', !hay);
+                    if (hay) {
+                        const prev = grid.previousElementSibling;
+                        if (prev && prev.tagName === 'H4') prev.classList.remove('oculto');
+                    }
+                });
+                p.style.display = visibles ? '' : 'none';
+                total += visibles;
+                if (visibles && !primera) primera = p.dataset.cfg;
+            });
+            if (primera) {
+                document.querySelectorAll('#rondo-cfg-tabs .cfg-tab').forEach((b) => {
+                    b.classList.toggle('activo', b.dataset.cfg === primera);
+                });
+            }
+            if (cont) cont.textContent = total ? (total + ' ajuste(s)') : 'Sin resultados';
+        };
+        if (cfgBuscar) {
+            cfgBuscar.addEventListener('input', cfgBuscarAplicar);
+            cfgBuscar.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { cfgBuscar.value = ''; cfgBuscarAplicar(); }
+            });
+        }
+
+        // v6.0.11: restaurar los ajustes a los valores por defecto (sin borrar
+        // datos: lista vigilada, rutas, odometro y perfiles se conservan).
+        const cfgReset = byId('rondo-cfg-reset');
+        if (cfgReset) cfgReset.addEventListener('click', () => {
+            abrirDialogo({
+                titulo: 'Restaurar valores por defecto',
+                html: '<div style="text-align:left;font-size:12.5px;line-height:1.5">Se restableceran <b>todas las opciones</b> a su valor por defecto.<br><br>No se borran tus datos (lista vigilada, rutas, odometro ni perfiles).</div>',
+                cancelText: 'Cancelar',
+                okText: 'Restaurar',
+                onOk: () => {
+                    APP.config = deepMerge({}, DEFAULTS);
+                    writeJSON(LS.cfg, APP.config);
+                    try { applyTheme(); } catch (_) { /* noop */ }
+                    try { aplicarModoPanel(); } catch (_) { /* noop */ }
+                    try { applyBar(); } catch (_) { /* noop */ }
+                    try { paintIASwitch(); } catch (_) { /* noop */ }
+                    try { abrirCfg(); } catch (_) { /* noop */ }
+                    adviceOk('Ajustes restaurados', 'Se aplicaron los valores por defecto.');
+                }
+            });
+        });
 
         function abrirCfg() {
             limpiarCfgDirty();
+            // v6.0.11: reabre en la ultima seccion usada (por defecto, General).
+            try { rxCfgTab(readSession(SS.cfgTab, 'general')); } catch (_) { /* noop */ }
             const g = (id) => byId(id);
             g('c-poll').value = APP.config.pollMs;
             g('c-off').value = APP.config.offlineMin;
@@ -556,6 +648,12 @@
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
+            const cRVelSost = g('c-r-vel-sost');
+            if (cRVelSost) cRVelSost.checked = !!APP.config.reglas.velocidadSostenida;
+            const cVelSostKmh = g('c-vel-sost-kmh');
+            if (cVelSostKmh) cVelSostKmh.value = APP.config.velSostenidaKmh != null ? APP.config.velSostenidaKmh : DEFAULTS.velSostenidaKmh;
+            const cVelSostMin = g('c-vel-sost-min');
+            if (cVelSostMin) cVelSostMin.value = APP.config.velSostenidaMin != null ? APP.config.velSostenidaMin : DEFAULTS.velSostenidaMin;
             g('c-r-riesgo').checked = !!APP.config.reglas.riesgoSinSenal;
             const cRRiesgoPre = g('c-r-riesgo-pre'); if (cRRiesgoPre) cRRiesgoPre.checked = !!APP.config.reglas.riesgoPredict;
             g('c-riesgo-url').value = APP.config.riesgoUrl || '';
@@ -820,6 +918,9 @@
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
+            cf.reglas.velocidadSostenida = g('c-r-vel-sost').checked;
+            cf.velSostenidaKmh = clamp(isoNum(g('c-vel-sost-kmh').value, DEFAULTS.velSostenidaKmh), 10, 400);
+            cf.velSostenidaMin = clamp(isoNum(g('c-vel-sost-min').value, DEFAULTS.velSostenidaMin), 1, 120);
             cf.reglas.riesgoSinSenal = g('c-r-riesgo').checked;
             const riesgoPreEl = g('c-r-riesgo-pre'); if (riesgoPreEl) cf.reglas.riesgoPredict = !!riesgoPreEl.checked;
             cf.riesgoUrl = (g('c-riesgo-url').value || '').trim();

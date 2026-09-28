@@ -25,11 +25,10 @@ porque son el artefacto instalable y el canal `dev` los sirve desde raw.
 ## Probar
 
 ```bash
-for t in tests/*.test.js; do node "$t"; done
+node scripts/test-all.mjs
 ```
 
-`tests/_source.js` construye el bundle automaticamente si `src/` cambio. Las 12
-suites no usan red ni navegador.
+`tests/_source.js` construye el bundle automaticamente si `src/` cambio. Las 16 suites no usan red ni navegador. `node scripts/check-docs.mjs` verifica que las cifras de la documentacion (suites, checks, pestañas, version) siguen cuadrando con el codigo; `--fix` las reescribe.
 
 ## Anadir una seccion de codigo
 - Crea/edita un fragmento en `src/parts/NN-slug.js` respetando el orden.
@@ -44,7 +43,7 @@ suites no usan red ni navegador.
   1. calcula la siguiente version segun los commits convencionales
      (`feat` → minor, `BREAKING CHANGE`/`!` → major, resto → patch);
   2. genera `changelogs/X.Y.Z.md` (si no existe uno escrito a mano);
-  3. construye (`--channel=main`), corre las 12 suites y actualiza el badge del
+  3. construye (`--channel=main`), corre las 16 suites y actualiza el badge del
      README;
   4. commitea `VERSION`, `rondo.user.js`, `dist/`, `changelogs/` y `README.md`
      (`[skip ci]`), crea el tag `vX.Y.Z`, publica el release con assets y sube

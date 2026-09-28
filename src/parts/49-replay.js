@@ -21,17 +21,50 @@
         const dd = String(d.getDate()).padStart(2, '0');
         return d.getFullYear() + '-' + mm + '-' + dd;
     }
-    function rxReplayRango(fecha, h1, h2) {
-        const f = String(fecha || rxReplayFechaHoy());
+    function rxReplayRango(fecha, h1, h2, fecha2) {
+        // Inicio y fin son fecha+hora independientes: si no se indica fecha de
+        // fin, el rango cae en el mismo dia que el inicio (compatibilidad).
+        const f1 = String(fecha || rxReplayFechaHoy());
+        const f2 = String(fecha2 || f1);
         const t1 = /^\d{1,2}:\d{2}$/.test(h1) ? h1 : '00:00';
         const t2 = /^\d{1,2}:\d{2}$/.test(h2) ? h2 : '23:59';
-        let desde = Math.floor(new Date(f + 'T' + t1 + ':00').getTime() / 1000);
-        let hasta = Math.floor(new Date(f + 'T' + t2 + ':59').getTime() / 1000);
+        let desde = Math.floor(new Date(f1 + 'T' + t1 + ':00').getTime() / 1000);
+        let hasta = Math.floor(new Date(f2 + 'T' + t2 + ':59').getTime() / 1000);
         const ahora = Math.floor(Date.now() / 1000);
         if (!isFinite(desde)) desde = ahora - 86400;
         if (!isFinite(hasta)) hasta = ahora;
         if (hasta > ahora) hasta = ahora;
         return { desde: desde, hasta: hasta };
+    }
+    // Estado de motor (ignicion) de un mensaje, si el sensor viene entre sus
+    // parametros. Devuelve true/false, o null si no hay dato. El nombre del
+    // sensor depende de cada instalacion, asi que se aceptan los tipicos.
+    const RX_MOTOR_KEYS = ['engine', 'ignition', 'acc', 'motor', 'encendido', 'engineoperation', 'ignicion'];
+    function rxMotorMsg(m) {
+        if (!m) return null;
+        if (m.eng === true || m.eng === false) return m.eng;
+        const p = m.params;
+        if (!p || typeof p !== 'object') return null;
+        for (const k of Object.keys(p)) {
+            const kk = String(k).toLowerCase().replace(/[\s_]/g, '');
+            if (RX_MOTOR_KEYS.indexOf(kk) < 0) continue;
+            const v = p[k];
+            if (v === true || v === 1) return true;
+            if (v === false || v === 0) return false;
+            const s = String(v).trim().toLowerCase();
+            if (s === '1' || s === 'on' || s === 'true' || s === 'encendido') return true;
+            if (s === '0' || s === 'off' || s === 'false' || s === 'apagado') return false;
+        }
+        return null;
+    }
+    // Clasifica el motor de una parada a partir de las muestras del sensor y
+    // del mayor hueco de reporte (s). Si no hay sensor, estima: un hueco
+    // largo = apagado; reporte continuo a velocidad 0 = encendido (ralenti).
+    function rxMotorClasificar(muestras, gapMaxS, gapMinS) {
+        let on = 0, off = 0;
+        for (const v of (muestras || [])) { if (v === true) on++; else if (v === false) off++; }
+        if (on || off) return { motor: (on >= off) ? 'on' : 'off', fuente: 'sensor' };
+        return { motor: ((Number(gapMaxS) || 0) >= (Number(gapMinS) || 0)) ? 'off' : 'on', fuente: 'estimado' };
     }
     function rxReplayColor(tipo) {
         return { parada: '#7d8595', exceso: '#b71c1c', zona: '#1565c0', desvio: '#e65100' }[tipo] || '#888';
@@ -255,6 +288,7 @@
         const limite = info ? limiteDe(info) : APP.config.velMax;
         const zonas = !!(APP.config.loadZones && (APP.zonas || []).length);
         let enParadaDesde = null, paradaLat = null, paradaLon = null, paradaIdx = 0;
+        let paradaGapMax = 0, motorSamples = [];
         let zonaPrev = null;
         let excesoDesde = null, excesoMax = 0, excesoLat = null, excesoLon = null, excesos = 0;
         let detenido = 0, moviendo = 0, velMax = 0;
@@ -262,7 +296,17 @@
             const dur = tFin - enParadaDesde;
             if (dur >= paradaMinS) {
                 const det = rxReplayDetalleParada(paradaLat, paradaLon, zonas);
-                paradas.push({ t: enParadaDesde, dur: dur, idx: paradaIdx, idxFin: idxFin, lat: paradaLat, lon: paradaLon, zona: det.zona, municipio: det.municipio });
+                // Clasificacion del motor: si hay sensor, manda el sensor; si
+                // no, se estima (hueco largo de reporte = apagado; reporte
+                // continuo a velocidad 0 = encendido en ralenti).
+                const gapMinS = Math.max(60, (Number(APP.config.replayGapMin) || 15) * 60);
+                const cl = rxMotorClasificar(motorSamples, paradaGapMax, gapMinS);
+                const motor = cl.motor, motorFuente = cl.fuente;
+                paradas.push({
+                    t: enParadaDesde, dur: dur, idx: paradaIdx, idxFin: idxFin,
+                    lat: paradaLat, lon: paradaLon, zona: det.zona, municipio: det.municipio,
+                    motor: motor, motorFuente: motorFuente, gapMax: Math.round(paradaGapMax)
+                });
             }
             enParadaDesde = null;
         };
@@ -277,7 +321,14 @@
             const dt = (i > 0) ? Math.max(0, m.t - (msgs[i - 1].t || m.t)) : 0;
             if (m.s > 3) { moviendo += dt; if (m.s > velMax) velMax = m.s; } else { detenido += dt; }
             if (m.s > 3) { if (enParadaDesde != null) cerrarParada(m.t, i); }
-            else if (enParadaDesde == null) { enParadaDesde = m.t; paradaLat = m.lat; paradaLon = m.lon; paradaIdx = i; }
+            else {
+                if (enParadaDesde == null) {
+                    enParadaDesde = m.t; paradaLat = m.lat; paradaLon = m.lon;
+                    paradaIdx = i; paradaGapMax = 0; motorSamples = [];
+                } else if (dt > paradaGapMax) paradaGapMax = dt;
+                const em = rxMotorMsg(m);
+                if (em !== null) motorSamples.push(em);
+            }
             if (limite && m.s > limite) {
                 if (excesoDesde == null) { excesoDesde = m.t; excesoMax = m.s; excesoLat = m.lat; excesoLon = m.lon; }
                 else if (m.s > excesoMax) excesoMax = m.s;
@@ -356,6 +407,9 @@
             '<span class="par-idx">' + (i + 1) + '</span>' +
             '<span class="par-hora">' + rxReplayHHMM(p.t) + '</span>' +
             '<span class="par-dur">' + rxFmtDur(p.dur) + '</span>' +
+            (p.motor ? '<span class="par-motor' + (p.motor === 'off' ? ' off' : '') + '" title="' +
+                (p.motorFuente === 'sensor' ? 'Segun el sensor de motor de la unidad' : 'Estimado por el patron de reporte (hueco largo = apagado)') + '">' +
+                'motor ' + (p.motor === 'off' ? 'apagado' : 'encendido') + (p.motorFuente === 'estimado' ? ' (est.)' : '') + '</span>' : '') +
             '<span class="par-lugar" title="' + esc(rxReplayParadaTooltip(p)) + '">' + esc(rxReplayParadaEtiqueta(p)) + '</span>' +
             '</div>'
         ).join('');
@@ -558,14 +612,26 @@
     }
     function rxReplayRangoRapido(kind) {
         const f = byId('rondo-replay-fecha');
+        const f2 = byId('rondo-replay-fecha2');
         const d = byId('rondo-replay-desde');
         const h = byId('rondo-replay-hasta');
-        const set = (fecha, h1, h2) => { if (f) f.value = fecha; if (d) d.value = h1; if (h) h.value = h2; };
+        const set = (fecha, h1, h2, fechaFin) => {
+            if (f) f.value = fecha;
+            if (f2) f2.value = fechaFin || fecha;
+            if (d) d.value = h1;
+            if (h) h.value = h2;
+        };
         const hoy = rxReplayFechaHoy();
         const ayer = (() => { const x = new Date(); x.setDate(x.getDate() - 1); const mm = String(x.getMonth() + 1).padStart(2, '0'); const dd = String(x.getDate()).padStart(2, '0'); return x.getFullYear() + '-' + mm + '-' + dd; })();
         if (kind === 'ayer') set(ayer, '00:00', '23:59');
         else if (kind === 'dia') set(f && f.value ? f.value : hoy, '06:00', '18:00');
         else if (kind === 'noche') set(f && f.value ? f.value : hoy, '18:00', '23:59');
+        else if (kind === '24h') {
+            // Ultimas 24 h cruzando la medianoche (ayer a esta hora -> hoy).
+            const x = new Date();
+            const hhmm = String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0');
+            set(ayer, hhmm, hhmm, hoy);
+        }
         else set(hoy, '00:00', '23:59');
     }
     function rxReplayExportarGeoJSON() {
@@ -578,7 +644,7 @@
         }];
         r.paradas.forEach((p, i) => features.push({
             type: 'Feature',
-            properties: { tipo: 'parada', n: i + 1, hora: rxReplayHHMM(p.t), durMin: Math.round(p.dur / 60), zona: p.zona || '', municipio: p.municipio || '' },
+            properties: { tipo: 'parada', n: i + 1, hora: rxReplayHHMM(p.t), durMin: Math.round(p.dur / 60), motor: p.motor || '', motorFuente: p.motorFuente || '', zona: p.zona || '', municipio: p.municipio || '' },
             geometry: { type: 'Point', coordinates: [+p.lon.toFixed(6), +p.lat.toFixed(6)] }
         }));
         r.eventos.forEach((e2) => features.push({
@@ -594,8 +660,8 @@
         const r = RX_REPLAY;
         if (!r) { adviceWarn('Sin recorrido', 'Carga un recorrido primero.'); return; }
         const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-        const filas = [['n', 'hora', 'duracion_min', 'lat', 'lon', 'zona', 'municipio']];
-        r.paradas.forEach((p, i) => filas.push([i + 1, rxReplayHHMM(p.t), Math.round(p.dur / 60), p.lat.toFixed(5), p.lon.toFixed(5), p.zona || '', p.municipio || '']));
+        const filas = [['n', 'hora', 'duracion_min', 'motor', 'lat', 'lon', 'zona', 'municipio']];
+        r.paradas.forEach((p, i) => filas.push([i + 1, rxReplayHHMM(p.t), Math.round(p.dur / 60), (p.motor || '') + (p.motorFuente === 'estimado' ? ' (est.)' : ''), p.lat.toFixed(5), p.lon.toFixed(5), p.zona || '', p.municipio || '']));
         rxReplayDescargar('rondo-paradas-' + r.eco + '-' + r.fecha + '.csv',
             '\uFEFF' + filas.map((f) => f.map(q).join(',')).join('\r\n'),
             'text/csv;charset=utf-8;');
@@ -635,11 +701,13 @@
         const ucat = rxReplayUnidades().filter((x) => x.eco === eco)[0];
         rxReplaySetUnidad(eco, ucat ? ucat.etq : eco);
         const fechaEl = byId('rondo-replay-fecha');
+        const fecha2El = byId('rondo-replay-fecha2');
         const h1 = byId('rondo-replay-desde');
         const h2 = byId('rondo-replay-hasta');
         const fecha = (fechaEl && fechaEl.value) || rxReplayFechaHoy();
-        const rango = rxReplayRango(fecha, h1 ? h1.value : '', h2 ? h2.value : '');
-        if (rango.hasta <= rango.desde) { adviceWarn('Rango invalido', 'La hora "hasta" debe ser mayor que "desde".'); return; }
+        const fecha2 = (fecha2El && fecha2El.value) || fecha;
+        const rango = rxReplayRango(fecha, h1 ? h1.value : '', h2 ? h2.value : '', fecha2);
+        if (rango.hasta <= rango.desde) { adviceWarn('Rango invalido', 'El fin debe ser posterior al inicio.'); return; }
         const btn = byId('rondo-replay-cargar');
         if (btn) setBusy(btn, true);
         try {
@@ -654,7 +722,7 @@
             } catch (e) { crudos = []; }
             const msgs = crudos
                 .filter((m) => m && m.pos && isFinite(+m.pos.y) && isFinite(+m.pos.x))
-                .map((m) => ({ t: Number(m.t) || 0, lat: +m.pos.y, lon: +m.pos.x, s: Number(m.pos.s) || 0, c: Number(m.pos.c) || 0 }))
+                .map((m) => ({ t: Number(m.t) || 0, lat: +m.pos.y, lon: +m.pos.x, s: Number(m.pos.s) || 0, c: Number(m.pos.c) || 0, eng: rxMotorMsg(m), params: m.params || null }))
                 .filter((m) => m.t > 0)
                 .sort((a, b) => a.t - b.t);
             if (!msgs.length) {
@@ -672,7 +740,7 @@
             const an = rxReplayAnalizar(msgs, it.info);
             if (RX_REPLAY && RX_REPLAY._timer) clearInterval(RX_REPLAY._timer);
             RX_REPLAY = {
-                eco: eco, clave: it.info.clave, info: it.info, fecha: fecha,
+                eco: eco, clave: it.info.clave, info: it.info, fecha: fecha, fecha2: fecha2,
                 desde: rango.desde, hasta: rango.hasta,
                 msgs: msgs, paradas: an.paradas, eventos: an.eventos, resumen: an.resumen,
                 idx: 0, vt: msgs[0].t, factor: 300, playing: false, _timer: null, _tick: 0,
@@ -691,12 +759,16 @@
         rxReplaySetUnidad(eco, u ? u.etq : eco);
         const f = byId('rondo-replay-fecha');
         if (f && !f.value) f.value = rxReplayFechaHoy();
+        const f2 = byId('rondo-replay-fecha2');
+        if (f2 && !f2.value) f2.value = (f && f.value) || rxReplayFechaHoy();
         setTab('replay');
         rxReplayCargar();
     }
     function bindReplay() {
         const f = byId('rondo-replay-fecha');
         if (f && !f.value) f.value = rxReplayFechaHoy();
+        const f2 = byId('rondo-replay-fecha2');
+        if (f2 && !f2.value) f2.value = (f && f.value) || rxReplayFechaHoy();
         const inp = byId('rondo-replay-buscar');
         if (inp) {
             inp.addEventListener('input', () => { _rxRepSugIdx = -1; rxReplaySugRender(); });

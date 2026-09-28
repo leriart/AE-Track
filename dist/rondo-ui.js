@@ -159,6 +159,8 @@
             "#rondo-panel .rondo-replay-par .par-idx{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--rondo-bg-strong);display:inline-flex;align-items:center;justify-content:center;font:700 10px var(--rondo-font)}\n" +
             "#rondo-panel .rondo-replay-par .par-hora{color:var(--rondo-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}\n" +
             "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
+            "#rondo-panel .rondo-replay-par .par-motor{flex:0 0 auto;font-size:10.5px;padding:1px 6px;border-radius:99px;background:var(--rondo-ok-soft,rgba(67,160,71,.14));color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .rondo-replay-par .par-motor.off{background:var(--rondo-bg);color:var(--rondo-fg-dim)}\n" +
             "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
             "#rondo-panel .rondo-replay-buscar{position:relative;grid-column:1 / -1;min-width:0}\n" +
@@ -814,6 +816,11 @@
             "#rondo-ayuda button.cancel:hover{background:var(--rondo-bg);transform:translateY(-1px)}\n" +
             "#rondo-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--rondo-bg);border-bottom:1px solid var(--rondo-border-soft);border-radius:10px 10px 0 0}\n" +
             "#rondo-config .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
+            // v6.0.11: buscador de ajustes y estado de filtrado.
+            "#rondo-config .rondo-cfg-buscar{flex:0 1 200px;min-width:110px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:7px;color:var(--rondo-fg);padding:5px 8px;font:400 11.5px var(--rondo-font)}\n" +
+            "#rondo-config .rondo-cfg-buscar::placeholder{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-config .cfg-buscar-count{font-size:10.5px;color:var(--rondo-fg-dim);white-space:nowrap}\n" +
+            "#rondo-config label.oculto,#rondo-config h4.oculto,#rondo-config .row-grid.oculto{display:none}\n" +
             "#rondo-config .cfg-tabs{display:flex;background:var(--rondo-bg);padding:0 10px;border-bottom:1px solid var(--rondo-border-soft);gap:6px;flex-wrap:wrap}\n" +
             "#rondo-config .cfg-tab{background:transparent;border:none;color:var(--rondo-fg-dim);padding:9px 12px;cursor:pointer;font:600 11.5px var(--rondo-font);border-bottom:2px solid transparent;letter-spacing:.4px;text-transform:uppercase}\n" +
             "#rondo-config .cfg-tab.activo{color:var(--rondo-fg);border-bottom-color:var(--rondo-accent-2)}\n" +
@@ -1355,7 +1362,8 @@
              '</div>' +
              '<div id="rondo-caravana-body" class="rondo-caravana-body"></div>' +
              '</div>' +
-             // v6.0.11: tab de replay. Reproduce el recorrido de un dia.
+             // v6.0.11: tab de replay. Reproduce el recorrido de una unidad
+             // entre una fecha/hora de inicio y una de fin (permite multidia).
              '<div class="tabla" id="rondo-wrap-replay" style="display:none">' +
              '<div class="rondo-replay-bar">' +
              '<div class="rondo-replay-buscar">' +
@@ -1363,9 +1371,11 @@
              '<input type="hidden" id="rondo-replay-eco">' +
              '<div id="rondo-replay-sug" class="rondo-replay-sug"></div>' +
              '</div>' +
-             '<input type="date" id="rondo-replay-fecha" class="filtro" title="Dia a reproducir">' +
-             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora desde" value="00:00">' +
-             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora hasta" value="23:59">' +
+             '<input type="date" id="rondo-replay-fecha" class="filtro" title="Fecha de inicio">' +
+             '<input type="time" id="rondo-replay-desde" class="filtro" title="Hora de inicio" value="00:00">' +
+             '<span class="rq-lbl">a</span>' +
+             '<input type="date" id="rondo-replay-fecha2" class="filtro" title="Fecha de fin (si se deja igual al inicio, es el mismo dia)">' +
+             '<input type="time" id="rondo-replay-hasta" class="filtro" title="Hora de fin" value="23:59">' +
              '<button class="mini" id="rondo-replay-cargar" title="Cargar el recorrido"><span class="rondo-usym">' + UIS.refresh + '</span> Cargar</button>' +
              '<button class="mini" id="rondo-replay-centrar" title="Centrar el mini-mapa en el recorrido"><span class="rondo-usym">' + UIS.map + '</span> Centrar</button>' +
              '</div>' +
@@ -1373,6 +1383,7 @@
              '<span class="rq-lbl">Rango:</span>' +
              '<button class="mini" data-rango="hoy">Hoy</button>' +
              '<button class="mini" data-rango="ayer">Ayer</button>' +
+             '<button class="mini" data-rango="24h">Ult. 24 h</button>' +
              '<button class="mini" data-rango="dia">Turno dia</button>' +
              '<button class="mini" data-rango="noche">Turno noche</button>' +
              '</div>' +
@@ -1579,6 +1590,8 @@
         cfgWinEl = makeEl('div', { id: 'rondo-config' });
         cfgWinEl.innerHTML = (
             '<div class="cfg-head"><h3><span class="rondo-usym">' + UIS.gear + '</span> Configuración</h3>' +
+            '<input type="search" id="rondo-cfg-buscar" class="rondo-cfg-buscar" placeholder="Buscar ajuste..." autocomplete="off" spellcheck="false" title="Filtra los ajustes por nombre (p. ej. velocidad, IA, umbral, geocerca)">' +
+            '<span class="cfg-buscar-count" id="rondo-cfg-buscar-count"></span>' +
             '<button class="rondo-iconbtn" id="rondo-cfg-cerrar-x" title="Cerrar">×</button></div>' +
             '<div class="cfg-tabs" id="rondo-cfg-tabs">' +
             '<button class="cfg-tab activo" data-cfg="general">General</button>' +
@@ -1625,6 +1638,9 @@
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
+            checkRow('c-r-vel-sost', 'Exceso sostenido') +
+            numRow('c-vel-sost-kmh', 'Velocidad sostenida (km/h)') +
+            numRow('c-vel-sost-min', 'Minutos sobre el umbral') +
             checkRow('c-r-riesgo', 'Perdi\u00f3 se\u00f1al en zona de riesgo') +
             checkRow('c-r-riesgo-pre', 'Aproximaci\u00f3n a zona de riesgo (predictiva)') +
             '</div>' +
@@ -1840,6 +1856,7 @@
             '<div class="cfg-foot">' +
             '<span class="cfg-dirty" id="rondo-cfg-dirty" title="Tienes cambios sin guardar">Cambios sin guardar</span>' +
             '<div style="display:flex;gap:8px">' +
+            '<button class="cancel" id="rondo-cfg-reset" title="Restaurar todas las opciones a sus valores por defecto (no borra tus datos)">Restaurar</button>' +
             '<button class="cancel" id="rondo-cfg-cerrar">Cerrar</button>' +
             '<button class="accbtn" id="rondo-cfg-guardar">Guardar</button>' +
             '</div>' +
@@ -2092,6 +2109,8 @@
     /* ====================== PAINT ====================== */
     function setTab(name) {
         APP.tab = name;
+        // v6.0.11: recuerda la pestaña para retomarla al recargar la pagina.
+        try { writeSession(SS.tab, name); } catch (_) { /* noop */ }
         const ids = ['dash', 'unidades', 'alertas', 'rutas', 'caravana', 'replay', 'chat', 'zonas'];
         ids.forEach((n) => {
             const el = byId('rondo-wrap-' + n);
@@ -2101,6 +2120,8 @@
             const act = t.dataset.tab === name;
             t.classList.toggle('activo', act);
             t.setAttribute('aria-selected', act ? 'true' : 'false');
+            // El tabindex sigue a la pestaña activa (patron ARIA de tablist).
+            if (t.getAttribute('role') === 'tab') t.setAttribute('tabindex', act ? '0' : '-1');
         });
         paintTools();
         if (name === 'dash') paintKPI();
@@ -4292,7 +4313,46 @@
     }
 
     /* ====================== TECLAS ====================== */
+    // Accesibilidad de las pestañas: roles ARIA, tabindex y navegacion con
+    // flechas (izq/der, Home/End). Se aplica en runtime para cubrir tambien
+    // la pestaña de chat, que se muestra u oculta segun la IA configurada.
+    function rxA11yTabs() {
+        const cont = byId('rondo-tabs');
+        if (!cont) return;
+        cont.setAttribute('role', 'tablist');
+        const tabs = Array.prototype.slice.call(cont.querySelectorAll('.tab'));
+        tabs.forEach((t) => {
+            const name = t.dataset.tab;
+            if (!name) return;
+            t.setAttribute('role', 'tab');
+            t.id = 'rondo-tab-' + name;
+            const panel = byId('rondo-wrap-' + name);
+            if (panel) {
+                panel.setAttribute('role', 'tabpanel');
+                panel.setAttribute('aria-labelledby', 'rondo-tab-' + name);
+                t.setAttribute('aria-controls', 'rondo-wrap-' + name);
+            }
+            t.setAttribute('tabindex', t.classList.contains('activo') ? '0' : '-1');
+            if (t._rxA11y) return;
+            t._rxA11y = true;
+            t.addEventListener('keydown', (e) => {
+                const visibles = tabs.filter((x) => x.style.display !== 'none');
+                const idx = visibles.indexOf(t);
+                if (idx < 0) return;
+                let next = null;
+                if (e.key === 'ArrowRight') next = visibles[(idx + 1) % visibles.length];
+                else if (e.key === 'ArrowLeft') next = visibles[(idx - 1 + visibles.length) % visibles.length];
+                else if (e.key === 'Home') next = visibles[0];
+                else if (e.key === 'End') next = visibles[visibles.length - 1];
+                if (!next) return;
+                e.preventDefault();
+                try { next.focus(); } catch (_) { /* noop */ }
+                next.click();
+            });
+        });
+    }
     function bindKeys() {
+        rxA11yTabs();
         document.addEventListener('keydown', (e) => {
             const tgt = e.target;
             const enCampo = !!(tgt && (tgt.tagName === 'INPUT' || tgt.tagName === 'TEXTAREA' || tgt.tagName === 'SELECT' || tgt.isContentEditable));
@@ -4806,10 +4866,102 @@
             document.querySelectorAll('#rondo-config .cfg-pane').forEach((p) => {
                 p.style.display = (p.dataset.cfg === sel) ? '' : 'none';
             });
+            // v6.0.11: recuerda la seccion para reabrir Ajustes donde estaba.
+            writeSession(SS.cfgTab, sel);
         }));
+        // Activa una seccion de Ajustes por nombre (o General si no existe).
+        const rxCfgTab = (sel) => {
+            const tab = document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="' + sel + '"]') ||
+                document.querySelector('#rondo-cfg-tabs .cfg-tab[data-cfg="general"]');
+            if (tab) tab.click();
+        };
+
+        // v6.0.11: buscador de ajustes. Filtra las filas de todas las
+        // pestañas a la vez y salta a la primera que tenga coincidencias.
+        // Al vaciar el campo se restaura la pestaña activa y todas las filas.
+        const cfgBuscar = byId('rondo-cfg-buscar');
+        const cfgBuscarAplicar = () => {
+            if (!cfgBuscar) return;
+            const cont = byId('rondo-cfg-buscar-count');
+            const panes = Array.prototype.slice.call(document.querySelectorAll('#rondo-config .cfg-pane'));
+            const q = norm(cfgBuscar.value || '');
+            if (!q) {
+                panes.forEach((p) => {
+                    Array.prototype.forEach.call(p.querySelectorAll('label, h4, .row-grid'), (el) => el.classList.remove('oculto'));
+                });
+                const act = document.querySelector('#rondo-cfg-tabs .cfg-tab.activo') || document.querySelector('#rondo-cfg-tabs .cfg-tab');
+                if (act) act.click();
+                if (cont) cont.textContent = '';
+                return;
+            }
+            let total = 0, primera = null;
+            panes.forEach((p) => {
+                Array.prototype.forEach.call(p.querySelectorAll('h4'), (h) => h.classList.add('oculto'));
+                let visibles = 0;
+                Array.prototype.forEach.call(p.querySelectorAll('label'), (l) => {
+                    const inp = l.querySelector('input,select,textarea');
+                    const hay = norm(l.textContent).indexOf(q) >= 0 || (inp && norm(inp.id).indexOf(q) >= 0);
+                    l.classList.toggle('oculto', !hay);
+                    if (!hay) return;
+                    visibles++;
+                    // Muestra el titulo (h4) de la seccion a la que pertenece.
+                    let prev = l.previousElementSibling, guard = 0;
+                    while (prev && prev.tagName !== 'H4' && guard < 60) { prev = prev.previousElementSibling; guard++; }
+                    if (prev && prev.tagName === 'H4') prev.classList.remove('oculto');
+                });
+                // Los grupos (.row-grid) y su titulo se ocultan si no queda fila.
+                Array.prototype.forEach.call(p.querySelectorAll('.row-grid'), (grid) => {
+                    const hay = !!grid.querySelector('label:not(.oculto)');
+                    grid.classList.toggle('oculto', !hay);
+                    if (hay) {
+                        const prev = grid.previousElementSibling;
+                        if (prev && prev.tagName === 'H4') prev.classList.remove('oculto');
+                    }
+                });
+                p.style.display = visibles ? '' : 'none';
+                total += visibles;
+                if (visibles && !primera) primera = p.dataset.cfg;
+            });
+            if (primera) {
+                document.querySelectorAll('#rondo-cfg-tabs .cfg-tab').forEach((b) => {
+                    b.classList.toggle('activo', b.dataset.cfg === primera);
+                });
+            }
+            if (cont) cont.textContent = total ? (total + ' ajuste(s)') : 'Sin resultados';
+        };
+        if (cfgBuscar) {
+            cfgBuscar.addEventListener('input', cfgBuscarAplicar);
+            cfgBuscar.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') { cfgBuscar.value = ''; cfgBuscarAplicar(); }
+            });
+        }
+
+        // v6.0.11: restaurar los ajustes a los valores por defecto (sin borrar
+        // datos: lista vigilada, rutas, odometro y perfiles se conservan).
+        const cfgReset = byId('rondo-cfg-reset');
+        if (cfgReset) cfgReset.addEventListener('click', () => {
+            abrirDialogo({
+                titulo: 'Restaurar valores por defecto',
+                html: '<div style="text-align:left;font-size:12.5px;line-height:1.5">Se restableceran <b>todas las opciones</b> a su valor por defecto.<br><br>No se borran tus datos (lista vigilada, rutas, odometro ni perfiles).</div>',
+                cancelText: 'Cancelar',
+                okText: 'Restaurar',
+                onOk: () => {
+                    APP.config = deepMerge({}, DEFAULTS);
+                    writeJSON(LS.cfg, APP.config);
+                    try { applyTheme(); } catch (_) { /* noop */ }
+                    try { aplicarModoPanel(); } catch (_) { /* noop */ }
+                    try { applyBar(); } catch (_) { /* noop */ }
+                    try { paintIASwitch(); } catch (_) { /* noop */ }
+                    try { abrirCfg(); } catch (_) { /* noop */ }
+                    adviceOk('Ajustes restaurados', 'Se aplicaron los valores por defecto.');
+                }
+            });
+        });
 
         function abrirCfg() {
             limpiarCfgDirty();
+            // v6.0.11: reabre en la ultima seccion usada (por defecto, General).
+            try { rxCfgTab(readSession(SS.cfgTab, 'general')); } catch (_) { /* noop */ }
             const g = (id) => byId(id);
             g('c-poll').value = APP.config.pollMs;
             g('c-off').value = APP.config.offlineMin;
@@ -4900,6 +5052,12 @@
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
+            const cRVelSost = g('c-r-vel-sost');
+            if (cRVelSost) cRVelSost.checked = !!APP.config.reglas.velocidadSostenida;
+            const cVelSostKmh = g('c-vel-sost-kmh');
+            if (cVelSostKmh) cVelSostKmh.value = APP.config.velSostenidaKmh != null ? APP.config.velSostenidaKmh : DEFAULTS.velSostenidaKmh;
+            const cVelSostMin = g('c-vel-sost-min');
+            if (cVelSostMin) cVelSostMin.value = APP.config.velSostenidaMin != null ? APP.config.velSostenidaMin : DEFAULTS.velSostenidaMin;
             g('c-r-riesgo').checked = !!APP.config.reglas.riesgoSinSenal;
             const cRRiesgoPre = g('c-r-riesgo-pre'); if (cRRiesgoPre) cRRiesgoPre.checked = !!APP.config.reglas.riesgoPredict;
             g('c-riesgo-url').value = APP.config.riesgoUrl || '';
@@ -5164,6 +5322,9 @@
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
+            cf.reglas.velocidadSostenida = g('c-r-vel-sost').checked;
+            cf.velSostenidaKmh = clamp(isoNum(g('c-vel-sost-kmh').value, DEFAULTS.velSostenidaKmh), 10, 400);
+            cf.velSostenidaMin = clamp(isoNum(g('c-vel-sost-min').value, DEFAULTS.velSostenidaMin), 1, 120);
             cf.reglas.riesgoSinSenal = g('c-r-riesgo').checked;
             const riesgoPreEl = g('c-r-riesgo-pre'); if (riesgoPreEl) cf.reglas.riesgoPredict = !!riesgoPreEl.checked;
             cf.riesgoUrl = (g('c-riesgo-url').value || '').trim();
@@ -5997,6 +6158,7 @@
         bindCaravanaSelect();
         bindReplay();
         bindRiesgo();
+        try { rxDiagBind(); } catch (_) { /* noop */ }
 
         const ok = await wialonReady();
         if (!ok) {
@@ -6483,17 +6645,50 @@
         const dd = String(d.getDate()).padStart(2, '0');
         return d.getFullYear() + '-' + mm + '-' + dd;
     }
-    function rxReplayRango(fecha, h1, h2) {
-        const f = String(fecha || rxReplayFechaHoy());
+    function rxReplayRango(fecha, h1, h2, fecha2) {
+        // Inicio y fin son fecha+hora independientes: si no se indica fecha de
+        // fin, el rango cae en el mismo dia que el inicio (compatibilidad).
+        const f1 = String(fecha || rxReplayFechaHoy());
+        const f2 = String(fecha2 || f1);
         const t1 = /^\d{1,2}:\d{2}$/.test(h1) ? h1 : '00:00';
         const t2 = /^\d{1,2}:\d{2}$/.test(h2) ? h2 : '23:59';
-        let desde = Math.floor(new Date(f + 'T' + t1 + ':00').getTime() / 1000);
-        let hasta = Math.floor(new Date(f + 'T' + t2 + ':59').getTime() / 1000);
+        let desde = Math.floor(new Date(f1 + 'T' + t1 + ':00').getTime() / 1000);
+        let hasta = Math.floor(new Date(f2 + 'T' + t2 + ':59').getTime() / 1000);
         const ahora = Math.floor(Date.now() / 1000);
         if (!isFinite(desde)) desde = ahora - 86400;
         if (!isFinite(hasta)) hasta = ahora;
         if (hasta > ahora) hasta = ahora;
         return { desde: desde, hasta: hasta };
+    }
+    // Estado de motor (ignicion) de un mensaje, si el sensor viene entre sus
+    // parametros. Devuelve true/false, o null si no hay dato. El nombre del
+    // sensor depende de cada instalacion, asi que se aceptan los tipicos.
+    const RX_MOTOR_KEYS = ['engine', 'ignition', 'acc', 'motor', 'encendido', 'engineoperation', 'ignicion'];
+    function rxMotorMsg(m) {
+        if (!m) return null;
+        if (m.eng === true || m.eng === false) return m.eng;
+        const p = m.params;
+        if (!p || typeof p !== 'object') return null;
+        for (const k of Object.keys(p)) {
+            const kk = String(k).toLowerCase().replace(/[\s_]/g, '');
+            if (RX_MOTOR_KEYS.indexOf(kk) < 0) continue;
+            const v = p[k];
+            if (v === true || v === 1) return true;
+            if (v === false || v === 0) return false;
+            const s = String(v).trim().toLowerCase();
+            if (s === '1' || s === 'on' || s === 'true' || s === 'encendido') return true;
+            if (s === '0' || s === 'off' || s === 'false' || s === 'apagado') return false;
+        }
+        return null;
+    }
+    // Clasifica el motor de una parada a partir de las muestras del sensor y
+    // del mayor hueco de reporte (s). Si no hay sensor, estima: un hueco
+    // largo = apagado; reporte continuo a velocidad 0 = encendido (ralenti).
+    function rxMotorClasificar(muestras, gapMaxS, gapMinS) {
+        let on = 0, off = 0;
+        for (const v of (muestras || [])) { if (v === true) on++; else if (v === false) off++; }
+        if (on || off) return { motor: (on >= off) ? 'on' : 'off', fuente: 'sensor' };
+        return { motor: ((Number(gapMaxS) || 0) >= (Number(gapMinS) || 0)) ? 'off' : 'on', fuente: 'estimado' };
     }
     function rxReplayColor(tipo) {
         return { parada: '#7d8595', exceso: '#b71c1c', zona: '#1565c0', desvio: '#e65100' }[tipo] || '#888';
@@ -6717,6 +6912,7 @@
         const limite = info ? limiteDe(info) : APP.config.velMax;
         const zonas = !!(APP.config.loadZones && (APP.zonas || []).length);
         let enParadaDesde = null, paradaLat = null, paradaLon = null, paradaIdx = 0;
+        let paradaGapMax = 0, motorSamples = [];
         let zonaPrev = null;
         let excesoDesde = null, excesoMax = 0, excesoLat = null, excesoLon = null, excesos = 0;
         let detenido = 0, moviendo = 0, velMax = 0;
@@ -6724,7 +6920,17 @@
             const dur = tFin - enParadaDesde;
             if (dur >= paradaMinS) {
                 const det = rxReplayDetalleParada(paradaLat, paradaLon, zonas);
-                paradas.push({ t: enParadaDesde, dur: dur, idx: paradaIdx, idxFin: idxFin, lat: paradaLat, lon: paradaLon, zona: det.zona, municipio: det.municipio });
+                // Clasificacion del motor: si hay sensor, manda el sensor; si
+                // no, se estima (hueco largo de reporte = apagado; reporte
+                // continuo a velocidad 0 = encendido en ralenti).
+                const gapMinS = Math.max(60, (Number(APP.config.replayGapMin) || 15) * 60);
+                const cl = rxMotorClasificar(motorSamples, paradaGapMax, gapMinS);
+                const motor = cl.motor, motorFuente = cl.fuente;
+                paradas.push({
+                    t: enParadaDesde, dur: dur, idx: paradaIdx, idxFin: idxFin,
+                    lat: paradaLat, lon: paradaLon, zona: det.zona, municipio: det.municipio,
+                    motor: motor, motorFuente: motorFuente, gapMax: Math.round(paradaGapMax)
+                });
             }
             enParadaDesde = null;
         };
@@ -6739,7 +6945,14 @@
             const dt = (i > 0) ? Math.max(0, m.t - (msgs[i - 1].t || m.t)) : 0;
             if (m.s > 3) { moviendo += dt; if (m.s > velMax) velMax = m.s; } else { detenido += dt; }
             if (m.s > 3) { if (enParadaDesde != null) cerrarParada(m.t, i); }
-            else if (enParadaDesde == null) { enParadaDesde = m.t; paradaLat = m.lat; paradaLon = m.lon; paradaIdx = i; }
+            else {
+                if (enParadaDesde == null) {
+                    enParadaDesde = m.t; paradaLat = m.lat; paradaLon = m.lon;
+                    paradaIdx = i; paradaGapMax = 0; motorSamples = [];
+                } else if (dt > paradaGapMax) paradaGapMax = dt;
+                const em = rxMotorMsg(m);
+                if (em !== null) motorSamples.push(em);
+            }
             if (limite && m.s > limite) {
                 if (excesoDesde == null) { excesoDesde = m.t; excesoMax = m.s; excesoLat = m.lat; excesoLon = m.lon; }
                 else if (m.s > excesoMax) excesoMax = m.s;
@@ -6818,6 +7031,9 @@
             '<span class="par-idx">' + (i + 1) + '</span>' +
             '<span class="par-hora">' + rxReplayHHMM(p.t) + '</span>' +
             '<span class="par-dur">' + rxFmtDur(p.dur) + '</span>' +
+            (p.motor ? '<span class="par-motor' + (p.motor === 'off' ? ' off' : '') + '" title="' +
+                (p.motorFuente === 'sensor' ? 'Segun el sensor de motor de la unidad' : 'Estimado por el patron de reporte (hueco largo = apagado)') + '">' +
+                'motor ' + (p.motor === 'off' ? 'apagado' : 'encendido') + (p.motorFuente === 'estimado' ? ' (est.)' : '') + '</span>' : '') +
             '<span class="par-lugar" title="' + esc(rxReplayParadaTooltip(p)) + '">' + esc(rxReplayParadaEtiqueta(p)) + '</span>' +
             '</div>'
         ).join('');
@@ -7020,14 +7236,26 @@
     }
     function rxReplayRangoRapido(kind) {
         const f = byId('rondo-replay-fecha');
+        const f2 = byId('rondo-replay-fecha2');
         const d = byId('rondo-replay-desde');
         const h = byId('rondo-replay-hasta');
-        const set = (fecha, h1, h2) => { if (f) f.value = fecha; if (d) d.value = h1; if (h) h.value = h2; };
+        const set = (fecha, h1, h2, fechaFin) => {
+            if (f) f.value = fecha;
+            if (f2) f2.value = fechaFin || fecha;
+            if (d) d.value = h1;
+            if (h) h.value = h2;
+        };
         const hoy = rxReplayFechaHoy();
         const ayer = (() => { const x = new Date(); x.setDate(x.getDate() - 1); const mm = String(x.getMonth() + 1).padStart(2, '0'); const dd = String(x.getDate()).padStart(2, '0'); return x.getFullYear() + '-' + mm + '-' + dd; })();
         if (kind === 'ayer') set(ayer, '00:00', '23:59');
         else if (kind === 'dia') set(f && f.value ? f.value : hoy, '06:00', '18:00');
         else if (kind === 'noche') set(f && f.value ? f.value : hoy, '18:00', '23:59');
+        else if (kind === '24h') {
+            // Ultimas 24 h cruzando la medianoche (ayer a esta hora -> hoy).
+            const x = new Date();
+            const hhmm = String(x.getHours()).padStart(2, '0') + ':' + String(x.getMinutes()).padStart(2, '0');
+            set(ayer, hhmm, hhmm, hoy);
+        }
         else set(hoy, '00:00', '23:59');
     }
     function rxReplayExportarGeoJSON() {
@@ -7040,7 +7268,7 @@
         }];
         r.paradas.forEach((p, i) => features.push({
             type: 'Feature',
-            properties: { tipo: 'parada', n: i + 1, hora: rxReplayHHMM(p.t), durMin: Math.round(p.dur / 60), zona: p.zona || '', municipio: p.municipio || '' },
+            properties: { tipo: 'parada', n: i + 1, hora: rxReplayHHMM(p.t), durMin: Math.round(p.dur / 60), motor: p.motor || '', motorFuente: p.motorFuente || '', zona: p.zona || '', municipio: p.municipio || '' },
             geometry: { type: 'Point', coordinates: [+p.lon.toFixed(6), +p.lat.toFixed(6)] }
         }));
         r.eventos.forEach((e2) => features.push({
@@ -7056,8 +7284,8 @@
         const r = RX_REPLAY;
         if (!r) { adviceWarn('Sin recorrido', 'Carga un recorrido primero.'); return; }
         const q = (v) => '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"';
-        const filas = [['n', 'hora', 'duracion_min', 'lat', 'lon', 'zona', 'municipio']];
-        r.paradas.forEach((p, i) => filas.push([i + 1, rxReplayHHMM(p.t), Math.round(p.dur / 60), p.lat.toFixed(5), p.lon.toFixed(5), p.zona || '', p.municipio || '']));
+        const filas = [['n', 'hora', 'duracion_min', 'motor', 'lat', 'lon', 'zona', 'municipio']];
+        r.paradas.forEach((p, i) => filas.push([i + 1, rxReplayHHMM(p.t), Math.round(p.dur / 60), (p.motor || '') + (p.motorFuente === 'estimado' ? ' (est.)' : ''), p.lat.toFixed(5), p.lon.toFixed(5), p.zona || '', p.municipio || '']));
         rxReplayDescargar('rondo-paradas-' + r.eco + '-' + r.fecha + '.csv',
             '\uFEFF' + filas.map((f) => f.map(q).join(',')).join('\r\n'),
             'text/csv;charset=utf-8;');
@@ -7097,11 +7325,13 @@
         const ucat = rxReplayUnidades().filter((x) => x.eco === eco)[0];
         rxReplaySetUnidad(eco, ucat ? ucat.etq : eco);
         const fechaEl = byId('rondo-replay-fecha');
+        const fecha2El = byId('rondo-replay-fecha2');
         const h1 = byId('rondo-replay-desde');
         const h2 = byId('rondo-replay-hasta');
         const fecha = (fechaEl && fechaEl.value) || rxReplayFechaHoy();
-        const rango = rxReplayRango(fecha, h1 ? h1.value : '', h2 ? h2.value : '');
-        if (rango.hasta <= rango.desde) { adviceWarn('Rango invalido', 'La hora "hasta" debe ser mayor que "desde".'); return; }
+        const fecha2 = (fecha2El && fecha2El.value) || fecha;
+        const rango = rxReplayRango(fecha, h1 ? h1.value : '', h2 ? h2.value : '', fecha2);
+        if (rango.hasta <= rango.desde) { adviceWarn('Rango invalido', 'El fin debe ser posterior al inicio.'); return; }
         const btn = byId('rondo-replay-cargar');
         if (btn) setBusy(btn, true);
         try {
@@ -7116,7 +7346,7 @@
             } catch (e) { crudos = []; }
             const msgs = crudos
                 .filter((m) => m && m.pos && isFinite(+m.pos.y) && isFinite(+m.pos.x))
-                .map((m) => ({ t: Number(m.t) || 0, lat: +m.pos.y, lon: +m.pos.x, s: Number(m.pos.s) || 0, c: Number(m.pos.c) || 0 }))
+                .map((m) => ({ t: Number(m.t) || 0, lat: +m.pos.y, lon: +m.pos.x, s: Number(m.pos.s) || 0, c: Number(m.pos.c) || 0, eng: rxMotorMsg(m), params: m.params || null }))
                 .filter((m) => m.t > 0)
                 .sort((a, b) => a.t - b.t);
             if (!msgs.length) {
@@ -7134,7 +7364,7 @@
             const an = rxReplayAnalizar(msgs, it.info);
             if (RX_REPLAY && RX_REPLAY._timer) clearInterval(RX_REPLAY._timer);
             RX_REPLAY = {
-                eco: eco, clave: it.info.clave, info: it.info, fecha: fecha,
+                eco: eco, clave: it.info.clave, info: it.info, fecha: fecha, fecha2: fecha2,
                 desde: rango.desde, hasta: rango.hasta,
                 msgs: msgs, paradas: an.paradas, eventos: an.eventos, resumen: an.resumen,
                 idx: 0, vt: msgs[0].t, factor: 300, playing: false, _timer: null, _tick: 0,
@@ -7153,12 +7383,16 @@
         rxReplaySetUnidad(eco, u ? u.etq : eco);
         const f = byId('rondo-replay-fecha');
         if (f && !f.value) f.value = rxReplayFechaHoy();
+        const f2 = byId('rondo-replay-fecha2');
+        if (f2 && !f2.value) f2.value = (f && f.value) || rxReplayFechaHoy();
         setTab('replay');
         rxReplayCargar();
     }
     function bindReplay() {
         const f = byId('rondo-replay-fecha');
         if (f && !f.value) f.value = rxReplayFechaHoy();
+        const f2 = byId('rondo-replay-fecha2');
+        if (f2 && !f2.value) f2.value = (f && f.value) || rxReplayFechaHoy();
         const inp = byId('rondo-replay-buscar');
         if (inp) {
             inp.addEventListener('input', () => { _rxRepSugIdx = -1; rxReplaySugRender(); });
@@ -7451,14 +7685,21 @@
         const r = RX_REPLAY;
         if (!r) return '';
         const s = r.resumen || {};
+        const fdt = (t) => {
+            try {
+                return new Date((+t || 0) * 1000).toLocaleString('es-MX', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            } catch (_) { return '--'; }
+        };
         const fecha = new Date((s.inicio || 0) * 1000).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
-        const rango = rxReplayHHMM(s.inicio) + ' - ' + rxReplayHHMM(s.fin);
+        // Rango completo con fecha y hora (el recorrido puede cruzar medianoche).
+        const rango = fdt(r.desde || s.inicio) + ' - ' + fdt(r.hasta || s.fin);
         const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
         const kpis = [
             kpi(r.eco, 'Unidad'),
             kpi(rxFmtDist(s.distM || 0), 'Distancia'),
             kpi(rxFmtDur(s.durSeg || 0), 'Duracion'),
-            kpi(s.paradas || 0, 'Paradas'),
+            kpi((r.paradas || []).length, 'Paradas'),
+            kpi((r.paradas || []).filter((p) => p.motor === 'off').length, 'Con motor apagado'),
             kpi(rxFmtDur(s.moviendoSeg || 0), 'En movimiento'),
             kpi(rxFmtDur(s.detenidoSeg || 0), 'Detenido'),
             kpi((s.velMax || 0) + ' km/h', 'Velocidad maxima'),
@@ -7468,6 +7709,7 @@
             String(i + 1),
             rxReplayHHMM(p.t),
             rxFmtDur(p.dur),
+            (p.motor ? (p.motor === 'off' ? 'Apagado' : 'Encendido') + (p.motorFuente === 'estimado' ? ' (est.)' : '') : ''),
             '<b>' + esc(rxReplayParadaEtiqueta(p)) + '</b>',
             esc(p.direccion || ''),
             esc(p.zona || ''),
@@ -7500,10 +7742,10 @@
             '<title>Recorrido ' + esc(r.eco) + ' ' + esc(fecha) + '</title>' +
             '<style>' + rxInfEstilo() + '</style></head><body>' +
             rxInfCabecera('Rondo', 'Recorrido de la unidad',
-                'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(fecha) + ' &middot; ' + esc(rango) + '<br>Documento de solo lectura') +
+                'Unidad <b>' + esc(r.eco) + '</b><br>' + esc(rango) + '<br>Documento de solo lectura') +
             '<div class="kpis">' + kpis + '</div>' +
             seccion('1. Mapa del recorrido', mapa + leyenda) +
-            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
+            seccion('2. Paradas (' + filasParadas.length + ')', rxInfTabla(['#', 'Hora', 'Duracion', 'Motor', 'Lugar (OpenStreetMap)', 'Direccion', 'Geocerca', 'Municipio', 'Coordenadas'], filasParadas)) +
             seccion('3. Eventos (' + filasEventos.length + ')', rxInfTabla(['Hora', 'Tipo', 'Detalle', 'Coordenadas'], filasEventos)) +
             (r.truncado ? '<p class="muted">Nota: el historial se trunco al limite de mensajes; el resumen puede ser parcial.</p>' : '') +
             rxInfPie() +
@@ -7551,4 +7793,130 @@
         if (!d.watched.length) { adviceWarn('Sin unidades', 'No hay unidades en el alcance para el reporte.'); return; }
         rxImprimirHTML(rxInformeHTML());
         advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
+    }
+    /* ====================== DIAGNOSTICO ======================
+     * Panel de diagnostico tecnico (solo lectura) en Ajustes > Avanzado.
+     * Resume el estado del propio Rondo: uso de storage por clave, fallos de
+     * escritura, tamano de las caches, uso de IA del dia, errores de reglas y
+     * diagnostico de geocercas. No persiste nada ni cambia la configuracion.
+     *
+     * Se inyecta en runtime para no tocar el HTML de Ajustes. Las funciones
+     * son declaraciones (hoisting) porque rxDiagBind() se llama desde init().
+     * ====================================================================== */
+
+    function rxDiagBytes(n) {
+        n = Number(n) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / (1024 * 1024)).toFixed(2) + ' MB';
+    }
+
+    // Toma el "peso" (bytes UTF-16 aprox) de cada clave rondo.api.* del
+    // localStorage y del sessionStorage. Si el storage esta bloqueado,
+    // devuelve lo que se haya podido leer.
+    function rxDiagStorage() {
+        const out = { local: [], session: [], totalLocal: 0, totalSession: 0 };
+        const scan = (store, destino, campo) => {
+            try {
+                for (let i = 0; i < store.length; i++) {
+                    const k = store.key(i);
+                    if (!k || k.indexOf('rondo.api.') !== 0) continue;
+                    const v = store.getItem(k) || '';
+                    const bytes = (k.length + v.length) * 2;
+                    destino.push({ clave: k, bytes: bytes });
+                    out[campo] += bytes;
+                }
+            } catch (_) { /* storage bloqueado o inaccesible */ }
+        };
+        scan(localStorage, out.local, 'totalLocal');
+        scan(sessionStorage, out.session, 'totalSession');
+        out.local.sort((a, b) => b.bytes - a.bytes);
+        out.session.sort((a, b) => b.bytes - a.bytes);
+        return out;
+    }
+
+    function rxDiagRecolectar() {
+        let iaHoy = { llamadas: 0, errores: 0 };
+        try { iaHoy = iaContadorHoy() || iaHoy; } catch (_) { /* noop */ }
+        return {
+            ver: (typeof VER !== 'undefined') ? VER : '',
+            online: (typeof navigator !== 'undefined') ? navigator.onLine : null,
+            storage: rxDiagStorage(),
+            caches: {
+                memo: Object.keys(APP.memo || {}).length,
+                geoCache: Object.keys(APP.geoCache || {}).length,
+                snapMemo: Object.keys(APP.snapMemo || {}).length,
+                grafoCache: Object.keys(APP.grafoCache || {}).length,
+                iaCache: (typeof IA_CACHE !== 'undefined' && IA_CACHE) ? Object.keys(IA_CACHE).length : 0
+            },
+            zonas: (APP.zonas || []).length,
+            zonasDiag: APP.zonasDiag || null,
+            unidades: (APP.unidades || []).length,
+            historial: (APP.historial || []).length,
+            ia: {
+                hoy: iaHoy,
+                limite: +APP.config.iaLimiteDiario || 0,
+                cacheTTL: +APP.config.iaCacheTTL || 0
+            },
+            stats: APP.stats || {},
+            fallos: {
+                json: (typeof writeJSON === 'function' && writeJSON._fallos) || 0,
+                session: (typeof writeSession === 'function' && writeSession._fallos) || 0
+            }
+        };
+    }
+
+    // Texto plano del diagnostico: sirve tanto para pintar como para copiar.
+    function rxDiagTexto(d) {
+        if (!d) d = rxDiagRecolectar();
+        const L = [];
+        L.push('Rondo ' + d.ver + ' \u00b7 ' + (d.online === false ? 'sin conexion' : 'en linea'));
+        L.push('Unidades: ' + d.unidades + ' \u00b7 avisos: ' + d.historial + ' \u00b7 geocercas: ' + d.zonas);
+        L.push('Storage local: ' + rxDiagBytes(d.storage.totalLocal) + ' (' + d.storage.local.length +
+            ' claves) \u00b7 sesion: ' + rxDiagBytes(d.storage.totalSession) + ' (' + d.storage.session.length + ' claves)');
+        L.push('Caches: memo ' + d.caches.memo + ' \u00b7 geo ' + d.caches.geoCache + ' \u00b7 snap ' +
+            d.caches.snapMemo + ' \u00b7 grafo ' + d.caches.grafoCache + ' \u00b7 IA ' + d.caches.iaCache);
+        L.push('IA hoy: ' + (d.ia.hoy.llamadas || 0) + (d.ia.limite ? '/' + d.ia.limite : '') +
+            ' (errores ' + (d.ia.hoy.errores || 0) + ') \u00b7 TTL cache ' + Math.round((+d.ia.cacheTTL || 0) / 60) + ' min');
+        L.push('Reglas: ' + (d.stats.erroresReglas || 0) + ' error(es) \u00b7 A* tope: ' + (d.stats.astarCap || 0));
+        L.push('Fallos de escritura: local ' + d.fallos.json + ' \u00b7 sesion ' + d.fallos.session);
+        if (d.zonasDiag) {
+            try { L.push('Geocercas: ' + JSON.stringify(d.zonasDiag).slice(0, 300)); } catch (_) { /* noop */ }
+        }
+        const top = d.storage.local.slice(0, 6).map((x) => '  ' + x.clave + ' \u00b7 ' + rxDiagBytes(x.bytes));
+        if (top.length) { L.push('Top storage:'); L.push.apply(L, top); }
+        return L.join('\n');
+    }
+
+    function rxDiagPintar() {
+        try {
+            const out = byId('rondo-diag-out');
+            if (out) out.textContent = rxDiagTexto(rxDiagRecolectar());
+        } catch (_) { /* noop */ }
+    }
+
+    // Inyecta el bloque en la seccion Avanzado de Ajustes (una sola vez) y
+    // cablea sus botones. Se llama desde init().
+    function rxDiagBind() {
+        const pane = document.querySelector('#rondo-config .cfg-pane[data-cfg="avanzado"]');
+        if (!pane || pane.querySelector('#rondo-diag-box')) return;
+        const box = makeEl('div', { id: 'rondo-diag-box' });
+        box.innerHTML =
+            '<h4>Diagnostico</h4>' +
+            '<div class="rondo-acciones">' +
+            '<button class="accbtn" id="rondo-diag-ver"><span class="rondo-usym">' + UIS.info + '</span> Ver diagnostico</button>' +
+            '<button class="accbtn" id="rondo-diag-copiar"><span class="rondo-usym">' + UIS.export + '</span> Copiar</button>' +
+            '</div>' +
+            '<div id="rondo-diag-out" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px;white-space:pre-wrap;font-family:monospace;line-height:1.45"></div>';
+        pane.appendChild(box);
+        const ver = box.querySelector('#rondo-diag-ver');
+        if (ver) ver.addEventListener('click', rxDiagPintar);
+        const cop = box.querySelector('#rondo-diag-copiar');
+        if (cop) cop.addEventListener('click', () => {
+            const txt = rxDiagTexto(rxDiagRecolectar());
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+                adviceOk('Diagnostico copiado', 'Pegalo donde lo necesites.');
+            } catch (_) { adviceWarn('No se pudo copiar', 'Selecciona el texto y copialo a mano.'); }
+        });
     }

@@ -14,8 +14,10 @@
         try { localStorage.setItem(key, JSON.stringify(value)); }
         catch (e) {
             // Cuota llena o almacenamiento bloqueado: el dato NO persiste.
-            // Avisar una sola vez para no inundar la consola en cada guardado
-            // (el caso tipico es guardar la config repetidamente y perderla).
+            // Se contabiliza para el panel de Diagnostico y se avisa una sola
+            // vez para no inundar la consola en cada guardado (el caso tipico
+            // es guardar la config repetidamente y perderla).
+            writeJSON._fallos = (writeJSON._fallos || 0) + 1;
             if (!writeJSON._avisado) {
                 writeJSON._avisado = true;
                 try { console.warn('[Rondo] no se pudo guardar en localStorage (' + key + '):', (e && e.message) || e); } catch (_) { /* noop */ }
@@ -52,7 +54,8 @@
         return fallback;
     }
     function writeSession(key, value) {
-        try { sessionStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* noop */ }
+        try { sessionStorage.setItem(key, JSON.stringify(value)); }
+        catch (_) { writeSession._fallos = (writeSession._fallos || 0) + 1; }
     }
     function readSessionArray(key, fallback, legacyKey) {
         const v = readSession(key, fallback, legacyKey);

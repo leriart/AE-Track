@@ -158,6 +158,8 @@
             "#rondo-panel .rondo-replay-par .par-idx{width:18px;height:18px;flex:0 0 auto;border-radius:50%;background:var(--rondo-bg-strong);display:inline-flex;align-items:center;justify-content:center;font:700 10px var(--rondo-font)}\n" +
             "#rondo-panel .rondo-replay-par .par-hora{color:var(--rondo-fg-dim);font-variant-numeric:tabular-nums;flex:0 0 auto}\n" +
             "#rondo-panel .rondo-replay-par .par-dur{flex:0 0 auto;color:var(--rondo-accent-2);font-weight:600}\n" +
+            "#rondo-panel .rondo-replay-par .par-motor{flex:0 0 auto;font-size:10.5px;padding:1px 6px;border-radius:99px;background:var(--rondo-ok-soft,rgba(67,160,71,.14));color:var(--rondo-ok-fg)}\n" +
+            "#rondo-panel .rondo-replay-par .par-motor.off{background:var(--rondo-bg);color:var(--rondo-fg-dim)}\n" +
             "#rondo-panel .rondo-replay-par .par-lugar{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
             "#rondo-panel .rondo-replay-acciones{display:flex;gap:6px;margin-top:8px}\n" +
             "#rondo-panel .rondo-replay-buscar{position:relative;grid-column:1 / -1;min-width:0}\n" +
@@ -813,6 +815,11 @@
             "#rondo-ayuda button.cancel:hover{background:var(--rondo-bg);transform:translateY(-1px)}\n" +
             "#rondo-config .cfg-head{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--rondo-bg);border-bottom:1px solid var(--rondo-border-soft);border-radius:10px 10px 0 0}\n" +
             "#rondo-config .cfg-head h3{margin:0;flex:1;font-size:13px}\n" +
+            // v6.0.11: buscador de ajustes y estado de filtrado.
+            "#rondo-config .rondo-cfg-buscar{flex:0 1 200px;min-width:110px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:7px;color:var(--rondo-fg);padding:5px 8px;font:400 11.5px var(--rondo-font)}\n" +
+            "#rondo-config .rondo-cfg-buscar::placeholder{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-config .cfg-buscar-count{font-size:10.5px;color:var(--rondo-fg-dim);white-space:nowrap}\n" +
+            "#rondo-config label.oculto,#rondo-config h4.oculto,#rondo-config .row-grid.oculto{display:none}\n" +
             "#rondo-config .cfg-tabs{display:flex;background:var(--rondo-bg);padding:0 10px;border-bottom:1px solid var(--rondo-border-soft);gap:6px;flex-wrap:wrap}\n" +
             "#rondo-config .cfg-tab{background:transparent;border:none;color:var(--rondo-fg-dim);padding:9px 12px;cursor:pointer;font:600 11.5px var(--rondo-font);border-bottom:2px solid transparent;letter-spacing:.4px;text-transform:uppercase}\n" +
             "#rondo-config .cfg-tab.activo{color:var(--rondo-fg);border-bottom-color:var(--rondo-accent-2)}\n" +

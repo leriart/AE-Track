@@ -40,6 +40,10 @@
         riesgo: 'rondo.api.s.riesgo',
         iaCache: 'rondo.api.s.iaCache',
         // v5.15: planes de ruta multipunto por unidad (pestana).
-        planes: 'rondo.api.s.planes'
+        planes: 'rondo.api.s.planes',
+        // v6.0.11: ultima pestana del panel usada (para retomarla al recargar).
+        tab: 'rondo.api.s.tab',
+        // v6.0.11: ultima seccion de Ajustes abierta (General, Reglas, IA...).
+        cfgTab: 'rondo.api.s.cfgTab'
     });
 

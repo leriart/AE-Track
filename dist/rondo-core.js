@@ -513,7 +513,11 @@
         riesgo: 'rondo.api.s.riesgo',
         iaCache: 'rondo.api.s.iaCache',
         // v5.15: planes de ruta multipunto por unidad (pestana).
-        planes: 'rondo.api.s.planes'
+        planes: 'rondo.api.s.planes',
+        // v6.0.11: ultima pestana del panel usada (para retomarla al recargar).
+        tab: 'rondo.api.s.tab',
+        // v6.0.11: ultima seccion de Ajustes abierta (General, Reglas, IA...).
+        cfgTab: 'rondo.api.s.cfgTab'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -526,6 +530,11 @@
         descoMin: 25,
         velMax: 110,
         cooldownMin: 45,
+        // v6.0.11: regla "exceso de velocidad sostenido". A diferencia de
+        // `velocidad` (instantanea), exige mantener la velocidad por encima
+        // del umbral durante N minutos, asi que no avisa por picos puntuales.
+        velSostenidaKmh: 90,
+        velSostenidaMin: 5,
         voice: true,
         voiceLang: 'es-MX',
         voiceVoice: '',         // nombre exacto de la voz del navegador (opcional)
@@ -555,6 +564,11 @@
         iaResumenInforme: true, // anadir bloque "## Resumen IA" al informe Markdown diario
         iaLimiteDiario: 200,    // tope blando de llamadas IA/dia (cache + colas)
         iaCacheTTL: 21600,      // TTL del cache de respuestas IA (s, 6h por defecto)
+        // v6.0.11: topes del contexto que se manda a la IA (unidades y
+        // geocercas). Antes estaban fijos en el codigo; ahora son ajustables
+        // para ampliar o recortar el alcance del chat/analisis de flota.
+        iaMaxUnidades: 120,     // unidades incluidas en el contexto de la IA
+        iaMaxGeocercas: 1200,   // geocercas incluidas en el contexto de la IA
         // v6.0.9: la IA amplia el contexto consultando la API de Wialon
         // (campos personalizados e historial de las unidades mencionadas en
         // la pregunta). Solo lectura. El reporte del servidor es opcional
@@ -603,6 +617,11 @@
         trazadoMax: 500,
         partidaHoras: 6,
         paradaMin: 15,
+        // Replay: un hueco de reporte >= N min con la posicion practicamente
+        // igual se interpreta como parada con el motor apagado (la unidad
+        // dejo de reportar). Sirve para clasificar las paradas cuando la
+        // instalacion no expone un sensor de motor.
+        replayGapMin: 15,
         historialHoras: 168,
         analizarAuto: true,
         autoRuta: false,
@@ -655,6 +674,9 @@
             destino: false,
             desconexion: true,
             velocidad: false,
+            // v6.0.11: exceso sostenido (velocidad por encima del umbral
+            // durante velSostenidaMin minutos). Apagada por defecto.
+            velocidadSostenida: false,
             desvio: false,
             retorno: false,
             giroU: false,
@@ -689,8 +711,10 @@
         try { localStorage.setItem(key, JSON.stringify(value)); }
         catch (e) {
             // Cuota llena o almacenamiento bloqueado: el dato NO persiste.
-            // Avisar una sola vez para no inundar la consola en cada guardado
-            // (el caso tipico es guardar la config repetidamente y perderla).
+            // Se contabiliza para el panel de Diagnostico y se avisa una sola
+            // vez para no inundar la consola en cada guardado (el caso tipico
+            // es guardar la config repetidamente y perderla).
+            writeJSON._fallos = (writeJSON._fallos || 0) + 1;
             if (!writeJSON._avisado) {
                 writeJSON._avisado = true;
                 try { console.warn('[Rondo] no se pudo guardar en localStorage (' + key + '):', (e && e.message) || e); } catch (_) { /* noop */ }
@@ -727,7 +751,8 @@
         return fallback;
     }
     function writeSession(key, value) {
-        try { sessionStorage.setItem(key, JSON.stringify(value)); } catch (_) { /* noop */ }
+        try { sessionStorage.setItem(key, JSON.stringify(value)); }
+        catch (_) { writeSession._fallos = (writeSession._fallos || 0) + 1; }
     }
     function readSessionArray(key, fallback, legacyKey) {
         const v = readSession(key, fallback, legacyKey);
@@ -831,7 +856,12 @@
         geoQueue: 0,
         geoLast: 0,
 
-        tab: 'dash',
+        // v6.0.11: se recuerda la ultima pestana usada (por pestaña del
+        // navegador) para retomar donde se dejo. Solo se aceptan conocidas.
+        tab: (function () {
+            const t = readSession(SS.tab, 'dash');
+            return ['dash', 'unidades', 'alertas', 'rutas', 'zonas', 'caravana', 'replay', 'chat'].indexOf(t) >= 0 ? t : 'dash';
+        })(),
         filtSever: 'todas',
         filtro: '',
         filtEstado: readJSON(LS.filtEstado, 'todas'),
@@ -845,6 +875,9 @@
         // v5.15.2: velocidad suavizada por unidad (media exponencial) para
         // ETAs y estados mas estables, sin depender del ultimo reporte.
         velSuave: {},
+        // v6.0.11: marca de tiempo (s) de la ultima muestra de velocidad; el
+        // suavizado se pondera por el tiempo real entre reportes.
+        velSuaveTs: {},
         // v6.0.6: cache de resolucion de paradas (texto -> tipo/coords) y
         // control de reintentos del trazado automatico (2 automaticos + manual).
         resolucionCache: {},
@@ -1477,6 +1510,17 @@ function _extraerZonasDe(items) {
         return (grad(Math.atan2(y, x)) + 360) % 360;
     }
     function difAngulo(a, b) { return Math.abs(((a - b + 540) % 360) - 180); }
+
+    // Factor de suavizado exponencial para un intervalo dtSeg dado un tiempo
+    // caracteristico tauSeg: alpha = 1 - e^(-dt/tau), acotado a [0.05, 0.9].
+    // Permite que una media exponencial dependa del TIEMPO real entre muestras
+    // en vez del numero de refrescos (polling irregular, reintentos, pestaña
+    // en segundo plano). Con dt = tau el factor es ~0.63.
+    function alphaEMA(dtSeg, tauSeg) {
+        const dt = Number(dtSeg), tau = Number(tauSeg);
+        if (!isFinite(dt) || dt <= 0 || !isFinite(tau) || tau <= 0) return 0.35;
+        return clamp(1 - Math.exp(-dt / tau), 0.05, 0.9);
+    }
 
     // Distancia punto->segmento. Para segmentos cortos usa proyeccion
     // equirectangular local (barata, suficiente); para los largos usa la

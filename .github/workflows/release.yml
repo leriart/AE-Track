@@ -58,19 +58,16 @@ jobs:
           node scripts/bump-readme.mjs "${{ steps.ver.outputs.version }}"
 
       - name: Pruebas
-        run: |
-          fallo=0
-          for t in tests/*.test.js; do
-            echo "== $t =="
-            node "$t" || fallo=1
-          done
-          exit $fallo
+        run: node scripts/test-all.mjs --json-out build/tests.json
+
+      - name: Sincronizar documentacion
+        run: node scripts/check-docs.mjs --fix --tests build/tests.json
 
       - name: Commit de artefactos
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add VERSION rondo.user.js dist changelogs README.md
+          git add VERSION rondo.user.js dist changelogs README.md MANUAL.md ARCHITECTURE.md CONTRIBUTING.md AGENTS.md
           git commit -m "chore(release): v${{ steps.ver.outputs.version }} [skip ci]"
 
       - name: Etiqueta y release
