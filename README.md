@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.10.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.10.0.md)
-[![tests](https://img.shields.io/badge/tests-1184%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1215%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -130,6 +130,10 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   (agregar, pegar, destinos/rutas multipunto, orden de ventanas, **buscador de
   la lista** por eco/placa/destino), con **perfiles de configuracion**,
   **filtros**, **exportacion a CSV/Markdown/GeoJSON** y **respaldo JSON**.
+- **Reportes**: **reporte operativo PDF** (portada, indice, KPIs y tablas de
+  unidades, avisos, rutas, sin senal, geocercas y zonas de riesgo) y **reporte
+  del recorrido PDF**; **fecha, hora y coordenadas por dato**. Ademas informe
+  **Markdown** y **CSV** con fecha/hora y coordenadas.
 - **Dialogos y confirmaciones** coherentes con el estilo del panel, y
   **estado vacio util** con pista y accion en cada pestana.
 - **Ajustes con buscador**: filtra las opciones de todas las secciones a la
@@ -377,7 +381,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**17 suites, ~1184 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**18 suites, ~1215 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

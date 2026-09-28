@@ -17,10 +17,12 @@
         URL.revokeObjectURL(a.href);
     }
     function exportUnits() {
-        const filas = [['Eco', 'Placa', 'Nombre', 'ID', 'Estado', 'Ultimo(min)', 'km/h', 'Lat', 'Lon', 'Zona', 'Silenciada', 'Vigilada']];
+        // v6.11: incluye la fecha y hora del ultimo reporte y las coordenadas.
+        const filas = [['Eco', 'Placa', 'Nombre', 'ID', 'Estado', 'Ultimo', 'Ultimo(min)', 'km/h', 'Lat', 'Lon', 'Zona', 'Silenciada', 'Vigilada']];
         (APP.unidades || []).filter(shouldWatch).forEach((u) => {
             const info = parseUnitName(u), st = unitState(u);
             filas.push([info.eco, info.placa, info.nombre, info.id, st.estado,
+                rxFechaHora(st.t),
                 isFinite(st.edadMin) ? st.edadMin.toFixed(1) : '', Math.round(st.vel),
                 st.lat, st.lon, zoneAt(st.lat, st.lon),
                 APP.dismissed.has(info.clave) ? 'si' : '',
@@ -30,9 +32,11 @@
         downloadCSV(filas, 'wialon_unidades');
     }
     function exportAlertas() {
-        const filas = [['Fecha', 'Severidad', 'Regla', 'Titulo', 'Detalle', 'Eco']];
+        // v6.11: fecha y hora completas + coordenadas de cada aviso.
+        const filas = [['Fecha y hora', 'Severidad', 'Regla', 'Titulo', 'Detalle', 'Eco', 'Lat', 'Lon']];
         (APP.historial || []).forEach((a) => filas.push([
-            new Date(a.ts).toLocaleString(), a.sev, a.regla, a.titulo, a.detalle, a.eco
+            rxFechaHora(a.ts, true), a.sev, a.regla, a.titulo, a.detalle, a.eco,
+            a.lat == null ? '' : a.lat, a.lon == null ? '' : a.lon
         ]));
         downloadCSV(filas, 'wialon_bitacora');
     }
@@ -51,12 +55,15 @@
         const watched = (APP.unidades || []).filter(shouldWatch).map((u) => ({ info: parseUnitName(u), st: unitState(u) }));
         const off = watched.filter((x) => !x.st.online);
 
+        const enLinea = watched.filter((x) => x.st.online).length;
+        const coords = (lat, lon) => (lat == null || lon == null) ? '-' : (+lat).toFixed(5) + ', ' + (+lon).toFixed(5);
         const lineas = [];
         lineas.push('# Informe Rondo');
         lineas.push('');
-        lineas.push('Generado: ' + new Date().toLocaleString());
+        lineas.push('Generado: ' + rxFechaHora(Date.now(), true));
+        lineas.push('Alcance: ' + (APP.config.watchAll ? 'toda la flota' : 'unidades vigiladas'));
         lineas.push('Unidades vigiladas: ' + watched.length);
-        lineas.push('En línea: ' + (watched.length - off.length) + ' · Off: ' + off.length);
+        lineas.push('En línea: ' + enLinea + ' · Off: ' + off.length);
         lineas.push('');
         // v5.14: bloque de resumen IA (placeholder; se rellena async abajo).
         const resumenIdx = lineas.length;
@@ -78,14 +85,43 @@
         if (ecos.length) ecos.forEach((e) => lineas.push('- ' + e + ': ' + porEco[e]));
         else lineas.push('- Sin datos.');
         lineas.push('');
-        lineas.push('## Unidades sin señal ahora');
-        if (off.length) off.forEach((x) => lineas.push('- ' + (x.info.eco || x.info.nombre) + ' (' + ageText(x.st.edadMin) + ')'));
-        else lineas.push('- Todas reportando.');
+        // v6.11: tabla de unidades con fecha/hora del ultimo reporte y coords.
+        lineas.push('## Unidades (' + watched.length + ')');
+        lineas.push('');
+        lineas.push('| Eco | Placa | Estado | Ultimo reporte | Velocidad | Zona | Coordenadas |');
+        lineas.push('| --- | --- | --- | --- | --- | --- | --- |');
+        if (watched.length) {
+            const zonasCargadas = !!(APP.config.loadZones && (APP.zonas || []).length);
+            watched.forEach((x) => {
+                const zona = (x.st.lat != null) ? (zoneAt(x.st.lat, x.st.lon) || (zonasCargadas ? 'Fuera de geocerca' : '-')) : '-';
+                lineas.push('| ' + (x.info.eco || x.info.nombre || '-') + ' | ' + (x.info.placa || '-') + ' | ' +
+                    (x.st.online ? 'En linea' : 'Sin senal') + ' | ' + rxFechaHora(x.st.t) + ' | ' +
+                    Math.round(x.st.vel) + ' km/h | ' + zona + ' | ' + coords(x.st.lat, x.st.lon) + ' |');
+            });
+        } else {
+            lineas.push('| - | - | - | - | - | - | - |');
+        }
+        lineas.push('');
+        lineas.push('## Unidades sin señal ahora (' + off.length + ')');
+        if (off.length) {
+            lineas.push('');
+            lineas.push('| Eco | Placa | Ultimo reporte | Sin reportar | Coordenadas |');
+            lineas.push('| --- | --- | --- | --- | --- |');
+            off.forEach((x) => lineas.push('| ' + (x.info.eco || x.info.nombre || '-') + ' | ' + (x.info.placa || '-') + ' | ' +
+                rxFechaHora(x.st.t) + ' | ' + ageText(x.st.edadMin) + ' | ' + coords(x.st.lat, x.st.lon) + ' |'));
+        } else {
+            lineas.push('- Todas reportando.');
+        }
         lineas.push('');
         lineas.push('## Ultimos avisos');
         if ((APP.historial || []).length) {
-            (APP.historial || []).slice(0, 25).forEach((a) => lineas.push(
-                '- [' + new Date(a.ts).toLocaleString() + '] ' + a.titulo + (a.detalle ? ' · ' + a.detalle : '')
+            lineas.push('');
+            lineas.push('| Fecha y hora | Severidad | Regla | Eco | Coordenadas | Titulo |');
+            lineas.push('| --- | --- | --- | --- | --- | --- |');
+            (APP.historial || []).slice(0, 50).forEach((a) => lineas.push(
+                '| ' + rxFechaHora(a.ts, true) + ' | ' + a.sev + ' | ' + (a.regla || '-') + ' | ' + (a.eco || '-') + ' | ' +
+                coords(a.lat, a.lon) + ' | ' + String(a.titulo || '').replace(/\|/g, '/') +
+                (a.detalle ? ' — ' + String(a.detalle).replace(/\|/g, '/') : '') + ' |'
             ));
         } else {
             lineas.push('- Sin avisos.');

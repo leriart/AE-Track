@@ -98,11 +98,18 @@ ok('la tab de replay incluye fecha de fin (fecha2)', src.includes('rondo-replay-
 ok('la tab de replay incluye el rango rapido 24 h', /data-rango="24h"/.test(src));
 
 // 8) El reporte del recorrido refleja el rango completo y el motor.
-ok('informe del recorrido: rango con fecha y hora', /fdt\(r\.desde \|\| s\.inicio\)/.test(src));
-ok('informe del recorrido: columna Motor en las paradas',
-    /'#', 'Hora', 'Duracion', 'Motor'/.test(src));
+ok('informe del recorrido: rango con fecha y hora', /rxFechaHora\(r\.desde \|\| s\.inicio\)/.test(src));
+ok('informe del recorrido: columna Fecha y hora + Motor en las paradas',
+    /'#', 'Fecha y hora', 'Duracion', 'Motor'/.test(src));
 ok('informe del recorrido: KPI de paradas con motor apagado',
-    /Paradas con motor apagado|filter\(\(p\) => p\.motor === 'off'\)\.length, 'Con motor apagado'/.test(src));
+    /filter\(\(p\) => p\.motor === 'off'\)\.length, 'Motor apagado'/.test(src));
+// v6.11: fecha/hora y coordenadas por dato + puntos del recorrido.
+ok('informe del recorrido: filas con fecha/hora y coordenadas',
+    /rxFechaHora\(p\.t, true\)/.test(src) && /coords\(p\.lat, p\.lon\)/.test(src) && /coords\(e2\.lat, e2\.lon\)/.test(src));
+ok('informe del recorrido: seccion Puntos del recorrido',
+    /seccion\('4\. Puntos del recorrido'/.test(src) && /filasPuntos/.test(src));
+ok('informe del recorrido: KPI de Puntos',
+    /kpi\(\(r\.msgs \|\| \[\]\)\.length, 'Puntos'\)/.test(src));
 
 // 9) Apariencia: la pestaña se organiza en tarjetas con jerarquia clara.
 const nCards = (src.match(/class="rondo-replay-card"/g) || []).length;
