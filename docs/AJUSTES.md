@@ -62,7 +62,7 @@ Total: **102 claves**.
 | `density` | string | `'normal'` |  |
 | `acento` | string | `'#850D22'` |  |
 | `temaPlataforma` | boolean | `false` | v6.0.14: heredar el color de acento del skin de la plataforma (AE-Track/Wialon) para que el panel combine con la pagina. Opt-in. |
-| `estiloPagina` | boolean | `false` | v6.0.14: reestiliza la pagina de la plataforma con la paleta de Rondo (experimental, opt-in) y usa el idioma del sitio para la voz. |
+| `estiloPagina` | boolean | `false` | v6.9.1: reestiliza la pagina de la plataforma con la paleta de Rondo (experimental, opt-in). Cubre acento, superficies, texto y bordes; se aplica con !important sobre :root,html,body y respeta el tema claro/oscuro. |
 | `idiomaPlataforma` | boolean | `false` |  |
 | `escalaUI` | number | `1` |  |
 | `contornos` | boolean | `true` |  |

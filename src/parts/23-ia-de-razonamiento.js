@@ -1897,14 +1897,18 @@ ta.value = '';
     function adviceErr(t, d) { advice(t, d, 'critico'); }
     // Pone un boton en estado ocupado: spinner, aria-busy y deshabilitado.
     // Restaura el contenido original al terminar.
-    function setBusy(btn, on) {
+    // v6.9.1: `label` opcional para mostrar un texto junto al spinner
+    // (p. ej. "Cargando recorrido..."). Sin label el comportamiento es el
+    // de siempre (solo spinner).
+    function setBusy(btn, on, label) {
         if (!btn) return;
         if (on) {
             if (btn.dataset.rondoTxt == null) btn.dataset.rondoTxt = btn.innerHTML;
             btn.classList.add('rondo-busy');
             btn.setAttribute('aria-busy', 'true');
             btn.disabled = true;
-            btn.innerHTML = '<span class="rondo-spin"></span>';
+            btn.innerHTML = '<span class="rondo-spin"></span>' +
+                (label ? '<span class="rondo-busy-lbl">' + esc(label) + '</span>' : '');
         } else {
             btn.classList.remove('rondo-busy');
             btn.removeAttribute('aria-busy');

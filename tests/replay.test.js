@@ -116,7 +116,7 @@ ok('replay: indicador de tiempo actual/total',
     /id="rondo-replay-tiempo"/.test(src) && /rxReplayHHMM\(m\.t\) \+ ' \/ ' \+ rxReplayHHMM\(finM/.test(src));
 ok('replay: el boton Play conserva el icono (span .rrc-play-txt)',
     /class="rrc-play-txt"/.test(src) && /querySelector\('\.rrc-play-txt'\)/.test(src));
-ok('replay: el boton Play marca el estado activo', /pb\.classList\.toggle\('activo', !!r\.playing\)/.test(src));
+ok('replay: el boton Play marca el estado activo', /pb\.classList\.toggle\('activo', !!playing\)/.test(src));
 ok('replay: ya no se usa la antigua barra .rondo-replay-bar', src.indexOf('rondo-replay-bar') < 0);
 ok('replay: estado vacio del mapa con icono',
     /rondo-replay-vacio"><span class="rondo-usym rv-ico">/.test(src));
@@ -125,6 +125,31 @@ ok('replay: estilos de tarjeta/campos/tiempo en el CSS',
     /\.rrc-time\{/.test(src) && /\.rrc-field\{/.test(src));
 ok('replay: rango y acciones a una columna en paneles estrechos',
     /\.rrc-range,#rondo-panel \.rrc-actions\{grid-template-columns:1fr\}/.test(src));
+
+// 10) v6.9.1: botones de Cargar y Play/Pausa mejorados.
+ok('replay: helper rxReplaySetPlayBtn existe', /function rxReplaySetPlayBtn\(/.test(src));
+ok('replay: el boton Play cambia el icono (play/pause)',
+    /rrc-play-ico/.test(src) && /ico\.innerHTML = playing \? UIS\.pause : UIS\.play/.test(src));
+ok('replay: helpers de iconos play y pause existen',
+    /\bplay: \['M765\.7 486\.8/.test(src) && /\bpause: \['M304 176h80v672h-80z/.test(src));
+ok('replay: helper rxReplaySetControles habilita/deshabilita',
+    /function rxReplaySetControles\(/.test(src) && /pb\.disabled = !on/.test(src) && /rb\.disabled = !on/.test(src));
+ok('replay: el boton Play arranca deshabilitado', /id="rondo-replay-play" title="Reproducir o pausar" disabled/.test(src));
+ok('replay: boton Reiniciar existe y arranca deshabilitado',
+    /id="rondo-replay-reiniciar"[\s\S]{0,120}disabled/.test(src));
+ok('replay: reiniciar vuelve al inicio', /reiniciar\.addEventListener\('click'[\s\S]{0,160}rxReplayIrA\(0\)/.test(src));
+ok('replay: barra espaciadora = Play/Pausa en la tab replay',
+    /APP\.tab !== 'replay'[\s\S]{0,400}e\.key === ' '[\s\S]{0,300}rxReplayAlternar\(\)/.test(src));
+ok('replay: linea de estado del recorrido', /id="rondo-replay-estado"/.test(src) && /function rxReplayEstado\(/.test(src));
+ok('replay: el boton Cargar usa etiqueta "Cargando..." al ocuparse',
+    /setBusy\(btn, true, 'Cargando\.\.\.'\)/.test(src));
+ok('replay: setBusy acepta etiqueta opcional', /function setBusy\(btn, on, label\)/.test(src) && /rondo-busy-lbl/.test(src));
+ok('replay: el boton Cargar pasa a "Recargar" tras cargar', /t\.textContent = 'Recargar recorrido'/.test(src));
+ok('replay: limpiar no rompe el icono del Play (usa el helper)',
+    /function rxReplayLimpiar\([\s\S]{0,2000}rxReplaySetPlayBtn\(false, false\)/.test(src));
+ok('replay: CSS de estado y controles',
+    /\.rrc-estado\{font-size:11px/.test(src) && /\.rrc-play\{min-width:100px/.test(src) &&
+    /\.rrc-play:disabled/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

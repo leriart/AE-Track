@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.6.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.6.0.md)
-[![tests](https://img.shields.io/badge/tests-1161%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1181%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -137,8 +137,9 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   defecto sin borrar datos. El panel tambien recuerda su ultima pestaña.
 - **Coherencia visual opcional**: Rondo detecta el skin de la plataforma y puede
   heredar su **color de acento** (Ajustes > Visual) para integrarse con la
-  pagina, **reestilizar la plataforma** con su propia paleta (experimental, usando
-  las variables CSS del skin y reversible) y **usar el idioma del sitio** para la
+  pagina, **reestilizar la plataforma** con su propia paleta (experimental,
+  cubriendo acento, superficies, texto y bordes, y respetando el tema
+  oscuro/claro; reversible) y **usar el idioma del sitio** para la
   voz. El panel de Diagnostico muestra el sitio, la skin, la API y el idioma
   detectados. Si la plataforma esta en la pantalla de login, Rondo lo avisa en
   lugar de decir que falta la API.
@@ -280,7 +281,7 @@ con `Alt+L`.
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
 | **Zonas** | Fusiona las geocercas de la plataforma (con las unidades dentro, boton Recargar) y las zonas de riesgo (dona, histograma, KPIs, filtros, export y lista). |
 | **Caravana** | Unidades (vigiladas o no) que acompanian a una unidad "lider" en la misma ruta (distancia firmada delante/detras) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada. |
-| **Replay** | Reproduce el recorrido de una unidad entre una **fecha/hora de inicio** y una **fecha/hora de fin** (o un dia completo): mini-mapa propio de OpenStreetMap, perfil de velocidad, paradas (con motor encendido/apagado) y eventos. Exporta GeoJSON, CSV de paradas y PDF. |
+| **Replay** | Reproduce el recorrido de una unidad entre una **fecha/hora de inicio** y una **fecha/hora de fin** (o un dia completo): mini-mapa propio de OpenStreetMap, perfil de velocidad, paradas (con motor encendido/apagado) y eventos. Botones de **Cargar** con progreso y resumen, y **Play/Pausa/Reiniciar** (con barra espaciadora). Exporta GeoJSON, CSV de paradas y PDF. |
 | **Chat IA** | Asistente conversacional (solo si la IA esta configurada) que conoce el manual y el estado de la flota. Switch *Toda la flota* / solo vigiladas. |
 
 Atajos de teclado: `Alt+1..8` cambian de pestana, `Alt+P` / `Alt+L` muestran u
@@ -376,7 +377,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**17 suites, ~1161 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**17 suites, ~1181 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

@@ -105,10 +105,19 @@ ok('reestilizado de la pagina: usa las variables del skin y es reversible',
     /const RX_PAGINA_VARS = \[/.test(src) && /'horizontal-bar-item-active-background'/.test(src) &&
     /el\.id = 'rondo-estilo-pagina'/.test(src) && /removeChild\(elPrev\)/.test(src));
 ok('reestilizado: los bordes se emiten como 1px solid',
-    /const RX_PAGINA_BORDES = \[/.test(src) && /':1px solid ' \+ acc \+ ';'/.test(src));
+    /const RX_PAGINA_BORDES = \[/.test(src) && /':1px solid ' \+ acc \+ ' !important;'/.test(src));
 ok('reestilizado: se aplica desde applyTheme', /try \{ rxAplicarEstiloPagina\(\); \} catch/.test(src));
 ok('applyTheme usa el acento de la plataforma si el estilo esta activo',
     /const acc = rxPlatAcento\(\) \|\| APP\.config\.acento \|\| '#850D22';/.test(src));
+// v6.9.1: el reestilizado de la pagina se endurece para que SI se aplique.
+ok('reestilizado: emite !important en las declaraciones',
+    /:1px solid ' \+ acc \+ ' !important;'/.test(src) && /\+ P\[RX_PAGINA_SUPERFICIES\[v\]\] \+ ' !important;'/.test(src));
+ok('reestilizado: aplica sobre :root,html,body',
+    /el\.textContent = ':root,html,body\{/.test(src));
+ok('reestilizado: mapea superficies y texto de la paleta',
+    /const RX_PAGINA_SUPERFICIES = \{/.test(src) && /const RX_PAGINA_TEXTOS = \{/.test(src));
+ok('reestilizado: paleta segun tema claro/oscuro',
+    /const claro = APP\.config\.theme === 'claro'/.test(src) && /const P = claro \? \{/.test(src));
 ok('detecta la pantalla de login',
     /function rxEnLogin\(/.test(src) && /getElementById\('login_body'\)/.test(src) &&
     /getElementById\('monitoring_body'\)/.test(src));
