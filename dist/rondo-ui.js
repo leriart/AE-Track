@@ -1310,58 +1310,117 @@
             "#rondo-dialog .rondo-ga-chip,#rondo-dialog .rondo-ga-dhint,#rondo-dialog .rondo-ga-dpv .pv-t{font-size:calc(10.5px * var(--rondo-esc))}\n" +
             "#rondo-dialog .rondo-ga-dpv .pv-d,#rondo-dialog .rondo-ga-sw{font-size:calc(10px * var(--rondo-esc))}\n" +
             // ── v6.13: geocercas de la app (mapa de dibujo + paneles) ─────
-            "#rondo-geocerca-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}\n" +
+            // Mismo lenguaje que el editor de paradas (.rpm-*): tarjeta con
+            // cabecera, cuerpo y pie; botones planos, chips redondeados y
+            // acento en la accion principal.
+            "#rondo-geocerca-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:14px}\n" +
             "#rondo-geocerca-modal.abierto{display:flex}\n" +
-            "#rondo-geocerca-modal .gg-card{position:relative;width:min(1180px,97vw);height:min(94vh,760px);display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.55);overflow:hidden;font:400 13px var(--rondo-font);min-width:0}\n" +
-            "#rondo-geocerca-modal .gg-head{display:flex;align-items:center;gap:8px;padding:10px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700;flex:0 0 auto;flex-wrap:wrap}\n" +
-            "#rondo-geocerca-modal .gg-head .rondo-usym{color:var(--rondo-accent-2);font-size:17px}\n" +
-            "#rondo-geocerca-modal .gg-headsub{font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);font-weight:500}\n" +
-            "#rondo-geocerca-modal .gg-x{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;width:24px;height:24px;cursor:pointer;color:var(--rondo-fg-dim);display:inline-flex;align-items:center;justify-content:center}\n" +
-            "#rondo-geocerca-modal .gg-x:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
-            "#rondo-geocerca-modal .gg-cuerpo{flex:1;min-height:0;display:flex;gap:10px;padding:10px 13px}\n" +
-            // Mapa: las dos capas SVG van por encima de los tiles.
-            "#rondo-geocerca-modal .rondo-gg-mapa{position:relative;flex:1;min-width:0;overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:10px;touch-action:none}\n" +
+            "#rondo-geocerca-modal .gg-card{position:relative;width:min(1240px,97vw);height:min(92vh,780px);display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font);min-width:0}\n" +
+            // Cabecera
+            "#rondo-geocerca-modal .gg-head{display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700;flex:0 0 auto;flex-wrap:wrap;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-head .rondo-usym{color:var(--rondo-accent-2);font-size:18px;flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-head b{font-size:14px;letter-spacing:.2px}\n" +
+            "#rondo-geocerca-modal .gg-headsub{font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);font-weight:500;padding-left:9px;border-left:1px solid var(--rondo-border);white-space:nowrap}\n" +
+            "#rondo-geocerca-modal .gg-x{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);cursor:pointer;color:var(--rondo-fg-dim);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-x:hover{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent}\n" +
+            // Cuerpo: mapa a la izquierda, paneles a la derecha.
+            "#rondo-geocerca-modal .gg-cuerpo{flex:1;min-height:0;display:flex;gap:11px;padding:11px 13px;min-width:0}\n" +
+            "#rondo-geocerca-modal .rondo-gg-mapa{position:relative;flex:1;min-width:0;overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);touch-action:none}\n" +
             "#rondo-geocerca-modal .rondo-gg-mapa .rondo-mm{cursor:crosshair;border:0;border-radius:0}\n" +
+            // Las dos capas SVG van por encima de los tiles del mini-mapa.
             "#rondo-geocerca-modal .rondo-gg-ctx,#rondo-geocerca-modal .rondo-gg-capa{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}\n" +
             "#rondo-geocerca-modal .rondo-gg-ctx{z-index:2}\n" +
             "#rondo-geocerca-modal .rondo-gg-capa{z-index:3}\n" +
-            "#rondo-geocerca-modal .rondo-gg-atrib{position:absolute;right:4px;bottom:3px;font-size:9px;color:#222;background:rgba(255,255,255,.72);padding:0 3px;border-radius:3px;pointer-events:none;z-index:4}\n" +
-            "#rondo-geocerca-modal .gg-lados{flex:0 0 288px;min-width:0;display:flex;flex-direction:column;gap:9px;overflow-y:auto}\n" +
-            "#rondo-geocerca-modal .gg-lado{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:9px 10px;display:flex;flex-direction:column;gap:7px;min-width:0}\n" +
-            "#rondo-geocerca-modal .gg-lado h4{margin:0;font:700 10px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);display:flex;align-items:center;gap:6px}\n" +
-            "#rondo-geocerca-modal .gg-lado h4 .gg-count{font:700 9px var(--rondo-font);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:0 6px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-geocerca-modal .rondo-gg-atrib{position:absolute;right:5px;bottom:4px;font-size:9px;color:#222;background:rgba(255,255,255,.75);padding:1px 4px;border-radius:4px;pointer-events:none;z-index:4}\n" +
+            // Chapa flotante sobre el mapa: modo actual + como se dibuja.
+            "#rondo-geocerca-modal .gg-hud{position:absolute;left:9px;top:9px;z-index:4;display:flex;flex-direction:column;gap:5px;align-items:flex-start;max-width:min(72%,320px);pointer-events:none}\n" +
+            "#rondo-geocerca-modal .gg-hud-m{display:inline-flex;align-items:center;gap:6px;background:rgba(20,24,34,.82);color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:3px 10px;font:600 10.5px var(--rondo-font);backdrop-filter:blur(2px)}\n" +
+            "#rondo-geocerca-modal .gg-hud-m .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-hud-h{background:rgba(20,24,34,.72);color:#e6e9f0;border-radius:8px;padding:3px 8px;font:500 10px var(--rondo-font);line-height:1.35}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-m,body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-h{background:rgba(255,255,255,.9);color:#1d2433;border-color:rgba(0,0,0,.1)}\n" +
+            // Paneles laterales
+            "#rondo-geocerca-modal .gg-lados{flex:0 0 296px;min-width:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:2px}\n" +
+            "#rondo-geocerca-modal .gg-lado{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lado h4{margin:0;font:700 10px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);display:flex;align-items:center;gap:6px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .rondo-usym{font-size:13px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .gg-count{margin-left:auto;font:700 9.5px var(--rondo-font);background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:1px 7px;color:var(--rondo-fg-dim);font-style:normal}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .gg-modo-tag{margin-left:auto;font:700 8.5px var(--rondo-font);font-style:normal;letter-spacing:.4px;background:var(--rondo-accent-grad);color:#fff;border-radius:7px;padding:1px 7px}\n" +
+            "#rondo-geocerca-modal .gg-sec{font:700 9px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);padding-top:2px;border-top:1px solid var(--rondo-border-soft)}\n" +
+            // Campos
             "#rondo-geocerca-modal .gg-lab{display:flex;flex-direction:column;gap:3px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute);min-width:0}\n" +
-            "#rondo-geocerca-modal .gg-lab input{width:100%;padding:4px 7px;font:500 12px var(--rondo-font);text-transform:none;letter-spacing:0}\n" +
+            "#rondo-geocerca-modal .gg-lab input{width:100%;min-width:0;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font:500 12px var(--rondo-font);text-transform:none;letter-spacing:0;transition:border-color .15s,box-shadow .15s}\n" +
+            "#rondo-geocerca-modal .gg-lab input:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.28)}\n" +
             "#rondo-geocerca-modal .gg-two{display:flex;gap:5px;min-width:0}\n" +
             "#rondo-geocerca-modal .gg-two input{flex:1;min-width:0}\n" +
-            "#rondo-geocerca-modal .gg-two .mini{flex:0 0 auto}\n" +
-            "#rondo-geocerca-modal .gg-modos{display:flex;gap:4px;flex-wrap:wrap}\n" +
-            "#rondo-geocerca-modal .gg-chip{flex:1;min-width:74px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:4px 8px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font)}\n" +
-            "#rondo-geocerca-modal .gg-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
-            "#rondo-geocerca-modal .gg-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
-            "#rondo-geocerca-modal .gg-res{margin:0;font:600 10.5px var(--rondo-font);color:var(--rondo-accent-2);min-height:14px}\n" +
-            "#rondo-geocerca-modal .gg-pista{margin:0;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            "#rondo-geocerca-modal .gg-ir{flex:0 0 auto;align-self:stretch}\n" +
+            "#rondo-geocerca-modal .gg-unit{position:relative;display:block}\n" +
+            "#rondo-geocerca-modal .gg-unit input{padding-right:26px}\n" +
+            "#rondo-geocerca-modal .gg-unit i{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:700 9.5px var(--rondo-font);font-style:normal;letter-spacing:.3px;color:var(--rondo-fg-mute);pointer-events:none}\n" +
+            // Chips de modo
+            "#rondo-geocerca-modal .gg-modos{display:flex;gap:4px}\n" +
+            "#rondo-geocerca-modal .gg-chip{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:5px 7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 11px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-chip .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-geocerca-modal .gg-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.32)}\n" +
+            // Tira de cifras
+            "#rondo-geocerca-modal .gg-stats{display:flex;gap:5px}\n" +
+            "#rondo-geocerca-modal .gg-stat{flex:1;min-width:0;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:5px 6px;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-geocerca-modal .gg-stat.ok{border-color:rgba(67,160,71,.42);background:var(--rondo-ok-bg)}\n" +
+            "#rondo-geocerca-modal .gg-stat b{font:700 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-stat.ok b{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-geocerca-modal .gg-stat span{font:700 8.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute)}\n" +
+            // Botones: el modal vive fuera de #rondo-panel, asi que los .mini
+            // de la app no le alcanzan: se redefinen aqui con su mismo estilo.
+            "#rondo-geocerca-modal .mini{display:inline-flex;align-items:center;justify-content:center;gap:4px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:var(--rondo-radius-sm);cursor:pointer;padding:4px 9px;font:600 11px var(--rondo-font);white-space:nowrap;transition:background .15s,color .15s,transform .1s,border-color .15s}\n" +
+            "#rondo-geocerca-modal .mini:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-geocerca-modal .mini:active{transform:translateY(0)}\n" +
             "#rondo-geocerca-modal .gg-acciones{display:flex;gap:5px;flex-wrap:wrap}\n" +
-            "#rondo-geocerca-modal .gg-lista{display:flex;flex-direction:column;gap:4px;max-height:210px;overflow-y:auto}\n" +
-            "#rondo-geocerca-modal .gg-item{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:8px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);min-width:0}\n" +
-            "#rondo-geocerca-modal .gg-ptag{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--rondo-accent-2);opacity:.75}\n" +
+            "#rondo-geocerca-modal .gg-acciones .mini{flex:1;min-width:88px}\n" +
+            "#rondo-geocerca-modal .gg-pista{margin:0;display:flex;gap:6px;align-items:flex-start;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:5px 7px}\n" +
+            "#rondo-geocerca-modal .gg-pista .rondo-usym{font-size:12px;flex:0 0 auto;margin-top:1px}\n" +
+            // Lista de geocercas
+            "#rondo-geocerca-modal .gg-lista{display:flex;flex-direction:column;gap:4px;max-height:236px;overflow-y:auto}\n" +
+            "#rondo-geocerca-modal .gg-item{display:flex;align-items:center;gap:7px;padding:6px 7px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;min-width:0;transition:border-color .15s,background .15s}\n" +
+            "#rondo-geocerca-modal .gg-item:hover{border-color:var(--rondo-border);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-geocerca-modal .gg-ptag{flex:0 0 auto;width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);color:var(--rondo-accent-2)}\n" +
+            "#rondo-geocerca-modal .gg-ptag .rondo-usym{font-size:13px}\n" +
             "#rondo-geocerca-modal .gg-in{flex:1;min-width:0;display:flex;flex-direction:column}\n" +
             "#rondo-geocerca-modal .gg-in b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
             "#rondo-geocerca-modal .gg-in span{font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
-            "#rondo-geocerca-modal .gg-in .gg-alerta{font-style:normal;color:var(--rondo-warn-fg);font-weight:700}\n" +
+            "#rondo-geocerca-modal .gg-tag-alerta{flex:0 0 auto;font:700 8px var(--rondo-font);font-style:normal;letter-spacing:.4px;color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-radius:7px;padding:2px 5px}\n" +
             "#rondo-geocerca-modal .gg-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n" +
             "#rondo-geocerca-modal .gg-acc .mini{padding:3px 5px}\n" +
-            "#rondo-geocerca-modal .gg-io{display:flex;gap:4px;flex-wrap:wrap}\n" +
-            "#rondo-geocerca-modal .gg-io .mini{flex:1;min-width:70px;justify-content:center}\n" +
-            "#rondo-geocerca-modal .gg-check{display:flex;align-items:center;gap:6px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-dim);cursor:pointer}\n" +
-            "#rondo-geocerca-modal .gg-check input{margin:0}\n" +
-            "#rondo-geocerca-modal .gg-vacio{padding:10px 4px;text-align:center;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.5}\n" +
-            "#rondo-geocerca-modal .gg-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:9px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft);flex:0 0 auto}\n" +
-            "#rondo-geocerca-modal .gg-foot .gg-pie{flex:1;min-width:180px;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
-            "#rondo-geocerca-modal .gg-foot button{padding:6px 13px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:5px}\n" +
-            "#rondo-geocerca-modal .gg-foot button.primary{background:var(--rondo-accent);color:#fff;border-color:transparent}\n" +
-            // Pantallas estrechas: el mapa arriba y los paneles debajo.
-            "@media (max-width:880px){#rondo-geocerca-modal{padding:8px}#rondo-geocerca-modal .gg-cuerpo{flex-direction:column}#rondo-geocerca-modal .rondo-gg-mapa{flex:0 0 42vh}#rondo-geocerca-modal .gg-lados{flex:1;flex-basis:auto}}\n" +
+            "#rondo-geocerca-modal .gg-acc .mini .rondo-usym{font-size:12px}\n" +
+            "#rondo-geocerca-modal .gg-acc .gg-al.on{color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-acc .gg-del:hover{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-vacio{display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 8px;text-align:center;border:1px dashed var(--rondo-border-soft);border-radius:8px}\n" +
+            "#rondo-geocerca-modal .gg-vacio .rondo-usym{font-size:20px;color:var(--rondo-fg-mute);opacity:.7}\n" +
+            "#rondo-geocerca-modal .gg-vacio b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-geocerca-modal .gg-vacio span{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            // Importar / exportar
+            "#rondo-geocerca-modal .gg-io{display:grid;grid-template-columns:1fr 1fr;gap:5px}\n" +
+            "#rondo-geocerca-modal .gg-io .mini{width:100%}\n" +
+            "#rondo-geocerca-modal .gg-check{display:flex;align-items:flex-start;gap:7px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-dim);cursor:pointer;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px 8px;transition:border-color .15s}\n" +
+            "#rondo-geocerca-modal .gg-check:hover{border-color:var(--rondo-border)}\n" +
+            "#rondo-geocerca-modal .gg-check input{margin:1px 0 0}\n" +
+            "#rondo-geocerca-modal .gg-check span{display:flex;flex-direction:column;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-check b{font:600 11px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-geocerca-modal .gg-check i{font:500 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            // Pie
+            "#rondo-geocerca-modal .gg-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft);flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-foot .gg-pie{flex:1;min-width:200px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            "#rondo-geocerca-modal .gg-foot button{display:inline-flex;align-items:center;gap:5px;padding:7px 15px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font:600 12px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-foot button:hover{border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-geocerca-modal .gg-foot button.primary{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 10px rgba(var(--rondo-accent-rgb),.32)}\n" +
+            "#rondo-geocerca-modal .gg-foot button.primary:hover{box-shadow:0 4px 16px rgba(var(--rondo-accent-rgb),.44)}\n" +
+            // Barra de scroll discreta, como en el resto del panel.
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar{width:8px}\n" +
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-thumb,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-thumb{background:var(--rondo-border);border-radius:4px}\n" +
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-track,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-track{background:transparent}\n" +
+            // Pantallas estrechas: mapa arriba, paneles debajo.
+            "@media (max-width:900px){#rondo-geocerca-modal{padding:8px}#rondo-geocerca-modal .gg-cuerpo{flex-direction:column;gap:9px}#rondo-geocerca-modal .rondo-gg-mapa{flex:0 0 40vh}#rondo-geocerca-modal .gg-lados{flex:1;flex-basis:auto}\n" +
+            "@media (max-width:900px){#rondo-geocerca-modal .gg-lados{display:grid;grid-template-columns:1fr 1fr;align-items:start}}\n" +
+            "@media (max-width:620px){#rondo-geocerca-modal .gg-lados{grid-template-columns:1fr}#rondo-geocerca-modal .gg-headsub{display:none}#rondo-geocerca-modal .gg-foot .gg-pie{display:none}}\n" +
             // Tarjeta de geocerca de la app: distintivo violeta/acento.
             "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:#fff}\n" +
             "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";
@@ -9758,6 +9817,19 @@ function glocEstado() {
 }
 // Capa propia encima del mini-mapa: dibuja el borrador (no vive en
 // inst.lineas porque rxMMDibujar reescribe esas capas en cada pan/zoom).
+// Chapa sobre el mapa: modo activo, cuanto lleva y como se dibuja. Se
+// actualiza en cada render para no tener que releer el DOM.
+function glocPintarHud() {
+    const el = byId('gg-hud');
+    if (!el) return;
+    const e = glocEstado();
+    const ico = (e.modo === 'circulo' ? 'zone' : (e.modo === 'linea' ? 'route' : 'map'));
+    const c = glocCifras();
+    const html = '<span class="gg-hud-m"><span class="rondo-usym">' + UIS[ico] + '</span>' +
+        esc(glocModoTxt(e.modo)) + ' \u00b7 ' + esc(c.puntos) + '</span>' +
+        '<span class="gg-hud-h">' + esc(glocPista(e.modo)) + '</span>';
+    setHtml(el, html);
+}
 function glocPintarBorrador() {
     const e = glocEstado();
     if (!e.mapa || !e.capa) return;
@@ -9864,6 +9936,7 @@ function glocModalEl() {
         '<div class="rondo-gg-mapa" id="rondo-gg-mapa">' +
         '<svg class="rondo-gg-ctx" xmlns="http://www.w3.org/2000/svg"></svg>' +
         '<svg class="rondo-gg-capa" xmlns="http://www.w3.org/2000/svg"></svg>' +
+        '<div class="gg-hud" id="gg-hud"></div>' +
         '<div class="rondo-gg-atrib">\u00a9 OpenStreetMap</div>' +
         '</div>' +
         '<div class="gg-lados"></div>' +
@@ -9953,32 +10026,53 @@ function glocPuntosActuales(e) {
 }
 // Resumen del borrador para el pie del editor.
 function glocResumen() {
+    const c = glocCifras();
+    if (!c.superficie) return c.puntos + ' \u00b7 completa la figura';
+    return c.puntos + ' \u00b7 ' + c.superficie + ' \u00b7 ' + c.perimetro;
+}
+// Cifras del borrador: alimentan la tira de estadisticos del panel lateral.
+function glocCifras() {
     const e = glocEstado();
-    const b = glocBorrador();
-    const z = glocNormaliza(b);
-    const nP = (e.modo === 'circulo') ? (e.pts.length ? 'circulo' : 'sin centro') : (e.pts.length + ' punto(s)');
-    if (!z) {
-        return nP + ' \u00b7 completa la figura';
-    }
-    const peri = (z.t === 3) ? (2 * Math.PI * z.w + ' m de circunferencia') : Math.round(glocPerimM(z.p, z.t === 2)) + ' m de perimetro';
-    return nP + ' \u00b7 ' + glocTextoTam(z) + ' \u00b7 ' + peri;
+    const z = glocNormaliza(glocBorrador());
+    const out = {
+        n: e.pts.length,
+        puntos: (e.modo === 'circulo')
+            ? (e.pts.length ? 'circulo' : 'sin centro')
+            : (e.pts.length + (e.pts.length === 1 ? ' punto' : ' puntos')),
+        superficie: '',
+        radio: '',
+        perimetro: '',
+        completo: !!z
+    };
+    if (!z) return out;
+    out.superficie = glocTextoTam(z);
+    out.radio = (z.t === 3) ? (Math.round(z.w) + ' m') : '';
+    out.perimetro = (z.t === 3)
+        ? (Math.round(2 * Math.PI * z.w) + ' m')
+        : (Math.round(glocPerimM(z.p, z.t === 2)) + ' m');
+    return out;
 }
 function glocListaHTML() {
     const lista = glocLista();
     if (!lista.length) {
-        return '<div class="gg-vacio">Aun no has creado ninguna geocerca en la app. Dibujala en el mapa y pulsa <b>Guardar</b>.</div>';
+        return '<div class="gg-vacio"><span class="rondo-usym">' + UIS.zone + '</span>' +
+            '<b>Aun no hay geocercas</b>' +
+            '<span>Dibuja un marco, circulo o linea en el mapa y pulsa <b>Guardar geocerca</b>.</span></div>';
     }
     return lista.map((z) => {
         const alertas = geoAlertaCfgZona(z.n);
-        return '<div class="gg-item" data-id="' + esc(z.id) + '">' +
-            '<span class="gg-ptag" title="' + (z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Poligono')) + '"></span>' +
+        const forma = (z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Marco'));
+        const ico = (z.t === 3 ? 'zone' : (z.t === 1 ? 'route' : 'map'));
+        return '<div class="gg-item" data-id="' + esc(z.id) + '"' +
+            (alertas ? ' data-alerta="1" title="Tiene alerta de geocerca activa"' : '') + '>' +
+            '<span class="gg-ptag"><span class="rondo-usym">' + UIS[ico] + '</span></span>' +
             '<div class="gg-in"><b>' + esc(z.n) + '</b>' +
-            '<span>' + (z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Poligono')) + ' \u00b7 ' + glocTextoTam(z) +
-            (alertas ? ' \u00b7 <i class="gg-alerta">alerta</i>' : '') + '</span></div>' +
+            '<span>' + forma + ' \u00b7 ' + glocTextoTam(z) + '</span></div>' +
+            (alertas ? '<i class="gg-tag-alerta" title="Alerta activa">ALERTA</i>' : '') +
             '<span class="gg-acc">' +
             '<button class="mini gg-ed" title="Editar en el mapa"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
             '<button class="mini gg-cp" title="Copiar nombre y centro"><span class="rondo-usym">' + UIS.copy + '</span></button>' +
-            '<button class="mini gg-al" title="Alerta de geocerca"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
+            '<button class="mini gg-al' + (alertas ? ' on' : '') + '" title="' + (alertas ? 'Ajustar su alerta' : 'Vigilar esta geocerca') + '"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button class="mini gg-del" title="Eliminar"><span class="rondo-usym">' + UIS.close + '</span></button>' +
             '</span></div>';
     }).join('');
@@ -9999,45 +10093,73 @@ function glocRender() {
     const cuerpo = el.querySelector('.gg-lados');
     if (cuerpo) {
         setHtml(cuerpo,
+            // ── Panel 1: la figura que se esta trazando ──────────────────
             '<div class="gg-lado">' +
-            '<h4>' + (e.editando ? 'Editando geocerca' : 'Nueva geocerca') + '</h4>' +
-            '<label class="gg-lab">Nombre<input type="text" id="gg-nombre" maxlength="' + GEOLOC_NOMBRE_MAX + '" value="' + esc(e.nombre) + '" placeholder="Patio del cliente"></label>' +
-            '<div class="gg-modos">' +
-            '<button type="button" class="gg-chip' + (e.modo === 'poligono' ? ' activo' : '') + '" data-gg="modo" data-v="poligono">Marco</button>' +
-            '<button type="button" class="gg-chip' + (e.modo === 'circulo' ? ' activo' : '') + '" data-gg="modo" data-v="circulo">Círculo</button>' +
-            '<button type="button" class="gg-chip' + (e.modo === 'linea' ? ' activo' : '') + '" data-gg="modo" data-v="linea">Línea</button>' +
+            '<h4><span class="rondo-usym">' + UIS.watch + '</span>' +
+            (e.editando ? 'Editando geocerca' : 'Nueva geocerca') +
+            (e.id ? '<i class="gg-modo-tag">' + esc(glocModoTxt(e.modo)) + '</i>' : '') + '</h4>' +
+            '<label class="gg-lab">Nombre' +
+            '<input type="text" id="gg-nombre" maxlength="' + GEOLOC_NOMBRE_MAX + '" value="' + esc(e.nombre) + '" placeholder="Patio del cliente"></label>' +
+            '<div class="gg-modos" role="group" aria-label="Tipo de figura">' +
+            glocModoChip(e, 'poligono', 'Marco', 'map') +
+            glocModoChip(e, 'circulo', 'C\u00edrculo', 'zone') +
+            glocModoChip(e, 'linea', 'L\u00ednea', 'route') +
             '</div>' +
-            '<label class="gg-lab">Centro (lat, lon)<span class="gg-two">' +
-            '<input type="text" id="gg-lat" inputmode="decimal" placeholder="19.4326" value="' + (e.pts.length ? e.pts[0].lat.toFixed(6) : '') + '">' +
-            '<input type="text" id="gg-lon" inputmode="decimal" placeholder="-99.1332" value="' + (e.pts.length ? e.pts[0].lon.toFixed(6) : '') + '">' +
-            '<button class="mini" id="gg-ir" title="Centrar el mapa en esas coordenadas">Ir</button>' +
+            '<div class="gg-stats" id="gg-res">' + glocStatsHTML() + '</div>' +
+            '<label class="gg-lab">Centro (latitud, longitud)<span class="gg-two">' +
+            '<input type="text" id="gg-lat" inputmode="decimal" placeholder="19.432600" value="' + (e.pts.length ? e.pts[0].lat.toFixed(6) : '') + '">' +
+            '<input type="text" id="gg-lon" inputmode="decimal" placeholder="-99.133200" value="' + (e.pts.length ? e.pts[0].lon.toFixed(6) : '') + '">' +
+            '<button type="button" class="mini gg-ir" id="gg-ir" title="Centrar el mapa en esas coordenadas">Ir</button>' +
             '</span></label>' +
             (e.modo === 'circulo'
-                ? '<label class="gg-lab">Radio (m)<input type="number" id="gg-radio" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.radio) + '"></label>'
-                : (e.modo === 'linea' ? '<label class="gg-lab">Ancho del trazo (m)<input type="number" id="gg-ancho" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.ancho) + '"></label>' : '')) +
-            '<p class="gg-res" id="gg-res">' + esc(glocResumen()) + '</p>' +
+                ? '<label class="gg-lab">Radio<span class="gg-unit"><input type="number" id="gg-radio" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.radio) + '"><i>m</i></span></label>'
+                : (e.modo === 'linea' ? '<label class="gg-lab">Ancho del trazo<span class="gg-unit"><input type="number" id="gg-ancho" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.ancho) + '"><i>m</i></span></label>' : '')) +
             '<div class="gg-acciones">' +
-            '<button class="mini" id="gg-undo" title="Quitar el ultimo punto"><span class="rondo-usym">' + UIS.menos + '</span> Deshacer</button>' +
-            '<button class="mini" id="gg-limpiar" title="Empezar de cero"><span class="rondo-usym">' + UIS.clear + '</span> Limpiar</button>' +
-            (e.modo === 'circulo' ? '' : '<button class="mini" id="gg-cerrar" title="Cerrar la figura (o doble clic en el mapa)">Cerrar figura</button>') +
+            '<button type="button" class="mini" id="gg-undo" title="Quitar el ultimo punto"><span class="rondo-usym">' + UIS.menos + '</span> Deshacer</button>' +
+            '<button type="button" class="mini" id="gg-limpiar" title="Empezar de cero"><span class="rondo-usym">' + UIS.clear + '</span> Limpiar</button>' +
+            (e.modo === 'circulo' ? '' : '<button type="button" class="mini" id="gg-cerrar" title="Cerrar la figura (o doble clic en el mapa)">Cerrar figura</button>') +
             '</div>' +
-            '<p class="gg-pista">' + esc(glocPista(e.modo)) + '</p>' +
+            '<p class="gg-pista"><span class="rondo-usym">' + UIS.info + '</span>' + esc(glocPista(e.modo)) + '</p>' +
             '</div>' +
+            // ── Panel 2: las geocercas de la app ─────────────────────────
             '<div class="gg-lado gg-lado-lista">' +
-            '<h4>Mis geocercas <span class="gg-count">' + glocLista().length + '</span></h4>' +
+            '<h4><span class="rondo-usym">' + UIS.map + '</span>Mis geocercas' +
+            '<i class="gg-count">' + glocLista().length + '</i></h4>' +
             '<div class="gg-lista">' + glocListaHTML() + '</div>' +
+            '<div class="gg-sec">Importar / exportar</div>' +
             '<div class="gg-io">' +
-            '<button class="mini" id="gg-exporta" title="Descargar un .json con tus geocercas"><span class="rondo-usym">' + UIS.export + '</span> Exportar</button>' +
-            '<button class="mini" id="gg-exporta-geo" title="Descargar GeoJSON (abrible en cualquier visor)"><span class="rondo-usym">' + UIS.map + '</span> GeoJSON</button>' +
-            '<button class="mini" id="gg-importa" title="Importar un .json o .geojson"><span class="rondo-usym">' + UIS.upload + '</span> Importar</button>' +
-            '<button class="mini" id="gg-copiar" title="Copiar el JSON al portapapeles"><span class="rondo-usym">' + UIS.copy + '</span> Copiar</button>' +
+            '<button type="button" class="mini" id="gg-exporta" title="Descargar un .json con tus geocercas"><span class="rondo-usym">' + UIS.export + '</span> Exportar</button>' +
+            '<button type="button" class="mini" id="gg-exporta-geo" title="Descargar GeoJSON (abrible en cualquier visor)"><span class="rondo-usym">' + UIS.map + '</span> GeoJSON</button>' +
+            '<button type="button" class="mini" id="gg-importa" title="Importar un .json o .geojson"><span class="rondo-usym">' + UIS.upload + '</span> Importar</button>' +
+            '<button type="button" class="mini" id="gg-copiar" title="Copiar el JSON al portapapeles"><span class="rondo-usym">' + UIS.copy + '</span> Copiar</button>' +
             '<input type="file" id="gg-file" accept=".json,.geojson,.txt" hidden>' +
             '</div>' +
-            '<label class="gg-check"><input type="checkbox" id="gg-recordar"' + (APP.config && APP.config.geolocalRecordar ? ' checked' : '') + '> Recordar en este navegador</label>' +
+            '<label class="gg-check"><input type="checkbox" id="gg-recordar"' + (APP.config && APP.config.geolocalRecordar ? ' checked' : '') + '> ' +
+            '<span><b>Recordar en este navegador</b><i>Sin esto se pierden al recargar la pagina</i></span></label>' +
             '</div>');
     }
     glocPintarBorrador();
     glocPintarContexto();
+    glocPintarHud();
+}
+function glocModoTxt(modo) {
+    return (modo === 'circulo') ? 'C\u00edrculo' : (modo === 'linea' ? 'L\u00ednea' : 'Marco');
+}
+function glocModoTxtPlano(modo) {
+    return (modo === 'circulo') ? 'circulo' : (modo === 'linea' ? 'linea' : 'marco');
+}
+function glocModoChip(e, modo, txt, icono) {
+    return '<button type="button" class="gg-chip' + (e.modo === modo ? ' activo' : '') + '" data-gg="modo" data-v="' + modo + '" title="Trazar un ' + glocModoTxtPlano(modo) + '">' +
+        '<span class="rondo-usym">' + UIS[icono] + '</span>' + esc(txt) + '</button>';
+}
+// Tira de cifras del borrador: puntos, superficie y perimetro.
+function glocStatsHTML() {
+    const c = glocCifras();
+    const celda = (lb, val, ok) => '<div class="gg-stat' + (ok ? ' ok' : '') + '"><b>' + esc(val) + '</b><span>' + lb + '</span></div>';
+    const circ = (c.puntos.indexOf('circulo') >= 0);
+    return celda('Puntos', c.puntos, c.n > 0) +
+        celda(circ ? 'Radio' : 'Superficie', (circ ? (c.radio || '\u2014') : (c.superficie || '\u2014')), c.completo) +
+        celda(circ ? 'Circunferencia' : 'Per\u00edmetro', c.perimetro || '\u2014', c.completo);
 }
 function glocPista(modo) {
     if (modo === 'circulo') return 'Clic para poner el centro y otro clic para el radio (o escribe el radio).';
@@ -10218,14 +10340,14 @@ function glocBind() {
             e.radioListo = !!e.pts.length;
             glocPintarBorrador();
             const res = byId('gg-res');
-            if (res) res.textContent = glocResumen();
+            if (res) setHtml(res, glocStatsHTML());
             return;
         }
         if (t.id === 'gg-ancho') {
             const n = Number(t.value);
             e.ancho = clamp(isFinite(n) ? n : 100, GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO);
             const res = byId('gg-res');
-            if (res) res.textContent = glocResumen();
+            if (res) setHtml(res, glocStatsHTML());
         }
     });
     cuerpo.addEventListener('change', (ev) => {

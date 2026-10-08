@@ -587,13 +587,16 @@ ok('la tarjeta de la app tiene boton de editar', /class="mini rondo-geo-edit"/.t
 ok('la tarjeta de la app se marca con APP', /class="rondo-geo-app"/.test(src) && /\.rondo-geo-card \.rondo-geo-app\{/.test(src));
 ok('filtro por origen de la geocerca', /<option value="app">De la app<\/option>/.test(src) &&
     /rol === 'app'\) lista = lista\.filter\(\(x\) => glocEsApp\(x\.z\)\)/.test(src));
+ok('la lista muestra nombre y tamano de cada geocerca',
+    /function glocListaHTML\(\)/.test(src) && /glocTextoTam\(z\)/.test(src));
 ok('modal con mapa y paneles', /\{ id: 'rondo-geocerca-modal' \}/.test(src) &&
     /id="rondo-gg-mapa"/.test(src) && /class="gg-lados"/.test(src));
 ok('el mapa usa los tiles de OpenStreetMap', /rxMiniMapa\(cont, \{ lineas: \[\], marcas: \[\] \}\)/.test(src));
 ok('capas propias para dibujar encima del mapa', /rondo-gg-capa/.test(src) && /rondo-gg-ctx/.test(src));
 ok('inversa del mapa (px -> lat/lon)', /function glocPxALatLon\(/.test(src) &&
     /Math\.atan\(Math\.sinh\(Math\.PI \* \(1 - 2 \* \(oy \/ n\)\)\)\)/.test(src));
-ok('modos de dibujo: marco, circulo y linea', /data-v="poligono"/.test(src) && /data-v="circulo"/.test(src) && /data-v="linea"/.test(src));
+ok('modos de dibujo: marco, circulo y linea',
+    /glocModoChip\(e, 'poligono', 'Marco'/.test(src) && /glocModoChip\(e, 'circulo'/.test(src) && /glocModoChip\(e, 'linea'/.test(src));
 ok('entrada de coordenadas en el editor', /id="gg-lat"/.test(src) && /id="gg-lon"/.test(src));
 ok('exportar e importar', /id="gg-exporta"/.test(src) && /id="gg-importa"/.test(src) && /id="gg-file"/.test(src));
 ok('recordar en este navegador', /id="gg-recordar"/.test(src) && /geolocalRecordar/.test(src));
@@ -606,6 +609,16 @@ ok('no se pierden al recargar las de la plataforma', /glocSincroniza\(\);[\s\S]{
 ok('refresh fusiona tras cargar la plataforma', /glocSincroniza\(\); \/\/ no/i.test(src) || /try \{ glocSincroniza\(\); \}/.test(src));
 ok('Escape cierra el editor de geocercas', /glocM\.classList\.contains\('abierto'\)\) \{ cerrarGeocercaApp\(\); return; \}/.test(src));
 ok('esUIPropia incluye el modal nuevo', /#rondo-geocerca-modal/.test(src));
+ok('el modal define sus propios estilos de boton (mini)',
+    /#rondo-geocerca-modal \.mini\{display:inline-flex/.test(src) &&
+    /#rondo-geocerca-modal \.mini:hover\{background:var\(--rondo-bg\)/.test(src));
+ok('el modal lleva chapa flotante sobre el mapa', /id="gg-hud"/.test(src) &&
+    /function glocPintarHud\(\)/.test(src) && /gg-hud-m/.test(src));
+ok('el modal respeta el tema claro en la chapa',
+    /body\[data-rondo-theme='claro'\] #rondo-geocerca-modal \.gg-hud-m/.test(src));
+ok('el modal tiene tira de cifras del borrador', /function glocStatsHTML\(\)/.test(src) && /class="gg-stat/.test(src));
+ok('el modal marca la lista con su icono de forma', /glocListaHTML\(\)/.test(src) &&
+    /gg-ptag"><span class="rondo-usym">' \+ UIS\[ico\]/.test(src));
 ok('el GeoJSON de geocercas marca el origen', /origen: glocEsApp\(z\) \? 'rondo-app' : 'plataforma'/.test(src));
 ok('la lista muestra nombre y tamano de cada geocerca', /function glocListaHTML\(\)/.test(src) &&
     /glocTextoTam\(z\)/.test(src));

@@ -379,6 +379,19 @@ function glocEstado() {
 }
 // Capa propia encima del mini-mapa: dibuja el borrador (no vive en
 // inst.lineas porque rxMMDibujar reescribe esas capas en cada pan/zoom).
+// Chapa sobre el mapa: modo activo, cuanto lleva y como se dibuja. Se
+// actualiza en cada render para no tener que releer el DOM.
+function glocPintarHud() {
+    const el = byId('gg-hud');
+    if (!el) return;
+    const e = glocEstado();
+    const ico = (e.modo === 'circulo' ? 'zone' : (e.modo === 'linea' ? 'route' : 'map'));
+    const c = glocCifras();
+    const html = '<span class="gg-hud-m"><span class="rondo-usym">' + UIS[ico] + '</span>' +
+        esc(glocModoTxt(e.modo)) + ' \u00b7 ' + esc(c.puntos) + '</span>' +
+        '<span class="gg-hud-h">' + esc(glocPista(e.modo)) + '</span>';
+    setHtml(el, html);
+}
 function glocPintarBorrador() {
     const e = glocEstado();
     if (!e.mapa || !e.capa) return;
@@ -485,6 +498,7 @@ function glocModalEl() {
         '<div class="rondo-gg-mapa" id="rondo-gg-mapa">' +
         '<svg class="rondo-gg-ctx" xmlns="http://www.w3.org/2000/svg"></svg>' +
         '<svg class="rondo-gg-capa" xmlns="http://www.w3.org/2000/svg"></svg>' +
+        '<div class="gg-hud" id="gg-hud"></div>' +
         '<div class="rondo-gg-atrib">\u00a9 OpenStreetMap</div>' +
         '</div>' +
         '<div class="gg-lados"></div>' +
@@ -574,32 +588,53 @@ function glocPuntosActuales(e) {
 }
 // Resumen del borrador para el pie del editor.
 function glocResumen() {
+    const c = glocCifras();
+    if (!c.superficie) return c.puntos + ' \u00b7 completa la figura';
+    return c.puntos + ' \u00b7 ' + c.superficie + ' \u00b7 ' + c.perimetro;
+}
+// Cifras del borrador: alimentan la tira de estadisticos del panel lateral.
+function glocCifras() {
     const e = glocEstado();
-    const b = glocBorrador();
-    const z = glocNormaliza(b);
-    const nP = (e.modo === 'circulo') ? (e.pts.length ? 'circulo' : 'sin centro') : (e.pts.length + ' punto(s)');
-    if (!z) {
-        return nP + ' \u00b7 completa la figura';
-    }
-    const peri = (z.t === 3) ? (2 * Math.PI * z.w + ' m de circunferencia') : Math.round(glocPerimM(z.p, z.t === 2)) + ' m de perimetro';
-    return nP + ' \u00b7 ' + glocTextoTam(z) + ' \u00b7 ' + peri;
+    const z = glocNormaliza(glocBorrador());
+    const out = {
+        n: e.pts.length,
+        puntos: (e.modo === 'circulo')
+            ? (e.pts.length ? 'circulo' : 'sin centro')
+            : (e.pts.length + (e.pts.length === 1 ? ' punto' : ' puntos')),
+        superficie: '',
+        radio: '',
+        perimetro: '',
+        completo: !!z
+    };
+    if (!z) return out;
+    out.superficie = glocTextoTam(z);
+    out.radio = (z.t === 3) ? (Math.round(z.w) + ' m') : '';
+    out.perimetro = (z.t === 3)
+        ? (Math.round(2 * Math.PI * z.w) + ' m')
+        : (Math.round(glocPerimM(z.p, z.t === 2)) + ' m');
+    return out;
 }
 function glocListaHTML() {
     const lista = glocLista();
     if (!lista.length) {
-        return '<div class="gg-vacio">Aun no has creado ninguna geocerca en la app. Dibujala en el mapa y pulsa <b>Guardar</b>.</div>';
+        return '<div class="gg-vacio"><span class="rondo-usym">' + UIS.zone + '</span>' +
+            '<b>Aun no hay geocercas</b>' +
+            '<span>Dibuja un marco, circulo o linea en el mapa y pulsa <b>Guardar geocerca</b>.</span></div>';
     }
     return lista.map((z) => {
         const alertas = geoAlertaCfgZona(z.n);
-        return '<div class="gg-item" data-id="' + esc(z.id) + '">' +
-            '<span class="gg-ptag" title="' + (z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Poligono')) + '"></span>' +
+        const forma = (z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Marco'));
+        const ico = (z.t === 3 ? 'zone' : (z.t === 1 ? 'route' : 'map'));
+        return '<div class="gg-item" data-id="' + esc(z.id) + '"' +
+            (alertas ? ' data-alerta="1" title="Tiene alerta de geocerca activa"' : '') + '>' +
+            '<span class="gg-ptag"><span class="rondo-usym">' + UIS[ico] + '</span></span>' +
             '<div class="gg-in"><b>' + esc(z.n) + '</b>' +
-            '<span>' + (z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Poligono')) + ' \u00b7 ' + glocTextoTam(z) +
-            (alertas ? ' \u00b7 <i class="gg-alerta">alerta</i>' : '') + '</span></div>' +
+            '<span>' + forma + ' \u00b7 ' + glocTextoTam(z) + '</span></div>' +
+            (alertas ? '<i class="gg-tag-alerta" title="Alerta activa">ALERTA</i>' : '') +
             '<span class="gg-acc">' +
             '<button class="mini gg-ed" title="Editar en el mapa"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
             '<button class="mini gg-cp" title="Copiar nombre y centro"><span class="rondo-usym">' + UIS.copy + '</span></button>' +
-            '<button class="mini gg-al" title="Alerta de geocerca"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
+            '<button class="mini gg-al' + (alertas ? ' on' : '') + '" title="' + (alertas ? 'Ajustar su alerta' : 'Vigilar esta geocerca') + '"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button class="mini gg-del" title="Eliminar"><span class="rondo-usym">' + UIS.close + '</span></button>' +
             '</span></div>';
     }).join('');
@@ -620,45 +655,73 @@ function glocRender() {
     const cuerpo = el.querySelector('.gg-lados');
     if (cuerpo) {
         setHtml(cuerpo,
+            // ── Panel 1: la figura que se esta trazando ──────────────────
             '<div class="gg-lado">' +
-            '<h4>' + (e.editando ? 'Editando geocerca' : 'Nueva geocerca') + '</h4>' +
-            '<label class="gg-lab">Nombre<input type="text" id="gg-nombre" maxlength="' + GEOLOC_NOMBRE_MAX + '" value="' + esc(e.nombre) + '" placeholder="Patio del cliente"></label>' +
-            '<div class="gg-modos">' +
-            '<button type="button" class="gg-chip' + (e.modo === 'poligono' ? ' activo' : '') + '" data-gg="modo" data-v="poligono">Marco</button>' +
-            '<button type="button" class="gg-chip' + (e.modo === 'circulo' ? ' activo' : '') + '" data-gg="modo" data-v="circulo">Círculo</button>' +
-            '<button type="button" class="gg-chip' + (e.modo === 'linea' ? ' activo' : '') + '" data-gg="modo" data-v="linea">Línea</button>' +
+            '<h4><span class="rondo-usym">' + UIS.watch + '</span>' +
+            (e.editando ? 'Editando geocerca' : 'Nueva geocerca') +
+            (e.id ? '<i class="gg-modo-tag">' + esc(glocModoTxt(e.modo)) + '</i>' : '') + '</h4>' +
+            '<label class="gg-lab">Nombre' +
+            '<input type="text" id="gg-nombre" maxlength="' + GEOLOC_NOMBRE_MAX + '" value="' + esc(e.nombre) + '" placeholder="Patio del cliente"></label>' +
+            '<div class="gg-modos" role="group" aria-label="Tipo de figura">' +
+            glocModoChip(e, 'poligono', 'Marco', 'map') +
+            glocModoChip(e, 'circulo', 'C\u00edrculo', 'zone') +
+            glocModoChip(e, 'linea', 'L\u00ednea', 'route') +
             '</div>' +
-            '<label class="gg-lab">Centro (lat, lon)<span class="gg-two">' +
-            '<input type="text" id="gg-lat" inputmode="decimal" placeholder="19.4326" value="' + (e.pts.length ? e.pts[0].lat.toFixed(6) : '') + '">' +
-            '<input type="text" id="gg-lon" inputmode="decimal" placeholder="-99.1332" value="' + (e.pts.length ? e.pts[0].lon.toFixed(6) : '') + '">' +
-            '<button class="mini" id="gg-ir" title="Centrar el mapa en esas coordenadas">Ir</button>' +
+            '<div class="gg-stats" id="gg-res">' + glocStatsHTML() + '</div>' +
+            '<label class="gg-lab">Centro (latitud, longitud)<span class="gg-two">' +
+            '<input type="text" id="gg-lat" inputmode="decimal" placeholder="19.432600" value="' + (e.pts.length ? e.pts[0].lat.toFixed(6) : '') + '">' +
+            '<input type="text" id="gg-lon" inputmode="decimal" placeholder="-99.133200" value="' + (e.pts.length ? e.pts[0].lon.toFixed(6) : '') + '">' +
+            '<button type="button" class="mini gg-ir" id="gg-ir" title="Centrar el mapa en esas coordenadas">Ir</button>' +
             '</span></label>' +
             (e.modo === 'circulo'
-                ? '<label class="gg-lab">Radio (m)<input type="number" id="gg-radio" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.radio) + '"></label>'
-                : (e.modo === 'linea' ? '<label class="gg-lab">Ancho del trazo (m)<input type="number" id="gg-ancho" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.ancho) + '"></label>' : '')) +
-            '<p class="gg-res" id="gg-res">' + esc(glocResumen()) + '</p>' +
+                ? '<label class="gg-lab">Radio<span class="gg-unit"><input type="number" id="gg-radio" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.radio) + '"><i>m</i></span></label>'
+                : (e.modo === 'linea' ? '<label class="gg-lab">Ancho del trazo<span class="gg-unit"><input type="number" id="gg-ancho" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.ancho) + '"><i>m</i></span></label>' : '')) +
             '<div class="gg-acciones">' +
-            '<button class="mini" id="gg-undo" title="Quitar el ultimo punto"><span class="rondo-usym">' + UIS.menos + '</span> Deshacer</button>' +
-            '<button class="mini" id="gg-limpiar" title="Empezar de cero"><span class="rondo-usym">' + UIS.clear + '</span> Limpiar</button>' +
-            (e.modo === 'circulo' ? '' : '<button class="mini" id="gg-cerrar" title="Cerrar la figura (o doble clic en el mapa)">Cerrar figura</button>') +
+            '<button type="button" class="mini" id="gg-undo" title="Quitar el ultimo punto"><span class="rondo-usym">' + UIS.menos + '</span> Deshacer</button>' +
+            '<button type="button" class="mini" id="gg-limpiar" title="Empezar de cero"><span class="rondo-usym">' + UIS.clear + '</span> Limpiar</button>' +
+            (e.modo === 'circulo' ? '' : '<button type="button" class="mini" id="gg-cerrar" title="Cerrar la figura (o doble clic en el mapa)">Cerrar figura</button>') +
             '</div>' +
-            '<p class="gg-pista">' + esc(glocPista(e.modo)) + '</p>' +
+            '<p class="gg-pista"><span class="rondo-usym">' + UIS.info + '</span>' + esc(glocPista(e.modo)) + '</p>' +
             '</div>' +
+            // ── Panel 2: las geocercas de la app ─────────────────────────
             '<div class="gg-lado gg-lado-lista">' +
-            '<h4>Mis geocercas <span class="gg-count">' + glocLista().length + '</span></h4>' +
+            '<h4><span class="rondo-usym">' + UIS.map + '</span>Mis geocercas' +
+            '<i class="gg-count">' + glocLista().length + '</i></h4>' +
             '<div class="gg-lista">' + glocListaHTML() + '</div>' +
+            '<div class="gg-sec">Importar / exportar</div>' +
             '<div class="gg-io">' +
-            '<button class="mini" id="gg-exporta" title="Descargar un .json con tus geocercas"><span class="rondo-usym">' + UIS.export + '</span> Exportar</button>' +
-            '<button class="mini" id="gg-exporta-geo" title="Descargar GeoJSON (abrible en cualquier visor)"><span class="rondo-usym">' + UIS.map + '</span> GeoJSON</button>' +
-            '<button class="mini" id="gg-importa" title="Importar un .json o .geojson"><span class="rondo-usym">' + UIS.upload + '</span> Importar</button>' +
-            '<button class="mini" id="gg-copiar" title="Copiar el JSON al portapapeles"><span class="rondo-usym">' + UIS.copy + '</span> Copiar</button>' +
+            '<button type="button" class="mini" id="gg-exporta" title="Descargar un .json con tus geocercas"><span class="rondo-usym">' + UIS.export + '</span> Exportar</button>' +
+            '<button type="button" class="mini" id="gg-exporta-geo" title="Descargar GeoJSON (abrible en cualquier visor)"><span class="rondo-usym">' + UIS.map + '</span> GeoJSON</button>' +
+            '<button type="button" class="mini" id="gg-importa" title="Importar un .json o .geojson"><span class="rondo-usym">' + UIS.upload + '</span> Importar</button>' +
+            '<button type="button" class="mini" id="gg-copiar" title="Copiar el JSON al portapapeles"><span class="rondo-usym">' + UIS.copy + '</span> Copiar</button>' +
             '<input type="file" id="gg-file" accept=".json,.geojson,.txt" hidden>' +
             '</div>' +
-            '<label class="gg-check"><input type="checkbox" id="gg-recordar"' + (APP.config && APP.config.geolocalRecordar ? ' checked' : '') + '> Recordar en este navegador</label>' +
+            '<label class="gg-check"><input type="checkbox" id="gg-recordar"' + (APP.config && APP.config.geolocalRecordar ? ' checked' : '') + '> ' +
+            '<span><b>Recordar en este navegador</b><i>Sin esto se pierden al recargar la pagina</i></span></label>' +
             '</div>');
     }
     glocPintarBorrador();
     glocPintarContexto();
+    glocPintarHud();
+}
+function glocModoTxt(modo) {
+    return (modo === 'circulo') ? 'C\u00edrculo' : (modo === 'linea' ? 'L\u00ednea' : 'Marco');
+}
+function glocModoTxtPlano(modo) {
+    return (modo === 'circulo') ? 'circulo' : (modo === 'linea' ? 'linea' : 'marco');
+}
+function glocModoChip(e, modo, txt, icono) {
+    return '<button type="button" class="gg-chip' + (e.modo === modo ? ' activo' : '') + '" data-gg="modo" data-v="' + modo + '" title="Trazar un ' + glocModoTxtPlano(modo) + '">' +
+        '<span class="rondo-usym">' + UIS[icono] + '</span>' + esc(txt) + '</button>';
+}
+// Tira de cifras del borrador: puntos, superficie y perimetro.
+function glocStatsHTML() {
+    const c = glocCifras();
+    const celda = (lb, val, ok) => '<div class="gg-stat' + (ok ? ' ok' : '') + '"><b>' + esc(val) + '</b><span>' + lb + '</span></div>';
+    const circ = (c.puntos.indexOf('circulo') >= 0);
+    return celda('Puntos', c.puntos, c.n > 0) +
+        celda(circ ? 'Radio' : 'Superficie', (circ ? (c.radio || '\u2014') : (c.superficie || '\u2014')), c.completo) +
+        celda(circ ? 'Circunferencia' : 'Per\u00edmetro', c.perimetro || '\u2014', c.completo);
 }
 function glocPista(modo) {
     if (modo === 'circulo') return 'Clic para poner el centro y otro clic para el radio (o escribe el radio).';
@@ -839,14 +902,14 @@ function glocBind() {
             e.radioListo = !!e.pts.length;
             glocPintarBorrador();
             const res = byId('gg-res');
-            if (res) res.textContent = glocResumen();
+            if (res) setHtml(res, glocStatsHTML());
             return;
         }
         if (t.id === 'gg-ancho') {
             const n = Number(t.value);
             e.ancho = clamp(isFinite(n) ? n : 100, GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO);
             const res = byId('gg-res');
-            if (res) res.textContent = glocResumen();
+            if (res) setHtml(res, glocStatsHTML());
         }
     });
     cuerpo.addEventListener('change', (ev) => {

@@ -438,9 +438,10 @@ puede **escribir el centro** (lat, lon) y pulsar **Ir** para saltar ahi, lo
 que es practico si copias las coordenadas de un WhatsApp o de otro sistema.
 
 El panel lateral indica en todo momento cuantos puntos lleva la figura, su
-superficie y su perimetro. **Guardar geocerca** pide el nombre (si choca con
-otra geocerca le anade "2"), lo deja creado y lo pinta en el mapa y en la
-tarjeta.
+superficie y su perimetro (en el circulo, el radio y la circunferencia). Sobre
+el mapa hay una chapa con el modo activo y como se dibuja. **Guardar
+geocerca** pide el nombre (si choca con otra geocerca le anade "2"), lo deja
+creado y lo pinta en el mapa y en la tarjeta.
 
 #### Donde se guardan
 
