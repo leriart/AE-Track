@@ -178,6 +178,10 @@
         desvioMunicipioM: 3000,
         // v5.15: radio (m) para considerar "llego" a cada parada del plan.
         paradaLlegadaM: 150,
+        // v6.13: las geocercas dibujadas en Rondo viven en la sesion. Con
+        // esto a true se guardan tambien en localStorage y sobreviven a
+        // cerrar el navegador (si no, se pierden al recargar).
+        geolocalRecordar: false,
         // v5.14.7: checkbox del chat IA. false = solo vigiladas (default,
         // mas enfocado), true = toda la flota que reporta en la plataforma.
         chatTodaFlota: false,

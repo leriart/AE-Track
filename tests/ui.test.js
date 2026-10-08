@@ -577,8 +577,42 @@ ok('estado vivo en vivo para la UI', /geoAlertaVivo: \{\}/.test(src));
 ok('paintGeocercas repinta la alerta', /function paintGeocercas\(\) \{\s*paintGeoAlertas\(\);/.test(src));
 ok('bindings delegan los eventos de la alerta', /bindGeoAlerta\(\);/.test(src));
 ok('manual lista la alerta de geocercas', /Alerta de geocercas \|/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+// v6.13: geocercas creadas en Rondo (fuera de la plataforma).
+ok('fragmento con el nucleo de las geocercas de la app', src.includes('/* ====================== GEOCERCAS DE LA APP: NUCLEO'));
+ok('fragmento con el mapa de dibujo', src.includes('/* ====================== GEOCERCAS DE LA APP: MAPA'));
+ok('fragmento con la UI de las geocercas de la app', src.includes('/* ====================== GEOCERCAS DE LA APP: UI'));
+ok('boton "Nueva" geocerca en la barra', /id="rondo-geo-nueva"/.test(src));
+ok('el boton abre el editor con mapa', /geoNueva\.addEventListener\('click', \(\) => abrirGeocercaApp\(\)\)/.test(src));
+ok('la tarjeta de la app tiene boton de editar', /class="mini rondo-geo-edit"/.test(src));
+ok('la tarjeta de la app se marca con APP', /class="rondo-geo-app"/.test(src) && /\.rondo-geo-card \.rondo-geo-app\{/.test(src));
+ok('filtro por origen de la geocerca', /<option value="app">De la app<\/option>/.test(src) &&
+    /rol === 'app'\) lista = lista\.filter\(\(x\) => glocEsApp\(x\.z\)\)/.test(src));
+ok('modal con mapa y paneles', /\{ id: 'rondo-geocerca-modal' \}/.test(src) &&
+    /id="rondo-gg-mapa"/.test(src) && /class="gg-lados"/.test(src));
+ok('el mapa usa los tiles de OpenStreetMap', /rxMiniMapa\(cont, \{ lineas: \[\], marcas: \[\] \}\)/.test(src));
+ok('capas propias para dibujar encima del mapa', /rondo-gg-capa/.test(src) && /rondo-gg-ctx/.test(src));
+ok('inversa del mapa (px -> lat/lon)', /function glocPxALatLon\(/.test(src) &&
+    /Math\.atan\(Math\.sinh\(Math\.PI \* \(1 - 2 \* \(oy \/ n\)\)\)\)/.test(src));
+ok('modos de dibujo: marco, circulo y linea', /data-v="poligono"/.test(src) && /data-v="circulo"/.test(src) && /data-v="linea"/.test(src));
+ok('entrada de coordenadas en el editor', /id="gg-lat"/.test(src) && /id="gg-lon"/.test(src));
+ok('exportar e importar', /id="gg-exporta"/.test(src) && /id="gg-importa"/.test(src) && /id="gg-file"/.test(src));
+ok('recordar en este navegador', /id="gg-recordar"/.test(src) && /geolocalRecordar/.test(src));
+ok('las geocercas de la app se guardan en la sesion',
+    /geolocal: 'rondo\.api\.s\.geolocal'/.test(src) && /geolocal: 'rondo\.api\.geolocal'/.test(src) &&
+    /readArray\(SS\.geolocal, \[\]\)/.test(src));
+ok('se fusionan con APP.zonas reasignando (indice espacial)', /APP\.zonas = nativas\.concat\(validas\)/.test(src) &&
+    /APP\.zonasIndex = null/.test(src));
+ok('no se pierden al recargar las de la plataforma', /glocSincroniza\(\);[\s\S]{0,40}paintGeocercas\(\)/.test(src));
+ok('refresh fusiona tras cargar la plataforma', /glocSincroniza\(\); \/\/ no/i.test(src) || /try \{ glocSincroniza\(\); \}/.test(src));
+ok('Escape cierra el editor de geocercas', /glocM\.classList\.contains\('abierto'\)\) \{ cerrarGeocercaApp\(\); return; \}/.test(src));
+ok('esUIPropia incluye el modal nuevo', /#rondo-geocerca-modal/.test(src));
+ok('el GeoJSON de geocercas marca el origen', /origen: glocEsApp\(z\) \? 'rondo-app' : 'plataforma'/.test(src));
+ok('la lista muestra nombre y tamano de cada geocerca', /function glocListaHTML\(\)/.test(src) &&
+    /glocTextoTam\(z\)/.test(src));
+ok('RONDO_DOC menciona las geocercas de la app', /Geocercas de la app/.test(src));
+ok('manual lista las geocercas de la app', /Geocercas de la app/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 ok('RONDO_DOC menciona la alerta por geocerca', /Alerta de geocercas \(por geocerca/.test(src) &&
-    /cada geocerca tiene su propia alerta/.test(src));
+    /Cada geocerca tiene ademas su propia alerta/.test(src));
 
 // v5.14.6: fix de los dos botones Cerrar + nueva tab Chat IA.
 ok('abrirDialogo auto-hide cancel si mismo texto que OK', /cancelText !== okText/.test(src));
@@ -656,7 +690,9 @@ ok('limpiarChat usa renderChatLog', /limpiarChat[\s\S]{0,300}renderChatLog\(\)/.
 
 // v5.14.8: manual como contexto de la IA + contexto de flota enriquecido.
 ok('RONDO_DOC existe como String.raw', /const RONDO_DOC = String\.raw/.test(src));
-ok('RONDO_DOC describe el panel y las tabs', /RONDO_DOC[\s\S]{0,4000}Dashboard[\s\S]{0,2000}Unidades[\s\S]{0,2000}Chat IA/.test(src));
+// La ventana es amplia a proposito: la guia crece con cada feature nueva y
+// el objetivo es que no se rompa porañadir un bullet.
+ok('RONDO_DOC describe el panel y las tabs', /RONDO_DOC[\s\S]{0,4000}Dashboard[\s\S]{0,2600}Unidades[\s\S]{0,2600}Chat IA/.test(src));
 ok('RONDO_DOC lista reglas', /Sin senal \(5 min\)[\s\S]{0,2000}Detenida en geocerca/.test(src));
 ok('RONDO_DOC lista ajustes', /AJUSTES \(engranaje[\s\S]{0,2000}IA: habilitar/.test(src));
 // El rango de atajos debe coincidir con las pestañas reales (43-teclas.js),

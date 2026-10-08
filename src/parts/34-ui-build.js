@@ -355,7 +355,9 @@
             '<option value="base">Base</option>' +
             '<option value="carga">Carga</option>' +
             '<option value="ocupadas">Con unidades</option>' +
+            '<option value="app">De la app</option>' +
             '</select>' +
+            '<button class="mini" id="rondo-geo-nueva" title="Dibujar una geocerca nueva en Rondo (fuera de la plataforma)"><span class="rondo-usym">' + UIS.zone + '</span> Nueva</button>' +
             '<button class="mini" id="rondo-geo-csv" title="Descargar CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
             '<button class="mini" id="rondo-geo-geo" title="Descargar GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
             '</div>' +

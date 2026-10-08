@@ -98,7 +98,12 @@
         geoAlertaVivo: {},
         // Episodios (histeresis) de las unidades NO vigiladas cuando el
         // alcance es "toda la flota"; las vigiladas van en APP.memo.
-        memoGeoAlerta: readSessionObject(SS.geoAlerta, {}, null)
+        memoGeoAlerta: readSessionObject(SS.geoAlerta, {}, null),
+        // v6.13: geocercas creadas en Rondo (fuera de la plataforma). Se
+        // leen del storage pero NO se meten en APP.zonas todavia: se fusionan
+        // al terminar de cargar las de la plataforma, para que el refresco
+        // siga pudiendo consultar la API si APP.zonas esta vacia.
+        zonasLocales: readArray(SS.geolocal, [])
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);

@@ -149,12 +149,15 @@ En la parte superior del panel:
   carga), buscador, orden (nombre/unidades/area), filtro por rol, area y centro
   por zona, boton **Recargar** y exportacion a **CSV / GeoJSON**; desde cada
   tarjeta puedes **usar la geocerca como parada** de una unidad o copiar su
-  nombre y centro. Debajo de los KPIs esta la franja **Alerta de
-  geocercas**: cada geocerca se vigila por separado desde la **campana** de
+  nombre y centro. El boton **Nueva** abre un editor con mapa para **dibujar
+  una geocerca dentro de Rondo** (no esta en la plataforma, se marca APP y se
+  guarda en la sesion; se puede importar/exportar). Debajo de los KPIs esta la
+  franja **Alerta de geocercas**: cada geocerca se vigila por separado desde la **campana** de
   su tarjeta (a quien, gravedad y si dispara al pasar, al detenerse o al
   detenerse con el motor apagado), con su barra lateral, su pastilla de
   disparador y una pastilla de resumen con acciones en cascada. Ver
-  [Alerta de geocercas](#alerta-de-geocercas). El lado de **Riesgo**
+  [Alerta de geocercas](#alerta-de-geocercas) y las dibujadas en Rondo en
+  [Geocercas de la app](#geocercas-de-la-app). El lado de **Riesgo**
   mantiene la dona con la distribucion
   por nivel, el histograma de scores, KPIs clicables Total/Alto/Medio/Bajo,
   busqueda libre, chips de nivel, 6 criterios de orden, vista agrupada o plana,
@@ -409,6 +412,56 @@ La unidad <eco> se encuentra detenida en la geocerca <nombre> · hace N min
 
 Se rearma cuando la unidad se mueve o sale de la geocerca. Ajusta el
 minimo en Ajustes > Reglas > "Min detenido para alertar (min)".
+
+### Geocercas de la app
+
+Geocercas que **no estan en la plataforma**: las dibujas tu en Rondo sobre un
+mapa de OpenStreetMap, con coordenadas escritas o a mano. Funcionan como las
+de la plataforma (cuentan en los KPIs, se pueden usar como parada, admiten su
+propia alerta, salen en el informe y la IA las ve), pero se guardan en **esta
+pestana** y se distinguen con la etiqueta **APP** en la tarjeta.
+
+Para abrir el editor: boton **Nueva** en la barra de geocercas (o el lapiz de
+una tarjeta marcada APP para editarla).
+
+#### Como se dibuja
+
+- **Marco** (poligono): clic en cada esquina; doble clic (o **Cerrar figura**)
+  para cerrarlo. Minimo 3 puntos.
+- **Círculo**: un clic pone el centro y otro el radio (tambien puedes escribir
+  el radio en metros). Al mover el raton se ve el circulo en vivo.
+- **Línea** (corredor): clic en cada punto del trazo, doble clic para
+  terminar. El ancho en metros se escribe a mano.
+
+En los tres modos el mapa se mueve arrastrando y se acerca con la rueda. Se
+puede **escribir el centro** (lat, lon) y pulsar **Ir** para saltar ahi, lo
+que es practico si copias las coordenadas de un WhatsApp o de otro sistema.
+
+El panel lateral indica en todo momento cuantos puntos lleva la figura, su
+superficie y su perimetro. **Guardar geocerca** pide el nombre (si choca con
+otra geocerca le anade "2"), lo deja creado y lo pinta en el mapa y en la
+tarjeta.
+
+#### Donde se guardan
+
+Por defecto solo en la **sesion** de esa pestana: al recargar se pierden. Marca
+**Recordar en este navegador** para que se guarden tambien en el navegador y
+sobrevivan a cerrarlo (en Ajustes > General se ve el interruptor y en el
+editor se puede cambiar en cualquier momento).
+
+#### Importar y exportar
+
+- **Exportar**: descarga un `.json` de Rondo (formato propio, con los puntos)
+  o un **GeoJSON** abrible en cualquier visor de mapas.
+- **Copiar**: pone el mismo JSON en el portapapeles para pegarlo en un chat.
+- **Importar**: acepta el JSON de Rondo, un GeoJSON (`Polygon`, `MultiPolygon`,
+  `LineString`, `Point` con radio en `radio_m`) o un array de geocercas.
+  Los nombres que ya existan se renombran solos y cada importacion genera ids
+  nuevos, asi que **importar dos veces el mismo archivo no pisa nada**.
+
+Las geocercas tambien entran con los botones **CSV** y **GeoJSON** de la
+pestana (ahi salen mezcladas con las de la plataforma, con el campo
+`origen` para distinguirlas).
 
 ### Alerta de geocercas
 

@@ -158,7 +158,7 @@
             const geom = zonaGeometry(z);
             return {
                 type: 'Feature',
-                properties: { nombre: z.n || ('Zona ' + z.id), rol: zonaRol(z), area_km2: +(zonaAreaM2(z) / 1e6).toFixed(3), unidades: ecos },
+                properties: { nombre: z.n || ('Zona ' + z.id), rol: zonaRol(z), area_km2: +(zonaAreaM2(z) / 1e6).toFixed(3), unidades: ecos, origen: glocEsApp(z) ? 'rondo-app' : 'plataforma' },
                 geometry: geom || { type: 'Point', coordinates: [0, 0] }
             };
         });
@@ -249,6 +249,7 @@
         });
         if (rol === 'base' || rol === 'carga') lista = lista.filter((x) => x.rol === rol);
         else if (rol === 'ocupadas') lista = lista.filter((x) => x.ecos.length);
+        else if (rol === 'app') lista = lista.filter((x) => glocEsApp(x.z));
         if (f) {
             lista = lista.filter((x) => ((x.z.n || '').toLowerCase().indexOf(f) >= 0) || x.ecos.some((e) => (e || '').toLowerCase().indexOf(f) >= 0));
         }
@@ -261,16 +262,21 @@
         const cards = lista.map((x) => {
             const z = x.z;
             const rolTxt = x.rol === 'base' ? 'Base' : (x.rol === 'carga' ? 'Carga' : 'Normal');
-            const areaTxt = x.area ? fmtArea(x.area / 1e6) : '';
+            // v6.13: para circulos el area no viene de zonaAreaM2; se usa la
+            // de la propia geocerca (pi*r2) para que el dato sea correcto.
+            const areaTxt = (z.t === 3) ? glocTextoTam(z) : (x.area ? fmtArea(x.area / 1e6) : '');
             // v6.12: la campana abre el menu de alerta DE ESTA geocerca
             // (alcance, gravedad, disparador y tiempos). El badge muestra su
             // gravedad y disparador cuando esta vigilada.
             const nomZ = z.n || ('Zona ' + z.id);
             const gac = geoAlertaCfgZona(nomZ);
-            return '<div class="rondo-geo-card' + (x.ecos.length ? ' ocupada' : '') + (gac ? ' alerta-sel sev-' + gac.severidad : '') + ' rol-' + x.rol + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
+            const esApp = glocEsApp(z);
+            return '<div class="rondo-geo-card' + (x.ecos.length ? ' ocupada' : '') + (gac ? ' alerta-sel sev-' + gac.severidad : '') + ' rol-' + x.rol + (esApp ? ' de-la-app' : '') + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
                 '<span class="rondo-geo-dot"></span>' +
                 '<div class="rondo-geo-body">' +
-                '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) + '</b>' +
+                '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) +
+                (esApp ? '<span class="rondo-geo-app" title="Geocerca creada en Rondo (no esta en la plataforma)">APP</span>' : '') +
+                '</b>' +
                 '<span class="rondo-geo-inside">' +
                 (x.ecos.length
                     ? esc(x.ecos.slice(0, 8).join(' \u00b7 ')) + (x.ecos.length > 8 ? ' +' + (x.ecos.length - 8) : '')
@@ -281,6 +287,7 @@
                 (gac ? '<span class="rondo-geo-gabadge sev-' + gac.severidad + '" title="' + esc(geoAlertaEtiqueta(nomZ, gac).sub) + '">' +
                     '<i></i>' + esc(GEO_ALERTA_ETIQUETAS[gac.disparo] || '') + '</span>' : '') +
                 '<span class="rondo-geo-acc">' +
+                (esApp ? '<button class="mini rondo-geo-edit" data-zona="' + esc(nomZ) + '" title="Editar en el mapa de Rondo"><span class="rondo-usym">' + UIS.watch + '</span></button>' : '') +
                 '<button class="mini rondo-geo-ga' + (gac ? ' on sev-' + gac.severidad : '') + '" data-zona="' + esc(nomZ) + '" title="' + (gac ? 'Ajustar la alerta de esta geocerca' : 'Vigilar esta geocerca') + '"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
                 '<button class="mini rondo-geo-usar" data-zona="' + esc(z.n || '') + '" title="Anadir como parada a una unidad"><span class="rondo-usym">' + UIS.route + '</span></button>' +
                 '<button class="mini rondo-geo-copy" data-zona="' + esc(z.n || '') + '" title="Copiar nombre y centro"><span class="rondo-usym">' + UIS.copy + '</span></button>' +
@@ -307,6 +314,9 @@
         try {
             APP.config.loadZones = true;
             APP.zonas = await fetchZones();
+            // v6.13: Recargar solo repone las de la plataforma; las dibujadas
+            // en Rondo se vuelven a fusionar (glocSincroniza las separa).
+            glocSincroniza();
             paintGeocercas();
             if (APP.tab === 'zonas') paintRiesgo();
             if (APP.zonas.length) adviceOk('Geocercas recargadas', APP.zonas.length + ' geocercas');

@@ -21,7 +21,10 @@
         riesgo: 'rondo.api.riesgo',
         // v5.15: municipios de OpenStreetMap (poligonos/bbox) para la
         // tolerancia de desvio y como parada tipo "municipio".
-        municipios: 'rondo.api.municipios'
+        municipios: 'rondo.api.municipios',
+        // v6.13: copia persistente de las geocercas creadas en Rondo. Solo
+        // se escribe si el operador marca "Recordar en este navegador".
+        geolocal: 'rondo.api.geolocal'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
@@ -48,6 +51,8 @@
         // v6.12: estado de la alerta de geocercas de las unidades que NO son
         // vigiladas (flota completa). Las vigiladas lo llevan en su memo
         // normal, dentro de R.geoAlerta.
-        geoAlerta: 'rondo.api.s.geoalerta'
+        geoAlerta: 'rondo.api.s.geoalerta',
+        // v6.13: geocercas dibujadas en Rondo (fuera de la plataforma).
+        geolocal: 'rondo.api.s.geolocal'
     });
 

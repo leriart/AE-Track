@@ -176,6 +176,9 @@
         // ── Geocercas de la plataforma (pestana Zonas) ────────────────
         const geoRec = byId('rondo-geo-recargar');
         if (geoRec) geoRec.addEventListener('click', () => recargarGeocercas());
+        // v6.13: editor de geocercas de Rondo (mapa propio, dibujo a mano).
+        const geoNueva = byId('rondo-geo-nueva');
+        if (geoNueva) geoNueva.addEventListener('click', () => abrirGeocercaApp());
         const geoCfg = byId('rondo-geo-configurar');
         if (geoCfg) geoCfg.addEventListener('click', () => abrirAjustes());
         // v5.15: filtros, orden y acciones de las geocercas.
@@ -201,6 +204,8 @@
             // La campana abre el menu de alerta de ESA geocerca (alcance,
             // gravedad, disparador y tiempos).
             if (b.classList.contains('rondo-geo-ga')) { abrirGeoAlerta(nombre); return; }
+            // v6.13: editar en el mapa la geocerca creada en Rondo.
+            if (b.classList.contains('rondo-geo-edit')) { abrirGeocercaApp(nombre); return; }
             const z = (APP.zonas || []).find((x) => (x.n || '') === nombre);
             if (!z) return;
             if (b.classList.contains('rondo-geo-usar')) elegirUnidadParaGeocerca(z);

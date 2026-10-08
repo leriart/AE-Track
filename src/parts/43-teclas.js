@@ -80,6 +80,8 @@
                 if (ctxEl && ctxEl.style.display === 'flex') { hideMenu(); return; }
                 const planM = byId('rondo-plan-modal');
                 if (planM && planM.classList.contains('abierto')) { cerrarEditorParadas(); return; }
+                const glocM = byId('rondo-geocerca-modal');
+                if (glocM && glocM.classList.contains('abierto')) { cerrarGeocercaApp(); return; }
                 const ventanas = [modalEl, cfgWinEl, ayudaEl];
                 for (let i = ventanas.length - 1; i >= 0; i--) {
                     const w = ventanas[i];

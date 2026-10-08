@@ -1307,7 +1307,63 @@
             "#rondo-dialog .rondo-ga-dht span{font-size:calc(10px * var(--rondo-esc))}\n" +
             "#rondo-dialog .rondo-ga-dlb,#rondo-dialog .rondo-ga-dnum,#rondo-dialog .rondo-ga-dprev > b{font-size:calc(9.5px * var(--rondo-esc))}\n" +
             "#rondo-dialog .rondo-ga-chip,#rondo-dialog .rondo-ga-dhint,#rondo-dialog .rondo-ga-dpv .pv-t{font-size:calc(10.5px * var(--rondo-esc))}\n" +
-            "#rondo-dialog .rondo-ga-dpv .pv-d,#rondo-dialog .rondo-ga-sw{font-size:calc(10px * var(--rondo-esc))}\n";
+            "#rondo-dialog .rondo-ga-dpv .pv-d,#rondo-dialog .rondo-ga-sw{font-size:calc(10px * var(--rondo-esc))}\n" +
+            // ── v6.13: geocercas de la app (mapa de dibujo + paneles) ─────
+            "#rondo-geocerca-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px}\n" +
+            "#rondo-geocerca-modal.abierto{display:flex}\n" +
+            "#rondo-geocerca-modal .gg-card{position:relative;width:min(1180px,97vw);height:min(94vh,760px);display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:12px;box-shadow:0 24px 70px rgba(0,0,0,.55);overflow:hidden;font:400 13px var(--rondo-font);min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-head{display:flex;align-items:center;gap:8px;padding:10px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700;flex:0 0 auto;flex-wrap:wrap}\n" +
+            "#rondo-geocerca-modal .gg-head .rondo-usym{color:var(--rondo-accent-2);font-size:17px}\n" +
+            "#rondo-geocerca-modal .gg-headsub{font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);font-weight:500}\n" +
+            "#rondo-geocerca-modal .gg-x{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;width:24px;height:24px;cursor:pointer;color:var(--rondo-fg-dim);display:inline-flex;align-items:center;justify-content:center}\n" +
+            "#rondo-geocerca-modal .gg-x:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-geocerca-modal .gg-cuerpo{flex:1;min-height:0;display:flex;gap:10px;padding:10px 13px}\n" +
+            // Mapa: las dos capas SVG van por encima de los tiles.
+            "#rondo-geocerca-modal .rondo-gg-mapa{position:relative;flex:1;min-width:0;overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:10px;touch-action:none}\n" +
+            "#rondo-geocerca-modal .rondo-gg-mapa .rondo-mm{cursor:crosshair;border:0;border-radius:0}\n" +
+            "#rondo-geocerca-modal .rondo-gg-ctx,#rondo-geocerca-modal .rondo-gg-capa{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}\n" +
+            "#rondo-geocerca-modal .rondo-gg-ctx{z-index:2}\n" +
+            "#rondo-geocerca-modal .rondo-gg-capa{z-index:3}\n" +
+            "#rondo-geocerca-modal .rondo-gg-atrib{position:absolute;right:4px;bottom:3px;font-size:9px;color:#222;background:rgba(255,255,255,.72);padding:0 3px;border-radius:3px;pointer-events:none;z-index:4}\n" +
+            "#rondo-geocerca-modal .gg-lados{flex:0 0 288px;min-width:0;display:flex;flex-direction:column;gap:9px;overflow-y:auto}\n" +
+            "#rondo-geocerca-modal .gg-lado{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:9px 10px;display:flex;flex-direction:column;gap:7px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lado h4{margin:0;font:700 10px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);display:flex;align-items:center;gap:6px}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .gg-count{font:700 9px var(--rondo-font);background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:0 6px;color:var(--rondo-fg-dim)}\n" +
+            "#rondo-geocerca-modal .gg-lab{display:flex;flex-direction:column;gap:3px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute);min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lab input{width:100%;padding:4px 7px;font:500 12px var(--rondo-font);text-transform:none;letter-spacing:0}\n" +
+            "#rondo-geocerca-modal .gg-two{display:flex;gap:5px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-two input{flex:1;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-two .mini{flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-modos{display:flex;gap:4px;flex-wrap:wrap}\n" +
+            "#rondo-geocerca-modal .gg-chip{flex:1;min-width:74px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:4px 8px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font)}\n" +
+            "#rondo-geocerca-modal .gg-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-geocerca-modal .gg-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-res{margin:0;font:600 10.5px var(--rondo-font);color:var(--rondo-accent-2);min-height:14px}\n" +
+            "#rondo-geocerca-modal .gg-pista{margin:0;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            "#rondo-geocerca-modal .gg-acciones{display:flex;gap:5px;flex-wrap:wrap}\n" +
+            "#rondo-geocerca-modal .gg-lista{display:flex;flex-direction:column;gap:4px;max-height:210px;overflow-y:auto}\n" +
+            "#rondo-geocerca-modal .gg-item{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:8px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-ptag{flex:0 0 auto;width:8px;height:8px;border-radius:50%;background:var(--rondo-accent-2);opacity:.75}\n" +
+            "#rondo-geocerca-modal .gg-in{flex:1;min-width:0;display:flex;flex-direction:column}\n" +
+            "#rondo-geocerca-modal .gg-in b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-in span{font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-in .gg-alerta{font-style:normal;color:var(--rondo-warn-fg);font-weight:700}\n" +
+            "#rondo-geocerca-modal .gg-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-acc .mini{padding:3px 5px}\n" +
+            "#rondo-geocerca-modal .gg-io{display:flex;gap:4px;flex-wrap:wrap}\n" +
+            "#rondo-geocerca-modal .gg-io .mini{flex:1;min-width:70px;justify-content:center}\n" +
+            "#rondo-geocerca-modal .gg-check{display:flex;align-items:center;gap:6px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-dim);cursor:pointer}\n" +
+            "#rondo-geocerca-modal .gg-check input{margin:0}\n" +
+            "#rondo-geocerca-modal .gg-vacio{padding:10px 4px;text-align:center;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.5}\n" +
+            "#rondo-geocerca-modal .gg-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:9px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft);flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-foot .gg-pie{flex:1;min-width:180px;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-geocerca-modal .gg-foot button{padding:6px 13px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:5px}\n" +
+            "#rondo-geocerca-modal .gg-foot button.primary{background:var(--rondo-accent);color:#fff;border-color:transparent}\n" +
+            // Pantallas estrechas: el mapa arriba y los paneles debajo.
+            "@media (max-width:880px){#rondo-geocerca-modal{padding:8px}#rondo-geocerca-modal .gg-cuerpo{flex-direction:column}#rondo-geocerca-modal .rondo-gg-mapa{flex:0 0 42vh}#rondo-geocerca-modal .gg-lados{flex:1;flex-basis:auto}}\n" +
+            // Tarjeta de geocerca de la app: distintivo violeta/acento.
+            "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:#fff}\n" +
+            "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";
 
         const style = makeEl('style');
         style.textContent = css;
