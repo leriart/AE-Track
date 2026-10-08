@@ -524,6 +524,7 @@ Sale en **PDF**, **CSV** o **Markdown**.
 | Rango de dias | Dos fechas (desde – hasta), ambas incluidas |
 | Unidades | **Toda la flota** (todas las que Rondo rastrea) o **solo las seleccionadas** (la lista vigilada) |
 | Datos | De donde salen los eventos (ver abajo) |
+| **Generar reporte** | Los cambios de opciones **no recargan solos**: el informe se calcula al pulsar el boton (y se recalcula solo al abrir, salvo con la fuente *Plataforma*) |
 
 El **rango de dias** escrito a mano manda sobre los atajos: si eliges un
 periodo corto se borra el rango, y si inviertes las fechas (desde posterior a
@@ -540,7 +541,9 @@ y **Markdown**.
 
 Para que sea agil con muchas geocercas, el informe solo comprueba la
 geocerca elegida en cada punto (y usa el indice espacial de Rondo cuando
-pides *Todas*), en vez de recorrer toda la lista punto por punto.
+pides *Todas*), en vez de recorrer toda la lista punto por punto. El
+historial de la plataforma se pide en paralelo y solo cuando pulsas
+**Generar reporte**.
 
 Sobre el alcance de los datos: la fuente **Rastreo** trabaja con la traza de
 la sesion (un punto cada vez que la unidad avanza 20 m, con un maximo por
@@ -557,7 +560,7 @@ o solo **las seleccionadas** (la lista vigilada).
 
 | Fuente | Que trae | Cuando hay datos |
 | --- | --- | --- |
-| **Plataforma** (por defecto al elegir geocerca) | Consulta el **historial de toda la flota** en la plataforma (una peticion por unidad, el mismo endpoint que Reproducir recorrido) y saca quien entro, quien salio y quien se paro dentro, aunque no estuviera vigilada ni hubiera avisado. La barra muestra el avance unidad por unidad | Siempre que la flota reporte en el rango elegido |
+| **Plataforma** (por defecto al elegir geocerca) | Consulta el **historial de toda la flota** en la plataforma (el mismo endpoint que Reproducir recorrido) y saca quien entro, quien salio y quien se paro dentro, aunque no estuviera vigilada ni hubiera avisado. Las peticiones van **en paralelo** (6 a la vez), priorizando las unidades vigiladas y las que reportaron mas reciente, y la barra muestra el avance y cuantos eventos van saliendo | Siempre que la flota reporte en el rango elegido |
 | **Rastreo** | Recorre la traza que Rondo ya guarda de cada unidad y saca **todas** las entradas, salidas y paradas dentro de la geocerca, haya avisado o no. Ademas lista quien esta **dentro ahora** | En cuanto hay unidades rastreando (traza activa), sin depender de reglas |
 | **Avisos** | Entradas y salidas (regla *Geocercas*), paradas dentro (regla *Detenida en geocerca*) y las de tu alerta de geocercas, con **hora exacta** | Siempre que haya avisos con geocerca en esta sesion |
 | **Viajes analizados** | Paradas con duracion y cruces deducidos de la traza | Tras analizar el viaje de esa unidad |

@@ -1498,6 +1498,15 @@
             "#rondo-dialog .rgi-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 9px;border-radius:8px;background:var(--rondo-warn-bg);border:1px solid rgba(249,168,37,.35);font:500 10.5px var(--rondo-font);color:var(--rondo-warn-fg)}\n" +
             "#rondo-dialog .rgi-aviso .mini{margin-left:auto;padding:4px 10px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg);font:600 10.5px var(--rondo-font)}\n" +
             "#rondo-dialog .rgi-aviso .mini:hover{border-color:var(--rondo-fg-mute)}\n" +
+            // Boton "Generar reporte": la carga es a peticion, no en cada cambio.
+            "#rondo-dialog .rgi-generar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:8px 10px;border-radius:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen{flex:0 0 auto;flex-direction:row;align-items:center;gap:7px;padding:7px 13px;background:var(--rondo-bg-strong);border-color:var(--rondo-border)}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen b{font-size:12.5px}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen i{display:none}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen.pulsa{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 2px 12px rgba(var(--rondo-accent-rgb),.42);animation:rgiPulsa 1.6s var(--rondo-easing) infinite}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen.pulsa .rondo-usym{color:#fff}\n" +
+            "@keyframes rgiPulsa{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}\n" +
+            "#rondo-dialog .rgi-gen-hint{flex:1;min-width:0;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
             // Barra de acciones de descarga.
             "#rondo-dialog .rgi-io{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px}\n" +
             "#rondo-dialog .rgi-btn{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:7px 10px;border-radius:9px;border:1px solid var(--rondo-border);background:var(--rondo-bg-soft);color:var(--rondo-fg);cursor:pointer;text-align:left;min-width:0;transition:all .15s var(--rondo-easing)}\n" +

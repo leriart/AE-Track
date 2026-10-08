@@ -19,6 +19,10 @@ const RX_GEO_FUENTES = Object.freeze(['historial', 'rastreo', 'bitacora', 'viaje
 // informe no tarde una eternidad.
 const RX_GEO_HIST_MAX_U = 150;
 const RX_GEO_HIST_MSGS = 3000;
+// Peticiones simultaneas al escanear el historial. En serie, 150 unidades
+// tardan una eternidad; con un pool de 6 va varias veces mas rapido sin
+// castigar al servidor de la plataforma.
+const RX_GEO_HIST_CONC = 6;
 // Minutos quieto para que una parada de la traza cuente. Es menor que el
 // umbral del Replay porque aqui la traza se toma en vivo, con puntos cada
 // pocos segundos: esperar 15 min seria exigir demasiado.
@@ -293,6 +297,9 @@ function rxGeoInfCeldasPlanas(c, modo) {
 const RX_GEO = {
     fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '',
     desde: '', hasta: '', busca: '',
+    // Resultados: se calculan al pulsar "Generar reporte" (y al abrir, si la
+    // fuente no consulta la plataforma). Cualquier cambio los deja pendientes.
+    listo: false,
     // 'todas' (toda la flota con traza) o 'sel' (solo la lista vigilada).
     unidades: 'todas'
 };
@@ -551,28 +558,47 @@ async function rxGeoInfEscanear(onProg, token) {
         if (!info || u.id == null) continue;
         const clave = info.eco || info.placa || String(info.id);
         if (RX_GEO.unidades === 'sel' && !(sel && (sel.has(clave) || sel.has(info.eco)))) continue;
-        lista.push({ u: u, info: info, clave: clave });
+        lista.push({ u: u, info: info, clave: clave, t: (() => { try { return unitState(u).t || 0; } catch (_) { return 0; } })() });
         if (lista.length >= RX_GEO_HIST_MAX_U) break;
     }
+    // Ordena por interes: las de la lista vigilada primero y, dentro de
+    // cada grupo, las que reportaron mas reciente. Asi los resultados
+    // utiles salen en los primeros segundos aunque el barrido siga.
+    lista.sort((a, b) => {
+        const wa = (sel && sel.has(a.clave)) ? 0 : 1;
+        const wb = (sel && sel.has(b.clave)) ? 0 : 1;
+        if (wa !== wb) return wa - wb;
+        return (b.t || 0) - (a.t || 0);
+    });
     const encontrados = [];
-    let hechas = 0;
     const total = lista.length;
-    for (const it of lista) {
-        if (token && token.cancelado) return { eventos: [], truncado: false, unidades: 0, cancelado: true };
-        hechas++;
-        if (onProg) onProg(hechas, total, it.info.eco || it.clave);
-        try {
-            const r = await remoteCall('messages/load_interval', {
-                itemId: it.u.id, timeFrom: rango.desde, timeTo: rango.hasta,
-                flags: 1, flagsMask: 1, loadCount: RX_GEO_HIST_MSGS
-            });
-            const evs = rxGeoInfDeMensajes((r && r.messages) || [], it.info.eco || it.clave, 'historial');
-            for (const e of evs) encontrados.push(e);
-        } catch (_) { /* unidad sin historial o sin permiso: se salta */ }
-        // Deja respirar a la interfaz cada pocas unidades para que la barra
-        // avance y el navegador no se congele.
-        if (hechas % 4 === 0) await rxGeoInfYield();
-    }
+    let hechas = 0, idx = 0;
+    // Pool de peticiones en paralelo: cada obrero toma la siguiente unidad
+    // libre hasta agotarlas. Es la diferencia entre minutos y segundos.
+    const obreros = Math.max(1, Math.min(RX_GEO_HIST_CONC, total || 1));
+    const obrero = async () => {
+        while (idx < total) {
+            if (token && token.cancelado) return;
+            const it = lista[idx++];
+            try {
+                const r = await remoteCall('messages/load_interval', {
+                    itemId: it.u.id, timeFrom: rango.desde, timeTo: rango.hasta,
+                    flags: 1, flagsMask: 1, loadCount: RX_GEO_HIST_MSGS
+                });
+                const evs = rxGeoInfDeMensajes((r && r.messages) || [], it.info.eco || it.clave, 'historial');
+                for (const e of evs) encontrados.push(e);
+            } catch (_) { /* unidad sin historial o sin permiso: se salta */ }
+            hechas++;
+            // La barra muestra el avance y cuantos eventos van saliendo.
+            if (onProg) onProg(hechas, total, it.info.eco || it.clave, encontrados.length);
+            // Cede el hilo para que la interfaz y el mapa se refresquen.
+            await rxGeoInfYield();
+        }
+    };
+    const tareas = [];
+    for (let k = 0; k < obreros; k++) tareas.push(obrero());
+    await Promise.all(tareas);
+    if (token && token.cancelado) return { eventos: [], truncado: false, unidades: 0, cancelado: true };
     _rxGeoHist = {
         key: key, t: Date.now(), eventos: encontrados,
         truncado: lista.length >= RX_GEO_HIST_MAX_U, unidades: total
@@ -648,6 +674,11 @@ function rxGeoInfReune() {
         unidades: rxGeoInfAgrupa(ev, RX_GEO.modo),
         zonas: rxGeoInfPorZona(ev, zona ? null : rxGeoInfZonas())
     };
+}
+// Deja respirar a la interfaz entre pasos: sin esto la barra de progreso no
+// llegaria a pintarse.
+function rxGeoInfYield() {
+    return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } });
 }
 /* ====================== INFORME POR GEOCERCA: UI ====================== */
 // Opciones del selector de geocerca, con buscador. Devuelve tambien cuantas
@@ -858,11 +889,6 @@ function rxGeoInfPintaMapa(d) {
         if (APP.unlocked) console.warn('[Rondo] mapa informe', e && e.message);
     }
 }
-// Deja respirar a la interfaz entre pasos: sin esto la barra de progreso no
-// llegaria a pintarse.
-function rxGeoInfYield() {
-    return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } });
-}
 function rxGeoInfNombreArchivo(d, ext) {
     const geo = d.zona ? (d.zona.replace(/[^\w\-]+/g, '_').slice(0, 30) + '_') : '';
     return 'rondo_geocerca_' + geo + (d.modo === 'paradas' ? 'paradas_' : 'cruces_') +
@@ -899,7 +925,7 @@ function abrirInformeGeocerca(origen) {
     if (RX_GEO._token) RX_GEO._token.cancelado = true;
     RX_GEO._token = { cancelado: false };
     const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
-    const cuerpo = (d, fuentes, selZ) => {
+    const cuerpo = (d, fuentes, selZ, generarPend) => {
         const chip = (act, attr, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
             '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + esc(txt) + '</button>';
         const tot = d.unidades.total;
@@ -927,7 +953,16 @@ function abrirInformeGeocerca(origen) {
                 (dentro.length > 14 ? '<span class="rgi-dmore">+' + (dentro.length - 14) + '</span>' : '') + '</div>'
             : '';
         // Acciones de descarga, con PDF como accion principal.
-        const acciones = '<div class="rgi-io">' +
+        const acciones = '<div class="rgi-generar">' +
+            '<button type="button" class="rgi-btn gen' + (generarPend ? ' pulsa' : '') + '" id="rgi-generar">' +
+            '<span class="rondo-usym">' + (generarPend ? UIS.refresh : UIS.check) + '</span>' +
+            '<b>' + (generarPend ? 'Generar reporte' : 'Actualizar reporte') + '</b>' +
+            '<i>' + (generarPend ? 'pulsa para consultar y calcular' : 'vuelve a consultar los datos') + '</i></button>' +
+            '<span class="rgi-gen-hint">' + esc((RX_GEO.fuente === 'historial')
+                ? 'La fuente Plataforma consulta el historial de toda la flota: se lanza con el boton.'
+                : 'Los cambios de opciones no recargan solos: pulsa el boton para actualizar el informe.') + '</span>' +
+            '</div>' +
+            '<div class="rgi-io">' +
             '<button type="button" class="rgi-btn primary" id="rgi-pdf" title="Reporte imprimible (Guardar como PDF)">' +
             '<span class="rondo-usym">' + UIS.export + '</span><b>PDF</b><i>reporte listo para imprimir</i></button>' +
             '<button type="button" class="rgi-btn" id="rgi-csv" title="Detalle evento a evento">' +
@@ -1030,30 +1065,35 @@ function abrirInformeGeocerca(origen) {
             // Version del token para descartar resultados de un pintado viejo
             // (el operador puede cambiar de opcion varias veces seguidas).
             let pintaN = 0;
-            const pinta = async () => {
+            // Pintar los controles y (si toca) calcular. `generar` decide si
+            // hay que consultar la plataforma; cambiar opciones solo repinta
+            // y deja los resultados viejos marcados como pendientes.
+            const pinta = async (generar) => {
                 const mio = ++pintaN;
-                setProg(10, 'Reuniendo datos\u2026');
-                await rxGeoInfYield();
-                // El historial de la plataforma se escanea de verdad: una
-                // peticion por unidad, con la barra marcando el avance.
-                if (RX_GEO.fuente === 'historial') {
-                    try {
-                        await rxGeoInfEscanear((hechas, total, eco) => {
-                            setProg(10 + Math.round((hechas / Math.max(1, total)) * 75),
-                                'Consultando ' + hechas + '/' + total + (eco ? ' \u00b7 ' + eco : ''));
-                        }, RX_GEO._token);
-                    } catch (_) { /* noop */ }
-                    if (mio !== pintaN) return;
+                if (generar) {
+                    setProg(6, 'Reuniendo datos\u2026');
+                    await rxGeoInfYield();
+                    if (RX_GEO.fuente === 'historial') {
+                        RX_GEO._token = { cancelado: false };
+                        try {
+                            await rxGeoInfEscanear((hechas, total, eco, hallados) => {
+                                setProg(6 + Math.round((hechas / Math.max(1, total)) * 80),
+                                    'Consultando ' + hechas + '/' + total +
+                                    (eco ? ' \u00b7 ' + eco : '') +
+                                    (hallados ? ' \u00b7 ' + hallados + ' evento(s)' : ''));
+                            }, RX_GEO._token);
+                        } catch (_) { /* noop */ }
+                        if (mio !== pintaN) return;
+                    }
+                    RX_GEO.listo = true;
                 }
                 const d = rxGeoInfReune();
-                setProg(88, 'Agrupando ' + d.eventos.length + ' evento(s)\u2026');
+                setProg(92, 'Dibujando\u2026');
                 await rxGeoInfYield();
                 if (mio !== pintaN) return;
                 const selZ = rxGeoInfSelect();
                 const fuentes = rxGeoInfFuentesDisponibles();
-                setProg(94, 'Dibujando\u2026');
-                await rxGeoInfYield();
-                setHtml(box, cuerpo(d, fuentes, selZ));
+                setHtml(box, cuerpo(d, fuentes, selZ, !RX_GEO.listo));
                 rxGeoInfPintaMapa(d);
                 if (carga) carga.style.display = 'none';
             };
@@ -1069,7 +1109,10 @@ function abrirInformeGeocerca(origen) {
                     RX_GEO[b.dataset.rgi] = b.dataset.v;
                     if (b.dataset.rgi === 'fuente') RX_GEO._fuenteTocada = true;
                 }
-                pinta();
+                // Cambiar opciones NO recarga: los resultados quedan viejos
+                // y el boton "Generar reporte" pasa a estar resaltado.
+                RX_GEO.listo = false;
+                pinta(false);
             });
             box.addEventListener('input', (ev) => {
                 const t = ev.target;
@@ -1090,9 +1133,8 @@ function abrirInformeGeocerca(origen) {
                 if (t.id === 'rgi-zona') {
                     RX_GEO.zona = t.value || '';
                     _rxGeoZonaSel = { nombre: '\u0000', z: null };
-                    // Con el historial, al cambiar de geocerca hay que volver
-                    // a consultar (la cache es por geocerca + rango).
-                    pinta();
+                    RX_GEO.listo = false;
+                    pinta(false);
                     return;
                 }
                 if (t.id === 'rgi-desde' || t.id === 'rgi-hasta') {
@@ -1104,7 +1146,8 @@ function abrirInformeGeocerca(origen) {
                         RX_GEO.desde = RX_GEO.hasta;
                         RX_GEO.hasta = tmp;
                     }
-                    pinta();
+                    RX_GEO.listo = false;
+                    pinta(false);
                 }
             });
             // Las salidas se piden a la cache para no recalcular al vuelo.
@@ -1118,7 +1161,15 @@ function abrirInformeGeocerca(origen) {
             });
             salida('rgi-csv', () => rxGeoInfCSV(rxGeoInfReune()));
             salida('rgi-md', () => rxGeoInfMD(rxGeoInfReune()));
-            pinta();
+            const gen = el.querySelector('#rgi-generar');
+            if (gen) gen.addEventListener('click', () => {
+                RX_GEO._guardado = RX_GEO._guardado || {};
+                pinta(true);
+            });
+            // Al abrir se calcula solo si la fuente no consulta la plataforma
+            // (las fuentes locales son instantaneas). Con "Plataforma" se
+            // espera al boton para no barrer la flota sin querer.
+            pinta(RX_GEO.fuente !== 'historial');
         },
         onOk: () => { /* las salidas se eligen en la barra de acciones */ }
     });

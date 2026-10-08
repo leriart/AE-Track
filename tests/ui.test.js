@@ -686,7 +686,7 @@ ok('dialogo: cabecera con la geocerca, su ficha y su origen',
 ok('dialogo: mapa con la geocerca y las unidades', /id="rgi-mapa"/.test(src) &&
     /function rxGeoInfPintaMapa\(d\)/.test(src) && /rxMiniMapa\(cont, \{ lineas: lineas, marcas: marcas \}\)/.test(src));
 ok('dialogo: barra de progreso', /id="rgi-carga"/.test(src) && /id="rgi-barra"/.test(src) &&
-    /function rxGeoInfYield\(\)/.test(src) && /setProg\(10,/.test(src));
+    /function rxGeoInfYield\(\)/.test(src) && /setProg\(6,/.test(src));
 ok('dialogo: barra de acciones con PDF principal', /class="rgi-btn primary" id="rgi-pdf"/.test(src) &&
     /class="rgi-btn" id="rgi-csv"/.test(src) && /class="rgi-btn" id="rgi-md"/.test(src));
 ok('dialogo: un solo boton de cierre', /cancel: false,\s*\n\s*html: '<div class="rgi-tool">/.test(src));
@@ -743,7 +743,17 @@ ok('historial: deteccion sobre mensajes crudos (pura)',
 ok('historial: es la fuente por defecto con geocerca y flota',
     /RX_GEO\.zona && hay\.some\(\(h\) => h\.k === 'historial'\) && !RX_GEO\._fuenteTocada/.test(src));
 ok('historial: el dialogo lo escanea con la barra por unidad',
-    /if \(RX_GEO\.fuente === 'historial'\)/.test(src) && /Consultando ' \+ hechas/.test(src));
+    /if \(RX_GEO\.fuente === 'historial'\)/.test(src) && /'Consultando ' \+ hechas/.test(src));
+ok('dialogo: boton "Generar reporte" (no recarga en cada cambio)',
+    /id="rgi-generar"/.test(src) && /Generar reporte/.test(src) &&
+    /RX_GEO\.listo = false;\s*\n\s*pinta\(false\);/.test(src));
+ok('dialogo: al abrir no barre la flota (espera al boton con Plataforma)',
+    /pinta\(RX_GEO\.fuente !== 'historial'\)/.test(src));
+ok('historial: peticiones en paralelo con pool',
+    /const RX_GEO_HIST_CONC = 6/.test(src) && /const obrero = async \(\) =>/.test(src) &&
+    /await Promise\.all\(tareas\)/.test(src));
+ok('historial: prioriza vigiladas y reporte reciente',
+    /lista\.sort\(\(a, b\) => \{/.test(src) && /return \(b\.t \|\| 0\) - \(a\.t \|\| 0\)/.test(src));
 ok('dialogo: aviso para buscar en la plataforma si no hay eventos',
     /class="rgi-aviso"/.test(src) && /Buscar en la plataforma/.test(src));
 ok('informe: el PDF lista a los que estan dentro ahora',

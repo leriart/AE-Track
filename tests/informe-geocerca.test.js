@@ -19,6 +19,8 @@ if (ini < 0 || fin < 0) {
 }
 
 const AHORA = 1750000000000;   // ms fijo para que las fechas no|Gi
+const REAL_SETTIMEOUT = global.setTimeout;
+const setTimeout_ = (f, t) => REAL_SETTIMEOUT(f, t);
 const H = {
     historial: [],
     viajes: {},
@@ -65,7 +67,10 @@ const stubs = [
     ' const dx=(lon-b.cen_x)*mx, dy=(lat-b.cen_y)*my; return Math.sqrt(dx*dx+dy*dy)<=r; }',
     'function rxFechaHora(t){ return t ? new Date(t).toISOString().slice(0,16).replace("T"," ") : "-"; }',
     'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
-    'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1; return Promise.resolve({ messages: (H.msgsPorId||{})[p.itemId] || [] }); }',
+    'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1; var msgs = (H.msgsPorId||{})[p.itemId] || [];' +
+        ' if (!H.retardo) return Promise.resolve({ messages: msgs });' +
+        ' return new Promise(function(r){ setTimeout(function(){ r({ messages: msgs }); }, H.retardo); }); }',
+    'function setTimeout(f, t){ return setTimeout_(f, t); }',
     'function unitState(u){ const p=(u&&u.pos)||{}; return {lat:(p.y!=null)?+p.y:null,lon:(p.x!=null)?+p.x:null,vel:+p.s||0,online:true}; }'
 ].join('\n');
 
@@ -458,6 +463,24 @@ mod.rxGeoInfCacheReset();
         r3.eventos.every((e) => e.eco === '205') && H.peticiones === 1, 'peticiones=' + H.peticiones);
     mod.RX_GEO.unidades = 'todas';
     H.seleccion.clear();
+
+    // Paralelismo: con 12 unidades y 40 ms por peticion, en serie serian
+    // ~480 ms; con el pool de 6 debe quedar muy por debajo.
+    mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = ''; mod.RX_GEO.rango = 'hoy'; mod.RX_GEO.unidades = 'todas';
+    mod.RX_GEO.zona = '';
+    H.unidades = [];
+    H.msgsPorId = {};
+    for (let k = 1; k <= 12; k++) { H.unidades.push({ id: 100 + k, nm: String(400 + k), pos: { y: 0, x: 0 } }); H.msgsPorId[100 + k] = []; }
+    APP.unidades = H.unidades;
+    H.retardo = 40; H.peticiones = 0;
+    mod.RX_GEO._histForzar = true;
+    const t0 = Date.now();
+    await mod.rxGeoInfEscanear(() => {}, null);
+    const ms = Date.now() - t0;
+    ok('historial: escanea en paralelo (pool de peticiones)',
+        H.peticiones === 12 && ms < 260, 'peticiones=' + H.peticiones + ' ms=' + ms);
+    H.retardo = 0;
+
 
     // ── Celdas para las salidas ─────────────────────────────────────────────
 const cab = mod.rxGeoInfCabeceras('paradas');
