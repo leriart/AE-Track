@@ -1001,13 +1001,13 @@
         R.zonaPend = null;
         if (actual) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: actual,
                 titulo: 'ENTRO \u00b7 ' + etq,
                 detalle: 'entro a ' + actual + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
         } else if (previo) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: previo,
                 titulo: 'SALIO \u00b7 ' + etq,
                 detalle: 'salio de ' + previo + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
@@ -1036,7 +1036,7 @@
         if (R.geoDetenidoAlerta) return;
         R.geoDetenidoAlerta = true;
         pushAlert({
-            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco,
+            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco, zona: R.zona,
             titulo: 'DETENIDA EN GEOCERCA \u00b7 ' + etq,
             detalle: 'La unidad ' + etq + ' se encuentra detenida en la geocerca ' + R.zona +
                 ' \u00b7 hace ' + Math.round(m) + ' min',

@@ -367,7 +367,7 @@ function reglaGeoAlerta(u, info, st, R) {
             const c2 = Object.assign({}, cfg, { motorFuente: mot.fuente });
             const t = geoAlertaTextoEvento(res.evento, nom, etq, mins, c2);
             pushAlert({
-                regla: 'geoAlerta', sev: cfg.severidad, clave: clave, eco: info.eco,
+                regla: 'geoAlerta', sev: cfg.severidad, clave: clave, eco: info.eco, zona: nom,
                 icono: (GEO_ALERTA_DISPAROS[cfg.disparo] || GEO_ALERTA_DISPAROS.paso).icono,
                 titulo: t.titulo, detalle: t.detalle, hablar: t.hablar,
                 lat: st.lat, lon: st.lon

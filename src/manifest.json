@@ -215,6 +215,10 @@
     {
       "file": "53-geocercas-de-la-app.js",
       "chunk": "ui"
+    },
+    {
+      "file": "54-informe-geocerca.js",
+      "chunk": "ui"
     }
   ]
 }

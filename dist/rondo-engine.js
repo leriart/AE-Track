@@ -875,6 +875,7 @@ PANEL (barra lateral a pantalla completa, lado y ancho configurables):
 - Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:). Con el boton Nueva se dibujan geocercas propias en un mapa (no estan en la plataforma, se marcan APP y se importan/exportan). Cada geocerca tiene ademas su propia alerta (campana en su tarjeta): a quien vigila (solo la lista vigilada o toda la flota), la gravedad y que lo dispara (solo paso / se detuvo / motor apagado).
 - Caravana: unidades cerca de una unidad lider (distancia firmada, sentido contrario, no vigiladas).
 - Replay: reproduce el recorrido de una unidad en un dia o rango de horas, con buscador de unidades, mini-mapa (tiles de OpenStreetMap), perfil de velocidad, resumen, lista de paradas (hora, duracion y lugar resuelto con OpenStreetMap: comercio, direccion o municipio) y eventos (geocercas, excesos, desvios). Exporta el recorrido a GeoJSON, las paradas a CSV y un reporte PDF del recorrido. Solo lectura.
+- Informe por geocerca: boton de pin junto al Reporte PDF. Elige si quieres cruces por unidad o paradas dentro, la geocerca, el periodo y los datos (avisos de la sesion, viajes analizados o el recorrido cargado en Replay); sale en PDF, CSV o Markdown con el detalle evento a evento.
 - Reporte PDF: desde la barra de herramientas se genera un reporte operativo completo (resumen, KPIs, unidades, avisos del dia, rutas, sin senal, geocercas y zonas de riesgo) paginado en A4 y listo para guardar como PDF.
 - Chat IA: consultas libres a la IA (solo si la IA esta habilitada con API key). La IA ve el estado de la flota.
 - Riesgo: se ve dentro de Zonas (segmentado).
@@ -1842,6 +1843,11 @@ ta.value = '';
             titulo: alert.titulo, detalle: alert.detalle || '',
             eco: alert.eco || '', clave: alert.clave, ts: ahora,
             lat: aLat, lon: aLon,
+            // v6.15: geocerca del aviso. Sin esto el reporte por geocerca
+            // tendria que sacarla del texto; con el campo la agregacion es
+            // exacta (y los avisos antiguos, sin campo, se siguen leyendo
+            // del texto en el reporte).
+            zona: alert.zona || '',
             // Se guarda la CLAVE del icono (no el SVG) para no inflar el
             // sessionStorage. Se resuelve al pintar con UIS[...].
             icono: alert.icono || alert.sev || 'info'
@@ -3135,13 +3141,13 @@ ta.value = '';
         R.zonaPend = null;
         if (actual) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: actual,
                 titulo: 'ENTRO \u00b7 ' + etq,
                 detalle: 'entro a ' + actual + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
         } else if (previo) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: previo,
                 titulo: 'SALIO \u00b7 ' + etq,
                 detalle: 'salio de ' + previo + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
@@ -3170,7 +3176,7 @@ ta.value = '';
         if (R.geoDetenidoAlerta) return;
         R.geoDetenidoAlerta = true;
         pushAlert({
-            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco,
+            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco, zona: R.zona,
             titulo: 'DETENIDA EN GEOCERCA \u00b7 ' + etq,
             detalle: 'La unidad ' + etq + ' se encuentra detenida en la geocerca ' + R.zona +
                 ' \u00b7 hace ' + Math.round(m) + ' min',

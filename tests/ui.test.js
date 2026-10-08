@@ -655,6 +655,41 @@ ok('la lista muestra nombre y tamano de cada geocerca', /function glocListaHTML\
     /glocTextoTam\(z\)/.test(src));
 ok('RONDO_DOC menciona las geocercas de la app', /Geocercas de la app/.test(src));
 ok('manual lista las geocercas de la app', /Geocercas de la app/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+// v6.15: informe por geocerca (cruces y paradas dentro).
+ok('boton de informe por geocerca en la barra', /id="rondo-informe-geo"/.test(src) &&
+    /Informe por geocerca: cruces/.test(src));
+ok('el boton abre el dialogo del informe', /informeGeo\.addEventListener\('click', abrirInformeGeocerca\)/.test(src));
+ok('dialogo: informe de cruces o de paradas',
+    /'data-rgi="modo"', 'cruces', 'Cruces por unidad'/.test(src) &&
+    /'data-rgi="modo"', 'paradas', 'Paradas dentro'/.test(src) &&
+    /'data-rgi="rango"', 'hoy'/.test(src));
+ok('dialogo: selector de geocerca', /id="rgi-zona"/.test(src) && /Todas las geocercas/.test(src));
+ok('dialogo: tres fuentes de datos', /data-rgi="fuente"/.test(src) &&
+    /bitacora: 'Avisos'/.test(src) && /viajes: 'Viajes analizados'/.test(src));
+ok('dialogo: vista previa y salidas PDF/CSV/Markdown',
+    /class="rgi-prev"/.test(src) && /id="rgi-pdf"/.test(src) && /id="rgi-csv"/.test(src) && /id="rgi-md"/.test(src));
+ok('informe: el PDF se imprime con el maquetado del informe general',
+    /rxImprimirHTML\(rxGeoInfHTML\(rxGeoInfReune\(\)\)\)/.test(src) &&
+    /rxInfEstilo\(\)/.test(src) && /rxInfCabecera\(/.test(src) && /rxInfPie\(\)/.test(src));
+ok('informe: el CSV sale evento a evento', /rxCsvCelda/.test(src) &&
+    /'Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Minutos', 'Detalle', 'Lat', 'Lon', 'Fuente'/.test(src));
+ok('informe: el markdown con tablas', /rxReplayDescargar\(rxGeoInfNombreArchivo\(d, '\.md'\)/.test(src));
+ok('informe: el nombre del archivo lleva geocerca, modo y fecha',
+    /function rxGeoInfNombreArchivo\(d, ext\)/.test(src) &&
+    /\? 'paradas_' : 'cruces_'/.test(src) && /rondo_geocerca_/.test(src));
+ok('informe: lee los tres origenes de datos', /function rxGeoInfDeBitacora\(/.test(src) &&
+    /function rxGeoInfDeViajes\(/.test(src) && /function rxGeoInfDeReplay\(/.test(src));
+ok('informe: agrega cruces y paradas por unidad', /function rxGeoInfAgrupa\(eventos, modo\)/.test(src) &&
+    /entradas: filas\.reduce/.test(src) && /min: filas\.reduce/.test(src));
+ok('informe: resumen por geocerca para la segunda tabla',
+    /function rxGeoInfPorZona\(eventos, orden\)/.test(src));
+ok('informe: sin datos avisa en vez de abrir en vacio',
+    /adviceWarn\('Sin datos de geocercas'/.test(src));
+ok('avisos: la bitacora guarda la geocerca del aviso',
+    /zona: alert\.zona \|\| ''/.test(src));
+ok('reglas: pasan su geocerca al aviso',
+    /eco: info\.eco, zona: actual/.test(src) && /eco: info\.eco, zona: previo/.test(src) &&
+    /eco: info\.eco, zona: R\.zona/.test(src) && /eco: info\.eco, zona: nom/.test(src));
 ok('RONDO_DOC menciona la alerta por geocerca', /Alerta de geocercas \(por geocerca/.test(src) &&
     /Cada geocerca tiene ademas su propia alerta/.test(src));
 

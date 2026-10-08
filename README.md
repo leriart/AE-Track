@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.15.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.15.0.md)
-[![tests](https://img.shields.io/badge/tests-1515%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1602%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -119,6 +119,13 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   area/centro y exportacion a CSV/GeoJSON. Desde cada tarjeta puedes convertir
   la geocerca en **parada** de una unidad o encender la **campana** para
   vigilarla con la alerta de geocercas.
+- **Informe por geocerca** (boton de pin junto al Reporte PDF): elige que
+  informe quieres (**cruces por unidad** o **paradas dentro**), la geocerca, el
+  periodo y de donde salen los datos (avisos de la sesion, viajes analizados o
+  el recorrido cargado en Replay). Trae KPIs, tabla por unidad, resumen por
+  geocerca y el detalle evento a evento; se descarga en **PDF**, **CSV** o
+  **Markdown**. Ver
+  [Informe por geocerca](./MANUAL.md#informe-por-geocerca).
 - **Geocercas de la app**: dibuja tus propias geocercas (marco, circulo o
   linea) sobre un mapa de OpenStreetMap, con coordenadas escritas o a mano.
   El mapa previsualiza a la vez las geocercas de la plataforma (azul) y las
@@ -402,12 +409,13 @@ node tests/paradas.test.js
 node tests/geocercas.test.js
 node tests/geocerca-alerta.test.js
 node tests/geocerca-local.test.js
+node tests/informe-geocerca.test.js
 node tests/carga.test.js
 node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**20 suites, ~1515 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**21 suites, ~1602 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

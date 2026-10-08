@@ -144,8 +144,8 @@ En la parte superior del panel:
   medias, bajas). Cada aviso indica la regla que lo genero y la hora.
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
   trazado, ETA y acciones para recalcular, exportar o eliminar.
-- **Zonas**: fusiona las **geocercas de la plataforma** y las **zonas de
-  riesgo**. En el lado de **Geocercas** hay KPIs (total, con unidades, base,
+- **Zonas**: fusiona las **geocercas de la plataforma**, las **dibujadas en
+  Rondo** y las **zonas de riesgo**. En el lado de **Geocercas** hay KPIs (total, con unidades, base,
   carga), buscador, orden (nombre/unidades/area), filtro por rol, area y centro
   por zona, boton **Recargar** y exportacion a **CSV / GeoJSON**; desde cada
   tarjeta puedes **usar la geocerca como parada** de una unidad o copiar su
@@ -500,6 +500,60 @@ Aparece en la tarjeta de la lista de geocercas, en cada fila del editor, en
 la leyenda del mapa y en las exportaciones: el **CSV** suma las columnas
 `origen` y `guardado` (`navegador` o `sesion`) y el **GeoJSON** los campos
 `origen` y `guardado`.
+
+### Informe por geocerca
+
+Aparte del reporte general y del de cada unidad (Replay), hay un **informe
+por geocerca** que responde dos preguntas: *¿quien cruzo esta geocerca?* y
+*¿quien se paro aqui?*. Se abre con el boton de pin (en la barra, junto al
+de Reporte PDF) y sale en **PDF**, **CSV** o **Markdown**.
+
+#### Que eliges
+
+| Opcion | Valores |
+| --- | --- |
+| Informe de | **Cruces por unidad** / **Paradas dentro** |
+| Geocerca | Cualquiera de las cargadas (las de la plataforma y las de Rondo), o *Todas las geocercas* |
+| Periodo | Hoy / 24 h / 7 dias / Todo |
+| Datos | De donde salen los eventos (ver abajo) |
+
+El panel va mostrando en vivo seis KPIs (unidades, cruces, entradas, paradas,
+minutos quietos, paradas con motor apagado) y una **vista previa** de las
+primeras 12 unidades, con la fila marcada en rojo cuando supera el filtro.
+
+#### De donde salen los datos
+
+| Fuente | Que trae | Cuando hay datos |
+| --- | --- | --- |
+| **Avisos** | Entradas y salidas (regla *Geocercas*), paradas dentro (regla *Detenida en geocerca*) y las de tu alerta de geocercas, con **hora exacta** | Siempre que haya avisos con geocerca en esta sesion |
+| **Viajes analizados** | Paradas con duracion y cruces deducidos de la traza | Tras analizar el viaje de esa unidad |
+| **Recorrido cargado** | Eventos con hora y paradas con motor y lugar | Con un recorrido cargado en la pestana Replay |
+
+El selector solo muestra las fuentes que tienen datos y pone cuantas lleva
+cada una. Si no hay ninguna, avisa de que actives la regla *Geocercas*,
+analices un viaje o cargues un recorrido.
+
+#### Que contiene
+
+- **Resumen** con los KPIs y una frase con el alcance de los datos.
+- **Geocerca**: nombre, tipo, origen (plataforma o creada en Rondo),
+  superficie y centro.
+- **Unidades**: cruces, entradas, salidas, paradas, minutos quieto y, en modo
+  paradas, minutos con el motor apagado; mas la primera y la ultima vez.
+- **Geocercas**: cuantos cruces y paradas lleva cada una y cuantos cambios
+  vio (o cuantas unidades distintas).
+- **Detalle de eventos**: hora, tipo, geocerca, unidad, detalle y
+  coordenadas (el PDF muestra 200; el CSV los lleva todos).
+
+#### Detalle por unidad
+
+El CSV trae **dos tablas**: la de unidades y la de **eventos uno a uno**
+(fecha, evento, geocerca, unidad, minutos, detalle, lat, lon y fuente). Es la
+que se analiza para saber quien entro, cuanto tiempo se quedo y con el motor
+apagado o no.
+
+Nota: el conteo se apoya en el campo `zona` de cada aviso, asi que es exacto.
+Los avisos anteriores a esta version lo sacan del texto del mensaje.
 
 ### Alerta de geocercas
 
