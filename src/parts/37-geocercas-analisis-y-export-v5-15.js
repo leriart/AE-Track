@@ -134,12 +134,16 @@
         const items = geocercasSubsetVisible();
         if (!items.length) { adviceWarn('Sin geocercas', 'Nada que exportar con los filtros actuales'); return; }
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
-        const filas = [['nombre', 'rol', 'area_km2', 'lat', 'lon', 'unidades']];
+        const filas = [['nombre', 'origen', 'guardado', 'rol', 'area_km2', 'lat', 'lon', 'unidades']];
         for (let i = 0; i < items.length; i++) {
             const z = items[i];
             const c = centroDeZona(z) || {};
             const ecos = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)).map((u) => u.info.eco);
-            filas.push([z.n || ('Zona ' + z.id), zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3),
+            // v6.14: origen explicito, para no confundir una geocerca dibujada
+            // en Rondo con una de la plataforma al abrir el CSV.
+            const org = glocOrigen(z);
+            filas.push([z.n || ('Zona ' + z.id), org.corto, (org.id === 'app' ? (org.guardado ? 'navegador' : 'sesion') : ''),
+                zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3),
                 c.lat == null ? '' : c.lat, c.lon == null ? '' : c.lon, ecos.join(' ')]);
         }
         const csv = filas.map((r) => r.map(rxCsvCelda).join(',')).join('\n');
@@ -158,7 +162,15 @@
             const geom = zonaGeometry(z);
             return {
                 type: 'Feature',
-                properties: { nombre: z.n || ('Zona ' + z.id), rol: zonaRol(z), area_km2: +(zonaAreaM2(z) / 1e6).toFixed(3), unidades: ecos, origen: glocEsApp(z) ? 'rondo-app' : 'plataforma' },
+                properties: (function () {
+                    const org = glocOrigen(z);
+                    return {
+                        nombre: z.n || ('Zona ' + z.id), rol: zonaRol(z),
+                        area_km2: +(zonaAreaM2(z) / 1e6).toFixed(3), unidades: ecos,
+                        origen: org.id === 'app' ? 'rondo-app' : 'plataforma',
+                        guardado: (org.id === 'app') ? (org.guardado ? 'navegador' : 'sesion') : null
+                    };
+                })(),
                 geometry: geom || { type: 'Point', coordinates: [0, 0] }
             };
         });
@@ -275,7 +287,7 @@
                 '<span class="rondo-geo-dot"></span>' +
                 '<div class="rondo-geo-body">' +
                 '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) +
-                (esApp ? '<span class="rondo-geo-app" title="Geocerca creada en Rondo (no esta en la plataforma)">APP</span>' : '') +
+                (esApp ? '<span class="rondo-geo-app" title="' + esc(glocOrigen(z).largo) + '">' + esc(glocOrigen(z).corto) + '</span>' : '') +
                 '</b>' +
                 '<span class="rondo-geo-inside">' +
                 (x.ecos.length

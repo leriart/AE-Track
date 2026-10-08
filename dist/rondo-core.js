@@ -1063,7 +1063,10 @@
         // leen del storage pero NO se meten en APP.zonas todavia: se fusionan
         // al terminar de cargar las de la plataforma, para que el refresco
         // siga pudiendo consultar la API si APP.zonas esta vacia.
-        zonasLocales: readArray(SS.geolocal, [])
+        zonasLocales: readArray(SS.geolocal, []),
+        // v6.14: que se previsualiza en el mapa del editor de geocercas:
+        // 'todas' | 'app' | 'plat' (solo la plataforma).
+        geoPreview: 'todas'
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);

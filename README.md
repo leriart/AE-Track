@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.14.1-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.14.1.md)
-[![tests](https://img.shields.io/badge/tests-1490%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1515%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -121,8 +121,11 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   vigilarla con la alerta de geocercas.
 - **Geocercas de la app**: dibuja tus propias geocercas (marco, circulo o
   linea) sobre un mapa de OpenStreetMap, con coordenadas escritas o a mano.
-  No estan en la plataforma (se marcan **APP**), viven en la sesion —o en el
-  navegador si marcas *Recordar*— y se importan/exportan en JSON o GeoJSON.
+  El mapa previsualiza a la vez las geocercas de la plataforma (azul) y las
+  tuyas (gris), con una leyenda que filtra entre **Todas / App / Plataforma**.
+  Se importan/exportan en JSON o GeoJSON y la importacion deja elegir una o
+  varias. No estan en la plataforma (se marcan **APP** o **PLAT** segun su
+  origen), viven en la sesion —o en el navegador si marcas *Recordar*—.
   Cuentan en los KPIs, sirven como parada y admiten su propia alerta, igual
   que las nativas. Ver
   [Geocercas de la app](./MANUAL.md#geocercas-de-la-app).
@@ -404,7 +407,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**20 suites, ~1490 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**20 suites, ~1515 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

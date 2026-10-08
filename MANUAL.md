@@ -443,6 +443,26 @@ el mapa hay una chapa con el modo activo y como se dibuja. **Guardar
 geocerca** pide el nombre (si choca con otra geocerca le anade "2"), lo deja
 creado y lo pinta en el mapa y en la tarjeta.
 
+#### Previsualizacion en el mapa
+
+Mientras dibujas, el mapa muestra las geocercas que ya existen, cada una con
+su color segun de donde venga:
+
+| En el mapa | De donde es |
+| --- | --- |
+| Trazo ambar relleno | La figura que estas trazando (borrador) |
+| Gris discontinuo | Geocercas creadas en Rondo (las tuyas) |
+| Azul discontinuo | Geocercas de la plataforma (Wialon / AE-Track) |
+
+Abajo a la izquierda hay una **leyenda** con el numero de cada tipo y tres
+botones para filtrar: **Todas**, **App** o **Plataforma**. Sirve para no
+tapar el mapa si la instalacion tiene muchas geocercas (se dibujan como
+mucho 140 de cada tipo; el resto queda fuera sin que nada falle).
+
+En la lista del editor hay otro selector, **Mias (app) / Plataforma /
+Todas**, con el numero de cada grupo. Al elegir *Plataforma* se explica que
+esos no se editan aqui: se crean en AE-Track o Wialon.
+
 #### Donde se guardan
 
 Por defecto solo en la **sesion** de esa pestana: al recargar se pierden. Marca
@@ -457,12 +477,29 @@ editor se puede cambiar en cualquier momento).
 - **Copiar**: pone el mismo JSON en el portapapeles para pegarlo en un chat.
 - **Importar**: acepta el JSON de Rondo, un GeoJSON (`Polygon`, `MultiPolygon`,
   `LineString`, `Point` con radio en `radio_m`) o un array de geocercas.
-  Los nombres que ya existan se renombran solos y cada importacion genera ids
-  nuevos, asi que **importar dos veces el mismo archivo no pisa nada**.
 
-Las geocercas tambien entran con los botones **CSV** y **GeoJSON** de la
-pestana (ahi salen mezcladas con las de la plataforma, con el campo
-`origen` para distinguirlas).
+Al importar se abre una ventana con **una casilla por geocerca**: puedes
+traer **una sola** de un archivo que trae diez, o marcarlas todas con el
+boton *Todas*. Cada fila dice de que tipo es, cuanto mide y si **ya existe una
+con ese nombre** (se guardara con otro); los nombres que ya existan se
+renombran solos y cada importacion genera ids nuevos, asi que **importar dos
+veces el mismo archivo no pisa nada**. Si el archivo trae algo inservible, se
+avisa de cuantas se descartaron.
+
+#### De donde viene cada geocerca
+
+El origen se muestra siempre, para que una geocerca dibujada en Rondo no se
+confunda con una de la plataforma:
+
+| Etiqueta | Significado |
+| --- | --- |
+| **APP** (ambar) | Creada en Rondo. Con el tick verde al lado significa que ademas se recuerda al cerrar el navegador |
+| **PLAT** (azul) | Geocerca de la plataforma (Wialon / AE-Track), solo lectura desde Rondo |
+
+Aparece en la tarjeta de la lista de geocercas, en cada fila del editor, en
+la leyenda del mapa y en las exportaciones: el **CSV** suma las columnas
+`origen` y `guardado` (`navegador` o `sesion`) y el **GeoJSON** los campos
+`origen` y `guardado`.
 
 ### Alerta de geocercas
 

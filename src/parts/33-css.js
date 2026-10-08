@@ -1337,6 +1337,23 @@
             "#rondo-geocerca-modal .gg-hud-m .rondo-usym{font-size:13px}\n" +
             "#rondo-geocerca-modal .gg-hud-h{background:rgba(20,24,34,.72);color:#e6e9f0;border-radius:8px;padding:3px 8px;font:500 10px var(--rondo-font);line-height:1.35}\n" +
             "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-m,body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-h{background:rgba(255,255,255,.9);color:#1d2433;border-color:rgba(0,0,0,.1)}\n" +
+            "#rondo-geocerca-modal .rondo-gg-plat{z-index:1}\n" +
+            // Leyenda del mapa: que color es cada origen y cuantas hay.
+            "#rondo-geocerca-modal .gg-leyenda{position:absolute;left:9px;bottom:9px;z-index:4;display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:calc(100% - 18px);pointer-events:none}\n" +
+            "#rondo-geocerca-modal .gg-ley-b{display:inline-flex;align-items:center;gap:5px;pointer-events:auto;cursor:pointer;background:rgba(20,24,34,.8);color:#e6e9f0;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:2px 8px;font:600 9.5px var(--rondo-font);backdrop-filter:blur(2px);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b:hover{border-color:rgba(255,255,255,.3);color:#fff}\n" +
+            "#rondo-geocerca-modal .gg-ley-b.activo{background:var(--rondo-warn-fg);color:#2a1d00;border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-ley-b b{font-weight:800}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i{width:9px;height:9px;border-radius:3px;flex:0 0 auto;border:1.5px dashed rgba(255,255,255,.5);background:rgba(255,255,255,.12)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b.activo i{border-color:rgba(0,0,0,.45);background:rgba(0,0,0,.12)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i.sw-app{border-color:#7d8595;background:rgba(125,133,149,.28)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i.sw-plat{border-color:#5c7a99;background:rgba(92,122,153,.28)}\n" +
+            "#rondo-geocerca-modal .gg-ley-draft{pointer-events:none;display:inline-flex;align-items:center;gap:5px;background:rgba(20,24,34,.8);color:#ffe082;border:1px solid rgba(249,168,37,.5);border-radius:999px;padding:2px 8px;font:600 9.5px var(--rondo-font);text-transform:none;letter-spacing:0}\n" +
+            "#rondo-geocerca-modal .gg-ley-draft::before{content:'';width:9px;height:9px;border-radius:3px;background:rgba(249,168,37,.35);border:1.5px solid #f9a817}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b{background:rgba(255,255,255,.9);color:#1d2433;border-color:rgba(0,0,0,.12)}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b.activo{background:var(--rondo-warn-fg);color:#3a2b00}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b i{border-color:rgba(0,0,0,.3);background:rgba(0,0,0,.08)}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-draft{background:rgba(255,255,255,.9);color:#8d6b00}\n" +
             // Paneles laterales
             "#rondo-geocerca-modal .gg-lados{flex:0 0 296px;min-width:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:2px}\n" +
             "#rondo-geocerca-modal .gg-lado{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}\n" +
@@ -1377,6 +1394,36 @@
             "#rondo-geocerca-modal .gg-acciones .mini{flex:1;min-width:88px}\n" +
             "#rondo-geocerca-modal .gg-pista{margin:0;display:flex;gap:6px;align-items:flex-start;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:5px 7px}\n" +
             "#rondo-geocerca-modal .gg-pista .rondo-usym{font-size:12px;flex:0 0 auto;margin-top:1px}\n" +
+            // Dialogo de importacion (seleccion de geocercas)
+            "#rondo-dialog .gg-imp-t{margin:0;font-size:12px;color:var(--rondo-fg-dim);line-height:1.5}\n" +
+            "#rondo-dialog .gg-imp-t b{color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .gg-imp-av{color:var(--rondo-warn-fg);font-size:11px}\n" +
+            "#rondo-dialog .gg-imp-l{display:flex;flex-direction:column;gap:4px;max-height:min(44vh,320px);overflow-y:auto}\n" +
+            "#rondo-dialog .gg-imp{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .gg-imp:hover{border-color:var(--rondo-border);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .gg-imp.sel{border-color:var(--rondo-accent-2);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .gg-imp input{margin:0;flex:0 0 auto}\n" +
+            "#rondo-dialog .gg-imp .nm{flex:1;min-width:0;display:flex;align-items:center;gap:5px;font:600 12px var(--rondo-font);color:var(--rondo-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-dialog .gg-imp .nm .rondo-usym{font-size:12px;color:var(--rondo-warn-fg);flex:0 0 auto}\n" +
+            "#rondo-dialog .gg-imp em{flex:0 0 auto;font:500 10px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute);white-space:nowrap}\n" +
+            "#rondo-dialog .gg-imp-a{display:flex;align-items:center;gap:6px}\n" +
+            "#rondo-dialog .gg-imp-a .mini{padding:3px 9px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .gg-imp-a .mini:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .gg-imp-a span{margin-left:auto;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            // Selector de origen de la lista
+            "#rondo-geocerca-modal .gg-filtro{display:flex;gap:4px}\n" +
+            "#rondo-geocerca-modal .gg-fchip{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:3px 6px;cursor:pointer;color:var(--rondo-fg-dim);font:600 9.5px var(--rondo-font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-fchip b{font-weight:800;opacity:.75}\n" +
+            "#rondo-geocerca-modal .gg-fchip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-geocerca-modal .gg-fchip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-fchip.activo b{opacity:.9}\n" +
+            // Etiqueta de origen en cada fila
+            "#rondo-geocerca-modal .gg-origen{display:inline-block;vertical-align:1px;margin-left:6px;font:700 7.5px var(--rondo-font);font-style:normal;letter-spacing:.5px;padding:1px 4px;border-radius:5px;background:var(--rondo-bg-strong);color:var(--rondo-fg-mute);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-geocerca-modal .gg-origen.o-app{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-origen.o-plat{background:rgba(92,122,153,.22);color:#a8c6e0;border-color:transparent}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-origen.o-plat{background:#e4edf5;color:#33607f}\n" +
+            "#rondo-geocerca-modal .gg-lock{display:inline-flex;vertical-align:-2px;margin-left:4px;color:var(--rondo-ok-fg)}\n" +
+            "#rondo-geocerca-modal .gg-lock .rondo-usym{font-size:10px}\n" +
             // Lista de geocercas
             "#rondo-geocerca-modal .gg-lista{display:flex;flex-direction:column;gap:4px;max-height:236px;overflow-y:auto}\n" +
             "#rondo-geocerca-modal .gg-item{display:flex;align-items:center;gap:7px;padding:6px 7px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;min-width:0;transition:border-color .15s,background .15s}\n" +

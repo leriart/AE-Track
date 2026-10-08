@@ -20,6 +20,9 @@ const GEOLOC_MIN_RADIO = 10;        // m
 const GEOLOC_MAX_RADIO = 50000;     // m
 const GEOLOC_NOMBRE_MAX = 60;
 const GEOLOC_VERSION = 1;
+// Geocercas dibujadas a la vez en el mapa (por capa): con muchas, el SVG se
+// saturaria y el navegador se arrastra. La leyenda avisa cuando se recorta.
+const GEOLOC_MAX_PREVIEW = 140;
 
 // Convierte una lista de puntos (lat/lon) al formato de la plataforma:
 // {x: lon, y: lat}. Descarta lo que no sea coordenada valida.
@@ -306,13 +309,17 @@ function glocBorra(id, lista) {
     return true;
 }
 // Importa (reemplaza o anade) las geocercas de un texto.
-function glocImporta(txt, modo) {
+function glocImporta(txt, modo, sel) {
     const r = glocParsea(txt);
     if (r.error && !r.lista.length) return r;
+    // sel: indices a importar (null = todas). Permite importar una sola de un
+    // archivo que trae varias.
+    const items = (Array.isArray(sel) && sel.length) ? sel.map((i) => r.lista[i]).filter(Boolean) : r.lista;
     let lista = (modo === 'anadir') ? glocLista() : [];
     let nuevas = 0;
-    for (const z of r.lista) {
-        const libre = glocNombreLibre(z.n, (APP.zonas || []).filter((x) => !x.app), lista.concat(APP.zonasLocales || []));
+    const nativas = (APP.zonas || []).filter((x) => !glocEsApp(x));
+    for (const z of items) {
+        const libre = glocNombreLibre(z.n, nativas, lista.concat(APP.zonasLocales || []));
         const copia = Object.assign({}, z, { n: libre, id: glocId() });
         if (lista.length >= GEOLOC_MAX_ZONAS) break;
         lista.push(copia);
@@ -327,6 +334,23 @@ function glocImporta(txt, modo) {
 // Marca las geocercas de la app para poder distinguirlas en la UI.
 function glocEsApp(z) {
     return !!(z && (z.app === 1 || z._app === true));
+}
+// De donde sale cada geocerca. Se usa en la tarjeta, la lista del editor, la
+// leyenda del mapa y las exportaciones, para que nunca se confundan.
+//   plat -> de la plataforma (Wialon / AE-Track)
+//   app  -> creada en Rondo (guardada en la sesion o en el navegador)
+function glocOrigen(z, cfg) {
+    if (!glocEsApp(z)) {
+        return { id: 'plat', txt: 'Plataforma', corto: 'PLAT', largo: 'De la plataforma (Wialon / AE-Track)', guardado: false };
+    }
+    const c = (cfg && typeof cfg.geolocalRecordar === 'boolean') ? cfg.geolocalRecordar
+        : !!(APP.config && APP.config.geolocalRecordar);
+    return {
+        id: 'app', txt: 'App', corto: 'APP',
+        largo: c ? 'Creada en Rondo \u00b7 guardada en este navegador'
+            : 'Creada en Rondo \u00b7 solo en esta sesi\u00f3n (se pierde al recargar)',
+        guardado: c
+    };
 }
 // ── Medidas (area, perimetro, longitud) ─────────────────────────────────
 // Perimetro/longitud en metros con la aproximacion local (misma que usa el
@@ -372,7 +396,7 @@ function glocEstado() {
     if (!_gloc) {
         _gloc = {
             id: null, nombre: '', modo: 'poligono', pts: [], radio: 100, ancho: 100,
-            mapa: null, capa: null, editando: false
+            mapa: null, capa: null, capaCtx: null, capaPlat: null, editando: false
         };
     }
     return _gloc;
@@ -446,36 +470,94 @@ function glocRadioDesde(e, centro) {
     if (!centro || !ref) return e.radio;
     return clamp(_geoDistM(centro.lat, centro.lon, ref.lat, ref.lon), GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO);
 }
-// Los puntos ya confirmados que se dibujan de otras geocercas (contexto).
+// Anillo de una geocerca en coordenadas de pantalla (funciona con las tres
+// formas: circulo, poligono y linea). Es la pieza que usan las tres capas.
+function glocAnillo(inst, z, segmentos) {
+    const pts = (z && z._pts) || _zonaPuntos(z) || z.p;
+    if (!Array.isArray(pts) || !pts.length) return '';
+    const px = (a) => {
+        const r = rxMMPt(inst, (a && a.y != null) ? a.y : a[1], (a && a.x != null) ? a.x : a[0]);
+        return r[0].toFixed(1) + ',' + r[1].toFixed(1);
+    };
+    if (z.t === 3) {
+        const cen = glocCentro(z.p) || (pts.length ? { x: +pts[0].x, y: +pts[0].y } : null);
+        const radio = _zonaRadio(z);
+        if (!cen || !(radio > 0)) return '';
+        const n = clamp(segmentos || 30, 10, 60);
+        const out = [];
+        for (let i = 0; i <= n; i++) {
+            const ang = (i / n) * Math.PI * 2;
+            const dl = (radio / 111320) * Math.cos(ang) / (Math.cos(cen.y * Math.PI / 180) || 1);
+            const da = (radio / 110540) * Math.sin(ang);
+            out.push(px({ x: cen.x + dl, y: cen.y + da }));
+        }
+        return out.join(' ');
+    }
+    const p = pts.map(px);
+    if (p.length < 2) return '';
+    return (z.t === 1) ? p.join(' ') : p.concat([p[0]]).join(' ');
+}
+// Previsualizacion: lo que ya existe se ve en el mapa mientras se dibuja.
+// Tres capas y un filtro (todas / solo mias / solo la plataforma) para no
+// saturar el mapa cuando la instalacion tiene muchas geocercas.
+function glocVista() {
+    return (APP.geoPreview === 'app' || APP.geoPreview === 'plat') ? APP.geoPreview : 'todas';
+}
+// Capa 1: geocercas de la app (las que puedes editar/eliminar aqui).
 function glocPintarContexto() {
     const e = glocEstado();
     if (!e.mapa || !e.capaCtx) return;
     const inst = e.mapa;
+    if (glocVista() === 'plat') { e.capaCtx.innerHTML = ''; return; }
     let h = '';
+    let n = 0;
     for (const z of glocLista()) {
         if (z.id === e.id) continue;
-        const c = '#7d8595';
-        const p = z.p.map((q) => {
-            const r = rxMMPt(inst, q.y, q.x);
-            return r[0].toFixed(1) + ',' + r[1].toFixed(1);
-        });
-        if (z.t === 3) {
-            const cen = glocCentro(z.p);
-            if (!cen) continue;
-            const pol = [];
-            for (let i = 0; i <= 24; i++) {
-                const ang = (i / 24) * Math.PI * 2;
-                const dl = (z.w / 111320) * Math.cos(ang) / (Math.cos(cen.y * Math.PI / 180) || 1);
-                const da = (z.w / 110540) * Math.sin(ang);
-                const r = rxMMPt(inst, cen.y + da, cen.x + dl);
-                pol.push(r[0].toFixed(1) + ',' + r[1].toFixed(1));
-            }
-            h += '<polygon points="' + pol.join(' ') + '" fill="rgba(125,133,149,.14)" stroke="' + c + '" stroke-width="1.5" stroke-dasharray="5 4"><title>' + esc(z.n) + '</title></polygon>';
-        } else if (p.length > 1) {
-            h += '<polygon points="' + p.concat([p[0]]).join(' ') + '" fill="rgba(125,133,149,.12)" stroke="' + c + '" stroke-width="1.5" stroke-dasharray="5 4"><title>' + esc(z.n) + '</title></polygon>';
-        }
+        if (n >= GEOLOC_MAX_PREVIEW) break;
+        const anillo = glocAnillo(inst, z, 26);
+        if (!anillo) continue;
+        n++;
+        const fill = (z.t === 3) ? 'rgba(125,133,149,.16)' : 'rgba(125,133,149,.13)';
+        const tag = '<title>' + esc(z.n) + ' \u00b7 de la app</title>';
+        h += (z.t === 1)
+            ? '<polyline points="' + anillo + '" fill="none" stroke="#7d8595" stroke-width="2" stroke-dasharray="6 4" opacity=".85">' + tag + '</polyline>'
+            : '<polygon points="' + anillo + '" fill="' + fill + '" stroke="#7d8595" stroke-width="1.5" stroke-dasharray="5 4">' + tag + '</polygon>';
     }
     e.capaCtx.innerHTML = h;
+}
+// Capa 2: geocercas de la plataforma, para dibujar sin pisarlas.
+function glocPintarPlataforma() {
+    const e = glocEstado();
+    if (!e.mapa || !e.capaPlat) return;
+    const inst = e.mapa;
+    if (glocVista() === 'app') { e.capaPlat.innerHTML = ''; return; }
+    let h = '';
+    let n = 0;
+    for (const z of (APP.zonas || [])) {
+        if (!z || glocEsApp(z)) continue;
+        if (n >= GEOLOC_MAX_PREVIEW) break;
+        const anillo = glocAnillo(inst, z, 20);
+        if (!anillo) continue;
+        n++;
+        const tag = '<title>' + esc(z.n || ('Zona ' + z.id)) + ' \u00b7 de la plataforma</title>';
+        h += (z.t === 1)
+            ? '<polyline points="' + anillo + '" fill="none" stroke="#5c7a99" stroke-width="1.5" stroke-dasharray="3 4" opacity=".7">' + tag + '</polyline>'
+            : '<polygon points="' + anillo + '" fill="rgba(92,122,153,.12)" stroke="#5c7a99" stroke-width="1" stroke-dasharray="3 4" opacity=".8">' + tag + '</polygon>';
+    }
+    e.capaPlat.innerHTML = h;
+}
+// Leyenda del mapa: que color es cada cosa y cuantas hay de cada origen.
+function glocLeyendaHTML() {
+    const todas = APP.zonas || [];
+    const propias = todas.filter((z) => glocEsApp(z)).length;
+    const plat = todas.length - propias;
+    const v = glocVista();
+    const chip = (val, txt, n, act) => '<button type="button" class="gg-ley-b' + (act ? ' activo' : '') + '" data-gg="preview" data-v="' + val + '" title="Ver ' + txt.toLowerCase() + ' en el mapa">' +
+        '<i class="sw-' + val + '"></i>' + esc(txt) + ' <b>' + n + '</b></button>';
+    return '<div class="gg-ley">' + chip('todas', 'Todas', propias + plat, v === 'todas') +
+        chip('app', 'App', propias, v === 'app') +
+        chip('plat', 'Plataforma', plat, v === 'plat') +
+        '<i class="gg-ley-draft">borrador</i></div>';
 }
 
 /* ====================== GEOCERCAS DE LA APP: UI ====================== */
@@ -496,9 +578,11 @@ function glocModalEl() {
         // pan/zoom y se llevaria por delante el borrador si fuera dentro.
         '<div class="gg-cuerpo">' +
         '<div class="rondo-gg-mapa" id="rondo-gg-mapa">' +
+        '<svg class="rondo-gg-plat" xmlns="http://www.w3.org/2000/svg"></svg>' +
         '<svg class="rondo-gg-ctx" xmlns="http://www.w3.org/2000/svg"></svg>' +
         '<svg class="rondo-gg-capa" xmlns="http://www.w3.org/2000/svg"></svg>' +
         '<div class="gg-hud" id="gg-hud"></div>' +
+        '<div class="gg-leyenda" id="gg-leyenda"></div>' +
         '<div class="rondo-gg-atrib">\u00a9 OpenStreetMap</div>' +
         '</div>' +
         '<div class="gg-lados"></div>' +
@@ -615,7 +699,14 @@ function glocCifras() {
     return out;
 }
 function glocListaHTML() {
-    const lista = glocLista();
+    const v = APP.geoListaVista || 'app';
+    const todas = glocLista();
+    const lista = todas.filter((z) => (v === 'plat') ? !glocEsApp(z) : (v === 'todas' ? true : glocEsApp(z)));
+    if (v === 'plat') {
+        return '<div class="gg-vacio"><span class="rondo-usym">' + UIS.map + '</span>' +
+            '<b>Las de la plataforma no se editan aqui</b>' +
+            '<span>Se dibujan en AE-Track o Wialon (icono azul en el mapa). Aqui solo se crean y modifican las de Rondo.</span></div>';
+    }
     if (!lista.length) {
         return '<div class="gg-vacio"><span class="rondo-usym">' + UIS.zone + '</span>' +
             '<b>Aun no hay geocercas</b>' +
@@ -623,12 +714,16 @@ function glocListaHTML() {
     }
     return lista.map((z) => {
         const alertas = geoAlertaCfgZona(z.n);
-        const forma = (z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Marco'));
+        const forma = (z.t === 3 ? 'C\u00edrculo' : (z.t === 1 ? 'L\u00ednea' : 'Marco'));
         const ico = (z.t === 3 ? 'zone' : (z.t === 1 ? 'route' : 'map'));
+        const org = glocOrigen(z);
         return '<div class="gg-item" data-id="' + esc(z.id) + '"' +
             (alertas ? ' data-alerta="1" title="Tiene alerta de geocerca activa"' : '') + '>' +
             '<span class="gg-ptag"><span class="rondo-usym">' + UIS[ico] + '</span></span>' +
-            '<div class="gg-in"><b>' + esc(z.n) + '</b>' +
+            '<div class="gg-in"><b>' + esc(z.n) +
+            '<i class="gg-origen o-' + org.id + '" title="' + esc(org.largo) + '">' + org.corto + '</i>' +
+            (org.id === 'app' && org.guardado ? '<i class="gg-lock" title="Se recuerda al cerrar el navegador"><span class="rondo-usym">' + UIS.check + '</span></i>' : '') +
+            '</b>' +
             '<span>' + forma + ' \u00b7 ' + glocTextoTam(z) + '</span></div>' +
             (alertas ? '<i class="gg-tag-alerta" title="Alerta activa">ALERTA</i>' : '') +
             '<span class="gg-acc">' +
@@ -647,6 +742,7 @@ function glocRender() {
         const cont = byId('rondo-gg-mapa');
         if (cont) {
             e.mapa = rxMiniMapa(cont, { lineas: [], marcas: [] });
+            e.capaPlat = cont.querySelector('.rondo-gg-plat');
             e.capaCtx = cont.querySelector('.rondo-gg-ctx');
             e.capa = cont.querySelector('.rondo-gg-capa');
             glocBindMapa(cont);
@@ -685,8 +781,13 @@ function glocRender() {
             '</div>' +
             // ── Panel 2: las geocercas de la app ─────────────────────────
             '<div class="gg-lado gg-lado-lista">' +
-            '<h4><span class="rondo-usym">' + UIS.map + '</span>Mis geocercas' +
+            '<h4><span class="rondo-usym">' + UIS.map + '</span>Geocercas' +
             '<i class="gg-count">' + glocLista().length + '</i></h4>' +
+            '<div class="gg-filtro">' +
+            glocFiltroChip('app', 'M\u00edas (app)', glocLista().length) +
+            glocFiltroChip('plat', 'Plataforma', (APP.zonas || []).filter((x) => !glocEsApp(x)).length) +
+            glocFiltroChip('todas', 'Todas', (APP.zonas || []).length) +
+            '</div>' +
             '<div class="gg-lista">' + glocListaHTML() + '</div>' +
             '<div class="gg-sec">Importar / exportar</div>' +
             '<div class="gg-io">' +
@@ -702,13 +803,21 @@ function glocRender() {
     }
     glocPintarBorrador();
     glocPintarContexto();
+    glocPintarPlataforma();
     glocPintarHud();
+    const ley = byId('gg-leyenda');
+    if (ley) setHtml(ley, glocLeyendaHTML());
 }
 function glocModoTxt(modo) {
     return (modo === 'circulo') ? 'C\u00edrculo' : (modo === 'linea' ? 'L\u00ednea' : 'Marco');
 }
 function glocModoTxtPlano(modo) {
     return (modo === 'circulo') ? 'circulo' : (modo === 'linea' ? 'linea' : 'marco');
+}
+function glocFiltroChip(val, txt, n) {
+    const v = APP.geoListaVista || 'app';
+    return '<button type="button" class="gg-fchip' + (v === val ? ' activo' : '') + '" data-gg="lista" data-v="' + val + '" title="Mostrar ' + txt.toLowerCase() + '">' +
+        esc(txt) + '<b>' + n + '</b></button>';
 }
 function glocModoChip(e, modo, txt, icono) {
     return '<button type="button" class="gg-chip' + (e.modo === modo ? ' activo' : '') + '" data-gg="modo" data-v="' + modo + '" title="Trazar un ' + glocModoTxtPlano(modo) + '">' +
@@ -757,6 +866,9 @@ function glocBindMapa(cont) {
     });
     cont.addEventListener('pointerup', (ev) => {
         if (movido || ev.button !== 0) return;
+        // La leyenda y la chapa viven sobre el mapa: un clic ahi NO debe
+        // anadir un punto a la figura.
+        if (ev.target.closest && ev.target.closest('.gg-leyenda,.gg-hud')) return;
         const e = glocEstado();
         const r = cont.getBoundingClientRect();
         const p = glocPxALatLon(e.mapa, ev.clientX - r.left, ev.clientY - r.top);
@@ -773,6 +885,7 @@ function glocBindMapa(cont) {
         glocRender();
     });
     cont.addEventListener('dblclick', (ev) => {
+        if (ev.target.closest && ev.target.closest('.gg-leyenda,.gg-hud')) return;
         ev.preventDefault();
         const e = glocEstado();
         if (e.modo === 'linea' || e.modo === 'poligono') e.pts.pop();
@@ -828,6 +941,21 @@ function glocBind() {
     cuerpo.addEventListener('click', (ev) => {
         const t = ev.target;
         const e = glocEstado();
+        const lp = t.closest && t.closest('[data-gg="preview"]');
+        if (lp) {
+            APP.geoPreview = (lp.dataset.v === 'app' || lp.dataset.v === 'plat') ? lp.dataset.v : 'todas';
+            glocPintarContexto();
+            glocPintarPlataforma();
+            const ley = byId('gg-leyenda');
+            if (ley) setHtml(ley, glocLeyendaHTML());
+            return;
+        }
+        const lf = t.closest && t.closest('[data-gg="lista"]');
+        if (lf) {
+            APP.geoListaVista = lf.dataset.v || 'app';
+            glocRender();
+            return;
+        }
         const chip = t.closest && t.closest('[data-gg="modo"]');
         if (chip) {
             const m = chip.dataset.v;
@@ -956,21 +1084,91 @@ function glocExportar(geojson) {
     );
     adviceOk('Geocercas exportadas', lista.length + ' geocerca(s)');
 }
+// Importar desde un archivo (o desde un texto pegado): primero se lee y se
+// pasa por el dialogo de seleccion, para poder importar una sola o varias.
 function glocImportarArchivo(file) {
     if (!file) return;
+    const alTerminar = (txt) => glocAbrirImport(txt);
     try {
-        file.text().then((txt) => {
-            const r = glocImporta(txt, 'anadir');
-            if (!r.lista.length && r.error) { adviceWarn('No se pudo importar', r.error); return; }
-            adviceOk('Geocercas importadas', (r.nuevas || 0) + ' nueva(s)' + (r.ignoradas ? ' \u00b7 ' + r.ignoradas + ' descartada(s)' : ''));
-            glocRender();
-            if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
-        }).catch(() => adviceWarn('No se pudo leer', file.name || 'el archivo'));
+        file.text().then(alTerminar).catch(() => adviceWarn('No se pudo leer', file.name || 'el archivo'));
     } catch (_) {
         // Navegadores antiguos sin file.text(): FileReader.
         const fr = new FileReader();
-        fr.onload = () => { glocImporta(String(fr.result || ''), 'anadir'); glocRender(); };
+        fr.onload = () => alTerminar(String(fr.result || ''));
         fr.onerror = () => adviceWarn('No se pudo leer', file.name || 'el archivo');
         fr.readAsText(file);
     }
+}
+// Dialogo de importacion: lista con casilla por geocerca, aviso de nombres
+// que ya existen y botones para marcar todas o ninguna.
+function glocAbrirImport(txt) {
+    const r = glocParsea(txt);
+    if (!r.lista.length) {
+        adviceWarn('No se pudo importar', r.error || 'El archivo no trae geocercas utilizables');
+        return;
+    }
+    const marcadas = r.lista.map((_, i) => i);
+    const nativas = (APP.zonas || []).filter((x) => !glocEsApp(x));
+    const mias = glocLista();
+    // Nombre que tendra cada una si se importa (sufijo si choca).
+    const nombres = r.lista.map((z, i) => ({
+        i: i, z: z,
+        libre: glocNombreLibre(z.n, nativas, mias.concat(r.lista.slice(0, i))),
+        igual: (nativas.some((x) => glocLimpiaNom(x.n).toLowerCase() === z.n.toLowerCase()) ||
+            mias.some((x) => glocLimpiaNom(x.n).toLowerCase() === z.n.toLowerCase()))
+    }));
+    const cuerpo = (sel) => {
+        const html = nombres.map((it) => {
+            const forma = (it.z.t === 3 ? 'C\u00edrculo ' + Math.round(it.z.w) + ' m' : (it.z.t === 1 ? 'L\u00ednea' : 'Marco'));
+            return '<label class="gg-imp' + (sel.indexOf(it.i) >= 0 ? ' sel' : '') + '">' +
+                '<input type="checkbox" data-gg-imp="' + it.i + '"' + (sel.indexOf(it.i) >= 0 ? ' checked' : '') + '>' +
+                '<span class="nm">' + esc(it.libre) + (it.igual ? '<i class="gg-imp-dup" title="Ya existe una con ese nombre: se guardara con otro">' + UIS.info + '</i>' : '') + '</span>' +
+                '<em>' + forma + ' \u00b7 ' + glocTextoTam(it.z) + '</em></label>';
+        }).join('');
+        return '<p class="gg-imp-t">' + (r.lista.length === 1
+            ? 'El archivo trae <b>1 geocerca</b>. Se importara en Rondo (no va a la plataforma).'
+            : 'El archivo trae <b>' + r.lista.length + ' geocercas</b>. Elige cuales importar.') +
+            (r.ignoradas ? ' <span class="gg-imp-av">' + r.ignoradas + ' se descartaron por no ser validas.</span>' : '') +
+            '</p><div class="gg-imp-l">' + html + '</div>' +
+            '<div class="gg-imp-a"><button type="button" class="mini" data-gg-imp-a="todas">Todas</button>' +
+            '<button type="button" class="mini" data-gg-imp-a="ninguna">Ninguna</button>' +
+            '<span>' + (sel.length === r.lista.length ? 'Todas marcadas' : sel.length + ' de ' + r.lista.length) + '</span></div>';
+    };
+    abrirDialogo({
+        icon: UIS.upload,
+        titulo: 'Importar geocercas',
+        ancho: 440,
+        okText: 'Importar',
+        html: '<div class="gg-impd" id="gg-impd">' + cuerpo(marcadas) + '</div>',
+        onOpen: (el) => {
+            const box = el.querySelector('#gg-impd');
+            if (!box) return;
+            const pinta = () => setHtml(box, cuerpo(marcadas));
+            box.addEventListener('change', (ev) => {
+                const t = ev.target;
+                if (!t || !t.dataset || t.dataset.ggImp == null) return;
+                const i = +t.dataset.ggImp;
+                const k = marcadas.indexOf(i);
+                if (t.checked && k < 0) marcadas.push(i);
+                else if (!t.checked && k >= 0) marcadas.splice(k, 1);
+                marcadas.sort((a, b) => a - b);
+                pinta();
+            });
+            box.addEventListener('click', (ev) => {
+                const b = ev.target.closest && ev.target.closest('[data-gg-imp-a]');
+                if (!b || !box.contains(b)) return;
+                marcadas.length = 0;
+                if (b.dataset.ggImpA === 'todas') for (let i = 0; i < r.lista.length; i++) marcadas.push(i);
+                pinta();
+            });
+        },
+        onOk: () => {
+            if (!marcadas.length) { adviceWarn('Nada que importar', 'Marca al menos una geocerca.'); return; }
+            const res = glocImporta(txt, 'anadir', marcadas);
+            adviceOk('Geocercas importadas', (res.nuevas || 0) + ' anadida(s) a las de la app');
+            APP.geoListaVista = 'app';
+            glocRender();
+            if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
+        }
+    });
 }

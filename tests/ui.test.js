@@ -619,7 +619,38 @@ ok('el modal respeta el tema claro en la chapa',
 ok('el modal tiene tira de cifras del borrador', /function glocStatsHTML\(\)/.test(src) && /class="gg-stat/.test(src));
 ok('el modal marca la lista con su icono de forma', /glocListaHTML\(\)/.test(src) &&
     /gg-ptag"><span class="rondo-usym">' \+ UIS\[ico\]/.test(src));
-ok('el GeoJSON de geocercas marca el origen', /origen: glocEsApp\(z\) \? 'rondo-app' : 'plataforma'/.test(src));
+ok('el GeoJSON de geocercas marca el origen', /origen: org\.id === 'app' \? 'rondo-app' : 'plataforma'/.test(src));
+ok('el GeoJSON marca donde se guarda', /guardado: \(org\.id === 'app'\) \? \(org\.guardado \? 'navegador' : 'sesion'\) : null/.test(src));
+ok('el CSV de geocercas tiene columnas de origen y guardado',
+    /\['nombre', 'origen', 'guardado', 'rol', 'area_km2', 'lat', 'lon', 'unidades'\]/.test(src));
+// v6.14: previsualizacion en el mapa, import con seleccion y origen visible.
+ok('helper de origen de cada geocerca', /function glocOrigen\(z, cfg\)/.test(src) &&
+    /id: 'plat', txt: 'Plataforma'/.test(src) && /id: 'app', txt: 'App'/.test(src));
+ok('el mapa previsualiza las geocercas de la plataforma',
+    /function glocPintarPlataforma\(\)/.test(src) && /rondo-gg-plat/.test(src) &&
+    /De la plataforma/.test(src));
+ok('el mapa previsualiza las de la app', /function glocPintarContexto\(\)/.test(src) &&
+    /de la app/.test(src));
+ok('anillo compartido para las tres capas', /function glocAnillo\(inst, z, segmentos\)/.test(src) &&
+    /_zonaPuntos\(z\)/.test(src));
+ok('leyenda del mapa con filtro de origen', /function glocLeyendaHTML\(\)/.test(src) &&
+    /data-gg="preview"/.test(src) && /gg-ley-b/.test(src));
+ok('el filtro de previsualizacion cambia de capa',
+    /APP\.geoPreview = \(lp\.dataset\.v === 'app' \|\| lp\.dataset\.v === 'plat'\)/.test(src) &&
+    /glocPintarPlataforma\(\);/.test(src));
+ok('tope de geocercas dibujadas por capa', /const GEOLOC_MAX_PREVIEW = 140/.test(src));
+ok('la lista del editor filtra por origen', /function glocFiltroChip\(val, txt, n\)/.test(src) &&
+    /data-gg="lista"/.test(src) && /Las de la plataforma no se editan aqui/.test(src));
+ok('cada fila muestra su origen', /gg-origen o-' \+ org\.id/.test(src) && /org\.corto/.test(src));
+ok('marca las recordadas en el navegador', /class="gg-lock"/.test(src) && /Se recuerda al cerrar el navegador/.test(src));
+ok('importar con seleccion de geocercas', /function glocAbrirImport\(txt\)/.test(src) &&
+    /data-gg-imp="/.test(src) && /Elige cuales importar/.test(src));
+ok('importar una sola de un archivo con varias', /function glocImporta\(txt, modo, sel\)/.test(src) &&
+    /Array\.isArray\(sel\) && sel\.length/.test(src));
+ok('el dialogo de import avisa de nombres repetidos', /gg-imp-dup/.test(src) &&
+    /Ya existe una con ese nombre/.test(src));
+ok('el clic en la leyenda no anade puntos al mapa',
+    /ev\.target\.closest\('.gg-leyenda,.gg-hud'\)\) return/.test(src));
 ok('la lista muestra nombre y tamano de cada geocerca', /function glocListaHTML\(\)/.test(src) &&
     /glocTextoTam\(z\)/.test(src));
 ok('RONDO_DOC menciona las geocercas de la app', /Geocercas de la app/.test(src));

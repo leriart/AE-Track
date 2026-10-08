@@ -77,7 +77,7 @@ const stubs = [
 const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {glocPts,glocLatLon,glocCentro,glocBBox,glocNormaliza,glocNombreLibre,' +
     'glocExportaJSON,glocExportaGeoJSON,glocParsea,glocLista,glocSincroniza,glocGuarda,glocBorra,' +
-    'glocImporta,glocEsApp,glocPerimM,glocM2,glocTextoTam,glocPxALatLon,' +
+    'glocImporta,glocEsApp,glocOrigen,glocPerimM,glocM2,glocTextoTam,glocPxALatLon,' +
     'GEOLOC_MAX_PUNTOS,GEOLOC_MAX_ZONAS,GEOLOC_MIN_RADIO,GEOLOC_MAX_RADIO,GEOLOC_NOMBRE_MAX};';
 const mod = new Function('H', code)(H);
 
@@ -316,6 +316,46 @@ ok('proyeccion: sin instancia no rompe', (function () {
     return isFinite(p.lat) && isFinite(p.lon);
 })());
 ok('proyeccion: no se sale del rango de latitudes', mod.glocPxALatLon({ z: 2, ox: 0, oy: 0 }, 0, 0).lat <= 85.06);
+
+// ── Origen de cada geocerca ─────────────────────────────────────────────
+ok('origen: la de la plataforma', (function () {
+    const o = mod.glocOrigen({ id: 1, n: 'PATIO' });
+    return o.id === 'plat' && o.corto === 'PLAT' && !o.guardado;
+})());
+ok('origen: la de la app se marca segun donde este guardada', (function () {
+    APP.config.geolocalRecordar = false;
+    const a = mod.glocOrigen({ id: 'g1', n: 'Mia', app: 1 });
+    APP.config.geolocalRecordar = true;
+    const b = mod.glocOrigen({ id: 'g1', n: 'Mia', app: 1 });
+    APP.config.geolocalRecordar = false;
+    return a.id === 'app' && a.corto === 'APP' && !a.guardado && /sesi\u00f3n/.test(a.largo) &&
+        b.guardado === true && /navegador/.test(b.largo);
+})());
+ok('origen: _app tambien cuenta como de la app', mod.glocEsApp({ _app: true }) === true);
+ok('origen: null no revienta', mod.glocOrigen(null).id === 'plat');
+
+// ── Importar con seleccion ───────────────────────────────────────────────
+mod.glocSincroniza([]);
+mod.glocGuarda(mod.glocNormaliza({ n: 'Ya existe', t: 2, p: CUAD }));
+const archivo = JSON.stringify({ geocercas: [
+    { n: 'Una', t: 2, p: CUAD },
+    { n: 'Dos', t: 3, p: [{ x: 1, y: 2 }], w: 300 },
+    { n: 'Ya existe', t: 2, p: CUAD.slice(0, 3) }
+] });
+let imp = mod.glocImporta(archivo, 'anadir');
+ok('seleccion: sin filtro importa todas', imp.nuevas === 3 && APP.zonasLocales.length === 4);
+ok('seleccion: el nombre repetido se renombra', APP.zonasLocales.some((x) => x.n === 'Ya existe 2'));
+mod.glocSincroniza([mod.glocNormaliza({ n: 'Ya existe', t: 2, p: CUAD })]);
+imp = mod.glocImporta(archivo, 'anadir', [1]);
+ok('seleccion: importa solo la elegida', imp.nuevas === 1 && APP.zonasLocales.length === 2 &&
+    APP.zonasLocales.filter((x) => x.n.indexOf('Dos') === 0).length === 1,
+    JSON.stringify(APP.zonasLocales.map((x) => x.n)));
+ok('seleccion: las demas no se crean', !APP.zonasLocales.some((x) => x.n.indexOf('Una') === 0));
+const antesSel = APP.zonasLocales.length;
+imp = mod.glocImporta(archivo, 'anadir', [9]);
+ok('seleccion: indice inexistente no rompe',
+    imp.nuevas === 0 && APP.zonasLocales.length === antesSel);
+mod.glocSincroniza([]);
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
 process.exit(fallos ? 1 : 0);
