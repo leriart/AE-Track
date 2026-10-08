@@ -692,8 +692,23 @@ ok('informe: el markdown con tablas', /rxReplayDescargar\(rxGeoInfNombreArchivo\
 ok('informe: el nombre del archivo lleva geocerca, modo y fecha',
     /function rxGeoInfNombreArchivo\(d, ext\)/.test(src) &&
     /\? 'paradas_' : 'cruces_'/.test(src) && /rondo_geocerca_/.test(src));
-ok('informe: lee los tres origenes de datos', /function rxGeoInfDeBitacora\(/.test(src) &&
-    /function rxGeoInfDeViajes\(/.test(src) && /function rxGeoInfDeReplay\(/.test(src));
+ok('informe: lee los cuatro origenes de datos', /function rxGeoInfDeBitacora\(/.test(src) &&
+    /function rxGeoInfDeViajes\(/.test(src) && /function rxGeoInfDeReplay\(/.test(src) &&
+    /function rxGeoInfDeRastreo\(/.test(src));
+ok('rastreo: recorre las trazas de todas las unidades',
+    /for \(const k of Object\.keys\(trazas\)\)/.test(src) && /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: k, fuente: 'rastreo' \}\)/.test(src));
+ok('rastreo: paradas de la traza con umbral propio',
+    /const RX_GEO_PARADA_MIN = 2/.test(src) && /const minSeg = Math\.max\(30, RX_GEO_PARADA_MIN \* 60\)/.test(src));
+ok('rastreo: quien esta dentro ahora',
+    /tipo: 'dentro', eco: info\.eco \|\| clave/.test(src) && /Dentro ahora/.test(src));
+ok('rastreo: alcance todas / seleccionadas',
+    /function rxGeoInfSoloSel\(\)/.test(src) && /function rxGeoInfEnSeleccion\(clave, info\)/.test(src) &&
+    /data-rgi="unidades"', 'todas'/.test(src) && /data-rgi="unidades"', 'sel'/.test(src));
+ok('rastreo: la cache separa todas de seleccionadas',
+    /const key = f \+ \(f === 'rastreo' \? ':' \+ \(RX_GEO\.unidades \|\| 'todas'\) : ''\)/.test(src));
+ok('informe: el PDF lista a los que estan dentro ahora',
+    /Dentro de la geocerca ahora \(/.test(src) && /filasDentro/.test(src));
+ok('informe: la tabla marca "dentro ahora"', /const dn = \(c\.dentro \? 'Si' : '-'\)/.test(src));
 ok('informe: agrega cruces y paradas por unidad', /function rxGeoInfAgrupa\(eventos, modo\)/.test(src) &&
     /entradas: filas\.reduce/.test(src) && /min: filas\.reduce/.test(src));
 ok('informe: resumen por geocerca para la segunda tabla',

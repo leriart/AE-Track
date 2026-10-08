@@ -522,6 +522,7 @@ Sale en **PDF**, **CSV** o **Markdown**.
 | Geocerca | Cualquiera de las cargadas (las de la plataforma y las de Rondo), o *Todas las geocercas* |
 | Periodo | Hoy / 24 h / 7 dias / 15 dias / 30 dias / Todo |
 | Rango de dias | Dos fechas (desde – hasta), ambas incluidas |
+| Unidades | **Toda la flota** (todas las que Rondo rastrea) o **solo las seleccionadas** (la lista vigilada) |
 | Datos | De donde salen los eventos (ver abajo) |
 
 El **rango de dias** escrito a mano manda sobre los atajos: si eliges un
@@ -533,14 +534,22 @@ El panel va mostrando en vivo seis KPIs (unidades, cruces, entradas, paradas,
 minutos quietos, paradas con motor apagado) y una **vista previa** de las
 primeras 12 unidades, con la fila marcada en rojo cuando supera el filtro.
 
-Sobre el alcance de los datos: la fuente **Avisos** solo guarda lo ocurrido en
-esta pestana (hasta 300 avisos), asi que un rango de muchos dias saldra vacio
-salvo que tengas viajes analizados o recorridos cargados.
+Sobre el alcance de los datos: la fuente **Rastreo** trabaja con la traza de
+la sesion (un punto cada vez que la unidad avanza 20 m, con un maximo por
+unidad), asi que es la que mejor responde a "quien anduvo por aqui" sin
+depender de que las reglas hayan avisado. La fuente **Avisos** solo guarda lo
+ocurrido en esta pestana (hasta 300 avisos), asi que un rango de muchos dias
+saldra vacio salvo que uses el rastreo, tengas viajes analizados o cargues un
+recorrido.
+
+Con **Unidades** eliges si el informe mira **toda la flota** que Rondo rastrea
+o solo **las seleccionadas** (la lista vigilada).
 
 #### De donde salen los datos
 
 | Fuente | Que trae | Cuando hay datos |
 | --- | --- | --- |
+| **Rastreo** | Recorre la traza que Rondo ya guarda de cada unidad y saca **todas** las entradas, salidas y paradas dentro de la geocerca, haya avisado o no. Ademas lista quien esta **dentro ahora** | En cuanto hay unidades rastreando (traza activa), sin depender de reglas |
 | **Avisos** | Entradas y salidas (regla *Geocercas*), paradas dentro (regla *Detenida en geocerca*) y las de tu alerta de geocercas, con **hora exacta** | Siempre que haya avisos con geocerca en esta sesion |
 | **Viajes analizados** | Paradas con duracion y cruces deducidos de la traza | Tras analizar el viaje de esa unidad |
 | **Recorrido cargado** | Eventos con hora y paradas con motor y lugar | Con un recorrido cargado en la pestana Replay |
@@ -552,6 +561,9 @@ analices un viaje o cargues un recorrido.
 #### Que contiene
 
 - **Resumen** con los KPIs y una frase con el alcance de los datos.
+- **Dentro de la geocerca ahora**: con el rastreo, la lista de unidades que
+  estan dentro en este momento, con su velocidad, si reportan y sus
+  coordenadas.
 - **Geocerca**: nombre, tipo, origen (plataforma o creada en Rondo),
   superficie y centro.
 - **Unidades**: cruces, entradas, salidas, paradas, minutos quieto y, en modo

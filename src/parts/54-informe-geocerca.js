@@ -13,14 +13,19 @@
  * El nucleo de este fragmento es puro (solo arrays que le pasamos) para
  * poder probarlo aislado en tests/informe-geocerca.test.js.
  */
-const RX_GEO_FUENTES = Object.freeze(['bitacora', 'viajes', 'replay']);
+const RX_GEO_FUENTES = Object.freeze(['rastreo', 'bitacora', 'viajes', 'replay']);
+// Minutos quieto para que una parada de la traza cuente. Es menor que el
+// umbral del Replay porque aqui la traza se toma en vivo, con puntos cada
+// pocos segundos: esperar 15 min seria exigir demasiado.
+const RX_GEO_PARADA_MIN = 2;
 const RX_GEO_RANGOS = Object.freeze(['hoy', '24h', '7d', '15d', '30d', 'todo']);
 const RX_GEO_TIPOS = Object.freeze({
     entra: 'Entrada',
     sale: 'Salida',
     detenida: 'Parada',
     motor: 'Parada con motor apagado',
-    parada: 'Parada'
+    parada: 'Parada',
+    dentro: 'Dentro ahora'
 });
 // ── Bitacora: un aviso -> evento con geocerca, tipo y minutos ───────────
 // Si el aviso no trae el campo zona (los anteriores a esta version) se lo
@@ -143,7 +148,7 @@ function rxGeoInfAgrupa(eventos, modo) {
         let f = por[clave];
         if (!f) {
             f = por[clave] = {
-                eco: clave, cruces: 0, entradas: 0, salidas: 0, paradas: 0,
+                eco: clave, cruces: 0, entradas: 0, salidas: 0, paradas: 0, dentro: 0,
                 min: 0, minMotor: 0, motor: 0, primero: 0, ultimo: 0,
                 lugares: {}, zonas: {}
             };
@@ -151,6 +156,8 @@ function rxGeoInfAgrupa(eventos, modo) {
         if (e.tipo === 'entra' || e.tipo === 'sale') {
             f.cruces++;
             if (e.tipo === 'entra') f.entradas++; else f.salidas++;
+        } else if (e.tipo === 'dentro') {
+            f.dentro++;
         } else {
             f.paradas++;
             f.min += (+e.min || 0);
@@ -173,6 +180,7 @@ function rxGeoInfAgrupa(eventos, modo) {
         entradas: filas.reduce((s, f) => s + f.entradas, 0),
         salidas: filas.reduce((s, f) => s + f.salidas, 0),
         paradas: filas.reduce((s, f) => s + f.paradas, 0),
+        dentro: filas.reduce((s, f) => s + f.dentro, 0),
         min: filas.reduce((s, f) => s + f.min, 0),
         motor: filas.reduce((s, f) => s + f.motor, 0),
         primera: filas.reduce((m, f) => ((f.primero && (!m || f.primero < m)) ? f.primero : m), 0),
@@ -210,7 +218,7 @@ function rxGeoInfCeldas(f) {
     const lugares = Object.keys(f.lugares || {});
     return {
         eco: f.eco, cruces: f.cruces, entradas: f.entradas, salidas: f.salidas,
-        paradas: f.paradas, min: f.min, motor: f.motor, minMotor: f.minMotor,
+        paradas: f.paradas, dentro: f.dentro, min: f.min, motor: f.motor, minMotor: f.minMotor,
         primero: f.primero, ultimo: f.ultimo,
         zonas: zonas.join(' | '),
         lugares: lugares.slice(0, 4).join(' | ')
@@ -248,30 +256,41 @@ function rxGeoInfCruces(puntos, dentroDe, base) {
 
 function rxGeoInfCabeceras(modo) {
     return (modo === 'paradas')
-        ? ['Eco', 'Paradas', 'Min quieto', 'Min motor apagado', 'Paradas con motor', 'Geocercas', 'Primera', 'Ultima']
-        : ['Eco', 'Cruces', 'Entradas', 'Salidas', 'Paradas', 'Min quieto', 'Geocercas', 'Primera', 'Ultima'];
+        ? ['Eco', 'Paradas', 'Min quieto', 'Min motor apagado', 'Paradas con motor', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima']
+        : ['Eco', 'Cruces', 'Entradas', 'Salidas', 'Paradas', 'Min quieto', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima'];
 }
 // Celdas ya en HTML (para la tabla del PDF y la vista previa).
 function rxGeoInfCeldasHTML(c, modo) {
     const t = (ms) => (ms ? esc(rxFechaHora(ms)) : '-');
+    const dn = (c.dentro ? 'Si' : '-');
     if (modo === 'paradas') {
         return [esc(c.eco), String(c.paradas), String(c.min), String(c.minMotor),
-            String(c.motor), esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
+            String(c.motor), dn, esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
     }
     return [esc(c.eco), String(c.cruces), String(c.entradas), String(c.salidas),
-        String(c.paradas), String(c.min), esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
+        String(c.paradas), String(c.min), dn, esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
 }
 // Filas planas (sin HTML) para CSV y Markdown.
 function rxGeoInfCeldasPlanas(c, modo) {
     const t = (ms) => (ms ? rxFechaHora(ms) : '-');
+    const dn = (c.dentro ? 'Si' : '-');
     if (modo === 'paradas') {
         return [c.eco, String(c.paradas), String(c.min), String(c.minMotor),
-            String(c.motor), (c.zonas || '-'), t(c.primero), t(c.ultimo)];
+            String(c.motor), dn, (c.zonas || '-'), t(c.primero), t(c.ultimo)];
     }
     return [c.eco, String(c.cruces), String(c.entradas), String(c.salidas),
-        String(c.paradas), String(c.min), (c.zonas || '-'), t(c.primero), t(c.ultimo)];
+        String(c.paradas), String(c.min), dn, (c.zonas || '-'), t(c.primero), t(c.ultimo)];
 }
 /* ====================== INFORME POR GEOCERCA: FUENTES ====================== */
+// Estado de la consulta (fuente, periodo, geocerca, modo y alcance del
+// rastreo). Vive aqui, con los lectores, porque el alcance tambien cambia
+// lo que devuelve el rastreo.
+const RX_GEO = {
+    fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '',
+    desde: '', hasta: '',
+    // 'todas' (toda la flota con traza) o 'sel' (solo la lista vigilada).
+    unidades: 'todas'
+};
 function rxGeoInfNombre(z) {
     return (z && (z.n || z.nombre)) || (z ? ('Zona ' + z.id) : '');
 }
@@ -298,6 +317,81 @@ function rxGeoInfDeBitacora() {
     for (const a of (APP.historial || [])) {
         const e = rxGeoInfEvento(a);
         if (e) out.push(e);
+    }
+    return out;
+}
+// Rastreo: recorre la traza que Rondo ya viene guardando de cada unidad
+// (una muestra cada vez que se mueve >=20 m, hasta trazadoMax) y saca los
+// cruces y las paradas dentro de las geocercas. Es la fuente que mira a
+// TODAS las unidades, hayan avisado o no. Ademas anade quien esta dentro
+// ahora mismo, con la posicion del ultimo reporte.
+function rxGeoInfSoloSel() {
+    return RX_GEO.unidades === 'sel';
+}
+function rxGeoInfEnSeleccion(clave, info) {
+    if (!rxGeoInfSoloSel()) return true;
+    const sel = APP.seleccion;
+    if (!sel || !sel.size) return false;
+    try {
+        if (sel.has(clave)) return true;
+        if (info && (sel.has(info.eco) || sel.has(info.placa) || sel.has(String(info.id)))) return true;
+    } catch (_) { /* noop */ }
+    return false;
+}
+function rxGeoInfDeRastreo() {
+    const out = [];
+    const minSeg = Math.max(30, RX_GEO_PARADA_MIN * 60);
+    // 1) Trazas: cruces y paradas de cada unidad vigilada.
+    const trazas = APP.trazas || {};
+    for (const k of Object.keys(trazas)) {
+        const arr = trazas[k] || [];
+        if (arr.length < 2) continue;
+        if (!rxGeoInfEnSeleccion(k, null)) continue;
+        const pts = arr.map((p) => [p.lon, p.lat, (p.t || 0) * 1000]);
+        out.push.apply(out, rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: k, fuente: 'rastreo' }));
+        // Paradas: muestras consecutivas dentro y casi quietas. La duracion
+        // es la de la propia traza (hasta la ultima muestra quieta).
+        let desde = 0, ultimo = 0, zona = '';
+        const cerrar = () => {
+            if (!desde || !zona) { desde = 0; ultimo = 0; zona = ''; return; }
+            const seg = (ultimo - desde) / 1000;
+            if (seg >= minSeg) {
+                out.push({
+                    zona: zona, tipo: 'detenida', eco: k, ts: desde,
+                    lat: null, lon: null, min: Math.round(seg / 60),
+                    motor: '', motorFuente: '', lugar: '',
+                    titulo: 'Parada', detalle: '', fuente: 'rastreo'
+                });
+            }
+            desde = 0; ultimo = 0; zona = '';
+        };
+        for (let i = 0; i < arr.length; i++) {
+            const p = arr[i];
+            const nom = (p.lat == null) ? '' : rxGeoInfZonaDe(p.lat, p.lon);
+            const quieta = nom && (p.v == null || +p.v <= 3);
+            if (quieta) {
+                if (!desde || nom !== zona) { cerrar(); desde = p.t * 1000; zona = nom; }
+                ultimo = p.t * 1000;
+            } else cerrar();
+        }
+        cerrar();
+    }
+    // 2) Quien esta dentro de una geocerca AHORA (toda la flota que reporta).
+    const ahora = Date.now();
+    for (const u of (APP.unidades || [])) {
+        let info = null, st = null;
+        try { info = parseUnitName(u); st = unitState(u); } catch (_) { continue; }
+        if (!info || st.lat == null) continue;
+        const clave = info.eco || info.placa || String(info.id);
+        if (!rxGeoInfEnSeleccion(clave, info)) continue;
+        const zona = rxGeoInfZonaDe(st.lat, st.lon);
+        if (!zona) continue;
+        out.push({
+            zona: zona, tipo: 'dentro', eco: info.eco || clave, ts: ahora,
+            lat: st.lat, lon: st.lon, min: 0, motor: '', motorFuente: '', lugar: '',
+            vel: Math.round(st.vel || 0), online: !!st.online,
+            titulo: 'Dentro ahora', detalle: (st.online ? '' : 'sin senal reciente'), fuente: 'rastreo'
+        });
     }
     return out;
 }
@@ -343,14 +437,18 @@ let _rxGeoCache = { t: 0, datos: {} };
 function rxGeoInfEventos(fuente, forzar) {
     const f = (RX_GEO_FUENTES.indexOf(fuente) >= 0) ? fuente : 'bitacora';
     const t = Date.now();
-    if (!forzar && _rxGeoCache.datos[f] && (t - _rxGeoCache.t) < 8000) return _rxGeoCache.datos[f];
+    // El rastreo depende ademas del alcance (todas / seleccionadas): se
+    // guarda con esa clave para no mezclar los dos resultados.
+    const key = f + (f === 'rastreo' ? ':' + (RX_GEO.unidades || 'todas') : '');
+    if (!forzar && _rxGeoCache.datos[key] && (t - _rxGeoCache.t) < 8000) return _rxGeoCache.datos[key];
     let out = [];
     try {
-        if (f === 'replay') out = rxGeoInfDeReplay();
+        if (f === 'rastreo') out = rxGeoInfDeRastreo();
+        else if (f === 'replay') out = rxGeoInfDeReplay();
         else if (f === 'viajes') out = rxGeoInfDeViajes();
         else out = rxGeoInfDeBitacora();
     } catch (e) { out = []; }
-    _rxGeoCache = { t: t, datos: Object.assign({}, _rxGeoCache.datos, (function () { const o = {}; o[f] = out; return o; })()) };
+    _rxGeoCache = { t: t, datos: Object.assign({}, _rxGeoCache.datos, (function () { const o = {}; o[key] = out; return o; })()) };
     return out;
 }
 // Que fuentes tienen datos ahora mismo (para el selector del dialogo).
@@ -364,7 +462,6 @@ function rxGeoInfFuentesDisponibles() {
 }
 
 /* ====================== INFORME POR GEOCERCA: UI ====================== */
-const RX_GEO = { fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '', desde: '', hasta: '' };
 function rxGeoInfZonas() {
     return (APP.zonas || []).map(rxGeoInfNombre).filter(Boolean);
 }
@@ -392,8 +489,9 @@ function rxGeoInfFilas(d) {
 }
 function rxGeoInfResumen(d) {
     const t = d.unidades.total;
-    const fuenteTxt = (d.fuente === 'bitacora') ? 'Avisos de la sesion'
-        : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay');
+    const fuenteTxt = (d.fuente === 'rastreo') ? 'Rastreo de unidades'
+        : (d.fuente === 'bitacora') ? 'Avisos de la sesion'
+            : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay');
     const rangoTxt = d.rangoTxt || (d.rango === 'hoy' ? 'hoy'
         : (d.rango === '24h' ? 'ultimas 24 h'
             : (d.rango === '7d' ? 'ultimos 7 dias'
@@ -429,6 +527,14 @@ function rxGeoInfHTML(d) {
         '<b>' + esc(f.zona) + '</b>', String(f.cruces), String(f.paradas), String(f.min),
         String(f.nUnidades), esc(Object.keys(f.unidades).slice(0, 10).join(', ') + (f.nUnidades > 10 ? '...' : ''))
     ]);
+    // Quienes estan dentro ahora mismo (solo aparece con el rastreo).
+    const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
+    const filasDentro = dentro.map((e) => [
+        '<b>' + esc(e.eco) + '</b>', esc(e.zona),
+        (e.vel == null ? '-' : (e.vel + ' km/h')),
+        (e.online === false ? '<span class="badge sev-alto">sin senal</span>' : '<span class="badge sev-ok">en linea</span>'),
+        (e.lat == null ? '<span class="muted">-</span>' : '<span class="mono">' + esc(rxCoord(e.lat, e.lon, 5)) + '</span>')
+    ]);
     const detalle = d.eventos.slice(0, 200).map((e) => [
         rxFechaHora(e.ts), esc(RX_GEO_TIPOS[e.tipo] || e.tipo), esc(e.zona), esc(e.eco || '-'),
         esc(e.detalle || e.titulo || '-'),
@@ -444,9 +550,12 @@ function rxGeoInfHTML(d) {
         kpi(tot.unidades, 'Unidades') + kpi(tot.cruces, 'Cruces') + kpi(tot.entradas, 'Entradas') +
         kpi(tot.salidas, 'Salidas') + kpi(tot.paradas, 'Paradas') +
         kpi(tot.min + ' min', 'Quieto') + kpi(tot.motor, 'Con motor apagado') +
+        (tot.dentro ? kpi(tot.dentro, 'Dentro ahora') : '') +
         '</div>' +
         '<h2 id="res">Resumen</h2><p class="resumen">' + esc(rxGeoInfResumen(d)) + '</p>' +
         infoZ +
+        (filasDentro.length ? '<h2 id="dentro">Dentro de la geocerca ahora (' + filasDentro.length + ')</h2>' +
+            rxInfTabla(['Eco', 'Geocerca', 'Velocidad', 'Estado', 'Coordenadas'], filasDentro) : '') +
         '<h2 id="unid">Unidades (' + d.unidades.filas.length + ')</h2>' + rxInfTabla(cab, filas) +
         '<h2 id="zonas">Geocercas (' + filasZona.length + ')</h2>' +
         rxInfTabla(['Geocerca', 'Cruces', 'Paradas', 'Min quieto', 'Unidades', 'Ecos'], filasZona) +
@@ -480,7 +589,7 @@ function abrirInformeGeocerca(origen) {
         return;
     }
     if (!hay.some((h) => h.k === RX_GEO.fuente)) RX_GEO.fuente = hay[0].k;
-    const ETIQUETA = { bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
+    const ETIQUETA = { rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
     const cuerpo = () => {
         const d = rxGeoInfReune();
         const fuentes = rxGeoInfFuentesDisponibles();
@@ -503,6 +612,10 @@ function abrirInformeGeocerca(origen) {
             '</div></div>' +
             '<div class="rgi-row"><span class="rgi-lb">Geocerca</span>' +
             '<select id="rgi-zona" class="filtro">' + opts + '</select></div>' +
+            '<div class="rgi-row"><span class="rgi-lb">Unidades</span><div class="rgi-chips">' +
+            chip(RX_GEO.unidades !== 'sel', 'data-rgi="unidades"', 'todas', 'Toda la flota') +
+            chip(RX_GEO.unidades === 'sel', 'data-rgi="unidades"', 'sel', 'Solo las seleccionadas') +
+            '</div></div>' +
             '<div class="rgi-row"><span class="rgi-lb">Periodo</span><div class="rgi-chips">' +
             chip(RX_GEO.rango === 'hoy' && !RX_GEO.desde, 'data-rgi="rango"', 'hoy', 'Hoy') +
             chip(RX_GEO.rango === '24h' && !RX_GEO.desde, 'data-rgi="rango"', '24h', '24 h') +

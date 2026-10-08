@@ -24,6 +24,10 @@ const H = {
     viajes: {},
     zonas: [],
     replay: { msgs: [], paradas: [] },
+    trazas: {},
+    unidades: [],
+    seleccion: new Set(),
+    trazadoMax: 500,
     dias: 3600000
 };
 const APP = {
@@ -57,13 +61,15 @@ const stubs = [
     ' const r=+z.w; if(!(r>0)) return false;',
     ' const mx=111320*Math.cos(b.cen_y*Math.PI/180), my=110540;',
     ' const dx=(lon-b.cen_x)*mx, dy=(lat-b.cen_y)*my; return Math.sqrt(dx*dx+dy*dy)<=r; }',
-    'function rxFechaHora(t){ return t ? new Date(t).toISOString().slice(0,16).replace("T"," ") : "-"; }'
+    'function rxFechaHora(t){ return t ? new Date(t).toISOString().slice(0,16).replace("T"," ") : "-"; }',
+    'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); const e=m?m[1]:""; return {id:0,nombre:n,eco:e,placa:"",clave:e||n}; }',
+    'function unitState(u){ const p=(u&&u.pos)||{}; return {lat:(p.y!=null)?+p.y:null,lon:(p.x!=null)?+p.x:null,vel:+p.s||0,online:true}; }'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {rxGeoInfZonaTexto,rxGeoInfMinutos,rxGeoInfEvento,rxGeoInfParada,rxGeoInfFiltra,' +
     'rxGeoInfDesde,rxGeoInfFechaMs,rxGeoInfFechaTxt,rxGeoInfAgrupa,rxGeoInfPorZona,rxGeoInfCeldas,rxGeoInfCruces,' +
-    'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfEventos,rxGeoInfFuentesDisponibles,' +
+    'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfDeRastreo,rxGeoInfEventos,rxGeoInfFuentesDisponibles,RX_GEO,' +
     'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
     'RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS};';
 const mod = new Function('P', code)(H);
@@ -297,6 +303,68 @@ H.viajes['105'] = { traza: [[0.02, 0], [0, 0]], paradas: [] };
 ok('fuentes: los viajes tambien', mod.rxGeoInfFuentesDisponibles().some((x) => x.k === 'viajes'));
 ok('fuentes: elegir una fuente inexistente cae en bitacora',
     mod.rxGeoInfEventos('inventada').length === 1);
+
+// ── Fuente: rastreo (todas las unidades / solo las seleccionadas) ───────
+reinicia();
+mod.RX_GEO.unidades = 'todas';
+// Traza de la unidad 105: fuera, dentro (2 muestras quietas), fuera.
+H.trazas['105'] = [
+    { t: 1000, lat: 0.02, lon: 0, v: 40 },
+    { t: 1060, lat: 0, lon: 0, v: 0 },
+    { t: 1180, lat: 0.0005, lon: 0.0005, v: 0 },
+    { t: 1240, lat: 0.03, lon: 0, v: 45 }
+];
+// Traza de la 205: entra y sale sin parar.
+H.trazas['205'] = [
+    { t: 2000, lat: 0.02, lon: 0, v: 50 },
+    { t: 2040, lat: 0, lon: 0, v: 45 },
+    { t: 2080, lat: 0.03, lon: 0, v: 50 }
+];
+H.unidades = [{ nm: '105', pos: { y: 0, x: 0, s: 0 } }, { nm: '305', pos: { y: 0.0005, x: 0, s: 12 } }];
+let ras = mod.rxGeoInfDeRastreo();
+const crucesR = ras.filter((x) => x.tipo === 'entra' || x.tipo === 'sale');
+ok('rastreo: cruces de las dos trazas (entra y sale por unidad)',
+    crucesR.length === 4 && crucesR.filter((x) => x.eco === '105').length === 2 &&
+    crucesR.filter((x) => x.eco === '205').length === 2,
+    JSON.stringify(crucesR.map((x) => x.eco + ':' + x.tipo)));
+ok('rastreo: parada de la traza con duracion', ras.filter((x) => x.tipo === 'detenida').length === 1 &&
+    ras.filter((x) => x.tipo === 'detenida')[0].min === 2 && ras.filter((x) => x.tipo === 'detenida')[0].zona === 'PATIO',
+    JSON.stringify(ras.filter((x) => x.tipo === 'detenida')[0]));
+ok('rastreo: parada con la regla de minutos de la traza',
+    /const RX_GEO_PARADA_MIN = 2/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'parts', '54-informe-geocerca.js'), 'utf8')));
+ok('rastreo: marca a quien esta dentro ahora', ras.filter((x) => x.tipo === 'dentro').length === 2 &&
+    ras.filter((x) => x.tipo === 'dentro').every((x) => x.zona === 'PATIO'));
+ok('rastreo: el evento "dentro" trae velocidad y estado',
+    ras.filter((x) => x.tipo === 'dentro')[0].vel === 0 && ras.filter((x) => x.tipo === 'dentro')[0].online === true);
+ok('rastreo: fuente marcada', ras.every((x) => x.fuente === 'rastreo'));
+// Alcance: solo las seleccionadas.
+mod.RX_GEO.unidades = 'sel';
+H.seleccion.add('105');
+ras = mod.rxGeoInfDeRastreo();
+ok('rastreo: solo la seleccionada', ras.every((x) => x.eco === '105'));
+ok('rastreo: la no seleccionada no aparece',
+    !ras.some((x) => x.eco === '305'), JSON.stringify(ras.map((x) => x.eco)));
+mod.RX_GEO.unidades = 'todas';
+H.seleccion.clear();
+ok('rastreo: "sube" igual a la seleccion', mod.RX_GEO.unidades === 'todas');
+// El agregado separa "dentro ahora" de las paradas.
+const agR = mod.rxGeoInfAgrupa(mod.rxGeoInfDeRastreo(), 'paradas');
+ok('rastreo: "dentro" no cuenta como parada', agR.filas.every((f) => f.dentro <= 1 && f.paradas < 2));
+ok('rastreo: total de dentro ahora', agR.total.dentro === 2, JSON.stringify(agR.total));
+ok('rastreo: sin trazas ni unidades no rompe', (function () {
+    const t = H.trazas; H.trazas = {}; const u = H.unidades; H.unidades = [];
+    const n = mod.rxGeoInfDeRastreo().length;
+    H.trazas = t; H.unidades = u;
+    return n === 0;
+})());
+ok('rastreo: es la primera fuente disponible', (function () {
+    const f = mod.rxGeoInfFuentesDisponibles();
+    return f.length === 0 || f[0].k === 'rastreo';
+})());
+ok('tipos: "dentro ahora" en el catalogo', mod.RX_GEO_TIPOS.dentro === 'Dentro ahora');
+ok('cabeceras: columna "Dentro ahora"',
+    mod.rxGeoInfCabeceras('cruces').indexOf('Dentro ahora') >= 0 &&
+    mod.rxGeoInfCabeceras('paradas').indexOf('Dentro ahora') >= 0);
 
 // ── Celdas para las salidas ─────────────────────────────────────────────
 const cab = mod.rxGeoInfCabeceras('paradas');

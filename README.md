@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.17.0-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.17.0.md)
-[![tests](https://img.shields.io/badge/tests-1616%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1638%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -122,8 +122,9 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **Informe por geocerca** (tambien desde **Reproducir recorrido**, donde toma
   las fechas del recorrido cargado): elige que informe quieres (**cruces por
   unidad** o **paradas dentro**), la geocerca, un **rango de dias** (o los
-  atajos hoy/24 h/7/15/30 dias/todo) y de donde salen los datos (avisos de la
-  sesion, viajes analizados o el recorrido cargado en Replay). Trae KPIs, tabla por unidad, resumen por
+  atajos hoy/24 h/7/15/30 dias/todo), si mira **toda la flota** o solo **las
+  seleccionadas**, y de donde salen los datos (**rastreo** de las trazas,
+  avisos de la sesion, viajes analizados o el recorrido cargado en Replay). Trae KPIs, tabla por unidad, resumen por
   geocerca y el detalle evento a evento; se descarga en **PDF**, **CSV** o
   **Markdown**. Ver
   [Informe por geocerca](./MANUAL.md#informe-por-geocerca).
@@ -416,7 +417,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**21 suites, ~1616 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**21 suites, ~1638 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana
