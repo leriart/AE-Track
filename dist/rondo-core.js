@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '6.11.1';
+    const VER = '6.12.0';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -604,7 +604,11 @@
         // v6.0.11: ultima pestana del panel usada (para retomarla al recargar).
         tab: 'rondo.api.s.tab',
         // v6.0.11: ultima seccion de Ajustes abierta (General, Reglas, IA...).
-        cfgTab: 'rondo.api.s.cfgTab'
+        cfgTab: 'rondo.api.s.cfgTab',
+        // v6.12: estado de la alerta de geocercas de las unidades que NO son
+        // vigiladas (flota completa). Las vigiladas lo llevan en su memo
+        // normal, dentro de R.geoAlerta.
+        geoAlerta: 'rondo.api.s.geoalerta'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -755,6 +759,35 @@
         // avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila
         // en el borde de una geocerca.
         geocercaEstableSeg: 15,
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). El
+        // operador elige UNA o VARIAS geocercas de la plataforma y decide
+        // a quien vigila (solo las unidades vigiladas o toda la flota), con
+        // que gravedad avisa y QUE lo dispara dentro de la geocerca:
+        //   paso      -> solo pasar por ella
+        //   detenida  -> quedarse parada dentro
+        //   motor     -> quedarse parada y apagar el motor
+        // La seleccion de geocercas viaja como texto con ' | ' (mismo
+        // formato que los planes multipunto) porque DEFAULTS es plano y las
+        // suites comparan sus claves. Sin geocercas elegidas la regla no
+        // hace nada, aunque este activada.
+        geoAlertas: Object.freeze({
+            // nombres de geocercas vigilados, separados por ' | '
+            zonas: '',
+            // 'vigiladas' (solo la lista vigilada) | 'todas'
+            alcance: 'vigiladas',
+            // 'bajo' | 'medio' | 'alto' | 'critico'
+            severidad: 'medio',
+            // 'paso' (solo pasar) | 'detenida' | 'motor' (parada + motor apagado)
+            disparo: 'paso',
+            // minutos parada dentro para el disparador 'detenida'
+            minMin: 2,
+            // minutos sin reportar posicion = motor apagado (estimado)
+            motorMin: 15,
+            // histeresis: segundos dentro antes de dar la entrada
+            estableSeg: 20,
+            // 0 = usar el cooldown global de alertas
+            cooldownS: 0
+        }),
         // v5.15: tolerancia de desvio por municipio. Mientras la unidad siga
         // DENTRO de un municipio por el que pasa su ruta (o una de sus
         // paradas), el desvio no se marca hasta desvioMunicipioM metros.
@@ -792,7 +825,11 @@
             // lleva >= X min detenida DENTRO de una geocerca (no fuera,
             // no en movimiento), avisa con el texto literal pedido:
             // "La unidad X se encuentra detenida en la geocerca Y".
-            geocercaDetenido: true
+            geocercaDetenido: true,
+            // v6.12: alerta de geocercas (seleccion de geocercas + gravedad
+            // + disparador). Se configura en la pestana Zonas > Geocercas;
+            // aqui solo el interruptor, igual que las demas reglas.
+            geoAlerta: false
         })
     });
 
@@ -878,6 +915,9 @@
         const out = Object.assign({}, base, over);
         if (base.reglas) out.reglas = Object.assign({}, base.reglas, (over && over.reglas) || {});
         if (base.horario) out.horario = Object.assign({}, base.horario, (over && over.horario) || {});
+        // v6.12: geoAlertas tambien es un grupo de opciones: si el cfg guardado
+        // trae solo algunas claves, las que faltan deben venir de DEFAULTS.
+        if (base.geoAlertas) out.geoAlertas = Object.assign({}, base.geoAlertas, (over && over.geoAlertas) || {});
         return out;
     }
 
@@ -1005,7 +1045,15 @@
         // v5.15: filtros/orden de las geocercas (pestana Zonas > Geocercas).
         geoFiltro: '',
         geoOrden: 'nombre',
-        geoRol: 'todas'
+        geoRol: 'todas',
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas).
+        geoAlertaBusca: '',   // texto del buscador de geocercas vigiladas
+        // Estado por unidad (clave -> zona + minutos) de quien esta dentro de
+        // una geocerca vigilada. Solo memoria: se recalcula cada refresco.
+        geoAlertaVivo: {},
+        // Episodios (histeresis) de las unidades NO vigiladas cuando el
+        // alcance es "toda la flota"; las vigiladas van en APP.memo.
+        memoGeoAlerta: readSessionObject(SS.geoAlerta, {}, null)
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);

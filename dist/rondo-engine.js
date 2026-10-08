@@ -872,7 +872,7 @@ PANEL (barra lateral a pantalla completa, lado y ancho configurables):
 - Unidades: tarjetas por unidad con estado, placa, velocidad, ultimo reporte, zona y ruta. Clic para abrir su ventana; clic derecho para mas opciones (planear ruta, geocerca, odometro, limite de velocidad, silenciar). Barra "Ordenar".
 - Avisos: historial de alertas filtrable por severidad (criticas/altas/medias/bajas). Boton IA por aviso, boton "Analizar lote" (resumen + ranking) y "Avisos CSV".
 - Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad. En el editor multipunto la ventana se mueve (arrastra el encabezado) y se redimensiona (esquina inferior derecha); las sugerencias se recorren con flechas arriba/abajo y Enter; las paradas se reordenan arrastrando el asa. La ruta se puede ver en un mini-mapa propio con tiles de OpenStreetMap.
-- Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:).
+- Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:). La vista Geocercas incluye la Alerta de geocercas: eliges una o varias geocercas, a quien vigila (solo la lista vigilada o toda la flota), la gravedad y que lo dispara (solo paso / se detuvo / se detuvo y apagó el motor).
 - Caravana: unidades cerca de una unidad lider (distancia firmada, sentido contrario, no vigiladas).
 - Replay: reproduce el recorrido de una unidad en un dia o rango de horas, con buscador de unidades, mini-mapa (tiles de OpenStreetMap), perfil de velocidad, resumen, lista de paradas (hora, duracion y lugar resuelto con OpenStreetMap: comercio, direccion o municipio) y eventos (geocercas, excesos, desvios). Exporta el recorrido a GeoJSON, las paradas a CSV y un reporte PDF del recorrido. Solo lectura.
 - Reporte PDF: desde la barra de herramientas se genera un reporte operativo completo (resumen, KPIs, unidades, avisos del dia, rutas, sin senal, geocercas y zonas de riesgo) paginado en A4 y listo para guardar como PDF.
@@ -880,7 +880,7 @@ PANEL (barra lateral a pantalla completa, lado y ancho configurables):
 - Riesgo: se ve dentro de Zonas (segmentado).
 
 REGLAS DE ALERTA (se activan y ajustan en Ajustes > Reglas):
-Sin senal (5 min), Reconecto, GPS perdido en marcha (15 min), Detenido (30 min, fuera de bases), Zona no prevista (20 min), Geocercas (entra/sale, inmediato), Destino (progreso >=95% o <400 m), Desconexion (25 min), Velocidad (110 km/h), Desvio de ruta (250 m durante 5 min), Giro en U (130 grados durante 3 min), Retorno/viaje cancelado (25% o 400 m), Perdio senal en zona de riesgo (critico), Aproximacion a zona de riesgo (predictiva, opcional), Detenida en geocerca (opcional).
+Sin senal (5 min), Reconecto, GPS perdido en marcha (15 min), Detenido (30 min, fuera de bases), Zona no prevista (20 min), Geocercas (entra/sale, inmediato), Destino (progreso >=95% o <400 m), Desconexion (25 min), Velocidad (110 km/h), Desvio de ruta (250 m durante 5 min), Giro en U (130 grados durante 3 min), Retorno/viaje cancelado (25% o 400 m), Perdio senal en zona de riesgo (critico), Aproximacion a zona de riesgo (predictiva, opcional), Detenida en geocerca (opcional), Alerta de geocercas (seleccion de geocercas + gravedad + disparador: paso, detenida o motor apagado; en Zonas > Geocercas).
 Cooldown por unidad+regla (45 min por defecto). Se puede limitar a un horario. Las zonas tipo base (patio, cedis, taller) no generan "detenido".
 
 AJUSTES (engranaje del panel):
@@ -3474,6 +3474,11 @@ ta.value = '';
             //   este episodio; rearma cuando sale o se mueve.
             geoDetenidoDesde: prev ? prev.geoDetenidoDesde : null,
             geoDetenidoAlerta: prev ? !!prev.geoDetenidoAlerta : false,
+            // v6.12: alerta de geocercas (pestana Zonas > Geocercas).
+            // Episodios por geocerca vigilada: dentro confirmado, minutos
+            // de parada y si el motor ya esta apagado. Los reinicia
+            // geoAlertaReinicia cuando el operador cambia la seleccion.
+            geoAlerta: (prev && prev.geoAlerta && typeof prev.geoAlerta === 'object') ? prev.geoAlerta : null,
             // v5.15: seguimiento de paradas del plan multipunto.
             llegadas: (prev && Array.isArray(prev.llegadas)) ? prev.llegadas : null,
             paradaActual: prev ? (prev.paradaActual || 0) : 0,
@@ -3506,6 +3511,10 @@ ta.value = '';
             // "La unidad X se encuentra detenida en la geocerca Y").
             // Una sola vez por episodio.
             reglaGeocercaDetenido(st, R, info, etq);
+            // v6.12: alerta dirigida por geocerca. Solo mira las geocercas
+            // que el operador selecciono en Zonas > Geocercas y avisa segun
+            // el disparador elegido (paso / detenida / motor apagado).
+            reglaGeoAlerta(u, info, st, R);
             await reglaDestino(st, R, info, etq);
             await reglaDesconexion(st, R, info, etq);
             await reglaRiesgoSinSenal(st, prev, R, info, etq);
@@ -3570,6 +3579,10 @@ ta.value = '';
             }
             APP.memo = nuevas;
             writeSession(SS.memo, APP.memo);
+            // v6.12: la alerta de geocercas puede vigilar TODA la flota. El
+            // bucle anterior solo recorre las unidades vigiladas, asi que
+            // las demas se evaluan aqui solo para esa regla.
+            geoAlertaFlota(unidades, nuevas);
 
             APP.kpi.online = APP.kpi.online.concat(onNow).slice(-180);
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);
