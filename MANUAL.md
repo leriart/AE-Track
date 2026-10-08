@@ -519,7 +519,7 @@ Sale en **PDF**, **CSV** o **Markdown**.
 | Opcion | Valores |
 | --- | --- |
 | Informe de | **Cruces por unidad** / **Paradas dentro** |
-| Geocerca | Cualquiera de las cargadas (las de la plataforma y las de Rondo), o *Todas las geocercas* |
+| Geocerca | Cualquiera de las cargadas (las de la plataforma y las de Rondo), o *Todas las geocercas*. Tiene **buscador** y muestra cuantos eventos tiene cada una |
 | Periodo | Hoy / 24 h / 7 dias / 15 dias / 30 dias / Todo |
 | Rango de dias | Dos fechas (desde – hasta), ambas incluidas |
 | Unidades | **Toda la flota** (todas las que Rondo rastrea) o **solo las seleccionadas** (la lista vigilada) |

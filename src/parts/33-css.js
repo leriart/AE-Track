@@ -243,7 +243,6 @@
             "#rondo-panel .rondo-ia-head.ia-on .rondo-ia-badge::after{content:'';position:absolute;left:2.5px;top:0.5px;width:3px;height:5px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}\n" +
             "#rondo-panel .tabs{display:flex;gap:3px;background:var(--rondo-bg-soft);padding:5px 6px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:9px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
-            +
             "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
@@ -622,7 +621,6 @@
             "#rondo-panel .rondo-riesgo-filters-row .mini .rondo-usym{font-size:13px}\n" +
             "#rondo-panel .rondo-riesgo-grupo-head .rondo-usym{font-size:14px;margin-right:2px}\n" +
             "#rondo-panel .rondo-riesgo-card .rb-actions button .rondo-usym{font-size:13px}\n" +
-            +
             "#rondo-panel .rondo-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
             "#rondo-panel .rondo-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 6px rgba(var(--rondo-accent-rgb),.3)}\n" +
@@ -761,8 +759,6 @@
             "#rondo-panel .tab:hover .rondo-usym{opacity:1}\n" +
             "#rondo-panel .tab.activo .rondo-usym{opacity:1;transform:scale(1.08)}\n" +
             "#rondo-panel .tab .contador{font-size:9.5px;padding:1px 5px;margin-left:0}\n" +
-            +
-            +
             "#rondo-panel .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
             "#rondo-panel .kpi .etq{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
             "#rondo-panel .kpi .valor{font:600 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
@@ -1038,7 +1034,6 @@
             "#rondo-body td.ruta .ruta-bar{margin-top:3px;height:4px;background:var(--rondo-bg-alt);border-radius:3px;overflow:hidden;min-width:96px}\n" +
             "#rondo-body td.ruta .ruta-bar-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s ease}\n" +
             "#rondo-body td.ruta .ruta-meta{margin-top:2px;font:500 10px monospace;color:var(--rondo-fg-dim);white-space:nowrap}\n" +
-            +
             /* ── Responsive ── */
             "@media (max-width:720px){\n" +
             "  #rondo-panel{min-width:0;max-width:96vw}\n" +
@@ -1464,7 +1459,7 @@
             "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-thumb,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-thumb{background:var(--rondo-border);border-radius:4px}\n" +
             "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-track,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-track{background:transparent}\n" +
             // Pantallas estrechas: mapa arriba, paneles debajo.
-            "@media (max-width:900px){#rondo-geocerca-modal{padding:8px}#rondo-geocerca-modal .gg-cuerpo{flex-direction:column;gap:9px}#rondo-geocerca-modal .rondo-gg-mapa{flex:0 0 40vh}#rondo-geocerca-modal .gg-lados{flex:1;flex-basis:auto}\n" +
+            "@media (max-width:900px){#rondo-geocerca-modal{padding:8px}#rondo-geocerca-modal .gg-cuerpo{flex-direction:column;gap:9px}#rondo-geocerca-modal .rondo-gg-mapa{flex:0 0 40vh}#rondo-geocerca-modal .gg-lados{flex:1;flex-basis:auto}}\n" +
             "@media (max-width:900px){#rondo-geocerca-modal .gg-lados{display:grid;grid-template-columns:1fr 1fr;align-items:start}}\n" +
             "@media (max-width:620px){#rondo-geocerca-modal .gg-lados{grid-template-columns:1fr}#rondo-geocerca-modal .gg-headsub{display:none}#rondo-geocerca-modal .gg-foot .gg-pie{display:none}}\n" +
             // ── v6.15: informe por geocerca (dialogo) ──────────────────
@@ -1491,6 +1486,12 @@
             "#rondo-dialog .rgi-chip{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:4px 11px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);white-space:nowrap;transition:all .15s var(--rondo-easing)}\n" +
             "#rondo-dialog .rgi-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
             "#rondo-dialog .rgi-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            // Buscador de geocerca dentro del dialogo.
+            "#rondo-dialog .rgi-busca{display:inline-flex;align-items:center;gap:6px;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rgi-busca .rondo-usym{font-size:13px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-dialog .rgi-busca input{flex:1;min-width:120px}\n" +
+            "#rondo-dialog .rgi-busca i{flex:0 0 auto;font:700 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-row-geo{margin-bottom:-2px}\n" +
             "#rondo-dialog .rgi-rango{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}\n" +
             "#rondo-dialog .rgi-rango input[type=date]{flex:1;min-width:118px;max-width:168px;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font:500 11.5px var(--rondo-font)}\n" +
             "#rondo-dialog .rgi-rango .sep{font:700 11px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +

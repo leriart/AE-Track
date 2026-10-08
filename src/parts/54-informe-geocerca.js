@@ -287,7 +287,7 @@ function rxGeoInfCeldasPlanas(c, modo) {
 // lo que devuelve el rastreo.
 const RX_GEO = {
     fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '',
-    desde: '', hasta: '',
+    desde: '', hasta: '', busca: '',
     // 'todas' (toda la flota con traza) o 'sel' (solo la lista vigilada).
     unidades: 'todas'
 };
@@ -464,6 +464,22 @@ function rxGeoInfFuentesDisponibles() {
 /* ====================== INFORME POR GEOCERCA: UI ====================== */
 function rxGeoInfZonas() {
     return (APP.zonas || []).map(rxGeoInfNombre).filter(Boolean);
+}
+// Opciones del selector de geocerca, con buscador. Devuelve tambien cuantas
+// coinciden, para el contador del campo.
+function rxGeoInfSelect() {
+    const zonas = rxGeoInfZonas();
+    const q = norm(RX_GEO.busca || '');
+    const conDatos = rxGeoInfPorZona(rxGeoInfEventos(RX_GEO.fuente), null);
+    const num = {};
+    for (const f of conDatos) num[f.zona] = f.cruces + f.paradas;
+    const lista = q ? zonas.filter((z) => norm(z).indexOf(q) >= 0) : zonas;
+    const opts = '<option value="">Todas las geocercas</option>' + lista.map((z) => {
+        const n = num[z] || 0;
+        return '<option value="' + esc(z) + '"' + (RX_GEO.zona === z ? ' selected' : '') + '>' + esc(z) +
+            (n ? ' \u00b7 ' + n + ' evento(s)' : ' \u00b7 sin datos') + '</option>';
+    }).join('');
+    return { html: opts, n: lista.length, total: zonas.length };
 }
 // Reune lo que se va a pintar: eventos filtrados + agregados.
 function rxGeoInfReune() {
@@ -676,11 +692,8 @@ function abrirInformeGeocerca(origen) {
         const chip = (act, attr, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
             '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + esc(txt) + '</button>';
         const tot = d.unidades.total;
-        const opts = '<option value="">Todas las geocercas</option>' + zonas.map((z) => {
-            const n = num[z] || 0;
-            return '<option value="' + esc(z) + '"' + (RX_GEO.zona === z ? ' selected' : '') + '>' + esc(z) +
-                (n ? ' \u00b7 ' + n + ' evento(s)' : ' \u00b7 sin datos') + '</option>';
-        }).join('');
+        const selZ = rxGeoInfSelect();
+        void num; void zonas;
         // Hero: que geocerca se informa, de donde viene y que datos tiene.
         const z = RX_GEO.zona ? (APP.zonas || []).find((x) => rxGeoInfNombre(x) === RX_GEO.zona) : null;
         const org = z ? glocOrigen(z) : null;
@@ -711,8 +724,14 @@ function abrirInformeGeocerca(origen) {
             chip(RX_GEO.modo === 'cruces', 'data-rgi="modo"', 'cruces', 'Cruces por unidad', 'Quien entro y salio de cada geocerca') +
             chip(RX_GEO.modo === 'paradas', 'data-rgi="modo"', 'paradas', 'Paradas dentro', 'Quien se quedo quieto dentro y cuanto tiempo') +
             '</div></div>' +
-            '<div class="rgi-row"><span class="rgi-lb">Geocerca</span>' +
-            '<select id="rgi-zona" class="filtro">' + opts + '</select></div>' +
+            '<div class="rgi-row rgi-row-geo"><span class="rgi-lb">Geocerca</span>' +
+            '<span class="rgi-busca">' +
+            '<span class="rondo-usym">' + UIS.filter + '</span>' +
+            '<input type="text" id="rgi-buscar" class="filtro" placeholder="Buscar geocerca\u2026" value="' + esc(RX_GEO.busca || '') + '">' +
+            '<i id="rgi-busca-n">' + selZ.n + '/' + selZ.total + '</i>' +
+            '</span></div>' +
+            '<div class="rgi-row"><span class="rgi-lb"></span>' +
+            '<select id="rgi-zona" class="filtro">' + selZ.html + '</select></div>' +
             '<div class="rgi-row"><span class="rgi-lb">Unidades</span><div class="rgi-chips">' +
             chip(RX_GEO.unidades !== 'sel', 'data-rgi="unidades"', 'todas', 'Toda la flota') +
             chip(RX_GEO.unidades === 'sel', 'data-rgi="unidades"', 'sel', 'Solo las seleccionadas') +
@@ -763,7 +782,7 @@ function abrirInformeGeocerca(origen) {
     abrirDialogo({
         icon: UIS.zone,
         titulo: 'Informe por geocerca',
-        ancho: 620,
+        ancho: 700,
         okText: 'Cerrar',
         html: '<div id="rgi-box">' + cuerpo() + '</div>',
         onOpen: (el) => {
@@ -783,9 +802,22 @@ function abrirInformeGeocerca(origen) {
                 }
                 pinta();
             });
+            box.addEventListener('input', (ev) => {
+                const t = ev.target;
+                if (!t || t.id !== 'rgi-buscar') return;
+                RX_GEO.busca = t.value || '';
+                // Se repinta solo el selector y el contador: asi el campo de
+                // busqueda no pierde el foco mientras se escribe.
+                const sel = byId('rgi-zona');
+                const info = rxGeoInfSelect();
+                if (sel) sel.innerHTML = info.html;
+                const n = byId('rgi-busca-n');
+                if (n) n.textContent = info.n + '/' + info.total;
+            });
             box.addEventListener('change', (ev) => {
                 const t = ev.target;
                 if (!t || !t.id) return;
+                if (t.id === 'rgi-buscar') return;
                 if (t.id === 'rgi-zona') { RX_GEO.zona = t.value || ''; pinta(); return; }
                 if (t.id === 'rgi-desde' || t.id === 'rgi-hasta') {
                     RX_GEO.desde = t.value || '';

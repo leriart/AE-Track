@@ -683,6 +683,11 @@ ok('dialogo: tres fuentes de datos', /data-rgi="fuente"/.test(src) &&
     /bitacora: 'Avisos'/.test(src) && /viajes: 'Viajes analizados'/.test(src));
 ok('dialogo: cabecera con la geocerca, su ficha y su origen',
     /class="rgi-hero/.test(src) && /rgi-herot/.test(src) && /rgi-ori o-/.test(src));
+ok('dialogo: buscador de geocercas', /id="rgi-buscar"/.test(src) && /function rxGeoInfSelect\(\)/.test(src) &&
+    /rgi-busca-n/.test(src) && /Buscar geocerca/.test(src));
+ok('dialogo: el buscador no pierde el foco al escribir',
+    /if \(!t \|\| t\.id !== 'rgi-buscar'\) return;/.test(src) &&
+    /sel\.innerHTML = info\.html/.test(src));
 ok('dialogo: chips de quienes estan dentro ahora', /class="rgi-dentro"/.test(src) && /rgi-dchip/.test(src));
 ok('informe: el PDF se maqueta como el del recorrido (secciones numeradas y mapa)',
     /'<h2 class="seccion">' \+ esc\(num/.test(src) && /function rxGeoInfAnillo\(z\)/.test(src) &&
