@@ -686,7 +686,7 @@ ok('dialogo: cabecera con la geocerca, su ficha y su origen',
 ok('dialogo: mapa con la geocerca y las unidades', /id="rgi-mapa"/.test(src) &&
     /function rxGeoInfPintaMapa\(d\)/.test(src) && /rxMiniMapa\(cont, \{ lineas: lineas, marcas: marcas \}\)/.test(src));
 ok('dialogo: barra de progreso', /id="rgi-carga"/.test(src) && /id="rgi-barra"/.test(src) &&
-    /function rxGeoInfYield\(\)/.test(src) && /setProg\(12,/.test(src));
+    /function rxGeoInfYield\(\)/.test(src) && /setProg\(10,/.test(src));
 ok('dialogo: barra de acciones con PDF principal', /class="rgi-btn primary" id="rgi-pdf"/.test(src) &&
     /class="rgi-btn" id="rgi-csv"/.test(src) && /class="rgi-btn" id="rgi-md"/.test(src));
 ok('dialogo: un solo boton de cierre', /cancel: false,\s*\n\s*html: '<div class="rgi-tool">/.test(src));
@@ -732,7 +732,20 @@ ok('rastreo: alcance todas / seleccionadas',
     /function rxGeoInfSoloSel\(\)/.test(src) && /function rxGeoInfEnSeleccion\(clave, info\)/.test(src) &&
     /data-rgi="unidades"', 'todas'/.test(src) && /data-rgi="unidades"', 'sel'/.test(src));
 ok('rastreo: la cache separa todas de seleccionadas',
-    /const key = f \+ \(f === 'rastreo' \? ':' \+ \(RX_GEO\.unidades \|\| 'todas'\) : ''\)/.test(src));
+    /const key = f \+ \(\(f === 'rastreo'\) \? ':' \+ \(RX_GEO\.unidades \|\| 'todas'\) : ''\)/.test(src));
+ok('historial: escaneo con una peticion por unidad, cancelable y con tope',
+    /function rxGeoInfEscanear\(onProg, token\)/.test(src) &&
+    /messages\/load_interval/.test(src) && /RX_GEO_HIST_MAX_U/.test(src) &&
+    /token\.cancelado/.test(src));
+ok('historial: deteccion sobre mensajes crudos (pura)',
+    /function rxGeoInfDeMensajes\(msgs, eco, fuente\)/.test(src) &&
+    /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: eco, fuente: fuente \|\| 'historial' \}\)/.test(src));
+ok('historial: es la fuente por defecto con geocerca y flota',
+    /RX_GEO\.zona && hay\.some\(\(h\) => h\.k === 'historial'\) && !RX_GEO\._fuenteTocada/.test(src));
+ok('historial: el dialogo lo escanea con la barra por unidad',
+    /if \(RX_GEO\.fuente === 'historial'\)/.test(src) && /Consultando ' \+ hechas/.test(src));
+ok('dialogo: aviso para buscar en la plataforma si no hay eventos',
+    /class="rgi-aviso"/.test(src) && /Buscar en la plataforma/.test(src));
 ok('informe: el PDF lista a los que estan dentro ahora',
     /'Dentro ahora \(' \+ filasDentro\.length/.test(src) && /filasDentro/.test(src));
 ok('informe: la tabla marca "dentro ahora"', /const dn = \(c\.dentro \? 'Si' : '-'\)/.test(src));

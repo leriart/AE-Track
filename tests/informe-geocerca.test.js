@@ -27,6 +27,8 @@ const H = {
     trazas: {},
     unidades: [],
     seleccion: new Set(),
+    msgsPorId: {},
+    peticiones: 0,
     trazadoMax: 500,
     dias: 3600000
 };
@@ -62,16 +64,18 @@ const stubs = [
     ' const mx=111320*Math.cos(b.cen_y*Math.PI/180), my=110540;',
     ' const dx=(lon-b.cen_x)*mx, dy=(lat-b.cen_y)*my; return Math.sqrt(dx*dx+dy*dy)<=r; }',
     'function rxFechaHora(t){ return t ? new Date(t).toISOString().slice(0,16).replace("T"," ") : "-"; }',
-    'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); const e=m?m[1]:""; return {id:0,nombre:n,eco:e,placa:"",clave:e||n}; }',
+    'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
+    'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1; return Promise.resolve({ messages: (H.msgsPorId||{})[p.itemId] || [] }); }',
     'function unitState(u){ const p=(u&&u.pos)||{}; return {lat:(p.y!=null)?+p.y:null,lon:(p.x!=null)?+p.x:null,vel:+p.s||0,online:true}; }'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {rxGeoInfZonaTexto,rxGeoInfMinutos,rxGeoInfEvento,rxGeoInfParada,rxGeoInfFiltra,' +
     'rxGeoInfDesde,rxGeoInfFechaMs,rxGeoInfFechaTxt,rxGeoInfAgrupa,rxGeoInfPorZona,rxGeoInfCeldas,rxGeoInfCruces,' +
-    'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfDeRastreo,rxGeoInfEventos,rxGeoInfFuentesDisponibles,rxGeoInfCacheReset,RX_GEO,' +
-    'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
-    'RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS};';
+    'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfDeRastreo,rxGeoInfDeHistorial,rxGeoInfDeMensajes,' +
+    'rxGeoInfEscanear,rxGeoInfRangoS,rxGeoInfHistKey,rxGeoInfEventos,rxGeoInfFuentesDisponibles,rxGeoInfCacheReset,' +
+    'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfZonaSel,rxGeoInfReune,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
+    'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U};';
 const mod = new Function('P', code)(H);
 
 let fallos = 0;
@@ -360,16 +364,102 @@ ok('rastreo: sin trazas ni unidades no rompe', (function () {
     H.trazas = t; H.unidades = u;
     return n === 0;
 })());
-ok('rastreo: es la primera fuente disponible', (function () {
+ok('rastreo: disponible y con datos', (function () {
     const f = mod.rxGeoInfFuentesDisponibles();
-    return f.length === 0 || f[0].k === 'rastreo';
+    return f.some((x) => x.k === 'rastreo' && x.n > 0);
+})());
+ok('rastreo: el historial de la plataforma se ofrece con unidades y geocercas', (function () {
+    const f = mod.rxGeoInfFuentesDisponibles();
+    return f.some((x) => x.k === 'historial');
 })());
 ok('tipos: "dentro ahora" en el catalogo', mod.RX_GEO_TIPOS.dentro === 'Dentro ahora');
 ok('cabeceras: columna "Dentro ahora"',
     mod.rxGeoInfCabeceras('cruces').indexOf('Dentro ahora') >= 0 &&
     mod.rxGeoInfCabeceras('paradas').indexOf('Dentro ahora') >= 0);
 
-// ── Celdas para las salidas ─────────────────────────────────────────────
+// ── Fuente: historial de la plataforma (escaneo de toda la flota) ───────
+// Es la que responde "quien anduvo por aqui" para CUALQUIER unidad, sin
+// depender de que este vigilada o de que haya avisado. Usa el mismo
+// endpoint que el Replay (messages/load_interval), una peticion por unidad.
+reinicia();
+const T = Math.floor(Date.now() / 1000);
+H.unidades = [
+    { id: 11, nm: '105', pos: { y: 0, x: 0 } },
+    { id: 22, nm: '205', pos: { y: 0, x: 0 } },
+    { id: 33, nm: '305', pos: { y: 1, x: 1 } }
+];
+function msgs(id) {
+    const p = [];
+    if (id === 11) {   // entra, se para 5 min dentro y sale
+        p.push({ t: T - 7200, pos: { y: 0.02, x: 0, s: 50 } });
+        p.push({ t: T - 7000, pos: { y: 0, x: 0, s: 0 } });
+        for (let k = 1; k <= 10; k++) p.push({ t: T - 7000 + k * 30, pos: { y: 0, x: 0, s: 0 } });
+        p.push({ t: T - 6600, pos: { y: 0.02, x: 0, s: 45 } });
+    }
+    if (id === 22) {   // solo pasa
+        p.push({ t: T - 3000, pos: { y: 0.02, x: 0, s: 60 } });
+        p.push({ t: T - 2900, pos: { y: 0, x: 0, s: 40 } });
+        p.push({ t: T - 2800, pos: { y: 0.02, x: 0, s: 60 } });
+    }
+    return p;
+}
+H.msgsPorId = { 11: msgs(11), 22: msgs(22), 33: [] };
+H.peticiones = 0;
+APP.unidades = H.unidades;
+APP.seleccion = H.seleccion;
+const dmsgs = mod.rxGeoInfDeMensajes(msgs(11), '105', 'historial');
+ok('historial: de mensajes crudos saca cruces y parada',
+    dmsgs.filter((e) => e.tipo === 'entra' || e.tipo === 'sale').length === 2 &&
+    dmsgs.filter((e) => e.tipo === 'detenida').length === 1 &&
+    dmsgs.filter((e) => e.tipo === 'detenida')[0].min === 5,
+    JSON.stringify(dmsgs.map((e) => e.tipo + (e.min ? '(' + e.min + ')' : ''))));
+ok('historial: descarta mensajes sin posicion o sin hora',
+    mod.rxGeoInfDeMensajes([{ pos: { y: 1, x: 1 } }, { t: 100 }, null], '105').length === 0);
+ok('historial: sin mensajes no rompe', mod.rxGeoInfDeMensajes([], '105').length === 0 &&
+    mod.rxGeoInfDeMensajes(null, '105').length === 0);
+mod.RX_GEO.fuente = 'historial';
+mod.RX_GEO.zona = 'PATIO';
+mod.RX_GEO.rango = 'hoy';
+mod.rxGeoInfCacheReset();
+(async function () {
+    const progreso = [];
+    const r = await mod.rxGeoInfEscanear((h, t, eco) => progreso.push(h + '/' + t), null);
+    ok('historial: escanea todas las unidades (una peticion por unidad)',
+        r.unidades === 3 && H.peticiones === 3, 'unidades=' + r.unidades + ' peticiones=' + H.peticiones);
+    ok('historial: informa del progreso por unidad', progreso.length === 3 && progreso[2] === '3/3',
+        progreso.join(','));
+    ok('historial: encuentra a la que paso y a la que se paro',
+        r.eventos.some((e) => e.eco === '105' && e.tipo === 'detenida') &&
+        r.eventos.some((e) => e.eco === '105' && e.tipo === 'entra') &&
+        r.eventos.some((e) => e.eco === '205' && e.tipo === 'entra'),
+        JSON.stringify(r.eventos.map((e) => e.eco + ':' + e.tipo)));
+    ok('historial: la unidad sin historial no aporta eventos', !r.eventos.some((e) => e.eco === '305'));
+    // Se lee desde el informe sin volver a pedir nada.
+    mod.rxGeoInfCacheReset();
+    const d2 = mod.rxGeoInfReune();
+    ok('historial: el informe lo usa', d2.fuente === 'historial' && d2.unidades.total.unidades === 2 &&
+        d2.unidades.total.cruces === 4 && d2.unidades.total.paradas === 1 && d2.unidades.total.min === 5,
+        JSON.stringify(d2.unidades.total));
+    const antes = H.peticiones;
+    await mod.rxGeoInfEscanear(() => {}, null);
+    ok('historial: la segunda vez usa la cache (sin peticiones nuevas)', H.peticiones === antes,
+        'antes=' + antes + ' despues=' + H.peticiones);
+    // Cancelable.
+    mod.RX_GEO.desde = '2026-01-01'; mod.RX_GEO.hasta = '2026-01-02'; mod.RX_GEO.rango = '';
+    const r2 = await mod.rxGeoInfEscanear(() => {}, { cancelado: true });
+    ok('historial: se puede cancelar', r2.cancelado === true);
+    // Alcance: solo las seleccionadas.
+    mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = ''; mod.RX_GEO.rango = 'hoy';
+    mod.RX_GEO.unidades = 'sel';
+    H.seleccion.clear(); H.seleccion.add('205');
+    H.peticiones = 0;
+    const r3 = await mod.rxGeoInfEscanear(() => {}, null);
+    ok('historial: respeta "solo las seleccionadas"',
+        r3.eventos.every((e) => e.eco === '205') && H.peticiones === 1, 'peticiones=' + H.peticiones);
+    mod.RX_GEO.unidades = 'todas';
+    H.seleccion.clear();
+
+    // ── Celdas para las salidas ─────────────────────────────────────────────
 const cab = mod.rxGeoInfCabeceras('paradas');
 ok('cabeceras: modo paradas con minutos de motor', cab.indexOf('Min motor apagado') >= 0 && cab[0] === 'Eco');
 ok('cabeceras: modo cruces con entradas y salidas',
@@ -383,5 +473,6 @@ ok('celdas: lugares joinados', mod.rxGeoInfCeldas({
     primero: 0, ultimo: 0, zonas: { A: 1, B: 2 }, lugares: { X: 1, Y: 1, Z: 1, W: 1, V: 1 }
 }).lugares.split(' | ').length === 4);
 
-console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
-process.exit(fallos ? 1 : 0);
+    console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
+    process.exit(fallos ? 1 : 0);
+})();

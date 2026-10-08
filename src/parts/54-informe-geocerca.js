@@ -13,7 +13,12 @@
  * El nucleo de este fragmento es puro (solo arrays que le pasamos) para
  * poder probarlo aislado en tests/informe-geocerca.test.js.
  */
-const RX_GEO_FUENTES = Object.freeze(['rastreo', 'bitacora', 'viajes', 'replay']);
+const RX_GEO_FUENTES = Object.freeze(['historial', 'rastreo', 'bitacora', 'viajes', 'replay']);
+// Limites del escaneo del historial de la plataforma (una peticion por
+// unidad, como hace el Replay). Con flotas enormes se acota para que el
+// informe no tarde una eternidad.
+const RX_GEO_HIST_MAX_U = 150;
+const RX_GEO_HIST_MSGS = 3000;
 // Minutos quieto para que una parada de la traza cuente. Es menor que el
 // umbral del Replay porque aqui la traza se toma en vivo, con puntos cada
 // pocos segundos: esperar 15 min seria exigir demasiado.
@@ -447,6 +452,49 @@ function rxGeoInfDeViajes() {
     }
     return out;
 }
+// Deteccion de cruces y paradas sobre los mensajes CRUDOS de la plataforma
+// (formato { t (s), pos:{x,y,s} }), el mismo que devuelve load_interval y el
+// que usa el Replay. Es pura para poder probarla sin red.
+function rxGeoInfDeMensajes(msgs, eco, fuente) {
+    const arr = [];
+    for (const m of (msgs || [])) {
+        if (!m || !m.pos || !isFinite(+m.pos.y) || !isFinite(+m.pos.x)) continue;
+        const t = Number(m.t) || 0;
+        if (!t) continue;
+        arr.push({ t: t, lat: +m.pos.y, lon: +m.pos.x, s: Number(m.pos.s) || 0 });
+    }
+    if (!arr.length) return [];
+    arr.sort((a, b) => a.t - b.t);
+    const pts = arr.map((p) => [p.lon, p.lat, p.t * 1000]);
+    const out = rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: eco, fuente: fuente || 'historial' });
+    // Paradas: tramos con la unidad casi quieta dentro de una geocerca.
+    const minSeg = Math.max(30, RX_GEO_PARADA_MIN * 60);
+    let desde = 0, ultimo = 0, zona = '';
+    const cerrar = () => {
+        if (desde && zona) {
+            const seg = (ultimo - desde) / 1000;
+            if (seg >= minSeg) {
+                out.push({
+                    zona: zona, tipo: 'detenida', eco: eco, ts: desde,
+                    lat: null, lon: null, min: Math.round(seg / 60),
+                    motor: '', motorFuente: '', lugar: '',
+                    titulo: 'Parada', detalle: '', fuente: fuente || 'historial'
+                });
+            }
+        }
+        desde = 0; ultimo = 0; zona = '';
+    };
+    for (const p of arr) {
+        const nom = rxGeoInfZonaDe(p.lat, p.lon);
+        const quieta = nom && p.s <= 3;
+        if (quieta) {
+            if (!desde || nom !== zona) { cerrar(); desde = p.t * 1000; zona = nom; }
+            ultimo = p.t * 1000;
+        } else cerrar();
+    }
+    cerrar();
+    return out;
+}
 // Eventos del recorrido cargado en la pestana Replay.
 function rxGeoInfDeReplay() {
     const r = (typeof RX_REPLAY !== 'undefined') ? RX_REPLAY : null;
@@ -465,6 +513,72 @@ function rxGeoInfDeReplay() {
     }
     return out;
 }
+// ── Fuente historial: una peticion por unidad, como el Replay ──────────
+// Resultado del ultimo escaneo (clave -> eventos). El dialogo lo rellena de
+// forma asincrona y `rxGeoInfDeHistorial` (sync) lo lee para el resto del
+// informe.
+let _rxGeoHist = { key: '', t: 0, eventos: [], truncado: false, unidades: 0 };
+function rxGeoInfHistKey() {
+    return (RX_GEO.zona || '*') + '|' + (RX_GEO.desde || RX_GEO.rango) + '|' + (RX_GEO.hasta || '') + '|' + (RX_GEO.unidades || 'todas');
+}
+function rxGeoInfDeHistorial() {
+    if (_rxGeoHist.key !== rxGeoInfHistKey()) return [];
+    return _rxGeoHist.eventos;
+}
+// Rango en segundos (el que espera load_interval). Sin rango explicito se
+// toman las ultimas 24 h; "Todo" se acota a 7 dias para no barrer años.
+function rxGeoInfRangoS() {
+    const ahora = Math.floor(Date.now() / 1000);
+    let d = RX_GEO.desde ? Math.floor(rxGeoInfFechaMs(RX_GEO.desde, false) / 1000) : Math.floor(rxGeoInfDesde(RX_GEO.rango) / 1000);
+    let h = RX_GEO.hasta ? Math.floor(rxGeoInfFechaMs(RX_GEO.hasta, true) / 1000) : ahora;
+    if (!d) d = ahora - 7 * 24 * 3600;
+    if (!h || h > ahora) h = ahora;
+    return { desde: d, hasta: h };
+}
+// Escanea el historial de la flota. `onProg(hechas, total, eco)` actualiza la
+// barra; `token` permite cancelar (al cerrar el dialogo o cambiar opciones).
+async function rxGeoInfEscanear(onProg, token) {
+    const cfg = { desde: RX_GEO.desde, hasta: RX_GEO.hasta, rango: RX_GEO.rango, zona: RX_GEO.zona, unidades: RX_GEO.unidades };
+    const key = rxGeoInfHistKey();
+    const ya = (_rxGeoHist.key === key && (Date.now() - _rxGeoHist.t) < 120000);
+    if (ya) return _rxGeoHist;
+    const rango = rxGeoInfRangoS();
+    const lista = [];
+    const sel = APP.seleccion;
+    for (const u of (APP.unidades || [])) {
+        let info = null;
+        try { info = parseUnitName(u); } catch (_) { continue; }
+        if (!info || u.id == null) continue;
+        const clave = info.eco || info.placa || String(info.id);
+        if (RX_GEO.unidades === 'sel' && !(sel && (sel.has(clave) || sel.has(info.eco)))) continue;
+        lista.push({ u: u, info: info, clave: clave });
+        if (lista.length >= RX_GEO_HIST_MAX_U) break;
+    }
+    const encontrados = [];
+    let hechas = 0;
+    const total = lista.length;
+    for (const it of lista) {
+        if (token && token.cancelado) return { eventos: [], truncado: false, unidades: 0, cancelado: true };
+        hechas++;
+        if (onProg) onProg(hechas, total, it.info.eco || it.clave);
+        try {
+            const r = await remoteCall('messages/load_interval', {
+                itemId: it.u.id, timeFrom: rango.desde, timeTo: rango.hasta,
+                flags: 1, flagsMask: 1, loadCount: RX_GEO_HIST_MSGS
+            });
+            const evs = rxGeoInfDeMensajes((r && r.messages) || [], it.info.eco || it.clave, 'historial');
+            for (const e of evs) encontrados.push(e);
+        } catch (_) { /* unidad sin historial o sin permiso: se salta */ }
+        // Deja respirar a la interfaz cada pocas unidades para que la barra
+        // avance y el navegador no se congele.
+        if (hechas % 4 === 0) await rxGeoInfYield();
+    }
+    _rxGeoHist = {
+        key: key, t: Date.now(), eventos: encontrados,
+        truncado: lista.length >= RX_GEO_HIST_MAX_U, unidades: total
+    };
+    return _rxGeoHist;
+}
 // Fuente elegida -> lista de eventos. Con cache corta, porque el dialogo
 // la pide en cada repintado y el recorrido puede tener miles de mensajes.
 let _rxGeoCache = { t: 0, datos: {} };
@@ -478,11 +592,15 @@ function rxGeoInfEventos(fuente, forzar) {
     const t = Date.now();
     // El rastreo depende ademas del alcance (todas / seleccionadas): se
     // guarda con esa clave para no mezclar los dos resultados.
-    const key = f + (f === 'rastreo' ? ':' + (RX_GEO.unidades || 'todas') : '');
+    // El historial no se cachea aqui (ya guarda su propio resultado); el
+    // rastreo depende del alcance, asi que va con la clave.
+    const key = f + ((f === 'rastreo') ? ':' + (RX_GEO.unidades || 'todas') : '')
+        + ((f === 'historial') ? ':' + rxGeoInfHistKey() : '');
     if (!forzar && _rxGeoCache.datos[key] && (t - _rxGeoCache.t) < 8000) return _rxGeoCache.datos[key];
     let out = [];
     try {
-        if (f === 'rastreo') out = rxGeoInfDeRastreo();
+        if (f === 'historial') out = rxGeoInfDeHistorial();
+        else if (f === 'rastreo') out = rxGeoInfDeRastreo();
         else if (f === 'replay') out = rxGeoInfDeReplay();
         else if (f === 'viajes') out = rxGeoInfDeViajes();
         else out = rxGeoInfDeBitacora();
@@ -498,30 +616,19 @@ function rxGeoInfFuentesDisponibles(forzar) {
     const out = [];
     for (const f of RX_GEO_FUENTES) {
         const n = rxGeoInfEventos(f, !!forzar).length;
+        // El historial de la plataforma se ofrece aunque aun no se haya
+        // escaneado (0 eventos): es el que detecta CUALQUIER unidad.
+        if (f === 'historial') {
+            if ((APP.unidades || []).length && (APP.zonas || []).length) out.push({ k: f, n: n });
+            continue;
+        }
         if (n) out.push({ k: f, n: n });
     }
     return out;
 }
 
-/* ====================== INFORME POR GEOCERCA: UI ====================== */
 function rxGeoInfZonas() {
     return (APP.zonas || []).map(rxGeoInfNombre).filter(Boolean);
-}
-// Opciones del selector de geocerca, con buscador. Devuelve tambien cuantas
-// coinciden, para el contador del campo.
-function rxGeoInfSelect() {
-    const zonas = rxGeoInfZonas();
-    const q = norm(RX_GEO.busca || '');
-    const conDatos = rxGeoInfPorZona(rxGeoInfEventos(RX_GEO.fuente), null);
-    const num = {};
-    for (const f of conDatos) num[f.zona] = f.cruces + f.paradas;
-    const lista = q ? zonas.filter((z) => norm(z).indexOf(q) >= 0) : zonas;
-    const opts = '<option value="">Todas las geocercas</option>' + lista.map((z) => {
-        const n = num[z] || 0;
-        return '<option value="' + esc(z) + '"' + (RX_GEO.zona === z ? ' selected' : '') + '>' + esc(z) +
-            (n ? ' \u00b7 ' + n + ' evento(s)' : ' \u00b7 sin datos') + '</option>';
-    }).join('');
-    return { html: opts, n: lista.length, total: zonas.length };
 }
 // Reune lo que se va a pintar: eventos filtrados + agregados.
 function rxGeoInfReune() {
@@ -542,12 +649,30 @@ function rxGeoInfReune() {
         zonas: rxGeoInfPorZona(ev, zona ? null : rxGeoInfZonas())
     };
 }
+/* ====================== INFORME POR GEOCERCA: UI ====================== */
+// Opciones del selector de geocerca, con buscador. Devuelve tambien cuantas
+// coinciden, para el contador del campo.
+function rxGeoInfSelect() {
+    const zonas = rxGeoInfZonas();
+    const q = norm(RX_GEO.busca || '');
+    const conDatos = rxGeoInfPorZona(rxGeoInfEventos(RX_GEO.fuente), null);
+    const num = {};
+    for (const f of conDatos) num[f.zona] = f.cruces + f.paradas;
+    const lista = q ? zonas.filter((z) => norm(z).indexOf(q) >= 0) : zonas;
+    const opts = '<option value="">Todas las geocercas</option>' + lista.map((z) => {
+        const n = num[z] || 0;
+        return '<option value="' + esc(z) + '"' + (RX_GEO.zona === z ? ' selected' : '') + '>' + esc(z) +
+            (n ? ' \u00b7 ' + n + ' evento(s)' : ' \u00b7 sin datos') + '</option>';
+    }).join('');
+    return { html: opts, n: lista.length, total: zonas.length };
+}
 function rxGeoInfFilas(d) {
     return d.unidades.filas.map(rxGeoInfCeldas);
 }
 function rxGeoInfResumen(d) {
     const t = d.unidades.total;
-    const fuenteTxt = (d.fuente === 'rastreo') ? 'Rastreo de unidades'
+    const fuenteTxt = (d.fuente === 'historial') ? 'Historial de la plataforma'
+        : (d.fuente === 'rastreo') ? 'Rastreo de unidades'
         : (d.fuente === 'bitacora') ? 'Avisos de la sesion'
             : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay');
     const rangoTxt = d.rangoTxt || (d.rango === 'hoy' ? 'hoy'
@@ -678,9 +803,10 @@ function rxGeoInfHTML(d) {
     add('Detalle de eventos (' + Math.min(200, d.eventos.length) + ' de ' + d.eventos.length + ')',
         (d.eventos.length > 200 ? '<div class="callout">Se listan los 200 primeros eventos del filtro; el CSV lleva todos.</div>' : '') +
         rxInfTabla(['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Detalle', 'Coordenadas'], detalle));
-    const fuenteTxt = (d.fuente === 'rastreo') ? 'Rastreo de unidades'
-        : (d.fuente === 'bitacora' ? 'Avisos de la sesion'
-            : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay'));
+    const fuenteTxt = (d.fuente === 'historial') ? 'Historial de la plataforma'
+        : (d.fuente === 'rastreo') ? 'Rastreo de unidades'
+            : (d.fuente === 'bitacora' ? 'Avisos de la sesion'
+                : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay'));
     const meta = (z ? 'Geocerca <b>' + esc(rxGeoInfNombre(z)) + '</b><br>' : 'Todas las geocercas<br>') +
         esc((d.rangoTxt || 'Periodo completo') + ' · ' + (rxGeoInfSoloSel() ? 'unidades seleccionadas' : 'toda la flota')) +
         '<br>Datos: ' + esc(fuenteTxt) + '<br>Documento de solo lectura';
@@ -762,11 +888,17 @@ function abrirInformeGeocerca(origen) {
             'Activa la regla Geocercas en Ajustes, analiza un viaje o carga un recorrido en Replay para poder informar.');
         return;
     }
+    // Si hay geocerca elegida y flota, el historial de la plataforma es el
+    // que responde de verdad "quien anduvo por aqui": se elige por defecto.
+    if (RX_GEO.zona && hay.some((h) => h.k === 'historial') && !RX_GEO._fuenteTocada) RX_GEO.fuente = 'historial';
     if (!hay.some((h) => h.k === RX_GEO.fuente)) RX_GEO.fuente = hay[0].k;
     // El contenedor del mapa se rehace con el dialogo: se olvida la instancia
     // anterior para no medir un nodo ya desconectado.
     RX_GEO._mapa = null;
-    const ETIQUETA = { rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
+    // El escaneo del historial es cancelable: al cerrar el dialogo se aborta.
+    if (RX_GEO._token) RX_GEO._token.cancelado = true;
+    RX_GEO._token = { cancelado: false };
+    const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
     const cuerpo = (d, fuentes, selZ) => {
         const chip = (act, attr, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
             '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + esc(txt) + '</button>';
@@ -853,6 +985,12 @@ function abrirInformeGeocerca(origen) {
             '</div>' +
             chipsDentro +
             '<p class="rgi-res">' + esc(rxGeoInfResumen(d)) + '</p>' +
+            ((!d.eventos.length && (APP.unidades || []).length && RX_GEO.fuente !== 'historial')
+                ? '<div class="rgi-aviso">No hay eventos en esta fuente. ' +
+                  'Para rastrear <b>toda la flota</b> en el rango elegido, usa el historial de la plataforma.' +
+                  '<button type="button" class="mini" data-rgi="fuente" data-v="historial">' +
+                  '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar en la plataforma</button></div>'
+                : '') +
             '<div class="rgi-prev">' + (d.unidades.filas.length
                 ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
                     .map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo))) +
@@ -889,15 +1027,31 @@ function abrirInformeGeocerca(origen) {
             };
             // Pintado asincrono por pasos: la barra se ve de verdad y la
             // interfaz respira entre el calculo y el dibujo.
+            // Version del token para descartar resultados de un pintado viejo
+            // (el operador puede cambiar de opcion varias veces seguidas).
+            let pintaN = 0;
             const pinta = async () => {
-                setProg(12, 'Reuniendo datos\u2026');
+                const mio = ++pintaN;
+                setProg(10, 'Reuniendo datos\u2026');
                 await rxGeoInfYield();
+                // El historial de la plataforma se escanea de verdad: una
+                // peticion por unidad, con la barra marcando el avance.
+                if (RX_GEO.fuente === 'historial') {
+                    try {
+                        await rxGeoInfEscanear((hechas, total, eco) => {
+                            setProg(10 + Math.round((hechas / Math.max(1, total)) * 75),
+                                'Consultando ' + hechas + '/' + total + (eco ? ' \u00b7 ' + eco : ''));
+                        }, RX_GEO._token);
+                    } catch (_) { /* noop */ }
+                    if (mio !== pintaN) return;
+                }
                 const d = rxGeoInfReune();
-                setProg(55, 'Agrupando ' + d.eventos.length + ' evento(s)\u2026');
+                setProg(88, 'Agrupando ' + d.eventos.length + ' evento(s)\u2026');
                 await rxGeoInfYield();
+                if (mio !== pintaN) return;
                 const selZ = rxGeoInfSelect();
                 const fuentes = rxGeoInfFuentesDisponibles();
-                setProg(85, 'Dibujando\u2026');
+                setProg(94, 'Dibujando\u2026');
                 await rxGeoInfYield();
                 setHtml(box, cuerpo(d, fuentes, selZ));
                 rxGeoInfPintaMapa(d);
@@ -913,6 +1067,7 @@ function abrirInformeGeocerca(origen) {
                     RX_GEO.hasta = '';
                 } else {
                     RX_GEO[b.dataset.rgi] = b.dataset.v;
+                    if (b.dataset.rgi === 'fuente') RX_GEO._fuenteTocada = true;
                 }
                 pinta();
             });
@@ -935,6 +1090,8 @@ function abrirInformeGeocerca(origen) {
                 if (t.id === 'rgi-zona') {
                     RX_GEO.zona = t.value || '';
                     _rxGeoZonaSel = { nombre: '\u0000', z: null };
+                    // Con el historial, al cambiar de geocerca hay que volver
+                    // a consultar (la cache es por geocerca + rango).
                     pinta();
                     return;
                 }

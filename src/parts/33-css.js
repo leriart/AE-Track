@@ -1495,6 +1495,9 @@
             "#rondo-dialog .rgi-carga > span:first-child{flex:0 0 auto;font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);white-space:nowrap}\n" +
             "#rondo-dialog .rgi-barra{flex:1;min-width:0;height:6px;border-radius:999px;background:var(--rondo-bg-strong);overflow:hidden;display:block}\n" +
             "#rondo-dialog .rgi-barra i{display:block;height:100%;width:0;border-radius:999px;background:var(--rondo-accent-grad);transition:width .25s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 9px;border-radius:8px;background:var(--rondo-warn-bg);border:1px solid rgba(249,168,37,.35);font:500 10.5px var(--rondo-font);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-aviso .mini{margin-left:auto;padding:4px 10px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg);font:600 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-aviso .mini:hover{border-color:var(--rondo-fg-mute)}\n" +
             // Barra de acciones de descarga.
             "#rondo-dialog .rgi-io{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px}\n" +
             "#rondo-dialog .rgi-btn{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:7px 10px;border-radius:9px;border:1px solid var(--rondo-border);background:var(--rondo-bg-soft);color:var(--rondo-fg);cursor:pointer;text-align:left;min-width:0;transition:all .15s var(--rondo-easing)}\n" +
