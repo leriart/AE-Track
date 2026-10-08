@@ -307,6 +307,9 @@
              '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido con las opciones elegidas"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
              '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
              '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
+             // v6.15: el informe por geocerca tambien desde aqui; al abrirlo
+             // toma las fechas del recorrido que se esta viendo.
+             '<button class="mini" id="rondo-replay-informe-geo" title="Informe de una geocerca: cruces y unidades paradas dentro, en un rango de dias"><span class="rondo-usym">' + UIS.zone + '</span> Informe geocerca</button>' +
              '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta

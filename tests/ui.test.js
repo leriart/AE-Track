@@ -663,6 +663,21 @@ ok('dialogo: informe de cruces o de paradas',
     /'data-rgi="modo"', 'cruces', 'Cruces por unidad'/.test(src) &&
     /'data-rgi="modo"', 'paradas', 'Paradas dentro'/.test(src) &&
     /'data-rgi="rango"', 'hoy'/.test(src));
+ok('dialogo: rango de dias con dos fechas',
+    /id="rgi-desde"/.test(src) && /id="rgi-hasta"/.test(src) && /class="rgi-rango"/.test(src));
+ok('dialogo: atajos de periodo en dias',
+    /'data-rgi="rango"', '15d', '15 dias'/.test(src) && /'data-rgi="rango"', '30d', '30 dias'/.test(src));
+ok('rango escrito manda sobre el atajo', /RX_GEO\.desde \? rxGeoInfFechaMs\(RX_GEO\.desde, false\) : rxGeoInfDesde\(RX_GEO\.rango\)/.test(src) &&
+    /RX_GEO\.hasta \? rxGeoInfFechaMs\(RX_GEO\.hasta, true\) : 0/.test(src));
+ok('al elegir un atajo se borra el rango escrito',
+    /RX_GEO\.desde = '';\s*\n\s*RX_GEO\.hasta = '';/.test(src));
+ok('el filtro de fechas incluye el dia final', /if \(hastaMs && e\.ts && e\.ts > hastaMs\) continue;/.test(src));
+ok('corige el rango si desde es posterior a hasta', /RX_GEO\.desde > RX_GEO\.hasta/.test(src));
+ok('boton de informe en la pestana Replay', /id="rondo-replay-informe-geo"/.test(src) &&
+    /Informe geocerca<\/button>/.test(src));
+ok('desde Replay el informe toma las fechas del recorrido',
+    /informeGeo\.addEventListener\('click', \(\) => abrirInformeGeocerca\('replay'\)\)/.test(src) &&
+    /RX_GEO\.desde = String\(r\.fecha\)/.test(src));
 ok('dialogo: selector de geocerca', /id="rgi-zona"/.test(src) && /Todas las geocercas/.test(src));
 ok('dialogo: tres fuentes de datos', /data-rgi="fuente"/.test(src) &&
     /bitacora: 'Avisos'/.test(src) && /viajes: 'Viajes analizados'/.test(src));

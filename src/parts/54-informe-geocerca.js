@@ -14,7 +14,7 @@
  * poder probarlo aislado en tests/informe-geocerca.test.js.
  */
 const RX_GEO_FUENTES = Object.freeze(['bitacora', 'viajes', 'replay']);
-const RX_GEO_RANGOS = Object.freeze(['hoy', '24h', '7d', 'todo']);
+const RX_GEO_RANGOS = Object.freeze(['hoy', '24h', '7d', '15d', '30d', 'todo']);
 const RX_GEO_TIPOS = Object.freeze({
     entra: 'Entrada',
     sale: 'Salida',
@@ -94,16 +94,34 @@ function rxGeoInfParada(p, zona, eco, fuente) {
         fuente: fuente || 'viajes'
     };
 }
-// Filtra por geocerca (vacia = todas) y por rango de fechas.
-function rxGeoInfFiltra(eventos, zona, desdeMs) {
+// Filtra por geocerca (vacia = todas) y por rango de fechas. El rango son
+// dos marcas: inicio (desdeMs) y fin (hastaMs, inclusive).
+function rxGeoInfFiltra(eventos, zona, desdeMs, hastaMs) {
     const out = [];
     for (const e of (eventos || [])) {
         if (!e) continue;
         if (zona && e.zona !== zona) continue;
         if (desdeMs && e.ts && e.ts < desdeMs) continue;
+        if (hastaMs && e.ts && e.ts > hastaMs) continue;
         out.push(e);
     }
     return out;
+}
+// Una fecha del selector (yyyy-mm-dd) a milisegundos. Con `fin` cubre el
+// dia entero (23:59:59.999), para que "hasta el dia X" incluya ese dia.
+function rxGeoInfFechaMs(s, fin) {
+    if (!s) return 0;
+    const d = new Date(String(s) + 'T00:00:00');
+    if (!isFinite(d.getTime())) return 0;
+    if (fin) d.setHours(23, 59, 59, 999);
+    return d.getTime();
+}
+function rxGeoInfFechaTxt(ms) {
+    if (!ms) return '';
+    const d = new Date(ms);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return dd + '/' + mm + '/' + d.getFullYear();
 }
 // Milisegundos de inicio del rango elegido ('hoy' = desde las 00:00).
 function rxGeoInfDesde(rango, ahora) {
@@ -111,6 +129,8 @@ function rxGeoInfDesde(rango, ahora) {
     if (rango === 'hoy') { const d = new Date(n); d.setHours(0, 0, 0, 0); return d.getTime(); }
     if (rango === '24h') return n - 24 * 3600 * 1000;
     if (rango === '7d') return n - 7 * 24 * 3600 * 1000;
+    if (rango === '15d') return n - 15 * 24 * 3600 * 1000;
+    if (rango === '30d') return n - 30 * 24 * 3600 * 1000;
     return 0;
 }
 // Agrega los eventos por unidad. modo 'cruces' ordena por cruces,
@@ -344,19 +364,25 @@ function rxGeoInfFuentesDisponibles() {
 }
 
 /* ====================== INFORME POR GEOCERCA: UI ====================== */
-const RX_GEO = { fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '' };
+const RX_GEO = { fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '', desde: '', hasta: '' };
 function rxGeoInfZonas() {
     return (APP.zonas || []).map(rxGeoInfNombre).filter(Boolean);
 }
 // Reune lo que se va a pintar: eventos filtrados + agregados.
 function rxGeoInfReune() {
     const todos = rxGeoInfEventos(RX_GEO.fuente);
-    const desde = rxGeoInfDesde(RX_GEO.rango);
+    // Un rango de dias escrito a mano manda sobre los atajos.
+    const desde = RX_GEO.desde ? rxGeoInfFechaMs(RX_GEO.desde, false) : rxGeoInfDesde(RX_GEO.rango);
+    const hasta = RX_GEO.hasta ? rxGeoInfFechaMs(RX_GEO.hasta, true) : 0;
     const zona = RX_GEO.zona || '';
-    const ev = rxGeoInfFiltra(todos, zona, desde);
+    const ev = rxGeoInfFiltra(todos, zona, desde, hasta);
+    const rangoTxt = (desde || hasta)
+        ? ((desde ? rxGeoInfFechaTxt(desde) : 'inicio') + ' – ' + (hasta ? rxGeoInfFechaTxt(hasta) : 'hoy'))
+        : '';
     return {
         fuente: RX_GEO.fuente, rango: RX_GEO.rango, modo: RX_GEO.modo, zona: zona,
-        desde: desde, eventos: ev, disponibles: todos.length,
+        desde: desde, hasta: hasta, rangoTxt: rangoTxt,
+        eventos: ev, disponibles: todos.length,
         unidades: rxGeoInfAgrupa(ev, RX_GEO.modo),
         zonas: rxGeoInfPorZona(ev, zona ? null : rxGeoInfZonas())
     };
@@ -368,9 +394,11 @@ function rxGeoInfResumen(d) {
     const t = d.unidades.total;
     const fuenteTxt = (d.fuente === 'bitacora') ? 'Avisos de la sesion'
         : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay');
-    const rangoTxt = (d.rango === 'hoy' ? 'hoy'
+    const rangoTxt = d.rangoTxt || (d.rango === 'hoy' ? 'hoy'
         : (d.rango === '24h' ? 'ultimas 24 h'
-            : (d.rango === '7d' ? 'ultimos 7 dias' : 'todo el historico')));
+            : (d.rango === '7d' ? 'ultimos 7 dias'
+                : (d.rango === '15d' ? 'ultimos 15 dias'
+                    : (d.rango === '30d' ? 'ultimos 30 dias' : 'todo el historico')))));
     return fuenteTxt + ' \u00b7 ' + rangoTxt + (d.zona ? (' \u00b7 geocerca ' + d.zona) : '') +
         ': ' + t.unidades + ' unidad(es), ' + t.cruces + ' cruce(s) y ' + t.paradas +
         ' parada(s) con ' + t.min + ' min quieto' + (t.motor ? (' (' + t.motor + ' con motor apagado)') : '') + '.';
@@ -434,7 +462,17 @@ function rxGeoInfNombreArchivo(d, ext) {
 }
 // Dialogo: que informe, de que geocerca, de que periodo, con que datos y
 // las tres salidas (PDF, CSV, Markdown).
-function abrirInformeGeocerca() {
+function abrirInformeGeocerca(origen) {
+    // Desde la pestana Replay el rango arranca en las fechas del recorrido
+    // cargado, que es lo que el operador esta mirando en ese momento.
+    if (origen === 'replay') {
+        const r = (typeof RX_REPLAY !== 'undefined') ? RX_REPLAY : null;
+        if (r && r.fecha) {
+            RX_GEO.desde = String(r.fecha);
+            RX_GEO.hasta = (r.fecha2 && r.fecha2 !== r.fecha) ? String(r.fecha2) : '';
+            RX_GEO.rango = '';
+        }
+    }
     const hay = rxGeoInfFuentesDisponibles();
     if (!hay.length) {
         adviceWarn('Sin datos de geocercas',
@@ -466,11 +504,20 @@ function abrirInformeGeocerca() {
             '<div class="rgi-row"><span class="rgi-lb">Geocerca</span>' +
             '<select id="rgi-zona" class="filtro">' + opts + '</select></div>' +
             '<div class="rgi-row"><span class="rgi-lb">Periodo</span><div class="rgi-chips">' +
-            chip(RX_GEO.rango === 'hoy', 'data-rgi="rango"', 'hoy', 'Hoy') +
-            chip(RX_GEO.rango === '24h', 'data-rgi="rango"', '24h', '24 h') +
-            chip(RX_GEO.rango === '7d', 'data-rgi="rango"', '7d', '7 dias') +
-            chip(RX_GEO.rango === 'todo', 'data-rgi="rango"', 'todo', 'Todo') +
+            chip(RX_GEO.rango === 'hoy' && !RX_GEO.desde, 'data-rgi="rango"', 'hoy', 'Hoy') +
+            chip(RX_GEO.rango === '24h' && !RX_GEO.desde, 'data-rgi="rango"', '24h', '24 h') +
+            chip(RX_GEO.rango === '7d' && !RX_GEO.desde, 'data-rgi="rango"', '7d', '7 dias') +
+            chip(RX_GEO.rango === '15d' && !RX_GEO.desde, 'data-rgi="rango"', '15d', '15 dias') +
+            chip(RX_GEO.rango === '30d' && !RX_GEO.desde, 'data-rgi="rango"', '30d', '30 dias') +
+            chip(RX_GEO.rango === 'todo' && !RX_GEO.desde, 'data-rgi="rango"', 'todo', 'Todo') +
             '</div></div>' +
+            '<div class="rgi-row"><span class="rgi-lb">Rango de dias</span>' +
+            '<span class="rgi-rango">' +
+            '<input type="date" id="rgi-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_GEO.desde) + '">' +
+            '<span class="sep">a</span>' +
+            '<input type="date" id="rgi-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_GEO.hasta) + '">' +
+            (RX_GEO.desde || RX_GEO.hasta ? '<button type="button" class="mini" data-rgi="rango" data-v="hoy">Quitar</button>' : '') +
+            '</span></div>' +
             '<div class="rgi-row"><span class="rgi-lb">Datos</span><div class="rgi-chips">' +
             fuentes.map((f) => chip(RX_GEO.fuente === f.k, 'data-rgi="fuente"', f.k,
                 ETIQUETA[f.k] + ' \u00b7 ' + f.n, ETIQUETA[f.k])).join('') +
@@ -509,14 +556,31 @@ function abrirInformeGeocerca() {
             box.addEventListener('click', (ev) => {
                 const b = ev.target.closest && ev.target.closest('[data-rgi]');
                 if (!b || !box.contains(b)) return;
-                RX_GEO[b.dataset.rgi] = b.dataset.v;
+                if (b.dataset.rgi === 'rango') {
+                    // Un atajo de periodo borra el rango escrito a mano.
+                    RX_GEO.rango = b.dataset.v;
+                    RX_GEO.desde = '';
+                    RX_GEO.hasta = '';
+                } else {
+                    RX_GEO[b.dataset.rgi] = b.dataset.v;
+                }
                 pinta();
             });
             box.addEventListener('change', (ev) => {
                 const t = ev.target;
-                if (!t || t.id !== 'rgi-zona') return;
-                RX_GEO.zona = t.value || '';
-                pinta();
+                if (!t || !t.id) return;
+                if (t.id === 'rgi-zona') { RX_GEO.zona = t.value || ''; pinta(); return; }
+                if (t.id === 'rgi-desde' || t.id === 'rgi-hasta') {
+                    RX_GEO.desde = t.value || '';
+                    RX_GEO.hasta = (byId('rgi-hasta') ? byId('rgi-hasta').value : '') || '';
+                    // Si el operador se equivoca de orden, se corrige solo.
+                    if (RX_GEO.desde && RX_GEO.hasta && RX_GEO.desde > RX_GEO.hasta) {
+                        const tmp = RX_GEO.desde;
+                        RX_GEO.desde = RX_GEO.hasta;
+                        RX_GEO.hasta = tmp;
+                    }
+                    pinta();
+                }
             });
             const salida = (id, fn) => {
                 const b2 = byId(id);

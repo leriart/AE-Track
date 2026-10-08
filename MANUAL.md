@@ -505,8 +505,14 @@ la leyenda del mapa y en las exportaciones: el **CSV** suma las columnas
 
 Aparte del reporte general y del de cada unidad (Replay), hay un **informe
 por geocerca** que responde dos preguntas: *¿quien cruzo esta geocerca?* y
-*¿quien se paro aqui?*. Se abre con el boton de pin (en la barra, junto al
-de Reporte PDF) y sale en **PDF**, **CSV** o **Markdown**.
+*¿quien se paro aqui?*. Se abre desde dos sitios:
+
+- el boton **Informe geocerca** de la pestana **Reproducir recorrido** (a la
+  derecha de *Paradas CSV*), que al abrirse toma **las fechas del recorrido
+  que estas viendo**; y
+- el boton de pin de la barra, junto al de Reporte PDF.
+
+Sale en **PDF**, **CSV** o **Markdown**.
 
 #### Que eliges
 
@@ -514,12 +520,22 @@ de Reporte PDF) y sale en **PDF**, **CSV** o **Markdown**.
 | --- | --- |
 | Informe de | **Cruces por unidad** / **Paradas dentro** |
 | Geocerca | Cualquiera de las cargadas (las de la plataforma y las de Rondo), o *Todas las geocercas* |
-| Periodo | Hoy / 24 h / 7 dias / Todo |
+| Periodo | Hoy / 24 h / 7 dias / 15 dias / 30 dias / Todo |
+| Rango de dias | Dos fechas (desde – hasta), ambas incluidas |
 | Datos | De donde salen los eventos (ver abajo) |
+
+El **rango de dias** escrito a mano manda sobre los atajos: si eliges un
+periodo corto se borra el rango, y si inviertes las fechas (desde posterior a
+hasta) se corrigen solas. El resumen siempre dice el periodo exacto
+("08/10/2026 – hoy").
 
 El panel va mostrando en vivo seis KPIs (unidades, cruces, entradas, paradas,
 minutos quietos, paradas con motor apagado) y una **vista previa** de las
 primeras 12 unidades, con la fila marcada en rojo cuando supera el filtro.
+
+Sobre el alcance de los datos: la fuente **Avisos** solo guarda lo ocurrido en
+esta pestana (hasta 300 avisos), asi que un rango de muchos dias saldra vacio
+salvo que tengas viajes analizados o recorridos cargados.
 
 #### De donde salen los datos
 

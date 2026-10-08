@@ -62,7 +62,7 @@ const stubs = [
 
 const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {rxGeoInfZonaTexto,rxGeoInfMinutos,rxGeoInfEvento,rxGeoInfParada,rxGeoInfFiltra,' +
-    'rxGeoInfDesde,rxGeoInfAgrupa,rxGeoInfPorZona,rxGeoInfCeldas,rxGeoInfCruces,' +
+    'rxGeoInfDesde,rxGeoInfFechaMs,rxGeoInfFechaTxt,rxGeoInfAgrupa,rxGeoInfPorZona,rxGeoInfCeldas,rxGeoInfCruces,' +
     'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfEventos,rxGeoInfFuentesDisponibles,' +
     'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
     'RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS};';
@@ -156,6 +156,30 @@ ok('rango: hoy empieza a las 00:00', (function () {
 ok('rango: 24 h y 7 d restan dias', mod.rxGeoInfDesde('24h', AHORA) === AHORA - 24 * 3600 * 1000 &&
     mod.rxGeoInfDesde('7d', AHORA) === AHORA - 7 * 24 * 3600 * 1000);
 ok('rango: todo = sin limite', mod.rxGeoInfDesde('todo', AHORA) === 0);
+ok('rango: 15 y 30 dias', mod.rxGeoInfDesde('15d', AHORA) === AHORA - 15 * 24 * 3600 * 1000 &&
+    mod.rxGeoInfDesde('30d', AHORA) === AHORA - 30 * 24 * 3600 * 1000);
+// Rango de dias escrito a mano (el selector de fechas del dialogo).
+// Fechas locales (el selector usa yyyy-mm-dd en hora local).
+const D = (iso) => { const p = String(iso).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]).getTime(); };
+ok('fecha: inicio a las 00:00 y fin al final del dia', (function () {
+    const a = mod.rxGeoInfFechaMs('2026-03-10', false), b = mod.rxGeoInfFechaMs('2026-03-10', true);
+    const d = new Date(a);
+    return a === D('2026-03-10') && d.getHours() === 0 && (b - a) === 23 * 3600000 + 59 * 60000 + 59999;
+})());
+ok('fecha: texto dd/mm/aaaa', mod.rxGeoInfFechaTxt(D('2026-03-10')) === '10/03/2026',
+    mod.rxGeoInfFechaTxt(D('2026-03-10')));
+ok('fecha: vacio o invalido da 0', mod.rxGeoInfFechaMs('', true) === 0 && mod.rxGeoInfFechaMs('no-es-fecha', false) === 0);
+ok('filtro: incluye el dia final completo', (function () {
+    const ev = [{ zona: 'P', tipo: 'entra', eco: '1', ts: D('2026-03-12') + 20 * 3600000 },
+        { zona: 'P', tipo: 'entra', eco: '1', ts: D('2026-03-14') }];
+    const r = mod.rxGeoInfFiltra(ev, '', D('2026-03-10'), mod.rxGeoInfFechaMs('2026-03-12', true));
+    return r.length === 1 && r[0].ts === D('2026-03-12') + 20 * 3600000;
+})());
+ok('filtro: rango de varios dias', (function () {
+    const ev = [];
+    for (const d of ['2026-03-01', '2026-03-05', '2026-03-10']) ev.push({ zona: 'P', tipo: 'entra', eco: '1', ts: D(d) + 3600000 });
+    return mod.rxGeoInfFiltra(ev, '', D('2026-03-05'), mod.rxGeoInfFechaMs('2026-03-10', true)).length === 2;
+})());
 
 // ── Agregacion por unidad ────────────────────────────────────────────────
 let g = mod.rxGeoInfAgrupa(bita, 'cruces');
