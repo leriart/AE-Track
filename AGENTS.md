@@ -135,7 +135,7 @@ commitear, asi que la doc no se desfasa sola.
   node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
   node scripts/test-all.mjs
   ```
-  Las 19 suites (~1344 checks) deben quedar en verde. Si añades logica nueva,
+  Las 19 suites (~1371 checks) deben quedar en verde. Si añades logica nueva,
   añade o amplia una suite.
 - La version se calcula **automaticamente** al hacer push a `main` (workflow
   Release, segun commits convencionales). No cambies `@version` a mano: usa
@@ -194,7 +194,7 @@ node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
 node scripts/test-all.mjs
 ```
 
-- **19 suites, ~1344 checks**. Ninguna usa red ni navegador: las suites extraen
+- **19 suites, ~1371 checks**. Ninguna usa red ni navegador: las suites extraen
   funciones del bundle con stubs de DOM/localStorage.
 - `tests/_source.js` reconstruye `build/rondo.bundle.js` solo si `src/`,
   `VERSION` o `build.mjs` estan mas nuevos, y expone `src` a cada suite.
@@ -215,7 +215,7 @@ node scripts/test-all.mjs
 | `extraer_patrones.test.js` | deteccion de patrones de alertas |
 | `carga.test.js` | carga/embarque y emparejamiento difuso |
 | `geocercas.test.js` | KPIs y analisis de geocercas |
-| `geocerca-alerta.test.js` | seleccion, alcance, gravedad y disparador de la alerta de geocercas (histeresis, motor, cooldown, flota) |
+| `geocerca-alerta.test.js` | config por geocerca, histeresis, motor (sensor/estimado), cooldown, alcance y flota |
 | `ui.test.js` | orden de tabla, escala de UI, iconos SVG, voz, IA y dialogo |
 | `version.test.js` | parseo de `@version`/`VER` y sincronia |
 | `syntax.test.js` | el bundle compila sin errores de sintaxis |

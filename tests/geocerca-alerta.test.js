@@ -1,7 +1,7 @@
 /*
- * Pruebas de la "Alerta de geocercas" (v6.12): seleccion de geocercas,
- * alcance (vigiladas / toda la flota), gravedad y disparador (solo paso,
- * detenida o detenida con el motor apagado).
+ * Pruebas de la "Alerta de geocercas" (v6.12): CADA geocerca tiene su
+ * propia alerta (vigilada o no, a quien, con que gravedad y que disparador:
+ * solo paso, detenida o detenida con el motor apagado).
  *
  * El bloque es puro: se extrae desde el banner NUCLEO hasta el de la UI y se
  * evalua con stubs de lo que vive fuera (inZone, norm, clamp, pushAlert,
@@ -28,6 +28,7 @@ const H = {
     reloj: 1000000,                                  // segundos
     alertas: [],
     sesiones: [],
+    guardadas: [],
     zonas: [
         { id: 1, n: 'PATIO', t: 3, w: 200, b: { min_x: -0.002, min_y: -0.002, max_x: 0.002, max_y: 0.002, cen_x: 0, cen_y: 0 } },
         { id: 2, n: 'CEDIS', t: 3, w: 100, b: { min_x: 0.099, min_y: 0.099, max_x: 0.101, max_y: 0.101, cen_x: 0.1, cen_y: 0.1 } }
@@ -81,18 +82,19 @@ const stubs = [
     'function velSuavizada(info, st){ const v=APP.velSuave[info.clave]; return (v!=null&&isFinite(v))?v:(st.vel||0); }',
     'function zonaRol(z){ return /PATIO/.test(z.n)?"base":"normal"; }',
     'function writeSession(k,v){ SES.push([k,v]); }',
-    'function writeJSON(k,v){ SES.push([k,v]); }',
+    'function writeJSON(k,v){ if(k==="cfg") H.guardadas.push(JSON.parse(JSON.stringify(v))); }',
     'function pushAlert(a){ ALERTAS.push(a); }',
     'function adviceOk(){} function adviceWarn(){} function adviceErr(){}',
-    'const DEFAULTS = { geoAlertas: Object.freeze({ zonas:"", alcance:"vigiladas", severidad:"medio", disparo:"paso", minMin:2, motorMin:15, estableSeg:20, cooldownS:0 }) };',
+    'function paintGeoAlertas(){} function paintGeocercas(){}',
+    'const DEFAULTS = { geoAlertas: Object.freeze({ porZona:Object.freeze({}), alcance:"vigiladas", severidad:"medio", disparo:"paso", minMin:2, motorMin:15, estableSeg:20, cooldownS:0 }) };',
     'const LS={cfg:"cfg"}, SS={memo:"memo", geoAlerta:"geoAlerta"};'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
-    '\nreturn {geoAlertaCfg,geoAlertaNombres,geoAlertaTexto,geoAlertaSel,geoAlertaZonasDe,geoAlertaDentro,' +
-    'geoAlertaMotor,geoAlertaEvalua,geoAlertaPermitido,geoAlertaTextoEvento,' +
-    'reglaGeoAlerta,geoAlertaFlota,geoAlertaReinicia,geoAlertaPodaVivo,' +
-    'GEO_ALERTA_DISPAROS,GEO_ALERTA_SEVS,GEO_ALERTA_SEP,GEO_ALERTA_MARGEN_M,GEO_ALERTA_MAX_ZONAS};';
+    '\nreturn {geoAlertaDef,geoAlertaLimpia,geoAlertaPorZona,geoAlertaCfgZona,geoAlertaVigiladas,' +
+    'geoAlertaZonasDe,geoAlertaDentro,geoAlertaMotor,geoAlertaEvalua,geoAlertaPermitido,geoAlertaTextoEvento,' +
+    'reglaGeoAlerta,geoAlertaFlota,geoAlertaReinicia,geoAlertaPodaVivo,geoAlertaGuardaZona,' +
+    'GEO_ALERTA_DISPAROS,GEO_ALERTA_SEVS,GEO_ALERTA_ETIQUETAS,GEO_ALERTA_MARGEN_M,GEO_ALERTA_MAX_ZONAS};';
 const mod = new Function('H', code)(H);
 
 const APP = H.APP;
@@ -108,12 +110,25 @@ function ok(nombre, cond, extra) {
 }
 
 // ── Utilidades de prueba ─────────────────────────────────────────────────
-function cfgBase(mods) {
+// Configura una o varias geocercas vigiladas (nombre -> ajustes). Sin
+// argumentos deja PATIO con los valores por defecto.
+function cfgBase(mods, extra) {
     APP.config.reglas.geoAlerta = true;
-    APP.config.geoAlertas = Object.assign({
-        zonas: 'PATIO', alcance: 'vigiladas', severidad: 'medio',
+    const base = {
+        on: true, alcance: 'vigiladas', severidad: 'medio',
         disparo: 'paso', minMin: 2, motorMin: 15, estableSeg: 20, cooldownS: 0
-    }, mods || {});
+    };
+    const porZona = {};
+    porZona.PATIO = Object.assign({}, base, mods || {});
+    if (extra) Object.keys(extra).forEach((k) => { porZona[k] = Object.assign({}, base, extra[k]); });
+    APP.config.geoAlertas = Object.assign({}, APP.config.geoAlertas, { porZona: porZona });
+}
+// Guarda una geocerca vigilada por la via real (el menu), no a mano.
+function cfgZona(nombre, cambios) {
+    mod.geoAlertaGuardaZona(nombre, Object.assign({
+        on: true, alcance: 'vigiladas', severidad: 'medio',
+        disparo: 'paso', minMin: 2, motorMin: 15, estableSeg: 20, cooldownS: 0
+    }, cambios || {}));
 }
 function reinicia() {
     H.reloj = 1000000;
@@ -127,6 +142,9 @@ function reinicia() {
     APP.memo = {};
     APP.unidades = [];
     APP.zonas = H.zonas.slice();
+    H.guardadas.length = 0;
+    APP.config.reglas.geoAlerta = true;
+    APP.config.geoAlertas = Object.assign({}, APP.config.geoAlertas, { porZona: {} });
 }
 function infoDe(u) {
     const m = String(u.nm || '').match(/\b0*(\d{3,5})\b/);
@@ -155,42 +173,72 @@ function tick(seg, over, u) {
     return R;
 }
 
-// ── Configuracion ────────────────────────────────────────────────────────
+// ── Configuracion por geocerca ───────────────────────────────────────────
 reinicia();
-cfgBase();
-let c = mod.geoAlertaCfg();
-ok('cfg: activa con la regla encendida', c.activa === true);
-ok('cfg: zonas parseadas', c.zonas.length === 1 && c.zonas[0] === 'PATIO', JSON.stringify(c.zonas));
-ok('cfg: valores saneados por defecto',
-    c.alcance === 'vigiladas' && c.severidad === 'medio' && c.disparo === 'paso' &&
-    c.minMin === 2 && c.motorMin === 15 && c.estableSeg === 20 && c.cooldownS === 0);
-APP.config.geoAlertas.severidad = 'inventada';
-APP.config.geoAlertas.disparo = 'inventado';
-APP.config.geoAlertas.alcance = 'inventado';
-APP.config.geoAlertas.minMin = 9999;
-APP.config.geoAlertas.motorMin = -5;
-c = mod.geoAlertaCfg();
-ok('cfg: severidad invalida -> medio', c.severidad === 'medio', c.severidad);
-ok('cfg: disparador invalido -> paso', c.disparo === 'paso', c.disparo);
-ok('cfg: alcance invalido -> vigiladas', c.alcance === 'vigiladas', c.alcance);
-ok('cfg: minMin se acota a 240', c.minMin === 240, String(c.minMin));
-ok('cfg: motorMin se acota a min 1', c.motorMin === 1, String(c.motorMin));
-APP.config.reglas.geoAlerta = false;
-ok('cfg: apagada si la regla esta off', mod.geoAlertaCfg().activa === false);
-cfgBase();
+let c = mod.geoAlertaDef();
+ok('def: apagada y con los valores por defecto',
+    c.on === false && c.alcance === 'vigiladas' && c.severidad === 'medio' &&
+    c.disparo === 'paso' && c.minMin === 2 && c.motorMin === 15 && c.estableSeg === 20 && c.cooldownS === 0,
+    JSON.stringify(c));
+c = mod.geoAlertaLimpia({ on: 1, alcance: 'inventado', severidad: 'inventada', disparo: 'inventado', minMin: 9999, motorMin: -5, estableSeg: 'x', cooldownS: 1e9 });
+ok('limpia: on -> booleano', c.on === true);
+ok('limpia: alcance invalido -> vigiladas', c.alcance === 'vigiladas', c.alcance);
+ok('limpia: severidad invalida -> medio', c.severidad === 'medio', c.severidad);
+ok('limpia: disparador invalido -> paso', c.disparo === 'paso', c.disparo);
+ok('limpia: minMin se acota a 240', c.minMin === 240, String(c.minMin));
+ok('limpia: motorMin se acota a min 1', c.motorMin === 1, String(c.motorMin));
+ok('limpia: estableSeg no numerico -> por defecto', c.estableSeg === 20, String(c.estableSeg));
+ok('limpia: cooldownS se acota a 86400', c.cooldownS === 86400, String(c.cooldownS));
+ok('limpia: null y basura no rompen', mod.geoAlertaLimpia(null).disparo === 'paso' && mod.geoAlertaLimpia('x').on === false);
 
-// ── Serializacion de la seleccion ────────────────────────────────────────
-ok('nombres: separa por " | " y dedupe',
-    JSON.stringify(mod.geoAlertaNombres('A | B | A | ')) === '["A","B"]',
-    JSON.stringify(mod.geoAlertaNombres('A | B | A | ')));
-ok('nombres: vacio -> lista vacia',
-    mod.geoAlertaNombres('').length === 0 && mod.geoAlertaNombres(null).length === 0);
-ok('texto: ida y vuelta', mod.geoAlertaTexto(['A', 'B']) === 'A | B');
-ok('texto: respeta el tope de geocercas',
-    mod.geoAlertaTexto(new Array(60).fill('X')).split(mod.GEO_ALERTA_SEP).length === mod.GEO_ALERTA_MAX_ZONAS);
-APP.config.geoAlertas.zonas = 'PATIO | CEDIS | BORRADA';
-ok('zonas: solo las que existen en la plataforma', mod.geoAlertaZonasDe(mod.geoAlertaCfg()).length === 2);
-ok('sel: set con la seleccion', mod.geoAlertaSel(mod.geoAlertaCfg()).has('CEDIS') === true);
+// Guardar por el menu (lo que hace abrirGeoAlerta -> geoAlertaGuardaZona).
+reinicia();
+cfgZona('PATIO', { severidad: 'critico', disparo: 'motor', motorMin: 30, alcance: 'todas' });
+ok('guarda: queda en el mapa porZona', !!APP.config.geoAlertas.porZona.PATIO);
+ok('guarda: respeta lo elegido', APP.config.geoAlertas.porZona.PATIO.severidad === 'critico' &&
+    APP.config.geoAlertas.porZona.PATIO.disparo === 'motor' && APP.config.geoAlertas.porZona.PATIO.motorMin === 30);
+ok('guarda: enciende el interruptor general', APP.config.reglas.geoAlerta === true);
+ok('guarda: persiste el cfg', H.guardadas.length === 1 && !!H.guardadas[0].geoAlertas.porZona.PATIO);
+ok('guarda: el mapa solo tiene geocercas vigiladas', mod.geoAlertaVigiladas().join(',') === 'PATIO');
+ok('cfg de zona: devuelve copia editable', (() => {
+    const z = mod.geoAlertaCfgZona('PATIO');
+    z.disparo = 'paso';
+    return mod.geoAlertaCfgZona('PATIO').disparo === 'motor';
+})());
+ok('cfg de zona: null si no esta vigilada', mod.geoAlertaCfgZona('CEDIS') === null && mod.geoAlertaCfgZona('') === null);
+
+// Desactivar una geocerca la quita del mapa (no queda apagada ocupando sitio).
+reinicia();
+cfgZona('PATIO', {});
+mod.geoAlertaGuardaZona('PATIO', { on: false });
+ok('guarda: desactivar quita la geocerca', mod.geoAlertaVigiladas().length === 0);
+ok('guarda: desactivar no borra la alarma general', APP.config.reglas.geoAlerta === true);
+
+// Varias geocercas, cada una con lo suyo.
+reinicia();
+cfgBase({}, { CEDIS: { severidad: 'bajo', disparo: 'detenida', minMin: 9 } });
+ok('varias: dos geocercas vigiladas', mod.geoAlertaVigiladas().length === 2);
+ok('varias: cada una con su gravedad',
+    mod.geoAlertaCfgZona('PATIO').severidad === 'medio' && mod.geoAlertaCfgZona('CEDIS').severidad === 'bajo');
+ok('varias: solo se resuelven las que existen en la plataforma',
+    mod.geoAlertaZonasDe().length === 2);
+APP.config.geoAlertas.porZona.BORRADA = { on: true };
+ok('varias: una geocerca borrada en la plataforma no se resuelve',
+    mod.geoAlertaZonasDe().length === 2 && mod.geoAlertaVigiladas().length === 3);
+
+// Proteccion frente a nombres piggybacking del prototipo.
+reinicia();
+APP.config.geoAlertas.porZona = JSON.parse('{"__proto__":{"on":true,"severidad":"critico"}}');
+ok('seguridad: "__proto__" no se cuela en el mapa',
+    Object.keys(mod.geoAlertaPorZona()).indexOf('__proto__') < 0);
+ok('seguridad: el mapa saneado queda vacio', Object.keys(mod.geoAlertaPorZona()).length === 0);
+ok('seguridad: guardar "__proto__" no altera el prototipo',
+    (() => {
+        APP.config.geoAlertas.porZona = {};
+        mod.geoAlertaGuardaZona('__proto__', { on: true, severidad: 'critico' });
+        return ({}).severidad === undefined && Object.keys(APP.config.geoAlertas.porZona).length === 0;
+    })());
+reinicia();
 
 // ── Pertenencia con margen ───────────────────────────────────────────────
 ok('dentro: centro de la geocerca', mod.geoAlertaDentro(Z0, 0, 0, 0) === true);
@@ -402,7 +450,10 @@ APP.memoGeoAlerta['305'] = { g: { PATIO: { d: 1 } } };
 mod.geoAlertaReinicia();
 ok('reinicia: limpia el memo de las vigiladas', APP.memo['105'].geoAlerta === undefined);
 ok('reinicia: limpia el memo de la flota', Object.keys(APP.memoGeoAlerta).length === 0);
-ok('reinicia: limpia el estado vivo', Object.keys(APP.geoAlertaVivo).length === 0);
+// El vivo NO se borra: se recalcula en el siguiente refresco y dejarlo
+// evita que la franja parpadee a "0" justo despues de guardar el menu.
+ok('reinicia: conserva la vista en vivo (se recalcula sola)',
+    !!APP.geoAlertaVivo['105'] && APP.geoAlertaVivo['105'].zona === 'PATIO');
 ok('reinicia: persiste el vaciado', sesiones.some(([k]) => k === 'geoAlerta'));
 
 // ── Poda del estado vivo ─────────────────────────────────────────────────

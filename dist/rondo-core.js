@@ -759,20 +759,16 @@
         // avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila
         // en el borde de una geocerca.
         geocercaEstableSeg: 15,
-        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). El
-        // operador elige UNA o VARIAS geocercas de la plataforma y decide
-        // a quien vigila (solo las unidades vigiladas o toda la flota), con
-        // que gravedad avisa y QUE lo dispara dentro de la geocerca:
-        //   paso      -> solo pasar por ella
-        //   detenida  -> quedarse parada dentro
-        //   motor     -> quedarse parada y apagar el motor
-        // La seleccion de geocercas viaja como texto con ' | ' (mismo
-        // formato que los planes multipunto) porque DEFAULTS es plano y las
-        // suites comparan sus claves. Sin geocercas elegidas la regla no
-        // hace nada, aunque este activada.
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). Cada
+        // geocerca lleva SU PROPIA alerta, editable desde la campana de su
+        // tarjeta: a quien vigila, con que gravedad y si dispara al pasar,
+        // al detenerse o al detenerse con el motor apagado.
+        // porZona: nombre de la geocerca -> ajustes; reglas.geoAlerta es el
+        // interruptor maestro de todas ellas.
         geoAlertas: Object.freeze({
-            // nombres de geocercas vigilados, separados por ' | '
-            zonas: '',
+            // nombre de la geocerca -> { on, alcance, severidad, disparo,
+            // minMin, motorMin, estableSeg, cooldownS }
+            porZona: Object.freeze({}),
             // 'vigiladas' (solo la lista vigilada) | 'todas'
             alcance: 'vigiladas',
             // 'bajo' | 'medio' | 'alto' | 'critico'
@@ -1046,8 +1042,8 @@
         geoFiltro: '',
         geoOrden: 'nombre',
         geoRol: 'todas',
-        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas).
-        geoAlertaBusca: '',   // texto del buscador de geocercas vigiladas
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). Cada
+        // geocerca se configura por separado desde la campana de su tarjeta.
         // Estado por unidad (clave -> zona + minutos) de quien esta dentro de
         // una geocerca vigilada. Solo memoria: se recalcula cada refresco.
         geoAlertaVivo: {},

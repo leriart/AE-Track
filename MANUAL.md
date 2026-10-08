@@ -149,11 +149,11 @@ En la parte superior del panel:
   carga), buscador, orden (nombre/unidades/area), filtro por rol, area y centro
   por zona, boton **Recargar** y exportacion a **CSV / GeoJSON**; desde cada
   tarjeta puedes **usar la geocerca como parada** de una unidad o copiar su
-  nombre y centro. Debajo de los KPIs esta el panel **Alerta de geocercas**:
-  eliges una o varias geocercas (campana en la tarjeta o casillas del
-  panel), a quien vigila (**solo la lista vigilada** o **toda la flota**), la
-  **gravedad** del aviso y que lo dispara (**solo paso**, **se detuvo** o
-  **se detuvo y apago el motor**), con sus tiempos y un cooldown propio. Ver
+  nombre y centro. Debajo de los KPIs esta la franja **Alerta de
+  geocercas**: cada geocerca se vigila por separado desde la **campana** de
+  su tarjeta (a quien, gravedad y si dispara al pasar, al detenerse o al
+  detenerse con el motor apagado), con su barra lateral, su pastilla de
+  disparador y una pastilla de resumen con acciones en cascada. Ver
   [Alerta de geocercas](#alerta-de-geocercas). El lado de **Riesgo**
   mantiene la dona con la distribucion
   por nivel, el histograma de scores, KPIs clicables Total/Alto/Medio/Bajo,
@@ -286,7 +286,7 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | Perdio senal en zona de riesgo | Transicion online -> offline y ultima posicion valida cae dentro de una zona de riesgo cargada | depende de los parametros de la zona (radio y score) |
 | Aproximacion a zona de riesgo | Una unidad en movimiento se acerca a una zona de alto score | score >= 4, buffer 500 m (apagada por defecto) |
 | Detenida en geocerca | Lleva parada dentro de una geocerca | 5 min (una sola vez por episodio) |
-| Alerta de geocercas | Pasa, se detiene o apaga el motor dentro de una geocerca que elegiste | segun el disparador elegido (pestana Zonas > Geocercas) |
+| Alerta de geocercas | Pasa, se detiene o apaga el motor dentro de una geocerca vigilada | por geocerca, desde su campana (pestana Zonas > Geocercas) |
 
 Notas:
 
@@ -412,54 +412,70 @@ minimo en Ajustes > Reglas > "Min detenido para alertar (min)".
 
 ### Alerta de geocercas
 
-Vigilancia **dirigida**: en lugar de mirar todas las geocercas, tu eliges
-**una o varias** y decides que debe pasar dentro para que Rondo avise. Se
-configura en la pestana **Zonas > Geocercas**, en el panel **Alerta de
-geocercas** (justo debajo de los KPIs). Apagada por defecto.
+Vigilancia **dirigida y por geocerca**: cada geocerca de la plataforma
+tiene **su propia alerta**, con su campana en la tarjeta. En lugar de una
+configuracion global aplicada a un grupo, eliges geocerca por geocerca a
+quien vigilar, con que gravedad y que debe pasar dentro para avisar.
+
+Apagada por defecto (interruptor general en *Ajustes > Reglas*), y sin
+geocercas marcadas no ocurre nada aunque el interruptor este encendido.
+
+#### Como configurarla
+
+Pulsa la **campana** de cualquier tarjeta de la lista de geocercas (pestana
+**Zonas > Geocercas**). Se abre un menu con:
 
 | Opcion | Valores | Que hace |
 | --- | --- | --- |
-| Interruptor | Activa / Apagada | Enciende o apaga la alerta entera |
-| Unidades | Solo vigiladas / Toda la flota | A quien se le aplica la seleccion de geocercas |
+| Interruptor | Sin vigilar / Vigilada | Enciende o apaga la alerta de **esta** geocerca |
+| Unidades | Solo vigiladas / Toda la flota | A quien se le aplica |
 | Gravedad | Baja, Media, Alta, Critica | Severidad del aviso (color, voz, pitido y filtro de la pestana Avisos) |
-| Dispara cuando | Solo paso / Se detuvo / Se detuvo y apago el motor | Que hecho dispara la alerta |
-| Parada (min) | 1 a 240 | Minutos parada dentro para el disparador *Se detuvo* |
-| Motor apagado (min) | 1 a 720 | Minutos parada sin reportar posicion para el disparador *motor* |
+| Dispara cuando | Solo paso / Se detuvo / Motor apagado | Que hecho dentro de la geocerca dispara el aviso |
+| Parada (min) | 1 a 240 | Minutos quieta dentro para *Se detuvo* |
+| Motor (min) | 1 a 720 | Minutos quieta sin reportar posicion para *Motor apagado* |
 | Confirmar (s) | 0 a 600 | Histeresis: segundos que debe sostenerse la entrada |
-| Cooldown (s) | 0 a 86400 | Espera entre avisos de la misma unidad en la misma geocerca (0 = la global) |
+| Cooldown (s) | 0 a 86400 | Espera entre avisos de la misma unidad en esa geocerca (0 = la global) |
 
-Como elegir geocercas:
+El menu edita en memoria: cambios y **Guardar** aplican, **Cancelar** no toca
+nada. Abajo aparece la **vista previa** del aviso tal y como saldria en la
+pestana Avisos, para elegir el disparador viendo el texto y no la etiqueta.
 
-- Con la **campana** de cada tarjeta de la lista (se enciende en ambar y la
-  tarjeta queda marcada con una barra lateral).
-- Con las **casillas** del panel de alerta, con buscador y los botones
-  **Todas**, **Ninguna** y **Solo las filtradas** (usa el buscador y el
-  filtro de rol de la tabla de geocercas).
+#### Indicadores en la pestana
 
-Como funciona:
+- **Franja resumen** (bajo los KPIs): cuantas geocercas de las cargadas
+  estan vigiladas, si hay unidades cumpliendo ahora, una **pastilla por
+  geocerca** (punto de color = gravedad, texto = ambito, gravedad y
+  disparador, contador = unidades dentro que cumplen) y dos acciones en
+  cascada: **Todas** (vigilar todas con los ajustes por defecto) y
+  **Ninguna**. Cada pastilla abre el menu de su geocerca.
+- **KPI En alerta**: unidades que cumplen ahora mismo alguna de las
+  geocercas vigiladas.
+- **Tarjeta**: barra lateral del color de la gravedad y pastilla
+  `DENTRO` / `PARADA` / `MOTOR` con el disparador elegido.
+
+#### Como funciona
 
 - **Solo paso**: avisa una vez cuando la unidad entra y se mantiene dentro
-  el tiempo de *Confirmar*. El borde no genera parpadeo: para dar la salida
-  se exige estar fuera con un margen de 40 m.
-- **Se detuvo**: avisa una sola vez cuando la unidad lleva *Parada (min)*
-  minutos quieta dentro. Si se mueve o sale, se rearma.
-- **Se detuvo y apago el motor**: avisa cuando la unidad lleva *Motor
-  apagado (min)* minutos quieta sin reportar posicion dentro. Si la unidad
-  publica un sensor de motor/ignicion como campo personalizado, se usa ese
-  dato; si no, Rondo lo estima por el corte de reporte (dejo de emitir),
-  que es la misma heuristica del Replay. En el aviso se indica que el motor
-  apagado es *estimado*.
-- Al activar la alerta no dispara avisos retroactivos: si una unidad ya
+  el tiempo de *Confirmar*. Para dar la salida se exige estar fuera con un
+  margen de 40 m, asi el borde no genera parpadeo.
+- **Se detuvo**: avisa una sola vez cuando la unidad lleva *Parada* minutos
+  quieta dentro. Si se mueve o sale, se rearma.
+- **Motor apagado**: avisa cuando la unidad lleva ese tiempo quieta sin
+  reportar posicion dentro. Si la unidad publica un sensor de motor o
+  ignicion como campo personalizado se usa ese dato; si no, Rondo lo estima
+  por el corte de reporte (dejo de emitir), igual que hace el Replay, y el
+  aviso lo indica como *motor apagado estimado*.
+- Sin senal no se confirma entrada ni parada (la posicion puede ser vieja);
+  el disparador de motor si trabaja con la posicion congelada.
+- Al activar la alerta no dispara avisos retroactivos: si la unidad ya
   estaba dentro, Rondo toma esa situacion como punto de partida.
 - Cada geocerca avisa **una vez por episodio**. El aviso sale con la regla
-  `geoAlerta`, con la gravedad elegida, y se puede silenciar por unidad como
-  cualquier otro.
+  `geoAlerta` y se puede silenciar por unidad como cualquier otro.
 
-El panel incluye ademas una fila **Ahora** con las unidades que en este
-momento estan dentro de una geocerca vigilada (con los minutos que llevan)
-y el KPI **En alerta** de la cabecera. Si eliges *Toda la flota*, Rondo
-recorre tambien las unidades que no vigilas (solo para esta regla: no les
-afecta el resto de alertas, el odometro ni las trazas).
+El estado en vivo se muestra en la franja y se recalcula en cada refresco.
+Si eliges *Toda la flota* en alguna geocerca, Rondo recorre tambien las
+unidades que no vigilas (solo para esta regla: no les afecta el resto de
+alertas, el odometro ni las trazas).
 
 ## Chat con la IA
 

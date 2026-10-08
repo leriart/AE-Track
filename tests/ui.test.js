@@ -524,24 +524,52 @@ ok('default reglas.geoAlerta apagado', /geoAlerta:\s*false/.test(src));
 ok('default geoAlertas con los 3 disparadores', /disparo: 'paso'/.test(src) && /minMin: 2/.test(src) && /motorMin: 15/.test(src));
 ok('fragmento con el nucleo de la alerta', src.includes('/* ====================== ALERTA DE GEOCERCAS: NUCLEO'));
 ok('fragmento con la UI de la alerta', src.includes('/* ====================== ALERTA DE GEOCERCAS: UI'));
-ok('catalogo con los 3 disparadores', /GEO_ALERTA_DISPAROS = Object\.freeze\(\{[\s\S]{0,400}motor:/.test(src));
-ok('panel de la alerta en la pestana Zonas', /id="rondo-geo-alerta"/.test(src));
+ok('catalogo con los 3 disparadores',
+    /GEO_ALERTA_DISPAROS = Object\.freeze\(\{[\s\S]{0,400}motor:/.test(src) &&
+    /paso: \{ txt: 'Solo pas/.test(src) && /detenida: \{ txt: 'Se detuvo'/.test(src));
+ok('catalogo de etiquetas para el reloj en vivo',
+    /GEO_ALERTA_ETIQUETAS = Object\.freeze\(\{[\s\S]{0,120}MOTOR/.test(src));
+ok('la maquina de estados es por geocerca', /function geoAlertaEvalua\(e, o\)/.test(src) &&
+    /const cfg = geoAlertaLimpia\(o\.cfg\)/.test(src));
+ok('franja resumen de la alerta en la pestana Zonas', /id="rondo-geo-ga-resumen"/.test(src));
 ok('KPI "En alerta" en las geocercas', /id="rondo-geo-kpi-alerta"/.test(src));
-ok('selector de unidades vigiladas / toda la flota',
-    /geoAlertaChip\(cfg\.alcance === 'vigiladas', 'data-ga="alcance"', 'vigiladas'/.test(src) &&
-    /geoAlertaChip\(cfg\.alcance === 'todas', 'data-ga="alcance"', 'todas'/.test(src));
-ok('selector de gravedad con 4 niveles',
-    /data-ga="sev"', s\.k/.test(src) && /\{ k: 'critico', txt:/.test(src) && /\{ k: 'bajo', txt:/.test(src));
-ok('selector de disparador con motor',
-    /data-ga="disparo"', d, d0\.txt/.test(src) && /motor: \{ txt: 'Se detuvo y apag/.test(src));
-ok('casillas de geocercas vigiladas', /data-ga-zona=/.test(src));
+// v6.12: cada geocerca con su propio menu (dialogo propio).
+ok('menu de alerta por geocerca', /function abrirGeoAlerta\(nombre\)/.test(src));
+ok('el menu edita una copia y guarda al aceptar', /const pend = geoAlertaLimpia\(cfg0\)/.test(src) &&
+    /onOk: \(\) => \{[\s\S]{0,200}geoAlertaGuardaZona\(titulo, limpio\)/.test(src));
+ok('menu: selector de unidades vigiladas / toda la flota',
+    /data-gz="alcance"', 'vigiladas'/.test(src) && /data-gz="alcance"', 'todas'/.test(src));
+ok('menu: selector de gravedad con 4 niveles',
+    /data-gz="sev"', s\.k/.test(src) && /\{ k: 'critico', txt:/.test(src) && /\{ k: 'bajo', txt:/.test(src));
+ok('menu: selector de disparador con motor',
+    /data-gz="disparo"', k, GEO_ALERTA_DISPAROS\[k\]\.txt/.test(src) && /motor: \{ txt: 'Motor apagado'/.test(src));
+ok('menu: los 4 parametros numericos',
+    /data-gz-num="minMin"/.test(src) && /data-gz-num="motorMin"/.test(src) &&
+    /data-gz-num="estableSeg"/.test(src) && /data-gz-num="cooldownS"/.test(src));
+ok('menu: vista previa del aviso', /function geoAlertaPreview\(/.test(src) && /As\\u00ed se ver\\u00e1 el aviso/.test(src));
+ok('menu: interruptor propio de la geocerca', /data-gz="on"/.test(src));
+ok('franja: pills con zona y gravedad', /data-ga="cfg" data-zona="/.test(src) && /rondo-ga-pill sev-/.test(src));
+ok('franja: acciones en cascada', /data-ga="todas"/.test(src) && /data-ga="ninguna"/.test(src));
 ok('campana en la tarjeta de geocerca', /class="mini rondo-geo-ga/.test(src));
+ok('tarjeta: badge con la gravedad y el disparador', /class="rondo-geo-gabadge sev-/.test(src) &&
+    /GEO_ALERTA_ETIQUETAS\[gac\.disparo\]/.test(src));
+ok('tarjeta: la tarjeta vigilada se marca por gravedad', /alerta-sel sev-/.test(src));
+ok('la campana abre el menu de ESA geocerca',
+    /classList\.contains\('rondo-geo-ga'\)\) \{ abrirGeoAlerta\(nombre\); return; \}/.test(src));
+ok('config por geocerca en un mapa por nombre', /porZona: Object\.freeze\(\{\}\)/.test(src));
+ok('guardar una geocerca enciende el interruptor general',
+    /APP\.config\.reglas\.geoAlerta = true/.test(src));
 ok('toggle c-r-geo-alerta existe', /checkRow\('c-r-geo-alerta'/.test(src));
 ok('precarga UI de c-r-geo-alerta', /cRGeoAl\.checked = !!APP\.config\.reglas\.geoAlerta/.test(src));
 ok('save handler recoge reglas.geoAlerta', /cf\.reglas\.geoAlerta = !!rGeoAlEl\.checked/.test(src));
 ok('R inicializa geoAlerta', /geoAlerta: \(prev && prev\.geoAlerta && typeof prev\.geoAlerta === 'object'\)/.test(src));
 ok('evaluateUnit llama reglaGeoAlerta', /reglaGeocercaDetenido\(st, R, info, etq\);[\s\S]{0,600}reglaGeoAlerta\(u, info, st, R\)/.test(src));
-ok('la alerta avisa con la regla geoAlerta', /regla: 'geoAlerta', sev: cfg\.severidad/.test(src));
+ok('la alerta avisa con la regla y la gravedad de ESA geocerca',
+    /regla: 'geoAlerta', sev: cfg\.severidad/.test(src));
+ok('la regla itera las geocercas vigiladas', /const zonas = geoAlertaZonasDe\(mapa\)/.test(src));
+ok('cada geocerca guarda su propio estado', /nuevo\[nom\] = res\.e/.test(src));
+ok('la flota se recorre si alguna geocerca pide toda la flota',
+    /Object\.keys\(mapa\)\.some\(\(k\) => mapa\[k\]\.alcance === 'todas'\)/.test(src));
 ok('refresh recorre la flota para la alerta', /geoAlertaFlota\(unidades, nuevas\)/.test(src));
 ok('estado de la flota en sessionStorage', /geoAlerta: 'rondo\.api\.s\.geoalerta'/.test(src));
 ok('deepMerge fusiona geoAlertas', /if \(base\.geoAlertas\)/.test(src));
@@ -549,7 +577,8 @@ ok('estado vivo en vivo para la UI', /geoAlertaVivo: \{\}/.test(src));
 ok('paintGeocercas repinta la alerta', /function paintGeocercas\(\) \{\s*paintGeoAlertas\(\);/.test(src));
 ok('bindings delegan los eventos de la alerta', /bindGeoAlerta\(\);/.test(src));
 ok('manual lista la alerta de geocercas', /Alerta de geocercas \|/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
-ok('RONDO_DOC menciona la alerta de geocercas', /Alerta de geocercas \(seleccion de geocercas/.test(src));
+ok('RONDO_DOC menciona la alerta por geocerca', /Alerta de geocercas \(por geocerca/.test(src) &&
+    /cada geocerca tiene su propia alerta/.test(src));
 
 // v5.14.6: fix de los dos botones Cerrar + nueva tab Chat IA.
 ok('abrirDialogo auto-hide cancel si mismo texto que OK', /cancelText !== okText/.test(src));

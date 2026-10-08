@@ -59,12 +59,13 @@ if (fns) {
     ok('texto: lista la clave mas pesada', txt.indexOf('rondo.api.cfg') >= 0);
     // v6.12: linea de la alerta de geocercas (solo si el snapshot la trae).
     const d2 = Object.assign({}, d, {
-        geoAlerta: { activa: true, elegidas: 3, alcance: 'todas', disparo: 'motor', severidad: 'alto', dentro: 2 }
+        geoAlerta: { activa: true, geocercas: 3, flotas: 2, dentro: 2 }
     });
     const txt2 = fns.rxDiagTexto(d2);
     ok('texto: linea de la alerta de geocercas',
         txt2.indexOf('Alerta de geocercas: activa') >= 0 && /3 geocerca\(s\)/.test(txt2) &&
-        txt2.indexOf('2 dentro') >= 0, txt2.split('\n').filter((x) => /geocercas: activa/.test(x))[0]);
+        /2 en toda la flota/.test(txt2) && txt2.indexOf('2 dentro ahora') >= 0,
+        txt2.split('\n').filter((x) => /geocercas: activa/.test(x))[0]);
     ok('texto: incluye el tamano en KB', txt.indexOf('2.0 KB') >= 0);
 }
 

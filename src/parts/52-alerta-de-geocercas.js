@@ -1,24 +1,24 @@
 /* ====================== ALERTA DE GEOCERCAS: NUCLEO ======================
- * Vigilancia dirigida: el operador elige una o varias geocercas de la
- * plataforma y Rondo avisa SOLO de lo que pase dentro de ellas. Completa a
- * las reglas globales (que miran cualquier geocerca y cualquier unidad):
+ * Cada geocerca lleva SU PROPIA alerta. En lugar de una configuracion global
+ * que se aplicaba a un grupo de geocercas, aqui cada una se configura desde
+ * su tarjeta (la campana abre el menu) y decide por separado:
  *
- *   - que geocercas importan (seleccion),
- *   - a quien se vigila (solo la lista vigilada o toda la flota),
- *   - con que gravedad se avisa,
- *   - y QUE dispara: solo pasar, quedarse parado, o pararse con el motor
- *     apagado.
+ *   - si esta vigilada o no,
+ *   - a quien: solo las unidades vigiladas o toda la flota,
+ *   - con que gravedad avisa,
+ *   - y QUE dispara dentro: solo pasar, quedarse parado, o pararse con el
+ *     motor apagado,
+ *   - mas sus tiempos y un cooldown propio.
  *
  * Por que NO reutiliza reglaGeocerca: aquella avisa de entrar y salir de
- * CUALQUIER geocerca, para las unidades vigiladas, y con severidad fija.
- * Aqui la severidad, el ambito y el disparador los elige el operador, y la
- * unidad vigilada por defecto es la lista vigilada.
+ * CUALQUIER geocerca, para las unidades vigiladas y con severidad fija.
+ * Aqui es por geocerca, con el ambito, la gravedad y el disparador a
+ * eleccion del operador.
  *
  * El nucleo de este fragmento es puro (no toca DOM ni red) para poder
  * probarlo aislado en tests/geocerca-alerta.test.js.
  */
-const GEO_ALERTA_SEP = ' | ';
-const GEO_ALERTA_MAX_ZONAS = 40;
+const GEO_ALERTA_MAX_ZONAS = 60;
 // Margen (m) para DAR LA SALIDA de una geocerca. Sin el, un vehiculo parado
 // en el borde alterna dentro/fuera cada reporte y el episodio nunca termina.
 const GEO_ALERTA_MARGEN_M = 40;
@@ -30,75 +30,104 @@ const GEO_ALERTA_MOTOR_KEYS = Object.freeze([
     'ENGINE', 'ENG', 'ENGINESTATUS', 'IGNITION', 'IGNITIONSTATUS', 'ACC', 'MOTOR',
     'ENCENDIDO', 'IGNICION', 'ENGINEOPERATION', 'MOTORON', 'STATUSMOTOR'
 ]);
-// Los tres disparadores que el operador puede elegir.
+// Los tres disparadores que se pueden elegir en cada geocerca.
 const GEO_ALERTA_DISPAROS = Object.freeze({
-    paso: { txt: 'Solo pas\u00f3', corto: 'paso', icono: 'zone' },
-    detenida: { txt: 'Se detuvo', corto: 'detenida', icono: 'stopped' },
-    motor: { txt: 'Se detuvo y apag\u00f3 el motor', corto: 'motor', icono: 'offline' }
+    paso: { txt: 'Solo pas\u00f3', corto: 'paso', icono: 'zone', ayuda: 'Avisa una vez al entrar y mantenerse dentro. El margen de borde evita el parpadeo.' },
+    detenida: { txt: 'Se detuvo', corto: 'detenida', icono: 'stopped', ayuda: 'Avisa una vez cuando la unidad lleva los minutos de parada dentro. Si se mueve o sale, se rearma.' },
+    motor: { txt: 'Motor apagado', corto: 'motor', icono: 'offline', ayuda: 'Avisa cuando la unidad lleva ese tiempo quieta sin reportar posicion dentro. Usa el sensor si la unidad publica motor/ignicion; si no, lo estima por el corte de reporte.' }
 });
-// Gravedad, de menos a mas (el panel las pinta en este orden).
+// Gravedad, de menos a mas (la UI las pinta en este orden).
 const GEO_ALERTA_SEVS = Object.freeze([
     { k: 'bajo', txt: 'Baja' },
     { k: 'medio', txt: 'Media' },
     { k: 'alto', txt: 'Alta' },
     { k: 'critico', txt: 'Cr\u00edtica' }
 ]);
+// Sub-etiqueta para el reloj en vivo: "se detuvo" y "motor" cuentan minutos
+// distintos, asi que la lista en vivo puede mostrar uno u otro.
+const GEO_ALERTA_ETIQUETAS = Object.freeze({
+    paso: 'DENTRO', detenida: 'PARADA', motor: 'MOTOR'
+});
 
 function geoAlertaNum(v, def) {
     const n = Number(v);
     return (v == null || !Number.isFinite(n)) ? def : n;
 }
-// Lectura normalizada de la configuracion: nunca lanza ni deja campos
-// raros (un cfg editado a mano o de una version vieja no puede romper el
-// refresco). Todo lo que decide la regla pasa por aqui.
-function geoAlertaCfg() {
-    const cfg = (APP && APP.config) || {};
-    const g = cfg.geoAlertas || {};
-    const sev = GEO_ALERTA_SEVS.some((s) => s.k === g.severidad) ? g.severidad : DEFAULTS.geoAlertas.severidad;
+// Geocerca llamada "__proto__", "constructor" o "prototype" no debe poder
+// tocar el prototipo al guardar o leer el mapa por nombre.
+function geoAlertaKeyOk(k) {
+    return !!k && k !== '__proto__' && k !== 'constructor' && k !== 'prototype';
+}
+function geoAlertaSev(k) {
+    return GEO_ALERTA_SEVS.some((s) => s.k === k) ? k : DEFAULTS.geoAlertas.severidad;
+}
+// Configuracion por defecto de UNA geocerca (la que se ofrece en el menu
+// cuando todavia no hay nada guardado para ella).
+function geoAlertaDef() {
+    const d = DEFAULTS.geoAlertas;
     return {
-        activa: !!(cfg.reglas && cfg.reglas.geoAlerta),
-        zonas: geoAlertaNombres(g.zonas),
-        alcance: (g.alcance === 'todas') ? 'todas' : 'vigiladas',
-        severidad: sev,
-        disparo: GEO_ALERTA_DISPAROS[g.disparo] ? g.disparo : DEFAULTS.geoAlertas.disparo,
-        minMin: clamp(geoAlertaNum(g.minMin, DEFAULTS.geoAlertas.minMin), 1, 240),
-        motorMin: clamp(geoAlertaNum(g.motorMin, DEFAULTS.geoAlertas.motorMin), 1, 720),
-        estableSeg: clamp(geoAlertaNum(g.estableSeg, DEFAULTS.geoAlertas.estableSeg), 0, 600),
-        cooldownS: clamp(geoAlertaNum(g.cooldownS, 0), 0, 86400)
+        on: false,
+        alcance: d.alcance,
+        severidad: d.severidad,
+        disparo: d.disparo,
+        minMin: d.minMin,
+        motorMin: d.motorMin,
+        estableSeg: d.estableSeg,
+        cooldownS: d.cooldownS
     };
 }
-// La seleccion es texto con ' | ' (mismo formato que los planes multipunto):
-// se parsea aqui y se serializa en geoAlertaGuarda.
-function geoAlertaNombres(txt) {
-    const s = String(txt == null ? '' : txt);
-    if (!s) return [];
-    const out = [];
-    for (const p of s.split(GEO_ALERTA_SEP)) {
-        const n = p.trim();
-        if (n && out.indexOf(n) < 0 && out.length < GEO_ALERTA_MAX_ZONAS) out.push(n);
+// Normaliza un objeto de configuracion: nunca lanza y nunca deja campos
+// raros (un cfg editado a mano o de una version vieja no puede romper el
+// refresco). Es la unica puerta por la que se leen estos valores.
+function geoAlertaLimpia(raw) {
+    const d = DEFAULTS.geoAlertas;
+    const g = (raw && typeof raw === 'object') ? raw : {};
+    return {
+        on: !!g.on,
+        alcance: (g.alcance === 'todas') ? 'todas' : 'vigiladas',
+        severidad: geoAlertaSev(g.severidad),
+        disparo: GEO_ALERTA_DISPAROS[g.disparo] ? g.disparo : d.disparo,
+        minMin: clamp(geoAlertaNum(g.minMin, d.minMin), 1, 240),
+        motorMin: clamp(geoAlertaNum(g.motorMin, d.motorMin), 1, 720),
+        estableSeg: clamp(geoAlertaNum(g.estableSeg, d.estableSeg), 0, 600),
+        cooldownS: clamp(geoAlertaNum(g.cooldownS, d.cooldownS), 0, 86400)
+    };
+}
+// Mapa nombre -> configuracion de las geocercas vigiladas, ya saneado.
+// hasOwnProperty evita que un nombre tipo "__proto__" o "constructor" lea o
+// escriba propiedades del prototipo.
+function geoAlertaPorZona() {
+    const g = (APP.config && APP.config.geoAlertas) || {};
+    const crudo = (g.porZona && typeof g.porZona === 'object') ? g.porZona : {};
+    const out = {};
+    for (const k of Object.keys(crudo)) {
+        if (!geoAlertaKeyOk(k) || !Object.prototype.hasOwnProperty.call(crudo, k)) continue;
+        const c = geoAlertaLimpia(crudo[k]);
+        if (c.on) out[k] = c;
     }
     return out;
 }
-function geoAlertaTexto(nombres) {
-    return (nombres || []).filter(Boolean).slice(0, GEO_ALERTA_MAX_ZONAS).join(GEO_ALERTA_SEP);
+// Configuracion de una geocerca (null si no esta vigilada). Devuelve un
+// objeto NUEVO: el menu edita una copia, no el config guardado.
+function geoAlertaCfgZona(nombre, mapa) {
+    if (!geoAlertaKeyOk(nombre)) return null;
+    const m = mapa || geoAlertaPorZona();
+    if (!Object.prototype.hasOwnProperty.call(m, nombre)) return null;
+    return m[nombre];
 }
-// Set de nombres seleccionados (para consultas O(1) al pintar).
-function geoAlertaSel(cfg) {
-    const c = cfg || geoAlertaCfg();
-    return new Set(c.zonas);
+function geoAlertaVigiladas(mapa) {
+    return Object.keys(mapa || geoAlertaPorZona()).slice(0, GEO_ALERTA_MAX_ZONAS);
 }
-// Geocercas de la plataforma que estan en la seleccion. Las que ya no
-// existen (borradas en la plataforma) se ignoran: el nombre guardado solo
-// sobrevive hasta que la geocerca vuelve.
-function geoAlertaZonasDe(cfg) {
-    const c = cfg || geoAlertaCfg();
-    if (!c.zonas.length) return [];
-    const sel = new Set(c.zonas);
+// Geocercas de la plataforma que tienen alerta. Las configuradas que ya no
+// existen (borradas en la plataforma) se ignoran sin perder el ajuste: el
+// nombre guardado sobrevive por si la geocerca vuelve.
+function geoAlertaZonasDe(mapa) {
+    const m = mapa || geoAlertaPorZona();
     const out = [];
     for (const z of (APP.zonas || [])) {
         if (!z) continue;
         const nom = z.n || ('Zona ' + z.id);
-        if (sel.has(nom)) out.push(z);
+        if (geoAlertaKeyOk(nom) && Object.prototype.hasOwnProperty.call(m, nom)) out.push(z);
     }
     return out;
 }
@@ -137,7 +166,7 @@ function geoAlertaMotor(u, st, motorMin) {
     }
     if (!st || geoAlertaNum(st.vel, 0) > GEO_ALERTA_VEL_PARADA) return { off: false, fuente: 'en marcha' };
     const gap = Math.max(0, geoAlertaNum(st.edadMin, 0));
-    return { off: gap >= clamp(geoAlertaNum(motorMin, 15), 1, 720), fuente: 'gap' };
+    return { off: gap >= clamp(geoAlertaNum(motorMin, 15), 1, 720), fuente: 'estimado' };
 }
 // Maquina de estados de UNA geocerca y UNA unidad. Devuelve el estado
 // siguiente y el evento a emitir en este tick (o null).
@@ -148,17 +177,16 @@ function geoAlertaMotor(u, st, motorMin) {
 //   ms desde cuando el motor esta apagado · ma ya aviso "motor"
 //
 // o (observacion del tick): dentro, vel, online, motorOff, motorAntiguedadMin,
-// ahora (segundos) y cfg {estableSeg, minMin, motorMin, disparo}.
+// ahora (segundos) y cfg (la config de ESA geocerca).
 //
-// Sin estado previo se toma la foto inicial sin avisar: si la regla se
+// Sin estado previo se toma la foto inicial sin avisar: si la alerta se
 // activa con una unidad ya dentro, no queremos un "ha pasado" fantasma.
 function geoAlertaEvalua(e, o) {
-    const d = DEFAULTS.geoAlertas;
-    const cfg = o.cfg || {};
-    const estSeg = clamp(geoAlertaNum(cfg.estableSeg, d.estableSeg), 0, 600);
-    const minMin = clamp(geoAlertaNum(cfg.minMin, d.minMin), 1, 240);
-    const motorMin = clamp(geoAlertaNum(cfg.motorMin, d.motorMin), 1, 720);
-    const disparo = GEO_ALERTA_DISPAROS[cfg.disparo] ? cfg.disparo : d.disparo;
+    const cfg = geoAlertaLimpia(o.cfg);
+    const estSeg = cfg.estableSeg;
+    const minMin = cfg.minMin;
+    const motorMin = cfg.motorMin;
+    const disparo = cfg.disparo;
     const ahora = geoAlertaNum(o.ahora, Math.floor(Date.now() / 1000));
     const dentro = !!o.dentro;
     const online = (o.online !== false);
@@ -182,9 +210,9 @@ function geoAlertaEvalua(e, o) {
         return salida;
     }
     // Histeresis de entrada: con estableSeg 0 confirma en el mismo tick. Sin
-    // senal no se confirma nada (su ultima posicion puede ser de hace
-    // media hora), salvo con el disparador de motor: ese busca justamente
-    // el corte de reporte, asi que trabaja con la posicion congelada.
+    // senal no se confirma nada (su ultima posicion puede ser de hace media
+    // hora), salvo con el disparador de motor: ese busca justamente el corte
+    // de reporte, asi que trabaja con la posicion congelada.
     const puede = online || disparo === 'motor';
     if (!n.d && puede) {
         if (!n.p) { n.p = 1; n.ps = ahora; }
@@ -235,7 +263,7 @@ function geoAlertaPermitido(clave, zona, cfg, ahora) {
 }
 
 /* ====================== ALERTA DE GEOCERCAS: MOTOR ====================== */
-function geoAlertaTextoEvento(evento, zona, etq, minutos) {
+function geoAlertaTextoEvento(evento, zona, etq, minutos, cfg) {
     const m = Math.max(0, Math.round(minutos));
     if (evento === 'paso') {
         return {
@@ -245,9 +273,10 @@ function geoAlertaTextoEvento(evento, zona, etq, minutos) {
         };
     }
     if (evento === 'motor') {
+        const src = (cfg && cfg.motorFuente === 'estimado') ? ' \u00b7 motor apagado estimado' : '';
         return {
             titulo: 'MOTOR APAGADO EN GEOCERCA \u00b7 ' + zona + ' \u00b7 ' + etq,
-            detalle: 'La unidad ' + etq + ' lleva ' + m + ' min detenida con el motor apagado dentro de la geocerca vigilada ' + zona,
+            detalle: 'La unidad ' + etq + ' lleva ' + m + ' min detenida con el motor apagado dentro de la geocerca vigilada ' + zona + src,
             hablar: 'La unidad ' + etq + ' est\u00e1 detenida con el motor apagado en la geocerca ' + zona
         };
     }
@@ -281,32 +310,33 @@ function geoAlertaSuaviza(info, st) {
 // sustituye por el del tick; publica en APP.geoAlertaVivo lo que la UI
 // pinta como "ahora".
 function reglaGeoAlerta(u, info, st, R) {
-    const cfg = geoAlertaCfg();
+    const clave = (info && info.clave) || '';
     // El estado previo vive en R.geoAlerta: evaluateUnit lo inicializa con
     // el memo de la unidad y la flota completa lo pasa a mano.
     const estado = (R.geoAlerta && typeof R.geoAlerta === 'object') ? R.geoAlerta : {};
-    const clave = (info && info.clave) || '';
-    // El "vivo" se repone al final si la unidad sigue dentro de una
-    // geocerca vigilada; hasta entonces sale de la lista en vivo.
+    // El "vivo" se repone al final si la unidad sigue dentro de una geocerca
+    // vigilada; hasta entonces sale de la lista en vivo.
     if (clave) delete APP.geoAlertaVivo[clave];
-    if (!cfg.activa || !cfg.zonas.length || !APP.config.loadZones) {
+    const mapa = geoAlertaPorZona();
+    if (!(APP.config.reglas && APP.config.reglas.geoAlerta) || !Object.keys(mapa).length ||
+        !APP.config.loadZones || !info || !clave || !st || st.lat == null || st.lon == null) {
         R.geoAlerta = null;
         return;
     }
-    if (!info || !info.clave || !st || st.lat == null || st.lon == null) return;
-    const zonas = geoAlertaZonasDe(cfg);
+    const zonas = geoAlertaZonasDe(mapa);
     if (!zonas.length) { R.geoAlerta = null; return; }
     const ahora = Math.floor(Date.now() / 1000);
     const etq = (info.eco || info.placa || info.nombre || info.id || '');
     const vel = geoAlertaNum(velSuavizada(info, st), st.vel);
-    const mot = geoAlertaMotor(u, st, cfg.motorMin);
-    const antiguedad = mot.off ? Math.max(0, geoAlertaNum(st.edadMin, 0)) : 0;
     const nuevo = {};
-    let vivo = null;
+    const vivos = [];
     for (let i = 0; i < zonas.length; i++) {
         const z = zonas[i];
         const nom = z.n || ('Zona ' + z.id);
+        const cfg = mapa[nom];
         const e0 = estado[nom];
+        const mot = geoAlertaMotor(u, st, cfg.motorMin);
+        const antiguedad = mot.off ? Math.max(0, geoAlertaNum(st.edadMin, 0)) : 0;
         const res = geoAlertaEvalua(e0, {
             dentro: geoAlertaDentro(z, st.lat, st.lon, (e0 && e0.d) ? GEO_ALERTA_MARGEN_M : 0),
             vel: vel,
@@ -318,11 +348,11 @@ function reglaGeoAlerta(u, info, st, R) {
         });
         nuevo[nom] = res.e;
         if (res.dentro) {
-            // "cumple" es si AHORA se cumple el disparador elegido: lo que
-            // cuenta para el KPI "En alerta" y para resaltar la fila en vivo.
+            // "cumple" es si AHORA se cumple el disparador de esa geocerca:
+            // lo que cuenta para el KPI "En alerta" y para resaltar la fila.
             const cumple = (cfg.disparo === 'paso') ||
                 (cfg.disparo === 'detenida' ? res.minutos >= cfg.minMin : res.minutosMotor >= cfg.motorMin);
-            const v = {
+            vivos.push({
                 zona: nom,
                 minutos: res.minutos,
                 minutosMotor: res.minutosMotor,
@@ -330,14 +360,14 @@ function reglaGeoAlerta(u, info, st, R) {
                 cumple: cumple,
                 vel: vel,
                 disparo: cfg.disparo
-            };
-            if (!vivo || (v.cumple && !vivo.cumple) || v.minutos > vivo.minutos) vivo = v;
+            });
         }
-        if (res.evento && geoAlertaPermitido(info.clave, nom, cfg, ahora)) {
+        if (res.evento && geoAlertaPermitido(clave, nom, cfg, ahora)) {
             const mins = (res.evento === 'motor') ? res.minutosMotor : res.minutos;
-            const t = geoAlertaTextoEvento(res.evento, nom, etq, mins);
+            const c2 = Object.assign({}, cfg, { motorFuente: mot.fuente });
+            const t = geoAlertaTextoEvento(res.evento, nom, etq, mins, c2);
             pushAlert({
-                regla: 'geoAlerta', sev: cfg.severidad, clave: info.clave, eco: info.eco,
+                regla: 'geoAlerta', sev: cfg.severidad, clave: clave, eco: info.eco,
                 icono: (GEO_ALERTA_DISPAROS[cfg.disparo] || GEO_ALERTA_DISPAROS.paso).icono,
                 titulo: t.titulo, detalle: t.detalle, hablar: t.hablar,
                 lat: st.lat, lon: st.lon
@@ -345,16 +375,29 @@ function reglaGeoAlerta(u, info, st, R) {
         }
     }
     R.geoAlerta = nuevo;
-    if (vivo && clave) APP.geoAlertaVivo[clave] = vivo;
+    // Una unidad puede estar en varias geocercas vigiladas: se guarda la
+    // mas avanzada para la lista en vivo y, en `zonas`, los nombres de las
+    // que esta cumpliendo ahora (asi las pills pueden contarlas).
+    if (clave && vivos.length) {
+        vivos.sort((a, b) => (b.cumple === a.cumple) ? (b.minutos - a.minutos) : ((b.cumple ? 1 : 0) - (a.cumple ? 1 : 0)));
+        const t = vivos[0];
+        APP.geoAlertaVivo[clave] = {
+            zona: t.zona, minutos: t.minutos, minutosMotor: t.minutosMotor,
+            motor: t.motor, cumple: t.cumple, vel: t.vel, disparo: t.disparo,
+            zonas: vivos.filter((v) => v.cumple).map((v) => v.zona)
+        };
+    }
 }
 // Segunda pasada del refresco para el alcance "toda la flota": el motor
 // normal solo evalua las unidades vigiladas, asi que las demas se recorren
-// aqui SOLO para esta regla (sinodometro, sin traza, sin reglas globales).
+// aqui SOLO para esta regla (sin odometro, sin traza, sin reglas globales).
 // Tambien poda el estado vivo de unidades que ya no reportan.
 function geoAlertaFlota(unidades, clavesVigiladas) {
-    const cfg = geoAlertaCfg();
+    const mapa = geoAlertaPorZona();
     const lista = unidades || [];
-    if (!cfg.activa || cfg.alcance !== 'todas' || !cfg.zonas.length || !APP.config.loadZones) {
+    const algunaTodas = Object.keys(mapa).some((k) => mapa[k].alcance === 'todas');
+    const activa = !!(APP.config.reglas && APP.config.reglas.geoAlerta) && APP.config.loadZones;
+    if (!activa || !algunaTodas || !Object.keys(mapa).length) {
         if (Object.keys(APP.memoGeoAlerta || {}).length) {
             APP.memoGeoAlerta = {};
             writeSession(SS.geoAlerta, APP.memoGeoAlerta);
@@ -396,12 +439,15 @@ function geoAlertaPodaVivo(unidades) {
         if (!hay[k]) delete vivo[k];
     }
 }
-// Al cambiar la seleccion (o el interruptor) los episodios anteriores ya no
-// significan nada: se limpian para que la alerta no salte con estado viejo.
+// Al cambiar el menu de una geocerca (o el interruptor general) los
+// episodios anteriores ya no significan nada: se limpian para que la alerta
+// no salte con estado viejo.
 function geoAlertaReinicia() {
     APP.memoGeoAlerta = {};
     writeSession(SS.geoAlerta, APP.memoGeoAlerta);
-    APP.geoAlertaVivo = {};
+    // La vista en vivo NO se borra: se recalcula entera en el siguiente
+    // refresco, y dejarla evita que la franja parpadee a "0" justo despues
+    // de guardar el menu. Los episodios de reloj si empiezan de cero.
     const memo = APP.memo || {};
     let cambio = false;
     for (const k of Object.keys(memo)) {
@@ -410,155 +456,222 @@ function geoAlertaReinicia() {
     if (cambio) writeSession(SS.memo, memo);
 }
 
-/* ====================== ALERTA DE GEOCERCAS: UI ====================== */
-function geoAlertaGuarda(cambios) {
-    if (!APP.config.geoAlertas) APP.config.geoAlertas = Object.assign({}, DEFAULTS.geoAlertas);
-    Object.assign(APP.config.geoAlertas, cambios || {});
+// Guarda el menu de UNA geocerca en la configuracion y reinicia los
+// episodios de esa geocerca (no de las demas). Si queda alguna activa, el
+// interruptor general se enciende solo.
+function geoAlertaGuardaZona(nombre, cambios) {
+    if (!geoAlertaKeyOk(nombre)) return;
+    if (!APP.config.geoAlertas || typeof APP.config.geoAlertas !== 'object') {
+        APP.config.geoAlertas = Object.assign({}, DEFAULTS.geoAlertas);
+    }
+    if (!APP.config.geoAlertas.porZona || typeof APP.config.geoAlertas.porZona !== 'object') {
+        APP.config.geoAlertas.porZona = {};
+    }
+    const mapa = APP.config.geoAlertas.porZona;
+    const previo = Object.prototype.hasOwnProperty.call(mapa, nombre) ? geoAlertaLimpia(mapa[nombre]) : geoAlertaDef();
+    const cfg = geoAlertaLimpia(Object.assign({}, previo, cambios || {}));
+    if (cfg.on) {
+        if (Object.keys(mapa).length >= GEO_ALERTA_MAX_ZONAS && !Object.prototype.hasOwnProperty.call(mapa, nombre)) {
+            adviceWarn('Limite alcanzado', 'Se pueden vigilar hasta ' + GEO_ALERTA_MAX_ZONAS + ' geocercas.');
+            return;
+        }
+        mapa[nombre] = cfg;
+        if (!(APP.config.reglas && APP.config.reglas.geoAlerta)) APP.config.reglas.geoAlerta = true;
+    } else {
+        delete mapa[nombre];
+    }
     writeJSON(LS.cfg, APP.config);
-    // Los episodios se limpian solo si cambian el QUE (geocercas o
-    // disparador) o el interruptor: retocar la gravedad o los minutos no
-    // debe reiniciar el reloj de una parada que ya se esta midiendo.
-    const c = cambios || {};
-    if (!Object.keys(c).length || c.zonas !== undefined || c.disparo !== undefined) geoAlertaReinicia();
+    geoAlertaReinicia();
     if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
 }
-// Alterna una geocerca de la seleccion desde la campana de su tarjeta.
-function geoAlertaAlternaZona(nombre) {
-    const cfg = geoAlertaCfg();
-    const sel = cfg.zonas.slice();
-    const i = sel.indexOf(nombre);
-    if (i >= 0) sel.splice(i, 1);
-    else if (sel.length >= GEO_ALERTA_MAX_ZONAS) {
-        adviceWarn('Limite de geocercas', 'Se pueden vigilar hasta ' + GEO_ALERTA_MAX_ZONAS + ' geocercas por alerta.');
-        return;
-    } else sel.push(nombre);
-    geoAlertaGuarda({ zonas: geoAlertaTexto(sel) });
-    if (sel.indexOf(nombre) >= 0) adviceOk('Geocerca vigilada', nombre);
+// Accion en cascada para la franja resumen: activar o desactivar todas.
+function geoAlertaTodas(activar) {
+    const zonas = (APP.zonas || []).map((z) => z && (z.n || ('Zona ' + z.id))).filter(Boolean);
+    if (!APP.config.geoAlertas || typeof APP.config.geoAlertas !== 'object') {
+        APP.config.geoAlertas = Object.assign({}, DEFAULTS.geoAlertas);
+    }
+    const mapa = {};
+    if (activar) {
+        const previo = geoAlertaPorZona();
+        for (let i = 0; i < zonas.length && i < GEO_ALERTA_MAX_ZONAS; i++) {
+            const nom = zonas[i];
+            const c = Object.prototype.hasOwnProperty.call(previo, nom) ? previo[nom] : geoAlertaDef();
+            c.on = true;
+            mapa[nom] = c;
+        }
+        APP.config.reglas.geoAlerta = true;
+    }
+    APP.config.geoAlertas.porZona = mapa;
+    writeJSON(LS.cfg, APP.config);
+    geoAlertaReinicia();
+    if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
+    adviceOk(activar ? 'Alertas activadas' : 'Alertas desactivadas',
+        (activar ? mapa.length : 0) + ' geocerca(s)');
 }
-function geoAlertaFila(etiqueta, controles, extra) {
-    return '<div class="rondo-ga-row"><span class="rondo-ga-lb">' + etiqueta + '</span>' +
-        '<div class="rondo-ga-chips">' + controles + '</div>' +
-        (extra || '') + '</div>';
-}
+
+/* ====================== ALERTA DE GEOCERCAS: UI ====================== */
 function geoAlertaChip(act, attr, valor, txt, cls) {
     return '<button type="button" class="rondo-ga-chip' + (act ? ' activo' : '') + (cls ? ' ' + cls : '') +
         '" ' + attr + ' data-v="' + esc(valor) + '">' + esc(txt) + '</button>';
 }
-// Pintado del panel. El HTML se reconstruye aqui (igual que el resto de la
-// pestana) pero setHtml solo escribe si cambio, y se devuelve el foco al
-// control que lo tenia: el buscador y los numeros se editan en vivo.
+// Etiqueta corta de una geocerca vigilada: "PATIO · alta · parada".
+function geoAlertaEtiqueta(nombre, cfg) {
+    const d0 = GEO_ALERTA_DISPAROS[cfg.disparo] || GEO_ALERTA_DISPAROS.paso;
+    const sev = (GEO_ALERTA_SEVS.find((s) => s.k === cfg.severidad) || { txt: '' }).txt;
+    return { txt: nombre, sub: (cfg.alcance === 'todas' ? 'flota' : 'vigiladas') + ' \u00b7 ' + sev.toLowerCase() + ' \u00b7 ' + d0.corto, sev: cfg.severidad };
+}
+// Franja compacta de la pestana: cuantas geocercas vigila Rondo, cuales y
+// dos acciones en cascada. El detalle de cada una vive en su campana.
 function paintGeoAlertas() {
-    const box = byId('rondo-geo-alerta');
+    const box = byId('rondo-geo-ga-resumen');
     if (!box) return;
-    const act = document.activeElement;
-    const foco = (act && act.id && box.contains(act)) ? act.id : '';
-    const cfg = geoAlertaCfg();
+    const mapa = geoAlertaPorZona();
     const zonas = APP.zonas || [];
-    const sel = geoAlertaSel(cfg);
-    const busq = String(APP.geoAlertaBusca || '').toLowerCase();
-    const dentro = geoAlertaUnidadesPorZona(cfg);
-    const val = (id, def) => {
-        const e = (foco === id) ? byId(id) : null;
-        return esc(e ? e.value : def);
-    };
-    const chips = [];
-    for (const d of Object.keys(GEO_ALERTA_DISPAROS)) {
-        const d0 = GEO_ALERTA_DISPAROS[d];
-        chips.push(geoAlertaChip(cfg.disparo === d, 'data-ga="disparo"', d, d0.txt, 'ancho'));
-    }
-    const grav = GEO_ALERTA_SEVS.map((s) => geoAlertaChip(cfg.severidad === s.k, 'data-ga="sev"', s.k, s.txt, 'sev-' + s.k));
-    // Lista de geocercas elegibles (mismas geocercas que la tabla).
-    const elegibles = zonas.filter((z) => !busq || ((z.n || '') + ' ' + (z.id || '')).toLowerCase().indexOf(busq) >= 0)
-        .sort((a, b) => (a.n || '').localeCompare(b.n || '', 'es'));
-    const items = elegibles.map((z) => {
-        const nom = z.n || ('Zona ' + z.id);
-        const n = dentro[nom] || [];
-        return '<label class="rondo-ga-z' + (sel.has(nom) ? ' sel' : '') + '">' +
-            '<input type="checkbox" data-ga-zona="' + esc(nom) + '"' + (sel.has(nom) ? ' checked' : '') + '>' +
-            '<span class="nm">' + esc(nom) + '</span>' +
-            '<i>' + (n.length ? esc(n.slice(0, 3).join(' \u00b7 ') + (n.length > 3 ? ' +' + (n.length - 3) : '')) : 'libre') + '</i>' +
-            '</label>';
+    const n = Object.keys(mapa).length;
+    const enAlerta = Object.keys(APP.geoAlertaVivo || {}).filter((k) => APP.geoAlertaVivo[k].cumple).length;
+    const master = !!(APP.config.reglas && APP.config.reglas.geoAlerta);
+    const chips = Object.keys(mapa).sort((a, b) => a.localeCompare(b, 'es')).map((k) => {
+        const et = geoAlertaEtiqueta(k, mapa[k]);
+        const vivos = Object.keys(APP.geoAlertaVivo || {}).filter((c) =>
+            (APP.geoAlertaVivo[c].zonas || []).indexOf(k) >= 0);
+        return '<button type="button" class="rondo-ga-pill sev-' + et.sev + (vivos.length ? ' avisa' : '') +
+            '" data-ga="cfg" data-zona="' + esc(k) + '" title="' + esc(et.sub) + '">' +
+            '<i></i><span class="nm">' + esc(et.txt) + '</span><em>' + esc(et.sub) + '</em>' +
+            (vivos.length ? '<b>' + vivos.length + '</b>' : '') + '</button>';
     }).join('');
-    const vivos = Object.keys(APP.geoAlertaVivo || {})
-        .map((k) => Object.assign({ clave: k }, APP.geoAlertaVivo[k]))
-        .sort((a, b) => (b.cumple === a.cumple) ? (b.minutos - a.minutos) : ((b.cumple ? 1 : 0) - (a.cumple ? 1 : 0)))
-        .slice(0, 12);
-    const enAlerta = vivos.filter((v) => v.cumple).length;
-    const d0 = GEO_ALERTA_DISPAROS[cfg.disparo];
-    const resumen = [sel.size + ' de ' + zonas.length + ' geocercas',
-        (cfg.alcance === 'todas') ? 'toda la flota' : 'solo vigiladas',
-        (GEO_ALERTA_SEVS.find((s) => s.k === cfg.severidad) || { txt: cfg.severidad }).txt.toLowerCase() + ' \u00b7 ' + d0.corto].join(' \u00b7 ');
-    const html =
-        '<div class="rondo-ga" data-activa="' + (cfg.activa ? '1' : '0') + '" data-sev="' + esc(cfg.severidad) + '" data-disparo="' + esc(cfg.disparo) + '">' +
-        '<div class="rondo-ga-head">' +
-        '<span class="rondo-usym ga-ico">' + UIS.alertas + '</span>' +
-        '<div class="rondo-ga-ht"><b>Alerta de geocercas</b><span>' + esc(resumen) + '</span></div>' +
-        '<button type="button" class="rondo-ga-sw' + (cfg.activa ? ' on' : '') + '" data-ga="on" title="Activar o desactivar la alerta">' +
-        '<span class="knob"></span><span class="lb">' + (cfg.activa ? 'Activa' : 'Apagada') + '</span></button>' +
-        '</div>' +
-        (!cfg.activa
-            ? '<p class="rondo-ga-off">Elige una o varias geocercas y activa la alerta para vigilar solo lo que pase dentro: ' +
-            'pasar, quedarse parado o pararse con el motor apagado.</p>'
-            : '<div class="rondo-ga-body">' +
-            geoAlertaFila('Unidades',
-                geoAlertaChip(cfg.alcance === 'vigiladas', 'data-ga="alcance"', 'vigiladas', 'Solo vigiladas') +
-                geoAlertaChip(cfg.alcance === 'todas', 'data-ga="alcance"', 'todas', 'Toda la flota')) +
-            geoAlertaFila('Gravedad', grav.join('')) +
-            geoAlertaFila('Dispara cuando', chips.join('')) +
-            geoAlertaFila('Tiempos',
-                '<label class="rondo-ga-num">Parada (min)<input type="number" id="rondo-ga-min" min="1" max="240" value="' + val('rondo-ga-min', cfg.minMin) + '"></label>' +
-                '<label class="rondo-ga-num">Motor apagado (min)<input type="number" id="rondo-ga-motor" min="1" max="720" value="' + val('rondo-ga-motor', cfg.motorMin) + '"></label>' +
-                '<label class="rondo-ga-num">Confirmar (s)<input type="number" id="rondo-ga-est" min="0" max="600" value="' + val('rondo-ga-est', cfg.estableSeg) + '"></label>' +
-                '<label class="rondo-ga-num">Cooldown (s)<input type="number" id="rondo-ga-cd" min="0" max="86400" value="' + val('rondo-ga-cd', cfg.cooldownS) + '"></label>',
-                '<p class="rondo-ga-hint">' + esc(geoAlertaAyuda(cfg)) + '</p>') +
-            '<div class="rondo-ga-zonas">' +
-            '<div class="rondo-ga-zhead"><b>Geocercas vigiladas</b>' +
-            '<input id="rondo-ga-buscar" class="filtro" placeholder="Buscar geocerca\u2026" value="' + val('rondo-ga-buscar', APP.geoAlertaBusca || '') + '">' +
-            '<button type="button" class="mini" data-ga="ztodas" title="Vigilar todas las geocercas">Todas</button>' +
-            '<button type="button" class="mini" data-ga="zninguna" title="Quitar todas">Ninguna</button>' +
-            '<button type="button" class="mini" data-ga="zfiltro" title="Vigilar solo las que muestra el filtro">Solo las filtradas</button>' +
-            '</div>' +
-            (items
-                ? '<div class="rondo-ga-zlist">' + items + '</div>'
-                : '<div class="rondo-ga-zempty">' + (zonas.length ? 'Ninguna geocerca coincide con la busqueda.' : 'No hay geocercas cargadas.') + '</div>') +
-            '</div>' +
-            '<div class="rondo-ga-live">' +
-            '<b>Ahora</b>' + (vivos.length ? '<span class="rondo-ga-liveh">' + enAlerta + ' en alerta</span>' : '') +
-            (vivos.length
-                ? vivos.map((v) => '<span class="rondo-ga-livec' + (v.cumple ? ' avisa' : '') + (v.motor ? ' motor' : '') + '">' +
-                    esc(v.clave) + ' \u00b7 ' + esc(v.zona) + ' \u00b7 ' +
-                    (v.motor ? Math.round(v.minutosMotor) + ' min motor' :
-                        (v.disparo === 'paso' ? 'dentro' : Math.round(v.minutos) + ' min')) +
-                    '</span>').join('')
-                : '<span class="rondo-ga-livenone">Ninguna unidad dentro de las geocercas vigiladas.</span>') +
-            '</div>' +
-            '</div>') +
-        '</div>';
+    const html = '<div class="rondo-ga-res' + (master && n ? ' on' : '') + '">' +
+        '<span class="rondo-ga-resico rondo-usym">' + UIS.alertas + '</span>' +
+        '<div class="rondo-ga-restxt"><b>' + (n ? n + ' de ' + zonas.length + ' geocercas vigiladas' : 'Ninguna geocerca vigilada') + '</b>' +
+        '<span>' + (master ? (enAlerta ? enAlerta + ' unidad(es) cumpliendo ahora' : 'sin avisos activos ahora') : 'interruptor general apagado (Ajustes &gt; Reglas)') + '</span></div>' +
+        (chips ? '<div class="rondo-ga-pills">' + chips + '</div>' : '') +
+        '<span class="rondo-ga-resacc">' +
+        '<button type="button" class="mini" data-ga="todas" title="Vigilar todas las geocercas con los ajustes por defecto">' +
+        '<span class="rondo-usym">' + UIS.check + '</span> Todas</button>' +
+        '<button type="button" class="mini" data-ga="ninguna" title="Dejar de vigilar todas las geocercas">' +
+        '<span class="rondo-usym">' + UIS.clear + '</span> Ninguna</button>' +
+        '</span></div>';
+    setHtml(box, html);
     const kpi = byId('rondo-geo-kpi-alerta');
     if (kpi) kpi.textContent = enAlerta;
-    if (setHtml(box, html) && foco) {
-        const again = byId(foco);
-        if (again && again.focus) {
-            try {
-                again.focus();
-                if (again.setSelectionRange && typeof again.selectionStart === 'number') {
-                    const p = (act && act.selectionStart != null) ? act.selectionStart : String(again.value).length;
-                    again.setSelectionRange(p, p);
-                }
-            } catch (_) { /* noop */ }
-        }
-    }
 }
-// Unidades dentro de cada geocerca vigilada (alimenta las etiquetas de la
-// lista y el KPI). Se calcula una vez por pintado: son pocas zonas.
-function geoAlertaUnidadesPorZona(cfg) {
-    const c = cfg || geoAlertaCfg();
+// Vista previa del aviso tal y como saldria en la pestana Avisos, para que
+// el operador elija el disparador viendo el texto y no solo la etiqueta.
+function geoAlertaPreview(p, nombre) {
+    const ev = (p.disparo === 'motor') ? 'motor' : (p.disparo === 'detenida' ? 'detenida' : 'paso');
+    const mins = (ev === 'motor') ? p.motorMin : p.minMin;
+    const t = geoAlertaTextoEvento(ev, nombre, '105', mins, p);
+    return '<div class="rondo-ga-dprev"><b>As\u00ed se ver\u00e1 el aviso</b>' +
+        '<div class="rondo-ga-dpv sev-' + p.severidad + '">' +
+        '<span class="pv-t">' + esc(t.titulo) + '</span>' +
+        '<span class="pv-d">' + esc(t.detalle) + '</span>' +
+        '</div></div>';
+}
+// Menu de la alerta de UNA geocerca. Toda la edicion vive en una copia
+// (pend) y solo se guarda al pulsar Aceptar: cancelar no toca nada.
+function abrirGeoAlerta(nombre) {
+    const z = (APP.zonas || []).find((x) => (x.n || ('Zona ' + x.id)) === nombre);
+    const cfg0 = geoAlertaCfgZona(nombre) || geoAlertaDef();
+    const pend = geoAlertaLimpia(cfg0);
+    const dentro = geoAlertaUnidadesPorZona()[nombre] || [];
+    const titulo = nombre;
+    // Cabecera: nombre, situacion actual y el interruptor de esta geocerca.
+    const cab = (p) => {
+        const d0 = GEO_ALERTA_DISPAROS[p.disparo];
+        return '<div class="rondo-ga-dhead sev-' + p.severidad + '">' +
+            '<span class="rondo-ga-dico rondo-usym">' + UIS.alertas + '</span>' +
+            '<div class="rondo-ga-dht"><b>' + esc(titulo) + '</b>' +
+            '<span>' + (dentro.length ? dentro.length + ' unidad(es) dentro ahora' + (dentro.length ? ' \u00b7 ' + esc(dentro.slice(0, 4).join(' \u00b7 ')) : '') : 'sin unidades dentro ahora') + '</span></div>' +
+            '<button type="button" class="rondo-ga-sw' + (p.on ? ' on' : '') + '" data-gz="on" title="Vigilar esta geocerca">' +
+            '<span class="knob"></span><span class="lb">' + (p.on ? 'Vigilada' : 'Sin vigilar') + '</span></button>' +
+            '</div>';
+    };
+    const fila = (etiqueta, controles, extra) => '<div class="rondo-ga-drow"><span class="rondo-ga-dlb">' + etiqueta + '</span>' +
+        '<div class="rondo-ga-chips">' + controles + '</div>' + (extra || '') + '</div>';
+    const cuerpo = (p) => cab(p) +
+        '<div class="rondo-ga-dbody' + (p.on ? '' : ' off') + '">' +
+        fila('Unidades',
+            geoAlertaChip(p.alcance === 'vigiladas', 'data-gz="alcance"', 'vigiladas', 'Solo vigiladas') +
+            geoAlertaChip(p.alcance === 'todas', 'data-gz="alcance"', 'todas', 'Toda la flota', 'ancho')) +
+        fila('Gravedad', GEO_ALERTA_SEVS.map((s) =>
+            geoAlertaChip(p.severidad === s.k, 'data-gz="sev"', s.k, s.txt, 'sev-' + s.k)).join('')) +
+        fila('Dispara cuando', Object.keys(GEO_ALERTA_DISPAROS).map((k) =>
+            geoAlertaChip(p.disparo === k, 'data-gz="disparo"', k, GEO_ALERTA_DISPAROS[k].txt, 'ancho')).join('')) +
+        fila('Tiempos',
+            '<label class="rondo-ga-dnum">Parada (min)<input type="number" min="1" max="240" data-gz-num="minMin" value="' + p.minMin + '"></label>' +
+            '<label class="rondo-ga-dnum">Motor (min)<input type="number" min="1" max="720" data-gz-num="motorMin" value="' + p.motorMin + '"></label>' +
+            '<label class="rondo-ga-dnum">Confirmar (s)<input type="number" min="0" max="600" data-gz-num="estableSeg" value="' + p.estableSeg + '"></label>' +
+            '<label class="rondo-ga-dnum">Cooldown (s)<input type="number" min="0" max="86400" data-gz-num="cooldownS" value="' + p.cooldownS + '"></label>',
+            '<p class="rondo-ga-dhint">' + esc(GEO_ALERTA_DISPAROS[p.disparo].ayuda) + '</p>') +
+        geoAlertaPreview(p, titulo) +
+        '</div>';
+    abrirDialogo({
+        icon: UIS.alertas,
+        titulo: 'Alerta de geocerca',
+        ancho: 440,
+        okText: 'Guardar',
+        html: '<div class="rondo-ga-d" id="rondo-ga-dlg">' + cuerpo(pend) + '</div>',
+        onOpen: (el) => {
+            const box = el.querySelector('#rondo-ga-dlg');
+            if (!box) return;
+            const pinta = () => {
+                const n = el.querySelector('[data-gz-num="minMin"]');
+                const mo = el.querySelector('[data-gz-num="motorMin"]');
+                const es = el.querySelector('[data-gz-num="estableSeg"]');
+                const cd = el.querySelector('[data-gz-num="cooldownS"]');
+                if (n) pend.minMin = n.value;
+                if (mo) pend.motorMin = mo.value;
+                if (es) pend.estableSeg = es.value;
+                if (cd) pend.cooldownS = cd.value;
+                setHtml(box, cuerpo(geoAlertaLimpia(pend)));
+            };
+            box.addEventListener('click', (ev) => {
+                const b = ev.target.closest && ev.target.closest('[data-gz]');
+                if (!b || !box.contains(b)) return;
+                const q = b.dataset.gz;
+                if (q === 'on') pend.on = !pend.on;
+                else if (q === 'alcance') pend.alcance = b.dataset.v;
+                else if (q === 'sev') pend.severidad = b.dataset.v;
+                else if (q === 'disparo') pend.disparo = b.dataset.v;
+                else return;
+                pinta();
+            });
+            box.addEventListener('change', (ev) => {
+                const t = ev.target;
+                if (!t || !t.dataset || !t.dataset.gzNum) return;
+                pinta();
+            });
+        },
+        onOk: () => {
+            const limpio = geoAlertaLimpia(pend);
+            geoAlertaGuardaZona(titulo, limpio);
+            if (limpio.on) adviceOk('Alerta guardada', titulo + ' \u00b7 ' + limpio.disparo);
+            else adviceOk('Alerta quitada', titulo);
+        }
+    });
+}
+// Delegacion de eventos de la franja resumen (los chips abren el menu de su
+// geocerca). Vive aqui para que todo lo de la alerta quede en un fragmento.
+function bindGeoAlerta() {
+    const box = byId('rondo-geo-ga-resumen');
+    if (!box) return;
+    box.addEventListener('click', (ev) => {
+        const b = ev.target.closest && ev.target.closest('[data-ga]');
+        if (!b || !box.contains(b)) return;
+        if (b.dataset.ga === 'cfg') { abrirGeoAlerta(b.dataset.zona); return; }
+        if (b.dataset.ga === 'todas') { geoAlertaTodas(true); return; }
+        if (b.dataset.ga === 'ninguna') { geoAlertaTodas(false); return; }
+    });
+}
+// Unidades dentro de cada geocerca vigilada (alimenta el menu y las
+// tarjetas). Se calcula una vez por pintado: son pocas zonas.
+function geoAlertaUnidadesPorZona(mapa) {
+    const m = mapa || geoAlertaPorZona();
     const dentro = {};
-    if (!c.zonas.length) return dentro;
-    const sel = new Set(c.zonas);
-    const todo = (c.alcance === 'todas');
+    if (!Object.keys(m).length) return dentro;
+    // Si alguna geocerca pide toda la flota, el conteo tambien es de toda.
+    const todaFlota = Object.keys(m).some((k) => m[k].alcance === 'todas');
     for (const u of (APP.unidades || [])) {
-        if (!todo && !shouldWatch(u)) continue;
+        if (!todaFlota && !shouldWatch(u)) continue;
         const st = unitState(u);
         if (!st.online || st.lat == null) continue;
         const info = parseUnitName(u);
@@ -566,108 +679,11 @@ function geoAlertaUnidadesPorZona(cfg) {
         if (!eco) continue;
         for (const z of (APP.zonas || [])) {
             const nom = z && (z.n || ('Zona ' + z.id));
-            if (!sel.has(nom)) continue;
+            if (!Object.prototype.hasOwnProperty.call(m, nom)) continue;
             if (geoAlertaDentro(z, st.lat, st.lon, GEO_ALERTA_MARGEN_M)) {
                 (dentro[nom] || (dentro[nom] = [])).push(eco);
             }
         }
     }
     return dentro;
-}
-// Texto de ayuda segun el disparador elegido (que cuenta cada parametro).
-function geoAlertaAyuda(cfg) {
-    if (cfg.disparo === 'paso') {
-        return 'Avisa una vez cuando la unidad entra y se mantiene ' + cfg.estableSeg +
-            ' s dentro. El margen de salida evita el parpadeo en el borde.';
-    }
-    if (cfg.disparo === 'detenida') {
-        return 'Avisa una vez cuando la unidad lleva ' + cfg.minMin +
-            ' min parada dentro. Si se mueve o sale, se rearma.';
-    }
-    return 'Avisa cuando la unidad lleva ' + cfg.motorMin +
-        ' min parada sin reportar posicion dentro (motor apagado estimado; si la unidad publica el sensor, se usa ese dato).';
-}
-// Delegacion de eventos del panel. Vive aqui (y no en 44-eventos) para que
-// todo lo de la alerta quede en un solo fragmento.
-function bindGeoAlerta() {
-    const box = byId('rondo-geo-alerta');
-    if (!box) return;
-    box.addEventListener('click', (ev) => {
-        const t = ev.target;
-        const chip = t.closest && t.closest('[data-ga]');
-        if (!chip || !box.contains(chip)) return;
-        const que = chip.dataset.ga;
-        const v = chip.dataset.v;
-        const cfg = geoAlertaCfg();
-        if (que === 'on') {
-            APP.config.reglas.geoAlerta = !cfg.activa;
-            geoAlertaGuarda({});
-            if (APP.config.reglas.geoAlerta && !cfg.zonas.length) {
-                adviceWarn('Sin geocercas elegidas', 'Marca al menos una geocerca: las que tengan la campana encendida.');
-            }
-            return;
-        }
-        if (que === 'alcance') { geoAlertaGuarda({ alcance: v }); return; }
-        if (que === 'sev') { geoAlertaGuarda({ severidad: v }); return; }
-        if (que === 'disparo') { geoAlertaGuarda({ disparo: v }); return; }
-        if (que === 'ztodas') {
-            geoAlertaGuarda({ zonas: geoAlertaTexto((APP.zonas || []).map((z) => z.n || ('Zona ' + z.id))) });
-            return;
-        }
-        if (que === 'zninguna') { geoAlertaGuarda({ zonas: '' }); return; }
-        if (que === 'zfiltro') {
-            const vis = geoAlertaVisibles();
-            if (!vis.length) {
-                adviceWarn('Sin geocercas a la vista', 'Ajusta el buscador o el filtro de rol de la lista.');
-                return;
-            }
-            geoAlertaGuarda({ zonas: geoAlertaTexto(vis) });
-            return;
-        }
-    });
-    box.addEventListener('change', (ev) => {
-        const cb = ev.target;
-        if (!cb || !cb.dataset || !cb.dataset.gaZona) return;
-        const cfg = geoAlertaCfg();
-        const sel = cfg.zonas.slice();
-        const i = sel.indexOf(cb.dataset.gaZona);
-        if (cb.checked && i < 0) sel.push(cb.dataset.gaZona);
-        else if (!cb.checked && i >= 0) sel.splice(i, 1);
-        geoAlertaGuarda({ zonas: geoAlertaTexto(sel) });
-    });
-    let _t = null;
-    box.addEventListener('input', (ev) => {
-        const e = ev.target;
-        if (!e || e.id !== 'rondo-ga-buscar') return;
-        clearTimeout(_t);
-        const v = e.value;
-        _t = setTimeout(() => {
-            APP.geoAlertaBusca = v.trim();
-            paintGeoAlertas();
-        }, 140);
-    });
-}
-// Nombres de las geocercas que muestra ahora la lista (mismo filtro y orden
-// que paintGeocercas) para el boton "Solo las filtradas".
-function geoAlertaVisibles() {
-    const zonas = APP.zonas || [];
-    if (!zonas.length) return [];
-    const f = (APP.geoFiltro || '').toLowerCase();
-    const rol = APP.geoRol || 'todas';
-    const out = [];
-    for (const z of zonas) {
-        const nom = z.n || ('Zona ' + z.id);
-        const r = zonaRol(z);
-        if (rol === 'base' || rol === 'carga') { if (r !== rol) continue; }
-        else if (rol === 'ocupadas') {
-            const ocupada = (APP.unidades || []).some((u) => {
-                const st = unitState(u);
-                return st.online && st.lat != null && inZone(st.lat, st.lon, z);
-            });
-            if (!ocupada) continue;
-        }
-        if (f && nom.toLowerCase().indexOf(f) < 0) continue;
-        out.push(nom);
-    }
-    return out;
 }

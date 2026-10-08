@@ -262,11 +262,12 @@
             const z = x.z;
             const rolTxt = x.rol === 'base' ? 'Base' : (x.rol === 'carga' ? 'Carga' : 'Normal');
             const areaTxt = x.area ? fmtArea(x.area / 1e6) : '';
-            // v6.12: la campana enciende la geocerca para la alerta dirigida
-            // (pestana Zonas > Geocercas).
+            // v6.12: la campana abre el menu de alerta DE ESTA geocerca
+            // (alcance, gravedad, disparador y tiempos). El badge muestra su
+            // gravedad y disparador cuando esta vigilada.
             const nomZ = z.n || ('Zona ' + z.id);
-            const enAlerta = geoAlertaSel().has(nomZ);
-            return '<div class="rondo-geo-card' + (x.ecos.length ? ' ocupada' : '') + (enAlerta ? ' alerta-sel' : '') + ' rol-' + x.rol + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
+            const gac = geoAlertaCfgZona(nomZ);
+            return '<div class="rondo-geo-card' + (x.ecos.length ? ' ocupada' : '') + (gac ? ' alerta-sel sev-' + gac.severidad : '') + ' rol-' + x.rol + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
                 '<span class="rondo-geo-dot"></span>' +
                 '<div class="rondo-geo-body">' +
                 '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) + '</b>' +
@@ -277,8 +278,10 @@
                 '</span>' +
                 '</div>' +
                 '<span class="rondo-geo-role">' + rolTxt + (areaTxt ? ' \u00b7 ' + areaTxt : '') + '</span>' +
+                (gac ? '<span class="rondo-geo-gabadge sev-' + gac.severidad + '" title="' + esc(geoAlertaEtiqueta(nomZ, gac).sub) + '">' +
+                    '<i></i>' + esc(GEO_ALERTA_ETIQUETAS[gac.disparo] || '') + '</span>' : '') +
                 '<span class="rondo-geo-acc">' +
-                '<button class="mini rondo-geo-ga' + (enAlerta ? ' on' : '') + '" data-zona="' + esc(nomZ) + '" title="' + (enAlerta ? 'Quitar de la alerta de geocercas' : 'Vigilar esta geocerca') + '"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
+                '<button class="mini rondo-geo-ga' + (gac ? ' on sev-' + gac.severidad : '') + '" data-zona="' + esc(nomZ) + '" title="' + (gac ? 'Ajustar la alerta de esta geocerca' : 'Vigilar esta geocerca') + '"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
                 '<button class="mini rondo-geo-usar" data-zona="' + esc(z.n || '') + '" title="Anadir como parada a una unidad"><span class="rondo-usym">' + UIS.route + '</span></button>' +
                 '<button class="mini rondo-geo-copy" data-zona="' + esc(z.n || '') + '" title="Copiar nombre y centro"><span class="rondo-usym">' + UIS.copy + '</span></button>' +
                 '</span>' +

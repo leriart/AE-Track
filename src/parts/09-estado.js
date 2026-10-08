@@ -91,8 +91,8 @@
         geoFiltro: '',
         geoOrden: 'nombre',
         geoRol: 'todas',
-        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas).
-        geoAlertaBusca: '',   // texto del buscador de geocercas vigiladas
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). Cada
+        // geocerca se configura por separado desde la campana de su tarjeta.
         // Estado por unidad (clave -> zona + minutos) de quien esta dentro de
         // una geocerca vigilada. Solo memoria: se recalcula cada refresco.
         geoAlertaVivo: {},

@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-6.12.1-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/6.12.1.md)
-[![tests](https://img.shields.io/badge/tests-1344%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-1371%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -64,11 +64,13 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **Reglas de alerta** personalizables: sin senal, GPS perdido en marcha,
   detenido en carretera, zona no prevista, geocercas, destino, desconexion,
   velocidad, exceso sostenido, desvio de ruta, giro en U, retorno y demora en base.
-- **Alerta de geocercas** dirigida: eliges una o varias geocercas, a quien
-  vigila (**solo la lista vigilada** o **toda la flota**), la **gravedad** del
-  aviso y que lo dispara: **solo paso**, **se detuvo** o **se detuvo y apago
-  el motor** (usa el sensor si la unidad lo publica y si no lo estima por el
-  corte de reporte).
+- **Alerta de geocercas** dirigida: **cada geocerca con su propia alerta**
+  (campana en su tarjeta): a quien vigila (**solo la lista vigilada** o **toda
+  la flota**), con que **gravedad** avisa y que dispara dentro (**solo paso**,
+  **se detuvo** o **motor apagado**, con sensor si la unidad lo publica y si no
+  estimado por el corte de reporte), mas sus tiempos y cooldown. Cada menu
+  muestra la vista previa del aviso y la franja de la pestana resume cuales
+  geocercas vigila Rondo y cuantas unidades cumplen ahora.
 - **Avisos con color** y diferenciacion de exitos, advertencias y errores.
   Voz y pitido en alertas graves; notificacion del navegador opcional.
 - **Modo No molestar** (cabecera) que silencia voz, pitido y toasts durante
@@ -117,11 +119,11 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
   area/centro y exportacion a CSV/GeoJSON. Desde cada tarjeta puedes convertir
   la geocerca en **parada** de una unidad o encender la **campana** para
   vigilarla con la alerta de geocercas.
-- **Alerta de geocercas** (panel bajo los KPIs de la pestana Zonas): casillas
-  con buscador y botones *Todas / Ninguna / Solo las filtradas*, interruptor,
-  chips de unidades (vigiladas o toda la flota), gravedad y disparador, tiempos
-  (parada, motor apagado, histeresis y cooldown), fila **Ahora** con quien esta
-  dentro y KPI **En alerta**. Ver
+- **Alerta de geocercas** (franja bajo los KPIs de la pestana Zonas): una
+  pastilla por geocerca vigilada (gravedad, ambito y disparador, con contador
+  de unidades cumpliendo) que abre el menu de esa geocerca, acciones en
+  cascada *Todas / Ninguna* y KPI **En alerta**. Las tarjetas vigiladas llevan
+  barra lateral por gravedad y pastilla `DENTRO / PARADA / MOTOR`. Ver
   [Alerta de geocercas](./MANUAL.md#alerta-de-geocercas).
 - **Zonas de riesgo** (optativo): configura una URL o importa un CSV/JSON
   con zonas de alto riesgo delictivo. Cuando una unidad transiciona de
@@ -295,7 +297,7 @@ con `Alt+L`.
 | **Unidades** | Lista de **tarjetas** (sin desbordes ni parpadeo) con estado, velocidad, ultimo reporte, geocerca, odometro y **estado de ruta** con barra de progreso y ETA. Cada tarjeta tiene **botones rapidos** (abrir, paradas/ruta, mapa, vigilar, silenciar). Barra **Ordenar** por estado, eco, placa, velocidad, zona, odometro o ruta, con boton para invertir la direccion. Clic en una tarjeta abre su ventana. |
 | **Avisos** | Historial de alertas con filtro por severidad y exportable a CSV o Markdown. |
 | **Rutas** | Progreso, distancia al trazado, ETA y desvios de cada ruta planificada. Analisis de viaje por unidad. |
-| **Zonas** | Fusiona las geocercas de la plataforma (con las unidades dentro, campana de alerta, boton Recargar) y las zonas de riesgo (dona, histograma, KPIs, filtros, export y lista). Ademas, el panel **Alerta de geocercas**. |
+| **Zonas** | Fusiona las geocercas de la plataforma (con las unidades dentro, campana de alerta por geocerca, boton Recargar) y las zonas de riesgo (dona, histograma, KPIs, filtros, export y lista). Ademas, la franja **Alerta de geocercas**. |
 | **Caravana** | Unidades (vigiladas o no) que acompanian a una unidad "lider" en la misma ruta (distancia firmada delante/detras) o dentro del radio de cercania. Marca sentido contrario, velocidad y si la unidad no esta vigilada. |
 | **Replay** | Reproduce el recorrido de una unidad entre una **fecha/hora de inicio** y una **fecha/hora de fin** (o un dia completo): mini-mapa propio de OpenStreetMap, perfil de velocidad, paradas (con motor encendido/apagado) y eventos. Botones de **Cargar** con progreso y resumen, y **Play/Pausa/Reiniciar** (con barra espaciadora). **Opciones del reporte** (mapa, KPIs, paradas, eventos, puntos, coordenadas, solo motor apagado) y exporta GeoJSON, CSV de paradas y PDF. |
 | **Chat IA** | Asistente conversacional (solo si la IA esta configurada) que conoce el manual y el estado de la flota. Switch *Toda la flota* / solo vigiladas. |
@@ -394,7 +396,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**19 suites, ~1344 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**19 suites, ~1371 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

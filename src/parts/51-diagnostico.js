@@ -69,10 +69,12 @@
             // saber por que no avisa: geocercas elegidas, alcance, etc).
             geoAlerta: (function () {
                 try {
-                    const c = geoAlertaCfg();
+                    const mapa = geoAlertaPorZona();
+                    const nom = Object.keys(mapa);
                     return {
-                        activa: c.activa, elegidas: c.zonas.length, alcance: c.alcance,
-                        disparo: c.disparo, severidad: c.severidad,
+                        activa: !!(APP.config.reglas && APP.config.reglas.geoAlerta),
+                        geocercas: nom.length,
+                        flotas: nom.filter((k) => mapa[k].alcance === 'todas').length,
                         dentro: Object.keys(APP.geoAlertaVivo || {}).length
                     };
                 } catch (_) { return null; }
@@ -116,9 +118,8 @@
         if (d.geoAlerta) {
             const g = d.geoAlerta;
             L.push('Alerta de geocercas: ' + (g.activa ? 'activa' : 'apagada') +
-                ' \u00b7 ' + g.elegidas + ' geocerca(s) \u00b7 ' + g.alcance +
-                ' \u00b7 ' + g.disparo + ' \u00b7 ' + g.severidad +
-                ' \u00b7 ' + g.dentro + ' dentro');
+                ' \u00b7 ' + g.geocercas + ' geocerca(s) \u00b7 ' + g.flotas + ' en toda la flota' +
+                ' \u00b7 ' + g.dentro + ' dentro ahora');
         }
         L.push('Fallos de escritura: local ' + d.fallos.json + ' \u00b7 sesion ' + d.fallos.session);
         if (d.zonasDiag) {
