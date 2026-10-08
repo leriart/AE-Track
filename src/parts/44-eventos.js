@@ -679,6 +679,9 @@
             if (cGeoDetMin) cGeoDetMin.value = APP.config.geocercaDetenidoMin != null ? APP.config.geocercaDetenidoMin : DEFAULTS.geocercaDetenidoMin;
             const cGeoEst = byId('c-geo-estable');
             if (cGeoEst) cGeoEst.value = APP.config.geocercaEstableSeg != null ? APP.config.geocercaEstableSeg : DEFAULTS.geocercaEstableSeg;
+            // v6.12: la alerta de geocercas se configura en Zonas; aqui solo
+            // el interruptor, para poder apagarla sin ir a la pestana.
+            const cRGeoAl = byId('c-r-geo-alerta'); if (cRGeoAl) cRGeoAl.checked = !!APP.config.reglas.geoAlerta;
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
@@ -960,6 +963,14 @@
             if (geoDetMinEl) cf.geocercaDetenidoMin = clamp(isoNum(geoDetMinEl.value, DEFAULTS.geocercaDetenidoMin), 1, 240);
             const geoEstEl = g('c-geo-estable');
             if (geoEstEl) cf.geocercaEstableSeg = clamp(isoNum(geoEstEl.value, DEFAULTS.geocercaEstableSeg), 2, 300);
+            // v6.12: interruptor de la alerta de geocercas (el resto vive en
+            // la pestana Zonas). Cambiarlo reinicia los episodios medidos.
+            const rGeoAlEl = g('c-r-geo-alerta');
+            if (rGeoAlEl) {
+                const antes = !!cf.reglas.geoAlerta;
+                cf.reglas.geoAlerta = !!rGeoAlEl.checked;
+                if (antes !== cf.reglas.geoAlerta) geoAlertaReinicia();
+            }
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;

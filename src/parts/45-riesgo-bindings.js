@@ -198,6 +198,9 @@
             const b = ev.target.closest && ev.target.closest('button');
             if (!b) return;
             const nombre = b.dataset.zona;
+            // La campana trabaja con el nombre de la geocerca y no necesita
+            // que la zona exista todavia en APP.zonas.
+            if (b.classList.contains('rondo-geo-ga')) { geoAlertaAlternaZona(nombre); return; }
             const z = (APP.zonas || []).find((x) => (x.n || '') === nombre);
             if (!z) return;
             if (b.classList.contains('rondo-geo-usar')) elegirUnidadParaGeocerca(z);
@@ -206,6 +209,8 @@
                 copiarAlPortapapeles((z.n || '') + (c ? '\n' + c.lat.toFixed(6) + ',' + c.lon.toFixed(6) : ''), 'Geocerca copiada', z.n || '');
             }
         });
+        // v6.12: panel de alerta de geocercas (chips, buscador, casillas).
+        bindGeoAlerta();
         // ── Botones existentes (recargar / limpiar / archivo) ─────────
         const rec = byId('rondo-riesgo-recargar');
         if (rec) rec.addEventListener('click', () => cargarRiesgo());

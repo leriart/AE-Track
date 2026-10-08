@@ -207,6 +207,10 @@
     {
       "file": "51-diagnostico.js",
       "chunk": "ui"
+    },
+    {
+      "file": "52-alerta-de-geocercas.js",
+      "chunk": "ui"
     }
   ]
 }

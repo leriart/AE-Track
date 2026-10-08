@@ -90,7 +90,15 @@
         // v5.15: filtros/orden de las geocercas (pestana Zonas > Geocercas).
         geoFiltro: '',
         geoOrden: 'nombre',
-        geoRol: 'todas'
+        geoRol: 'todas',
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas).
+        geoAlertaBusca: '',   // texto del buscador de geocercas vigiladas
+        // Estado por unidad (clave -> zona + minutos) de quien esta dentro de
+        // una geocerca vigilada. Solo memoria: se recalcula cada refresco.
+        geoAlertaVivo: {},
+        // Episodios (histeresis) de las unidades NO vigiladas cuando el
+        // alcance es "toda la flota"; las vigiladas van en APP.memo.
+        memoGeoAlerta: readSessionObject(SS.geoAlerta, {}, null)
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);

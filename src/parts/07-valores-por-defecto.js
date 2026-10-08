@@ -146,6 +146,35 @@
         // avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila
         // en el borde de una geocerca.
         geocercaEstableSeg: 15,
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). El
+        // operador elige UNA o VARIAS geocercas de la plataforma y decide
+        // a quien vigila (solo las unidades vigiladas o toda la flota), con
+        // que gravedad avisa y QUE lo dispara dentro de la geocerca:
+        //   paso      -> solo pasar por ella
+        //   detenida  -> quedarse parada dentro
+        //   motor     -> quedarse parada y apagar el motor
+        // La seleccion de geocercas viaja como texto con ' | ' (mismo
+        // formato que los planes multipunto) porque DEFAULTS es plano y las
+        // suites comparan sus claves. Sin geocercas elegidas la regla no
+        // hace nada, aunque este activada.
+        geoAlertas: Object.freeze({
+            // nombres de geocercas vigilados, separados por ' | '
+            zonas: '',
+            // 'vigiladas' (solo la lista vigilada) | 'todas'
+            alcance: 'vigiladas',
+            // 'bajo' | 'medio' | 'alto' | 'critico'
+            severidad: 'medio',
+            // 'paso' (solo pasar) | 'detenida' | 'motor' (parada + motor apagado)
+            disparo: 'paso',
+            // minutos parada dentro para el disparador 'detenida'
+            minMin: 2,
+            // minutos sin reportar posicion = motor apagado (estimado)
+            motorMin: 15,
+            // histeresis: segundos dentro antes de dar la entrada
+            estableSeg: 20,
+            // 0 = usar el cooldown global de alertas
+            cooldownS: 0
+        }),
         // v5.15: tolerancia de desvio por municipio. Mientras la unidad siga
         // DENTRO de un municipio por el que pasa su ruta (o una de sus
         // paradas), el desvio no se marca hasta desvioMunicipioM metros.
@@ -183,7 +212,11 @@
             // lleva >= X min detenida DENTRO de una geocerca (no fuera,
             // no en movimiento), avisa con el texto literal pedido:
             // "La unidad X se encuentra detenida en la geocerca Y".
-            geocercaDetenido: true
+            geocercaDetenido: true,
+            // v6.12: alerta de geocercas (seleccion de geocercas + gravedad
+            // + disparador). Se configura en la pestana Zonas > Geocercas;
+            // aqui solo el interruptor, igual que las demas reglas.
+            geoAlerta: false
         })
     });
 

@@ -43,6 +43,10 @@
             }
             APP.memo = nuevas;
             writeSession(SS.memo, APP.memo);
+            // v6.12: la alerta de geocercas puede vigilar TODA la flota. El
+            // bucle anterior solo recorre las unidades vigiladas, asi que
+            // las demas se evaluan aqui solo para esa regla.
+            geoAlertaFlota(unidades, nuevas);
 
             APP.kpi.online = APP.kpi.online.concat(onNow).slice(-180);
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);

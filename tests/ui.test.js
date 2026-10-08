@@ -519,6 +519,38 @@ ok('evaluateUnit llama reglaGeocercaDetenido', /reglaGeocerca\(st, prev, R, info
 ok('reglaGeocercaDetenido usa severity bajo', /regla: 'geocercaDetenido', sev: 'bajo'/.test(src));
 ok('reglaGeocercaDetenido respeta geocercaDetenidoMin >= 1', /Math\.max\(1, \+APP\.config\.geocercaDetenidoMin/.test(src));
 
+// v6.12: "Alerta de geocercas" (seleccion + alcance + gravedad + disparador).
+ok('default reglas.geoAlerta apagado', /geoAlerta:\s*false/.test(src));
+ok('default geoAlertas con los 3 disparadores', /disparo: 'paso'/.test(src) && /minMin: 2/.test(src) && /motorMin: 15/.test(src));
+ok('fragmento con el nucleo de la alerta', src.includes('/* ====================== ALERTA DE GEOCERCAS: NUCLEO'));
+ok('fragmento con la UI de la alerta', src.includes('/* ====================== ALERTA DE GEOCERCAS: UI'));
+ok('catalogo con los 3 disparadores', /GEO_ALERTA_DISPAROS = Object\.freeze\(\{[\s\S]{0,400}motor:/.test(src));
+ok('panel de la alerta en la pestana Zonas', /id="rondo-geo-alerta"/.test(src));
+ok('KPI "En alerta" en las geocercas', /id="rondo-geo-kpi-alerta"/.test(src));
+ok('selector de unidades vigiladas / toda la flota',
+    /geoAlertaChip\(cfg\.alcance === 'vigiladas', 'data-ga="alcance"', 'vigiladas'/.test(src) &&
+    /geoAlertaChip\(cfg\.alcance === 'todas', 'data-ga="alcance"', 'todas'/.test(src));
+ok('selector de gravedad con 4 niveles',
+    /data-ga="sev"', s\.k/.test(src) && /\{ k: 'critico', txt:/.test(src) && /\{ k: 'bajo', txt:/.test(src));
+ok('selector de disparador con motor',
+    /data-ga="disparo"', d, d0\.txt/.test(src) && /motor: \{ txt: 'Se detuvo y apag/.test(src));
+ok('casillas de geocercas vigiladas', /data-ga-zona=/.test(src));
+ok('campana en la tarjeta de geocerca', /class="mini rondo-geo-ga/.test(src));
+ok('toggle c-r-geo-alerta existe', /checkRow\('c-r-geo-alerta'/.test(src));
+ok('precarga UI de c-r-geo-alerta', /cRGeoAl\.checked = !!APP\.config\.reglas\.geoAlerta/.test(src));
+ok('save handler recoge reglas.geoAlerta', /cf\.reglas\.geoAlerta = !!rGeoAlEl\.checked/.test(src));
+ok('R inicializa geoAlerta', /geoAlerta: \(prev && prev\.geoAlerta && typeof prev\.geoAlerta === 'object'\)/.test(src));
+ok('evaluateUnit llama reglaGeoAlerta', /reglaGeocercaDetenido\(st, R, info, etq\);[\s\S]{0,600}reglaGeoAlerta\(u, info, st, R\)/.test(src));
+ok('la alerta avisa con la regla geoAlerta', /regla: 'geoAlerta', sev: cfg\.severidad/.test(src));
+ok('refresh recorre la flota para la alerta', /geoAlertaFlota\(unidades, nuevas\)/.test(src));
+ok('estado de la flota en sessionStorage', /geoAlerta: 'rondo\.api\.s\.geoalerta'/.test(src));
+ok('deepMerge fusiona geoAlertas', /if \(base\.geoAlertas\)/.test(src));
+ok('estado vivo en vivo para la UI', /geoAlertaVivo: \{\}/.test(src));
+ok('paintGeocercas repinta la alerta', /function paintGeocercas\(\) \{\s*paintGeoAlertas\(\);/.test(src));
+ok('bindings delegan los eventos de la alerta', /bindGeoAlerta\(\);/.test(src));
+ok('manual lista la alerta de geocercas', /Alerta de geocercas \|/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+ok('RONDO_DOC menciona la alerta de geocercas', /Alerta de geocercas \(seleccion de geocercas/.test(src));
+
 // v5.14.6: fix de los dos botones Cerrar + nueva tab Chat IA.
 ok('abrirDialogo auto-hide cancel si mismo texto que OK', /cancelText !== okText/.test(src));
 ok('abrirDialogo conserva cancel si cancel === false', /opts\.cancel !== false && cancelText !== okText/.test(src));

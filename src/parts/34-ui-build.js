@@ -338,7 +338,11 @@
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-ocupadas">0</b><span>Con unidades</span></div>' +
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-base">0</b><span>Base</span></div>' +
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-carga">0</b><span>Carga</span></div>' +
+            '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-alerta">0</b><span>En alerta</span></div>' +
             '</div>' +
+            // v6.12: alerta dirigida por geocerca (seleccion, alcance,
+            // gravedad y disparador). Se pinta desde paintGeoAlertas.
+            '<div id="rondo-geo-alerta"></div>' +
             '<div class="rondo-geo-filters">' +
             '<input id="rondo-geo-buscar" class="filtro" placeholder="Buscar geocerca o unidad\u2026">' +
             '<select id="rondo-geo-orden" class="filtro" title="Ordenar">' +
@@ -532,6 +536,7 @@
             checkRow('c-r-geo-det', 'Detenida en geocerca') +
             numRow('c-geo-det-min', 'Min detenido para alertar (min)') +
             numRow('c-geo-estable', 'Confirmar cambio de geocerca (s)') +
+            checkRow('c-r-geo-alerta', 'Alerta de geocercas (seleccion propia)') +
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
@@ -541,6 +546,8 @@
             checkRow('c-r-riesgo', 'Perdi\u00f3 se\u00f1al en zona de riesgo') +
             checkRow('c-r-riesgo-pre', 'Aproximaci\u00f3n a zona de riesgo (predictiva)') +
             '</div>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:0 0 6px">La <b>alerta de geocercas</b> (que geocercas vigilar, a quien: lista vigilada o toda la flota, ' +
+            'la gravedad y si dispara al pasar, al detenerse o al detenerse con el motor apagado) se configura en la pestana <b>Zonas &gt; Geocercas</b>.</p>' +
             '<h4>Zonas de riesgo</h4>' +
             '<label>URL del CSV / JSON <span style="color:var(--rondo-fg-dim);font-size:11px">(opcional; se consulta en cada arranque; el repo no incluye datos)</span>' +
             '<input type="text" id="c-riesgo-url" style="width:100%;margin-top:4px" placeholder="pega la URL aqu\u00ed (https://...)">' +

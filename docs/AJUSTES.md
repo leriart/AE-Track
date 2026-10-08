@@ -6,7 +6,7 @@ Referencia generada automaticamente desde `DEFAULTS`
 usa `APP.config`, asi que puedes consultarla desde la consola del navegador
 (`APP.config.pollMs`).
 
-Total: **103 claves**.
+Total: **104 claves**.
 
 | Clave | Tipo | Valor por defecto | Descripcion |
 | --- | --- | --- | --- |
@@ -107,6 +107,7 @@ Total: **103 claves**.
 | `riesgoPredictCooldownS` | number | `300` | segundos entre alertas repetidas por misma unidad+zona |
 | `geocercaDetenidoMin` | number | `5` | minutos detenido dentro de geocerca para alertar |
 | `geocercaEstableSeg` | number | `15` | v6.0.2: segundos que debe sostenerse un cambio de geocerca antes de avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila en el borde de una geocerca. |
+| `geoAlertas` | object | `{ zonas: '', alcance: 'vigiladas', severidad: 'medio', disparo: 'paso', minMin: 2, motorMin: 15, estableSeg: 20… }` | formato que los planes multipunto) porque DEFAULTS es plano y las suites comparan sus claves. Sin geocercas elegidas la regla no hace nada, aunque este activada. |
 | `desvioMunicipio` | boolean | `true` | v5.15: tolerancia de desvio por municipio. Mientras la unidad siga DENTRO de un municipio por el que pasa su ruta (o una de sus paradas), el desvio no se marca hasta desvioMunicipioM metros. |
 | `desvioMunicipioM` | number | `3000` |  |
 | `paradaLlegadaM` | number | `150` | v5.15: radio (m) para considerar "llego" a cada parada del plan. |

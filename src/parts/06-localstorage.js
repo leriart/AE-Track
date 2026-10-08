@@ -44,6 +44,10 @@
         // v6.0.11: ultima pestana del panel usada (para retomarla al recargar).
         tab: 'rondo.api.s.tab',
         // v6.0.11: ultima seccion de Ajustes abierta (General, Reglas, IA...).
-        cfgTab: 'rondo.api.s.cfgTab'
+        cfgTab: 'rondo.api.s.cfgTab',
+        // v6.12: estado de la alerta de geocercas de las unidades que NO son
+        // vigiladas (flota completa). Las vigiladas lo llevan en su memo
+        // normal, dentro de R.geoAlerta.
+        geoAlerta: 'rondo.api.s.geoalerta'
     });
 
