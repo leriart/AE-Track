@@ -683,6 +683,18 @@ ok('dialogo: tres fuentes de datos', /data-rgi="fuente"/.test(src) &&
     /bitacora: 'Avisos'/.test(src) && /viajes: 'Viajes analizados'/.test(src));
 ok('dialogo: cabecera con la geocerca, su ficha y su origen',
     /class="rgi-hero/.test(src) && /rgi-herot/.test(src) && /rgi-ori o-/.test(src));
+ok('dialogo: mapa con la geocerca y las unidades', /id="rgi-mapa"/.test(src) &&
+    /function rxGeoInfPintaMapa\(d\)/.test(src) && /rxMiniMapa\(cont, \{ lineas: lineas, marcas: marcas \}\)/.test(src));
+ok('dialogo: barra de progreso', /id="rgi-carga"/.test(src) && /id="rgi-barra"/.test(src) &&
+    /function rxGeoInfYield\(\)/.test(src) && /setProg\(12,/.test(src));
+ok('dialogo: barra de acciones con PDF principal', /class="rgi-btn primary" id="rgi-pdf"/.test(src) &&
+    /class="rgi-btn" id="rgi-csv"/.test(src) && /class="rgi-btn" id="rgi-md"/.test(src));
+ok('dialogo: un solo boton de cierre', /cancel: false,\s*\n\s*html: '<div class="rgi-tool">/.test(src));
+ok('informe: busca por la geocerca elegida (O(1) por punto)', /function rxGeoInfZonaSel\(\)/.test(src) &&
+    /const z = rxGeoInfZonaSel\(\);\s*\n\s*return \(z && rxGeoInfEnZona/.test(src));
+ok('informe: usa el indice espacial cuando no hay geocerca elegida',
+    /typeof zoneAt === 'function' && APP\.config && APP\.config\.loadZones\) return zoneAt\(lat, lon\)/.test(src));
+ok('informe: la cache se puede reiniciar', /function rxGeoInfCacheReset\(\)/.test(src));
 ok('dialogo: buscador de geocercas', /id="rgi-buscar"/.test(src) && /function rxGeoInfSelect\(\)/.test(src) &&
     /rgi-busca-n/.test(src) && /Buscar geocerca/.test(src));
 ok('dialogo: el buscador no pierde el foco al escribir',

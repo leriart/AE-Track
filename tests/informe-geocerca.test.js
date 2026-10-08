@@ -69,7 +69,7 @@ const stubs = [
 const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {rxGeoInfZonaTexto,rxGeoInfMinutos,rxGeoInfEvento,rxGeoInfParada,rxGeoInfFiltra,' +
     'rxGeoInfDesde,rxGeoInfFechaMs,rxGeoInfFechaTxt,rxGeoInfAgrupa,rxGeoInfPorZona,rxGeoInfCeldas,rxGeoInfCruces,' +
-    'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfDeRastreo,rxGeoInfEventos,rxGeoInfFuentesDisponibles,RX_GEO,' +
+    'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfDeRastreo,rxGeoInfEventos,rxGeoInfFuentesDisponibles,rxGeoInfCacheReset,RX_GEO,' +
     'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
     'RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS};';
 const mod = new Function('P', code)(H);
@@ -296,13 +296,16 @@ ok('replay: sin recorrido cargado no hay eventos', mod.rxGeoInfDeReplay().length
 // ── Fuentes disponibles ─────────────────────────────────────────────────
 reinicia();
 ok('fuentes: sin datos ninguna disponible', mod.rxGeoInfFuentesDisponibles().length === 0);
+mod.rxGeoInfCacheReset();
 H.historial.push(aviso('geocerca', { detalle: 'entro a PATIO' }));
 ok('fuentes: la bitacora aparece cuando hay avisos',
     mod.rxGeoInfFuentesDisponibles().some((x) => x.k === 'bitacora' && x.n === 1));
+mod.rxGeoInfCacheReset();
 H.viajes['105'] = { traza: [[0.02, 0], [0, 0]], paradas: [] };
 ok('fuentes: los viajes tambien', mod.rxGeoInfFuentesDisponibles().some((x) => x.k === 'viajes'));
+mod.rxGeoInfCacheReset();
 ok('fuentes: elegir una fuente inexistente cae en bitacora',
-    mod.rxGeoInfEventos('inventada').length === 1);
+    mod.rxGeoInfEventos('inventada', true).length === 1);
 
 // ── Fuente: rastreo (todas las unidades / solo las seleccionadas) ───────
 reinicia();

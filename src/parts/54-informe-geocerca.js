@@ -303,9 +303,43 @@ function rxGeoInfEnZona(lat, lon, z) {
         return !!inZone(lat, lon, z);
     } catch (_) { return false; }
 }
-// Devuelve el nombre de la geocerca que contiene el punto (primera que
-// coincide, como zoneAt).
+// La geocerca elegida, con la geometria ya normalizada (si venia como
+// texto JSON se parsea UNA vez, no en cada punto como hace inZone). Se
+// memoiza para no volver a buscarla en cada llamada.
+let _rxGeoZonaSel = { nombre: '\u0000', z: null };
+function rxGeoInfZonaSel() {
+    const nombre = RX_GEO.zona || '';
+    if (_rxGeoZonaSel.nombre === nombre) return _rxGeoZonaSel.z;
+    let z = null;
+    if (nombre) {
+        z = (APP.zonas || []).find((x) => rxGeoInfNombre(x) === nombre) || null;
+        if (z) {
+            // Copia con los puntos ya en array: evita un JSON.parse por
+            // cada punto consultado.
+            let p = z.p;
+            if (typeof p === 'string') { try { p = JSON.parse(p); } catch (_) { p = null; } }
+            z = Object.assign({}, z, { p: Array.isArray(p) ? p : null });
+        }
+    }
+    _rxGeoZonaSel = { nombre: nombre, z: z };
+    return z;
+}
+// Nombre de la geocerca que contiene el punto. Es el punto caliente del
+// informe: se llama una vez por cada punto de cada traza.
+//
+// Truco de rendimiento: si el operador eligio UNA geocerca (el caso normal)
+// solo se prueba esa (O(1)); si pide todas, se usa el indice espacial de
+// Rondo (zoneAt, celdas de ~2 km) en vez de recorrer las 1765 geocercas en
+// cada punto. Solo si no hubiera indice se cae al recorrido lineal.
 function rxGeoInfZonaDe(lat, lon) {
+    if (lat == null || lon == null) return '';
+    if (RX_GEO.zona) {
+        const z = rxGeoInfZonaSel();
+        return (z && rxGeoInfEnZona(lat, lon, z)) ? rxGeoInfNombre(z) : '';
+    }
+    try {
+        if (typeof zoneAt === 'function' && APP.config && APP.config.loadZones) return zoneAt(lat, lon) || '';
+    } catch (_) { /* noop */ }
     for (const z of (APP.zonas || [])) {
         if (rxGeoInfEnZona(lat, lon, z)) return rxGeoInfNombre(z);
     }
@@ -434,6 +468,11 @@ function rxGeoInfDeReplay() {
 // Fuente elegida -> lista de eventos. Con cache corta, porque el dialogo
 // la pide en cada repintado y el recorrido puede tener miles de mensajes.
 let _rxGeoCache = { t: 0, datos: {} };
+// Limpia la cache de eventos (util al abrir el informe y en las pruebas,
+// que cambian los datos a mano entre comprobaciones).
+function rxGeoInfCacheReset() {
+    _rxGeoCache = { t: 0, datos: {} };
+}
 function rxGeoInfEventos(fuente, forzar) {
     const f = (RX_GEO_FUENTES.indexOf(fuente) >= 0) ? fuente : 'bitacora';
     const t = Date.now();
@@ -452,10 +491,13 @@ function rxGeoInfEventos(fuente, forzar) {
     return out;
 }
 // Que fuentes tienen datos ahora mismo (para el selector del dialogo).
-function rxGeoInfFuentesDisponibles() {
+// Que fuentes tienen datos. Se apoya en la cache (8 s) para no recorrer
+// trazas y bitacora en cada repintado del dialogo; `forzar` se usa al abrir
+// y cuando cambian los datos de verdad.
+function rxGeoInfFuentesDisponibles(forzar) {
     const out = [];
     for (const f of RX_GEO_FUENTES) {
-        const n = rxGeoInfEventos(f, true).length;
+        const n = rxGeoInfEventos(f, !!forzar).length;
         if (n) out.push({ k: f, n: n });
     }
     return out;
@@ -656,13 +698,52 @@ function rxGeoInfHTML(d) {
         secciones.join('') +
         rxInfPie() + '</body></html>';
 }
+// Mapa del dialogo: la geocerca marcada y las unidades encontradas. Usa el
+// mismo mini-mapa interactivo (pan/zoom) y el mismo anillo que el PDF.
+function rxGeoInfPintaMapa(d) {
+    const cont = byId('rgi-mapa');
+    if (!cont) return;
+    const z = RX_GEO.zona ? rxGeoInfZonaSel() : null;
+    const zonasMapa = z ? [z]
+        : (APP.zonas || []).filter((zz) => d.zonas.some((f) => f.zona === rxGeoInfNombre(zz))).slice(0, 8);
+    const lineas = [];
+    for (const zz of zonasMapa) {
+        const an = rxGeoInfAnillo(zz);
+        if (an.length > 2) lineas.push({ pts: an, color: '#1565c0', width: 3, opacity: 0.9, glow: true });
+    }
+    const marcas = [];
+    for (const e of d.eventos) {
+        if (marcas.length >= 150) break;
+        if (e.lat == null || e.lon == null) continue;
+        const col = (e.tipo === 'dentro') ? '#2e7d32'
+            : (e.tipo === 'motor' ? '#b71c1c' : (e.tipo === 'detenida' ? '#e65100' : '#1565c0'));
+        marcas.push({ lat: e.lat, lon: e.lon, color: col, radio: (e.tipo === 'dentro' ? 6 : 4), txt: e.eco + ' \u00b7 ' + (RX_GEO_TIPOS[e.tipo] || e.tipo) });
+    }
+    if (!lineas.length && !marcas.length) {
+        if (RX_GEO._mapa) { try { RX_GEO._mapa.destruir(); } catch (_) { /* noop */ } RX_GEO._mapa = null; }
+        cont.innerHTML = '<div class="rgi-mapa-vacio">Sin geometria ni unidades con este filtro.</div>';
+        return;
+    }
+    try {
+        if (!RX_GEO._mapa) RX_GEO._mapa = rxMiniMapa(cont, { lineas: lineas, marcas: marcas });
+        else { RX_GEO._mapa.lineas = lineas; RX_GEO._mapa.marcas = marcas; }
+        RX_GEO._mapa.encuadrar();
+    } catch (e) {
+        if (APP.unlocked) console.warn('[Rondo] mapa informe', e && e.message);
+    }
+}
+// Deja respirar a la interfaz entre pasos: sin esto la barra de progreso no
+// llegaria a pintarse.
+function rxGeoInfYield() {
+    return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } });
+}
 function rxGeoInfNombreArchivo(d, ext) {
     const geo = d.zona ? (d.zona.replace(/[^\w\-]+/g, '_').slice(0, 30) + '_') : '';
     return 'rondo_geocerca_' + geo + (d.modo === 'paradas' ? 'paradas_' : 'cruces_') +
         new Date().toISOString().slice(0, 10) + ext;
 }
-// Dialogo: que informe, de que geocerca, de que periodo, con que datos y
-// las tres salidas (PDF, CSV, Markdown).
+// Dialogo: que informe, de que geocerca, de que periodo, con que datos, un
+// mapa con la geocerca y las unidades, y las tres salidas.
 function abrirInformeGeocerca(origen) {
     // Desde la pestana Replay el rango arranca en las fechas del recorrido
     // cargado, que es lo que el operador esta mirando en ese momento.
@@ -674,6 +755,7 @@ function abrirInformeGeocerca(origen) {
             RX_GEO.rango = '';
         }
     }
+    rxGeoInfCacheReset();
     const hay = rxGeoInfFuentesDisponibles();
     if (!hay.length) {
         adviceWarn('Sin datos de geocercas',
@@ -681,21 +763,16 @@ function abrirInformeGeocerca(origen) {
         return;
     }
     if (!hay.some((h) => h.k === RX_GEO.fuente)) RX_GEO.fuente = hay[0].k;
+    // El contenedor del mapa se rehace con el dialogo: se olvida la instancia
+    // anterior para no medir un nodo ya desconectado.
+    RX_GEO._mapa = null;
     const ETIQUETA = { rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
-    const cuerpo = () => {
-        const d = rxGeoInfReune();
-        const fuentes = rxGeoInfFuentesDisponibles();
-        const zonas = rxGeoInfZonas();
-        const conDatos = rxGeoInfPorZona(rxGeoInfEventos(RX_GEO.fuente), null);
-        const num = {};
-        for (const f of conDatos) num[f.zona] = f.cruces + f.paradas;
+    const cuerpo = (d, fuentes, selZ) => {
         const chip = (act, attr, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
             '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + esc(txt) + '</button>';
         const tot = d.unidades.total;
-        const selZ = rxGeoInfSelect();
-        void num; void zonas;
         // Hero: que geocerca se informa, de donde viene y que datos tiene.
-        const z = RX_GEO.zona ? (APP.zonas || []).find((x) => rxGeoInfNombre(x) === RX_GEO.zona) : null;
+        const z = RX_GEO.zona ? rxGeoInfZonaSel() : null;
         const org = z ? glocOrigen(z) : null;
         let ficha = 'Todas las geocercas';
         if (z) {
@@ -717,6 +794,15 @@ function abrirInformeGeocerca(origen) {
                 '<span class="rondo-usym">' + UIS.pin + '</span>' + esc(e.eco) + '</span>').join('') +
                 (dentro.length > 14 ? '<span class="rgi-dmore">+' + (dentro.length - 14) + '</span>' : '') + '</div>'
             : '';
+        // Acciones de descarga, con PDF como accion principal.
+        const acciones = '<div class="rgi-io">' +
+            '<button type="button" class="rgi-btn primary" id="rgi-pdf" title="Reporte imprimible (Guardar como PDF)">' +
+            '<span class="rondo-usym">' + UIS.export + '</span><b>PDF</b><i>reporte listo para imprimir</i></button>' +
+            '<button type="button" class="rgi-btn" id="rgi-csv" title="Detalle evento a evento">' +
+            '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>evento a evento</i></button>' +
+            '<button type="button" class="rgi-btn" id="rgi-md" title="Informe en texto">' +
+            '<span class="rondo-usym">' + UIS.copy + '</span><b>Markdown</b><i>texto para pegar</i></button>' +
+            '</div>';
         return '<div class="rgi">' +
             hero +
             '<div class="rgi-cfg">' +
@@ -772,23 +858,51 @@ function abrirInformeGeocerca(origen) {
                     .map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo))) +
                 (d.unidades.filas.length > 12 ? '<p class="rgi-more">y ' + (d.unidades.filas.length - 12) + ' unidad(es) m\u00e1s en el PDF y el CSV.</p>' : '')
                 : '<p class="rgi-more">Sin unidades con este filtro.</p>') + '</div>' +
-            '<div class="rgi-io">' +
-            '<button type="button" class="mini" id="rgi-pdf" title="Reporte imprimible (Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> PDF</button>' +
-            '<button type="button" class="mini" id="rgi-csv" title="Detalle evento a evento en CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
-            '<button type="button" class="mini" id="rgi-md" title="Informe en Markdown"><span class="rondo-usym">' + UIS.copy + '</span> Markdown</button>' +
-            '</div>' +
+            acciones +
             '</div>';
     };
     abrirDialogo({
         icon: UIS.zone,
         titulo: 'Informe por geocerca',
-        ancho: 700,
+        ancho: 720,
         okText: 'Cerrar',
-        html: '<div id="rgi-box">' + cuerpo() + '</div>',
+        // Un solo boton abajo: las salidas viven en la barra de acciones.
+        cancel: false,
+        html: '<div class="rgi-tool">' +
+            '<div class="rgi-mapa" id="rgi-mapa"><div class="rgi-mapa-vacio">Elige una geocerca para verla en el mapa</div></div>' +
+            '<div class="rgi-carga" id="rgi-carga" style="display:none">' +
+            '<span id="rgi-carga-t">Calculando\u2026</span>' +
+            '<span class="rgi-barra"><i id="rgi-barra"></i></span>' +
+            '</div>' +
+            '<div id="rgi-box"></div>' +
+            '</div>',
         onOpen: (el) => {
             const box = el.querySelector('#rgi-box');
             if (!box) return;
-            const pinta = () => setHtml(box, cuerpo());
+            const carga = el.querySelector('#rgi-carga');
+            const barra = el.querySelector('#rgi-barra');
+            const cargaT = el.querySelector('#rgi-carga-t');
+            const setProg = (p, t) => {
+                if (barra) barra.style.width = p + '%';
+                if (cargaT && t) cargaT.textContent = t;
+                if (carga) carga.style.display = 'flex';
+            };
+            // Pintado asincrono por pasos: la barra se ve de verdad y la
+            // interfaz respira entre el calculo y el dibujo.
+            const pinta = async () => {
+                setProg(12, 'Reuniendo datos\u2026');
+                await rxGeoInfYield();
+                const d = rxGeoInfReune();
+                setProg(55, 'Agrupando ' + d.eventos.length + ' evento(s)\u2026');
+                await rxGeoInfYield();
+                const selZ = rxGeoInfSelect();
+                const fuentes = rxGeoInfFuentesDisponibles();
+                setProg(85, 'Dibujando\u2026');
+                await rxGeoInfYield();
+                setHtml(box, cuerpo(d, fuentes, selZ));
+                rxGeoInfPintaMapa(d);
+                if (carga) carga.style.display = 'none';
+            };
             box.addEventListener('click', (ev) => {
                 const b = ev.target.closest && ev.target.closest('[data-rgi]');
                 if (!b || !box.contains(b)) return;
@@ -818,7 +932,12 @@ function abrirInformeGeocerca(origen) {
                 const t = ev.target;
                 if (!t || !t.id) return;
                 if (t.id === 'rgi-buscar') return;
-                if (t.id === 'rgi-zona') { RX_GEO.zona = t.value || ''; pinta(); return; }
+                if (t.id === 'rgi-zona') {
+                    RX_GEO.zona = t.value || '';
+                    _rxGeoZonaSel = { nombre: '\u0000', z: null };
+                    pinta();
+                    return;
+                }
                 if (t.id === 'rgi-desde' || t.id === 'rgi-hasta') {
                     RX_GEO.desde = t.value || '';
                     RX_GEO.hasta = (byId('rgi-hasta') ? byId('rgi-hasta').value : '') || '';
@@ -831,8 +950,9 @@ function abrirInformeGeocerca(origen) {
                     pinta();
                 }
             });
+            // Las salidas se piden a la cache para no recalcular al vuelo.
             const salida = (id, fn) => {
-                const b2 = byId(id);
+                const b2 = el.querySelector('#' + id);
                 if (b2) b2.addEventListener('click', fn);
             };
             salida('rgi-pdf', () => {
@@ -841,8 +961,9 @@ function abrirInformeGeocerca(origen) {
             });
             salida('rgi-csv', () => rxGeoInfCSV(rxGeoInfReune()));
             salida('rgi-md', () => rxGeoInfMD(rxGeoInfReune()));
+            pinta();
         },
-        onOk: () => { /* la salida se elige con los botones del cuerpo */ }
+        onOk: () => { /* las salidas se eligen en la barra de acciones */ }
     });
 }
 function rxGeoInfCSV(d) {

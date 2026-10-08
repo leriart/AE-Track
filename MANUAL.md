@@ -530,9 +530,17 @@ periodo corto se borra el rango, y si inviertes las fechas (desde posterior a
 hasta) se corrigen solas. El resumen siempre dice el periodo exacto
 ("08/10/2026 – hoy").
 
-El panel va mostrando en vivo seis KPIs (unidades, cruces, entradas, paradas,
-minutos quietos, paradas con motor apagado) y una **vista previa** de las
-primeras 12 unidades, con la fila marcada en rojo cuando supera el filtro.
+La ventana incluye un **mapa** con la geocerca marcada y las unidades
+encontradas (verde = dentro ahora, naranja = parada, rojo = motor apagado),
+una **barra de progreso** mientras reune y agrupa los datos, seis KPIs
+(unidades, cruces, entradas, paradas, minutos quietos, paradas con motor
+apagado) y una **vista previa** de las primeras 12 unidades. Abajo, la barra
+de descarga: **PDF** (reporte listo para imprimir), **CSV** (evento a evento)
+y **Markdown**.
+
+Para que sea agil con muchas geocercas, el informe solo comprueba la
+geocerca elegida en cada punto (y usa el indice espacial de Rondo cuando
+pides *Todas*), en vez de recorrer toda la lista punto por punto.
 
 Sobre el alcance de los datos: la fuente **Rastreo** trabaja con la traza de
 la sesion (un punto cada vez que la unidad avanza 20 m, con un maximo por

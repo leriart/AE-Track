@@ -1486,6 +1486,25 @@
             "#rondo-dialog .rgi-chip{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:4px 11px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);white-space:nowrap;transition:all .15s var(--rondo-easing)}\n" +
             "#rondo-dialog .rgi-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
             "#rondo-dialog .rgi-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            // Herramienta: mapa arriba, barra de progreso y caja de datos.
+            "#rondo-dialog .rgi-tool{display:flex;flex-direction:column;gap:9px;min-width:0}\n" +
+            "#rondo-dialog .rgi-mapa{position:relative;height:190px;border-radius:var(--rondo-radius-sm);overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-mapa .rondo-mm{border:0;border-radius:0}\n" +
+            "#rondo-dialog .rgi-mapa-vacio{display:flex;align-items:center;justify-content:center;height:100%;font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);text-align:center;padding:10px}\n" +
+            "#rondo-dialog .rgi-carga{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-carga > span:first-child{flex:0 0 auto;font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);white-space:nowrap}\n" +
+            "#rondo-dialog .rgi-barra{flex:1;min-width:0;height:6px;border-radius:999px;background:var(--rondo-bg-strong);overflow:hidden;display:block}\n" +
+            "#rondo-dialog .rgi-barra i{display:block;height:100%;width:0;border-radius:999px;background:var(--rondo-accent-grad);transition:width .25s var(--rondo-easing)}\n" +
+            // Barra de acciones de descarga.
+            "#rondo-dialog .rgi-io{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px}\n" +
+            "#rondo-dialog .rgi-btn{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:7px 10px;border-radius:9px;border:1px solid var(--rondo-border);background:var(--rondo-bg-soft);color:var(--rondo-fg);cursor:pointer;text-align:left;min-width:0;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-btn .rondo-usym{font-size:15px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-btn b{font:700 12px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-btn i{font:500 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}\n" +
+            "#rondo-dialog .rgi-btn:hover{border-color:var(--rondo-fg-mute);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
+            "#rondo-dialog .rgi-btn.primary{background:var(--rondo-accent-grad);border-color:transparent;box-shadow:0 2px 10px rgba(var(--rondo-accent-rgb),.3)}\n" +
+            "#rondo-dialog .rgi-btn.primary .rondo-usym,#rondo-dialog .rgi-btn.primary b{color:#fff}\n" +
+            "#rondo-dialog .rgi-btn.primary i{color:rgba(255,255,255,.75)}\n" +
             // Buscador de geocerca dentro del dialogo.
             "#rondo-dialog .rgi-busca{display:inline-flex;align-items:center;gap:6px;flex:1;min-width:0}\n" +
             "#rondo-dialog .rgi-busca .rondo-usym{font-size:13px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
