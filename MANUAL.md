@@ -560,7 +560,11 @@ analices un viaje o cargues un recorrido.
 
 #### Que contiene
 
-- **Resumen** con los KPIs y una frase con el alcance de los datos.
+- **Mapa**: la geocerca dibujada sobre OpenStreetMap con las unidades que
+  estuvieron o estan dentro (verde = dentro ahora, naranja = parada, rojo =
+  motor apagado) y su leyenda. Si eliges *Todas las geocercas*, entran las
+  que tienen datos.
+- **Ficha de la geocerca**: tipo, origen, superficie y centro.
 - **Dentro de la geocerca ahora**: con el rastreo, la lista de unidades que
   estan dentro en este momento, con su velocidad, si reportan y sus
   coordenadas.

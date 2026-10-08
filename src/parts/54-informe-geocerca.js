@@ -502,66 +502,142 @@ function rxGeoInfResumen(d) {
         ' parada(s) con ' + t.min + ' min quieto' + (t.motor ? (' (' + t.motor + ' con motor apagado)') : '') + '.';
 }
 // Documento imprimible (PDF). Reutiliza el maquetado del informe general.
+// Anillo de una geocerca en {lat,lon}, para pintarla en el mini-mapa del
+// PDF (circulos, poligonos y lineas). Vacio si no hay geometria utilizable.
+function rxGeoInfAnillo(z) {
+    if (!z) return [];
+    const radio = (typeof _zonaRadio === 'function') ? _zonaRadio(z) : (+z.w || 0);
+    if (z.t === 3) {
+        const c = centroDeZona(z);
+        if (!c || !(radio > 0)) return [];
+        const out = [];
+        const mx = 111320 * Math.cos(c.lat * Math.PI / 180) || 111320;
+        for (let i = 0; i <= 36; i++) {
+            const a = (i / 36) * Math.PI * 2;
+            out.push({ lat: c.lat + (radio / 110540) * Math.sin(a), lon: c.lon + (radio / mx) * Math.cos(a) });
+        }
+        return out;
+    }
+    const pts = (typeof _zonaPuntos === 'function') ? _zonaPuntos(z) : (z.p || []);
+    const out = [];
+    for (const p of (pts || [])) {
+        if (!p) continue;
+        const la = (p.y != null) ? +p.y : (Array.isArray(p) ? +p[1] : NaN);
+        const lo = (p.x != null) ? +p.x : (Array.isArray(p) ? +p[0] : NaN);
+        if (isFinite(la) && isFinite(lo)) out.push({ lat: la, lon: lo });
+    }
+    if (out.length >= 3) out.push(out[0]);
+    return out;
+}
+// Documento imprimible (PDF). Sigue el mismo maquetado que el reporte del
+// recorrido: portada, KPIs, mapa con leyenda, secciones numeradas y tablas.
 function rxGeoInfHTML(d) {
     const z = d.zona ? (APP.zonas || []).find((x) => rxGeoInfNombre(x) === d.zona) : null;
     const cab = rxGeoInfCabeceras(d.modo);
     const filas = d.unidades.filas.slice(0, 300).map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo));
     const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
+    const coords = (la, lo) => (la == null || lo == null)
+        ? '<span class="muted">-</span>'
+        : '<span class="mono">' + esc(rxCoord(la, lo, 5)) + '</span>';
     const tot = d.unidades.total;
-    const titulo = d.zona ? ('Informe de geocerca: ' + d.zona) : 'Informe de geocercas';
-    let infoZ = '';
+    const org = z && (typeof glocOrigen === 'function') ? glocOrigen(z) : null;
+    // Ficha de la geocerca (dos columnas, como el resto del informe).
+    let ficha = '';
     if (z) {
         const cen = centroDeZona(z) || {};
         let area = '-';
         try { const a = zonaAreaM2(z); if (a > 0) area = (a / 1e6).toFixed(3) + ' km2'; } catch (_) { /* noop */ }
-        const org = (typeof glocOrigen === 'function') ? glocOrigen(z) : null;
-        infoZ = '<h3>Geocerca</h3><table><thead><tr><th>Campo</th><th>Valor</th></tr></thead><tbody>' +
-            '<tr><td>Nombre</td><td><b>' + esc(rxGeoInfNombre(z)) + '</b></td></tr>' +
-            '<tr><td>Tipo</td><td>' + esc(z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Poligono')) + '</td></tr>' +
-            (org ? '<tr><td>Origen</td><td>' + esc(org.largo) + '</td></tr>' : '') +
-            '<tr><td>Superficie</td><td>' + esc(area) + '</td></tr>' +
-            '<tr><td>Centro</td><td>' + (cen.lat == null ? '-' : esc(rxCoord(cen.lat, cen.lon, 6))) + '</td></tr>' +
-            '</tbody></table>';
+        ficha = '<div class="grid2"><div>' +
+            rxInfTabla(['Geocerca', 'Detalle'], [
+                ['<b>' + esc(rxGeoInfNombre(z)) + '</b>', esc(z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Poligono'))],
+                [esc(org ? org.corto : 'PLAT'), esc(org ? org.largo : 'Geocerca de la plataforma')]
+            ]) + '</div><div>' +
+            rxInfTabla(['Dato', 'Valor'], [
+                ['Superficie', esc(area)],
+                ['Centro', (cen.lat == null ? '<span class="muted">-</span>' : coords(cen.lat, cen.lon))],
+                ['Eventos', String(d.eventos.length)]
+            ]) + '</div></div>';
     }
+    // Mapa: la geocerca (o las que tienen datos) y las unidades que
+    // estuvieron o estan dentro. Es el mismo mini-mapa que usa el Replay.
+    const zonasMapa = z ? [z]
+        : (APP.zonas || []).filter((zz) => d.zonas.some((f) => f.zona === rxGeoInfNombre(zz))).slice(0, 8);
+    const lineas = [];
+    for (const zz of zonasMapa) {
+        const an = rxGeoInfAnillo(zz);
+        if (an.length > 2) lineas.push({ pts: an, color: '#1565c0', width: 3, opacity: 0.9, glow: true });
+    }
+    const marcas = [];
+    for (const e of d.eventos) {
+        if (marcas.length >= 80) break;
+        if (e.lat == null || e.lon == null) continue;
+        if (e.tipo === 'dentro') {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#2e7d32', radio: 6, txt: e.eco + ' · dentro ahora' });
+        } else if (e.tipo === 'motor') {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#b71c1c', radio: 5, txt: e.eco + ' · parado con motor apagado' });
+        } else if (e.tipo === 'detenida') {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#e65100', radio: 5, txt: e.eco + ' · parada' });
+        } else {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#1565c0', radio: 4, txt: e.eco + ' · ' + (RX_GEO_TIPOS[e.tipo] || e.tipo) });
+        }
+    }
+    const mapa = (lineas.length || marcas.length) ? rxMiniMapaHTML({ lineas: lineas, marcas: marcas }, 680, 300) : '';
+    const leyenda = '<div class="mapa-leyenda">' +
+        '<span><i style="background:#1565c0"></i>Geocerca' + (zonasMapa.length > 1 ? 's' : '') + '</span>' +
+        '<span><i style="background:#2e7d32"></i>Dentro ahora</span>' +
+        '<span><i style="background:#e65100"></i>Parada</span>' +
+        '<span><i style="background:#b71c1c"></i>Motor apagado</span>' +
+        '<span class="muted">Mapa: OpenStreetMap</span></div>';
+    // Tablas.
     const filasZona = d.zonas.map((f) => [
         '<b>' + esc(f.zona) + '</b>', String(f.cruces), String(f.paradas), String(f.min),
         String(f.nUnidades), esc(Object.keys(f.unidades).slice(0, 10).join(', ') + (f.nUnidades > 10 ? '...' : ''))
     ]);
-    // Quienes estan dentro ahora mismo (solo aparece con el rastreo).
     const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
     const filasDentro = dentro.map((e) => [
         '<b>' + esc(e.eco) + '</b>', esc(e.zona),
         (e.vel == null ? '-' : (e.vel + ' km/h')),
-        (e.online === false ? '<span class="badge sev-alto">sin senal</span>' : '<span class="badge sev-ok">en linea</span>'),
-        (e.lat == null ? '<span class="muted">-</span>' : '<span class="mono">' + esc(rxCoord(e.lat, e.lon, 5)) + '</span>')
+        (e.online === false ? '<span class="bad">sin senal</span>' : '<span class="ok">en linea</span>'),
+        coords(e.lat, e.lon)
     ]);
     const detalle = d.eventos.slice(0, 200).map((e) => [
-        rxFechaHora(e.ts), esc(RX_GEO_TIPOS[e.tipo] || e.tipo), esc(e.zona), esc(e.eco || '-'),
-        esc(e.detalle || e.titulo || '-'),
-        (e.lat == null ? '<span class="muted">-</span>' : '<span class="mono">' + esc(rxCoord(e.lat, e.lon, 5)) + '</span>')
+        esc(rxFechaHora(e.ts, true)),
+        '<span class="pill">' + esc(RX_GEO_TIPOS[e.tipo] || e.tipo) + '</span>',
+        esc(e.zona), esc(e.eco || '-'), esc(e.detalle || e.titulo || '-'), coords(e.lat, e.lon)
     ]);
-    const origen = (d.fuente === 'bitacora') ? 'Avisos de la sesion'
-        : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay');
-    return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' + esc(titulo) + '</title>' +
-        rxInfEstilo() + '</head><body>' +
-        rxInfCabecera(titulo, 'Rondo \u00b7 informe por geocerca',
-            esc(rxGeoInfResumen(d)) + '<br>' + esc(origen)) +
+    // Secciones numeradas, como en el reporte del recorrido.
+    const secciones = [];
+    let num = 0;
+    const add = (titulo, contenido) => { num++; secciones.push('<h2 class="seccion">' + esc(num + '. ' + titulo) + '</h2>' + contenido); };
+    if (mapa) add('Mapa', mapa + leyenda);
+    if (ficha) add('Geocerca' + (z ? ': ' + rxGeoInfNombre(z) : ''), ficha);
+    if (filasDentro.length) add('Dentro ahora (' + filasDentro.length + ')',
+        rxInfTabla(['Eco', 'Geocerca', 'Velocidad', 'Estado', 'Coordenadas'], filasDentro));
+    add((d.modo === 'paradas' ? 'Paradas por unidad' : 'Cruces por unidad') + ' (' + d.unidades.filas.length + ')',
+        rxInfTabla(cab, filas));
+    add('Resumen por geocerca (' + filasZona.length + ')',
+        rxInfTabla(['Geocerca', 'Cruces', 'Paradas', 'Min quieto', 'Unidades', 'Ecos'], filasZona));
+    add('Detalle de eventos (' + Math.min(200, d.eventos.length) + ' de ' + d.eventos.length + ')',
+        (d.eventos.length > 200 ? '<div class="callout">Se listan los 200 primeros eventos del filtro; el CSV lleva todos.</div>' : '') +
+        rxInfTabla(['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Detalle', 'Coordenadas'], detalle));
+    const fuenteTxt = (d.fuente === 'rastreo') ? 'Rastreo de unidades'
+        : (d.fuente === 'bitacora' ? 'Avisos de la sesion'
+            : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay'));
+    const meta = (z ? 'Geocerca <b>' + esc(rxGeoInfNombre(z)) + '</b><br>' : 'Todas las geocercas<br>') +
+        esc((d.rangoTxt || 'Periodo completo') + ' · ' + (rxGeoInfSoloSel() ? 'unidades seleccionadas' : 'toda la flota')) +
+        '<br>Datos: ' + esc(fuenteTxt) + '<br>Documento de solo lectura';
+    return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' +
+        'Geocerca ' + esc(z ? rxGeoInfNombre(z) : 'todas') + '</title>' +
+        '<style>' + rxInfEstilo() + '</style></head><body>' +
+        rxInfCabecera('Rondo', 'Informe por geocerca', meta) +
         '<div class="kpis">' +
         kpi(tot.unidades, 'Unidades') + kpi(tot.cruces, 'Cruces') + kpi(tot.entradas, 'Entradas') +
         kpi(tot.salidas, 'Salidas') + kpi(tot.paradas, 'Paradas') +
         kpi(tot.min + ' min', 'Quieto') + kpi(tot.motor, 'Con motor apagado') +
         (tot.dentro ? kpi(tot.dentro, 'Dentro ahora') : '') +
         '</div>' +
-        '<h2 id="res">Resumen</h2><p class="resumen">' + esc(rxGeoInfResumen(d)) + '</p>' +
-        infoZ +
-        (filasDentro.length ? '<h2 id="dentro">Dentro de la geocerca ahora (' + filasDentro.length + ')</h2>' +
-            rxInfTabla(['Eco', 'Geocerca', 'Velocidad', 'Estado', 'Coordenadas'], filasDentro) : '') +
-        '<h2 id="unid">Unidades (' + d.unidades.filas.length + ')</h2>' + rxInfTabla(cab, filas) +
-        '<h2 id="zonas">Geocercas (' + filasZona.length + ')</h2>' +
-        rxInfTabla(['Geocerca', 'Cruces', 'Paradas', 'Min quieto', 'Unidades', 'Ecos'], filasZona) +
-        '<h2 id="det">Detalle de eventos (' + Math.min(200, d.eventos.length) + ' de ' + d.eventos.length + ')</h2>' +
-        rxInfTabla(['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Detalle', 'Coordenadas'], detalle) +
-        (d.eventos.length > 200 ? '<p class="muted">Se muestran 200 eventos; el CSV lleva todos.</p>' : '') +
+        '<p class="resumen">' + esc(rxGeoInfResumen(d)) + '</p>' +
+        secciones.join('') +
         rxInfPie() + '</body></html>';
 }
 function rxGeoInfNombreArchivo(d, ext) {
@@ -605,8 +681,33 @@ function abrirInformeGeocerca(origen) {
             return '<option value="' + esc(z) + '"' + (RX_GEO.zona === z ? ' selected' : '') + '>' + esc(z) +
                 (n ? ' \u00b7 ' + n + ' evento(s)' : ' \u00b7 sin datos') + '</option>';
         }).join('');
+        // Hero: que geocerca se informa, de donde viene y que datos tiene.
+        const z = RX_GEO.zona ? (APP.zonas || []).find((x) => rxGeoInfNombre(x) === RX_GEO.zona) : null;
+        const org = z ? glocOrigen(z) : null;
+        let ficha = 'Todas las geocercas';
+        if (z) {
+            let area = '';
+            try { const a = zonaAreaM2(z); if (a > 0) area = (a / 1e6).toFixed(2) + ' km2'; } catch (_) { /* noop */ }
+            ficha = (z.t === 3 ? 'C\u00edrculo' : (z.t === 1 ? 'L\u00ednea' : 'Pol\u00edgono')) +
+                (area ? ' \u00b7 ' + area : '') + ' \u00b7 ' + (org ? org.largo : 'de la plataforma');
+        }
+        const hero = '<div class="rgi-hero' + (org ? ' o-' + org.id : '') + '">' +
+            '<span class="rgi-heroico rondo-usym">' + UIS.zone + '</span>' +
+            '<div class="rgi-herot"><b>' + esc(RX_GEO.zona || 'Todas las geocercas') + '</b>' +
+            '<span>' + esc(ficha) + '</span></div>' +
+            (org ? '<i class="rgi-ori o-' + org.id + '">' + esc(org.corto) + '</i>' : '') +
+            '</div>';
+        const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
+        const chipsDentro = dentro.length
+            ? '<div class="rgi-dentro"><span class="rgi-dl">Dentro ahora</span>' + dentro.slice(0, 14).map((e) =>
+                '<span class="rgi-dchip" title="' + esc(e.zona) + (e.vel != null ? ' \u00b7 ' + e.vel + ' km/h' : '') + '">' +
+                '<span class="rondo-usym">' + UIS.pin + '</span>' + esc(e.eco) + '</span>').join('') +
+                (dentro.length > 14 ? '<span class="rgi-dmore">+' + (dentro.length - 14) + '</span>' : '') + '</div>'
+            : '';
         return '<div class="rgi">' +
-            '<div class="rgi-row"><span class="rgi-lb">Informe de</span><div class="rgi-chips">' +
+            hero +
+            '<div class="rgi-cfg">' +
+            '<div class="rgi-row"><span class="rgi-lb">Informe</span><div class="rgi-chips">' +
             chip(RX_GEO.modo === 'cruces', 'data-rgi="modo"', 'cruces', 'Cruces por unidad', 'Quien entro y salio de cada geocerca') +
             chip(RX_GEO.modo === 'paradas', 'data-rgi="modo"', 'paradas', 'Paradas dentro', 'Quien se quedo quieto dentro y cuanto tiempo') +
             '</div></div>' +
@@ -619,15 +720,15 @@ function abrirInformeGeocerca(origen) {
             '<div class="rgi-row"><span class="rgi-lb">Periodo</span><div class="rgi-chips">' +
             chip(RX_GEO.rango === 'hoy' && !RX_GEO.desde, 'data-rgi="rango"', 'hoy', 'Hoy') +
             chip(RX_GEO.rango === '24h' && !RX_GEO.desde, 'data-rgi="rango"', '24h', '24 h') +
-            chip(RX_GEO.rango === '7d' && !RX_GEO.desde, 'data-rgi="rango"', '7d', '7 dias') +
-            chip(RX_GEO.rango === '15d' && !RX_GEO.desde, 'data-rgi="rango"', '15d', '15 dias') +
-            chip(RX_GEO.rango === '30d' && !RX_GEO.desde, 'data-rgi="rango"', '30d', '30 dias') +
+            chip(RX_GEO.rango === '7d' && !RX_GEO.desde, 'data-rgi="rango"', '7d', '7 d\u00edas') +
+            chip(RX_GEO.rango === '15d' && !RX_GEO.desde, 'data-rgi="rango"', '15d', '15 d\u00edas') +
+            chip(RX_GEO.rango === '30d' && !RX_GEO.desde, 'data-rgi="rango"', '30d', '30 d\u00edas') +
             chip(RX_GEO.rango === 'todo' && !RX_GEO.desde, 'data-rgi="rango"', 'todo', 'Todo') +
             '</div></div>' +
-            '<div class="rgi-row"><span class="rgi-lb">Rango de dias</span>' +
+            '<div class="rgi-row"><span class="rgi-lb">D\u00edas</span>' +
             '<span class="rgi-rango">' +
             '<input type="date" id="rgi-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_GEO.desde) + '">' +
-            '<span class="sep">a</span>' +
+            '<span class="sep">\u2192</span>' +
             '<input type="date" id="rgi-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_GEO.hasta) + '">' +
             (RX_GEO.desde || RX_GEO.hasta ? '<button type="button" class="mini" data-rgi="rango" data-v="hoy">Quitar</button>' : '') +
             '</span></div>' +
@@ -635,20 +736,23 @@ function abrirInformeGeocerca(origen) {
             fuentes.map((f) => chip(RX_GEO.fuente === f.k, 'data-rgi="fuente"', f.k,
                 ETIQUETA[f.k] + ' \u00b7 ' + f.n, ETIQUETA[f.k])).join('') +
             '</div></div>' +
-            '<p class="rgi-res">' + esc(rxGeoInfResumen(d)) + '</p>' +
+            '</div>' +
             '<div class="rgi-kpis">' +
-            '<div class="rgi-kpi"><b>' + tot.unidades + '</b><span>Unidades</span></div>' +
+            '<div class="rgi-kpi' + (tot.unidades ? ' ok' : '') + '"><b>' + tot.unidades + '</b><span>Unidades</span></div>' +
             '<div class="rgi-kpi"><b>' + tot.cruces + '</b><span>Cruces</span></div>' +
             '<div class="rgi-kpi"><b>' + tot.entradas + '</b><span>Entradas</span></div>' +
             '<div class="rgi-kpi"><b>' + tot.paradas + '</b><span>Paradas</span></div>' +
             '<div class="rgi-kpi"><b>' + tot.min + '</b><span>Min quieto</span></div>' +
             '<div class="rgi-kpi"><b>' + tot.motor + '</b><span>Motor apagado</span></div>' +
+            (tot.dentro ? '<div class="rgi-kpi vivo"><b>' + tot.dentro + '</b><span>Dentro ahora</span></div>' : '') +
             '</div>' +
+            chipsDentro +
+            '<p class="rgi-res">' + esc(rxGeoInfResumen(d)) + '</p>' +
             '<div class="rgi-prev">' + (d.unidades.filas.length
                 ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
                     .map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo))) +
-                (d.unidades.filas.length > 12 ? '<p class="muted">y ' + (d.unidades.filas.length - 12) + ' unidad(es) mas.</p>' : '')
-                : '<p class="muted">Sin unidades con este filtro.</p>') + '</div>' +
+                (d.unidades.filas.length > 12 ? '<p class="rgi-more">y ' + (d.unidades.filas.length - 12) + ' unidad(es) m\u00e1s en el PDF y el CSV.</p>' : '')
+                : '<p class="rgi-more">Sin unidades con este filtro.</p>') + '</div>' +
             '<div class="rgi-io">' +
             '<button type="button" class="mini" id="rgi-pdf" title="Reporte imprimible (Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> PDF</button>' +
             '<button type="button" class="mini" id="rgi-csv" title="Detalle evento a evento en CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +

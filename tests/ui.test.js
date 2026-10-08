@@ -666,7 +666,7 @@ ok('dialogo: informe de cruces o de paradas',
 ok('dialogo: rango de dias con dos fechas',
     /id="rgi-desde"/.test(src) && /id="rgi-hasta"/.test(src) && /class="rgi-rango"/.test(src));
 ok('dialogo: atajos de periodo en dias',
-    /'data-rgi="rango"', '15d', '15 dias'/.test(src) && /'data-rgi="rango"', '30d', '30 dias'/.test(src));
+    /'data-rgi="rango"', '15d', '15 d\\u00edas'/.test(src) && /'data-rgi="rango"', '30d', '30 d\\u00edas'/.test(src));
 ok('rango escrito manda sobre el atajo', /RX_GEO\.desde \? rxGeoInfFechaMs\(RX_GEO\.desde, false\) : rxGeoInfDesde\(RX_GEO\.rango\)/.test(src) &&
     /RX_GEO\.hasta \? rxGeoInfFechaMs\(RX_GEO\.hasta, true\) : 0/.test(src));
 ok('al elegir un atajo se borra el rango escrito',
@@ -681,6 +681,16 @@ ok('desde Replay el informe toma las fechas del recorrido',
 ok('dialogo: selector de geocerca', /id="rgi-zona"/.test(src) && /Todas las geocercas/.test(src));
 ok('dialogo: tres fuentes de datos', /data-rgi="fuente"/.test(src) &&
     /bitacora: 'Avisos'/.test(src) && /viajes: 'Viajes analizados'/.test(src));
+ok('dialogo: cabecera con la geocerca, su ficha y su origen',
+    /class="rgi-hero/.test(src) && /rgi-herot/.test(src) && /rgi-ori o-/.test(src));
+ok('dialogo: chips de quienes estan dentro ahora', /class="rgi-dentro"/.test(src) && /rgi-dchip/.test(src));
+ok('informe: el PDF se maqueta como el del recorrido (secciones numeradas y mapa)',
+    /'<h2 class="seccion">' \+ esc\(num/.test(src) && /function rxGeoInfAnillo\(z\)/.test(src) &&
+    /rxMiniMapaHTML\(\{ lineas: lineas, marcas: marcas \}, 680, 300\)/.test(src) &&
+    /class="mapa-leyenda"/.test(src));
+ok('informe: portada con el mismo patron que el recorrido',
+    /rxInfCabecera\('Rondo', 'Informe por geocerca', meta\)/.test(src) &&
+    /Documento de solo lectura/.test(src));
 ok('dialogo: vista previa y salidas PDF/CSV/Markdown',
     /class="rgi-prev"/.test(src) && /id="rgi-pdf"/.test(src) && /id="rgi-csv"/.test(src) && /id="rgi-md"/.test(src));
 ok('informe: el PDF se imprime con el maquetado del informe general',
@@ -707,7 +717,7 @@ ok('rastreo: alcance todas / seleccionadas',
 ok('rastreo: la cache separa todas de seleccionadas',
     /const key = f \+ \(f === 'rastreo' \? ':' \+ \(RX_GEO\.unidades \|\| 'todas'\) : ''\)/.test(src));
 ok('informe: el PDF lista a los que estan dentro ahora',
-    /Dentro de la geocerca ahora \(/.test(src) && /filasDentro/.test(src));
+    /'Dentro ahora \(' \+ filasDentro\.length/.test(src) && /filasDentro/.test(src));
 ok('informe: la tabla marca "dentro ahora"', /const dn = \(c\.dentro \? 'Si' : '-'\)/.test(src));
 ok('informe: agrega cruces y paradas por unidad', /function rxGeoInfAgrupa\(eventos, modo\)/.test(src) &&
     /entradas: filas\.reduce/.test(src) && /min: filas\.reduce/.test(src));
