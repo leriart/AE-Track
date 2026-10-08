@@ -69,14 +69,14 @@ que ambos quedan siempre sincronizados.
 
 ## Pruebas
 
-`tests/_source.js` construye el bundle si `src/` cambio y lo expone a las 21 suites. Asi las pruebas analizan el script completo aunque el repositorio guarde
+`tests/_source.js` construye el bundle si `src/` cambio y lo expone a las 22 suites. Asi las pruebas analizan el script completo aunque el repositorio guarde
 fragmentos.
 
 ## Automatizacion
 
 | Workflow | Disparo | Que hace |
 | --- | --- | --- |
-| `ci.yml` | push/PR a `main`/`dev` | build bundle + 21 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/`. |
+| `ci.yml` | push/PR a `main`/`dev` | build bundle + 22 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/`. |
 | `release.yml` | **push a `main`** (o manual) | calcula la version (conventional commits), genera el changelog, build, tests, actualiza el badge del README, commit de artefactos, tag, release con assets y push a `main`. |
 | `dev.yml` | push a `dev` | build con `X.Y.Z-dev.N`, tests y commit de `dist/` + bootstrap en `dev`. |
 

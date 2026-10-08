@@ -741,7 +741,9 @@ ok('historial: deteccion sobre mensajes crudos (pura)',
     /function rxGeoInfDeMensajes\(msgs, eco, fuente\)/.test(src) &&
     /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: eco, fuente: fuente \|\| 'historial' \}\)/.test(src));
 ok('historial: es la fuente por defecto con geocerca y flota',
-    /RX_GEO\.zona && hay\.some\(\(h\) => h\.k === 'historial'\) && !RX_GEO\._fuenteTocada/.test(src));
+    /if \(RX_GEO\.zona && hay\.some\(\(h\) => h\.k === 'historial'\)\) \{\s*\n\s*RX_GEO\.fuente = 'historial';/.test(src));
+ok('sin geocerca se prefiere una fuente local (instantanea)',
+    /const local = hay\.find\(\(h\) => h\.k !== 'historial'\)/.test(src));
 ok('historial: el dialogo lo escanea con la barra por unidad',
     /if \(RX_GEO\.fuente === 'historial'\)/.test(src) && /'Consultando ' \+ hechas/.test(src));
 ok('dialogo: boton "Generar reporte" (no recarga en cada cambio)',

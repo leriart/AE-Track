@@ -914,10 +914,19 @@ function abrirInformeGeocerca(origen) {
             'Activa la regla Geocercas en Ajustes, analiza un viaje o carga un recorrido en Replay para poder informar.');
         return;
     }
-    // Si hay geocerca elegida y flota, el historial de la plataforma es el
-    // que responde de verdad "quien anduvo por aqui": se elige por defecto.
-    if (RX_GEO.zona && hay.some((h) => h.k === 'historial') && !RX_GEO._fuenteTocada) RX_GEO.fuente = 'historial';
-    if (!hay.some((h) => h.k === RX_GEO.fuente)) RX_GEO.fuente = hay[0].k;
+    if (!RX_GEO._fuenteTocada) {
+        // Si hay geocerca elegida y flota, el historial de la plataforma es
+        // el que responde de verdad "quien anduvo por aqui". Sin geocerca
+        // (mirar todas) se prefiere una fuente local, que es instantanea.
+        if (RX_GEO.zona && hay.some((h) => h.k === 'historial')) {
+            RX_GEO.fuente = 'historial';
+        } else if (!hay.some((h) => h.k === RX_GEO.fuente)) {
+            const local = hay.find((h) => h.k !== 'historial');
+            RX_GEO.fuente = (local || hay[hay.length - 1]).k;
+        }
+    } else if (!hay.some((h) => h.k === RX_GEO.fuente)) {
+        RX_GEO.fuente = hay[0].k;
+    }
     // El contenedor del mapa se rehace con el dialogo: se olvida la instancia
     // anterior para no medir un nodo ya desconectado.
     RX_GEO._mapa = null;
@@ -1098,6 +1107,20 @@ function abrirInformeGeocerca(origen) {
                 if (carga) carga.style.display = 'none';
             };
             box.addEventListener('click', (ev) => {
+                const btn = ev.target.closest && ev.target.closest('button');
+                // Salidas y "Generar reporte": el cuerpo se repinta en cada
+                // cambio, asi que los botones se atienden por delegacion (el
+                // contenedor #rgi-box no se reemplaza).
+                if (btn && box.contains(btn)) {
+                    if (btn.id === 'rgi-generar') { pinta(true); return; }
+                    if (btn.id === 'rgi-pdf') {
+                        rxImprimirHTML(rxGeoInfHTML(rxGeoInfReune()));
+                        advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
+                        return;
+                    }
+                    if (btn.id === 'rgi-csv') { rxGeoInfCSV(rxGeoInfReune()); return; }
+                    if (btn.id === 'rgi-md') { rxGeoInfMD(rxGeoInfReune()); return; }
+                }
                 const b = ev.target.closest && ev.target.closest('[data-rgi]');
                 if (!b || !box.contains(b)) return;
                 if (b.dataset.rgi === 'rango') {
@@ -1150,22 +1173,8 @@ function abrirInformeGeocerca(origen) {
                     pinta(false);
                 }
             });
-            // Las salidas se piden a la cache para no recalcular al vuelo.
-            const salida = (id, fn) => {
-                const b2 = el.querySelector('#' + id);
-                if (b2) b2.addEventListener('click', fn);
-            };
-            salida('rgi-pdf', () => {
-                rxImprimirHTML(rxGeoInfHTML(rxGeoInfReune()));
-                advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
-            });
-            salida('rgi-csv', () => rxGeoInfCSV(rxGeoInfReune()));
-            salida('rgi-md', () => rxGeoInfMD(rxGeoInfReune()));
-            const gen = el.querySelector('#rgi-generar');
-            if (gen) gen.addEventListener('click', () => {
-                RX_GEO._guardado = RX_GEO._guardado || {};
-                pinta(true);
-            });
+            // Los botones se atienden por delegacion en #rgi-box (arriba):
+            // al repintarse el cuerpo, enlazarlos aqui no serviria.
             // Al abrir se calcula solo si la fuente no consulta la plataforma
             // (las fuentes locales son instantaneas). Con "Plataforma" se
             // espera al boton para no barrer la flota sin querer.
