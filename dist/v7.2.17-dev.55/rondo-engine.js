@@ -5619,6 +5619,7 @@ ta.value = '';
         return out.join('');
     }
     let _rxObs = null;
+    let _rxObsBody = null;
     let _rxHojasVistas = null;
     let _rxTimer = 0;
     let _rxCompCSS = '';
@@ -5652,6 +5653,7 @@ ta.value = '';
             if (el && el.parentNode) el.parentNode.removeChild(el);
         });
         if (_rxObs) { _rxObs.disconnect(); _rxObs = null; }
+        if (_rxObsBody) { _rxObsBody.disconnect(); _rxObsBody = null; }
         Object.keys(_rxVars).forEach((k) => delete _rxVars[k]);
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
@@ -5671,6 +5673,57 @@ ta.value = '';
         if (!t) return false;
         rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
         return true;
+    }
+    // Wialon pinta los valores de sensores/tarjetas con colores INLINE
+    // (style="background-color:#fff; color:#fff"). El remap de hojas no los ve,
+    // asi que quedan como islas: texto claro sobre fondo claro del mismo color.
+    // Se remapean igual (por propiedad) dentro de las ventanas/tarjetas, nunca
+    // en el panel de Rondo.
+    const RX_VENTANA_SEL = '[class*="_messageBox_"],[class*="_messageBoxWrapper_"],[class*="_contentWrapper_"],' +
+        '[class*="_content-wrapper_"],[class*="_cell_"],[class*="_row_"],[class*="_table_"],' +
+        '.tippy-box,.wui2-message-box,.wui-message-box,#tooltip,#tooltip2,.wui-tooltip,.x-unit-info,' +
+        '.mini-window-extra,.x-monitoring-units-extra-info-row';
+    function rxEsRondo(el) {
+        try { return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-rail,#rondo-nmolestar,#rondo-btn-panel')); }
+        catch (_) { return false; }
+    }
+    function rxRemapearInline(el) {
+        const st = el && el.style;
+        if (!st || !st.length || rxEsRondo(el)) return false;
+        let cambio = false;
+        for (let i = 0; i < st.length; i++) {
+            const prop = st[i];
+            if (prop.indexOf('--') === 0) continue;
+            if (!/color|background|fill|stroke/.test(prop)) continue;
+            const val0 = st.getPropertyValue(prop);
+            let val = val0.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
+                const clave = rxTokenClave(tok, rxPropRol(prop));
+                return clave ? 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave) + ')' : full;
+            });
+            val = val.replace(RX_COLOR_LIT, (lit) => {
+                const clave = rxColorClave(lit, prop);
+                return clave ? 'var(--rpg-' + rxVarId(lit, clave) + ')' : lit;
+            });
+            if (val !== val0) { st.setProperty(prop, val, st.getPropertyPriority(prop)); cambio = true; }
+        }
+        return cambio;
+    }
+    // Remapea el estilo inline del nodo y de sus descendientes con [style].
+    function rxRemapearInlineArbol(root) {
+        if (!root || root.nodeType !== 1 || rxEsRondo(root)) return false;
+        let cambio = rxRemapearInline(root);
+        let els;
+        try { els = root.querySelectorAll('[style]'); } catch (_) { return cambio; }
+        for (let i = 0; i < els.length; i++) { if (rxRemapearInline(els[i])) cambio = true; }
+        return cambio;
+    }
+    function rxRemapearVentanas() {
+        let cambiado = false;
+        try {
+            const roots = document.querySelectorAll(RX_VENTANA_SEL);
+            for (let i = 0; i < roots.length; i++) { if (rxRemapearInlineArbol(roots[i])) cambiado = true; }
+        } catch (_) { /* noop */ }
+        return cambiado;
     }
     function rxAplicarColoresPagina() {
         if (!(APP.config && APP.config.estiloPagina)) { rxDesactivarColores(); return; }
@@ -5698,6 +5751,7 @@ ta.value = '';
             rxAplicarColoresPagina._avisado = true;
             try { console.warn('[Rondo] ' + bloqueadas + ' hojas CSS no accesibles (cross-origin); el remap no puede leerlas.'); } catch (_) { /* noop */ }
         }
+        rxRemapearVentanas();
         rxPintarTokens(P, acc, accD);
         rxObservar();
     }
@@ -5722,6 +5776,32 @@ ta.value = '';
         });
         const head = document.head || document.documentElement;
         try { _rxObs.observe(head, { childList: true }); } catch (_) { _rxObs = null; }
+        // Segundo observador: las ventanas/tarjetas de unidad se inyectan en el
+        // body en diferido y traen colores INLINE (sensores). Se remapean al
+        // aparecer (y solo entonces, para no recorrer el DOM en cada cambio).
+        if (!_rxObsBody) {
+            _rxObsBody = new MutationObserver((muts) => {
+                let hayInline = false;
+                for (let i = 0; i < muts.length; i++) {
+                    const nodos = muts[i].addedNodes;
+                    for (let j = 0; j < nodos.length; j++) {
+                        const n = nodos[j];
+                        if (!n || n.nodeType !== 1 || rxEsRondo(n)) continue;
+                        let esVentana = false, dentro = false, conEstilo = false;
+                        try {
+                            esVentana = !!(n.matches && n.matches(RX_VENTANA_SEL));
+                            dentro = !!(n.closest && n.closest(RX_VENTANA_SEL));
+                            conEstilo = !!(n.matches && n.matches('[style]'));
+                        } catch (_) { esVentana = dentro = conEstilo = false; }
+                        if ((esVentana || dentro) && rxRemapearInlineArbol(n)) hayInline = true;
+                        else if (conEstilo && rxRemapearInline(n)) hayInline = true;
+                    }
+                }
+                if (hayInline) rxProgramarColoresPagina();
+            });
+            const body = document.body || document.documentElement;
+            try { _rxObsBody.observe(body, { childList: true, subtree: true }); } catch (_) { _rxObsBody = null; }
+        }
     }
     // Un <link rel=stylesheet> tiene .sheet = null hasta que carga. Se vuelve a
     // disparar el barrido cuando termina, para no perder su CSS.
