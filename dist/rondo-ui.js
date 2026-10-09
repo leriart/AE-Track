@@ -9019,14 +9019,69 @@
         lista.sort((a, b) => b.n - a.n);
         const vars = {};
         variables.forEach((v, k) => { vars[k] = v; });
+        // Elementos con texto practicamente del mismo color que su fondo: son
+        // los que se ven "vacios" aunque tengan dato. Se recalcula el fondo
+        // efectivo subiendo por los ancestros (el propio suele ser transparente).
+        const invisibles = [];
+        try {
+            const parseC = (c) => {
+                const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+                return m ? { r: +m[1], g: +m[2], b: +m[3] } : null;
+            };
+            const rutaCorta = (el) => {
+                const p = [];
+                let n = el, c = 0;
+                while (n && n.nodeType === 1 && c < 5) {
+                    let s = n.tagName.toLowerCase();
+                    if (n.id) s += '#' + n.id;
+                    else if (typeof n.className === 'string' && n.className.trim()) s += '.' + n.className.trim().split(/\s+/).slice(0, 2).join('.');
+                    p.unshift(s); n = n.parentElement; c++;
+                }
+                return p.join(' > ');
+            };
+            const raiz = document.body || document.documentElement;
+            const todos = raiz && raiz.querySelectorAll ? raiz.querySelectorAll('*') : [];
+            for (let i = 0; i < todos.length && invisibles.length < 80; i++) {
+                const el = todos[i];
+                if (el.id && el.id.indexOf('rondo') === 0) continue;
+                if (el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-rail')) continue;
+                let txt = '';
+                for (let ch = el.firstChild; ch; ch = ch.nextSibling) if (ch.nodeType === 3) txt += ch.nodeValue;
+                txt = txt.trim();
+                if (!txt) continue;
+                const cs = window.getComputedStyle ? getComputedStyle(el) : null;
+                if (!cs || cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+                const f = parseC(cs.color);
+                let bg = 'rgba(0, 0, 0, 0)', p = el;
+                while (p) {
+                    const c2 = getComputedStyle(p).backgroundColor;
+                    if (c2 && !/rgba\(0, 0, 0, 0\)|transparent/.test(c2)) { bg = c2; break; }
+                    p = p.parentElement;
+                }
+                const b = parseC(bg);
+                if (!f || !b) continue;
+                const d = Math.abs(f.r - b.r) + Math.abs(f.g - b.g) + Math.abs(f.b - b.b);
+                if (d < 40) {
+                    invisibles.push({
+                        tag: el.tagName.toLowerCase(),
+                        clase: String(el.className || '').slice(0, 140),
+                        texto: txt.slice(0, 40),
+                        color: cs.color, fondo: bg,
+                        inline: String(el.getAttribute('style') || '').slice(0, 200),
+                        ruta: rutaCorta(el)
+                    });
+                }
+            }
+        } catch (_) { /* noop */ }
         return {
             version: 1,
             generado: new Date().toISOString(),
             url: (location ? location.href : ''),
-            resumen: { colores: lista.length, variables: variables.size, hojas: hojas.length, reglas: nReglas, shadowRoots: nRoots },
+            resumen: { colores: lista.length, variables: variables.size, hojas: hojas.length, reglas: nReglas, shadowRoots: nRoots, invisibles: invisibles.length },
             colores: lista,
             variables: vars,
-            hojas: hojas
+            hojas: hojas,
+            invisibles: invisibles
         };
     }
     // Descarga el JSON de estilos (Blob + <a>, todo local).
@@ -9050,7 +9105,8 @@
                 if (a.parentNode) a.parentNode.removeChild(a);
             }, 500);
             adviceOk('Estilos exportados', datos.resumen.colores + ' colores · ' + datos.resumen.variables +
-                ' variables · ' + datos.resumen.shadowRoots + ' shadow roots');
+                ' variables · ' + datos.resumen.shadowRoots + ' shadow roots · ' +
+                datos.resumen.invisibles + ' textos invisibles');
         } catch (_) { adviceWarn('No se pudo descargar', 'Copia el texto manualmente.'); }
     }
     // Inyecta el bloque en la seccion Avanzado de Ajustes (una sola vez) y

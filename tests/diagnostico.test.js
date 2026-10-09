@@ -78,6 +78,9 @@ ok('writeSession contabiliza fallos', /writeSession\._fallos = \(writeSession\._
 ok('diagnostico: captura de ventana con fondo claro (boton + funcion)',
     /function rxCapturarVentana\(/.test(src) && /"rondo-diag-fondos"/.test(src) &&
     /CAPTURADO: /.test(src) && /rxCapturarVentana\(25\)/.test(src));
+ok('diagnostico: el export detecta textos invisibles (color == fondo)',
+    /const invisibles = \[\]/.test(src) && /resumen: \{[^}]*invisibles/.test(src) &&
+    /invisibles: invisibles/.test(src) && /getComputedStyle\(p\)\.backgroundColor/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

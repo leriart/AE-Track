@@ -214,7 +214,7 @@ ok('reestilizado real: pone el logo RONDO (Ndot)',
 
 // Remap de colores literales y logo RONDO: se evaluan las funciones puras.
 const M = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
-    '\nreturn { svg: rondoLogoSVG, uri: rondoLogoURI, parse: rxColorParse, clave: rxColorClave, valor: rxColorValor, decl: rxDeclaracionesRondo };')();
+    '\nreturn { svg: rondoLogoSVG, uri: rondoLogoURI, parse: rxColorParse, clave: rxColorClave, valor: rxColorValor, decl: rxDeclaracionesRondo, inline: rxRemapearInline };')();
 const P = { bg: '#1f2330', soft: '#272d3c', strong: '#313849', fg: '#e8ecf3', dim: '#9aa4b5', mute: '#6f7888', border: '#3a4252' };
 const ACC = '#850D22', ACCD = '#720B1D';
 ok('logo RONDO: SVG dot-matrix con circulos y etiqueta',
@@ -305,6 +305,27 @@ ok('color: las definiciones de variables se reescriben por el rol del nombre',
     /--tab-bg-color:var\(--rpg-/.test(decCustom));
 ok('color: una custom property sin token mapeado no se toca',
     M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+// Estilos INLINE (Wialon pinta los sensores con style="..."). Antes quedaban
+// como islas: fondo blanco con texto blanco.
+function elInline(obj) {
+    const keys = Object.keys(obj);
+    const st = { length: keys.length, getPropertyValue: (p) => obj[p], getPropertyPriority: () => '' };
+    st.setProperty = (p, v) => { obj[p] = v; };
+    keys.forEach((k, i) => { st[i] = k; });
+    return { style: st, closest: () => null };
+}
+const elIn = elInline({ 'background-color': 'rgb(255, 255, 255)', 'color': '#172336' });
+M.inline(elIn);
+const idsIn = (elIn.style.getPropertyValue('background-color') + elIn.style.getPropertyValue('color'))
+    .match(/var\(--rpg-([\w]+)\)/g) || [];
+ok('color: remapea los colores INLINE de las ventanas (texto/fondo distintos)',
+    elIn.style.getPropertyValue('background-color').indexOf('var(--rpg-') === 0 &&
+    elIn.style.getPropertyValue('color').indexOf('var(--rpg-') === 0 && idsIn.length === 2);
+const elRondo = elInline({ 'background-color': 'rgb(255, 255, 255)' });
+elRondo.closest = (s) => (s.indexOf('#rondo-panel') >= 0 ? {} : null);
+M.inline(elRondo);
+ok('color: NO toca el estilo inline del panel de Rondo',
+    elRondo.style.getPropertyValue('background-color') === 'rgb(255, 255, 255)');
 
 ok('color: named colors basicos',
     M.clave('white', 'background-color') === 'soft' && M.clave('black', 'color') === 'fg');
