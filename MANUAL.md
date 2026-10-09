@@ -1283,7 +1283,10 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 > sino tapado por una capa translucida o fuera de la caja.
 
 > **Estilo de Rondo en la pagina: que cubre.** Ademas de las variables del skin
-> y los colores literales de todas las hojas, reescribe: las definiciones
+> y los colores literales de todas las hojas, reescribe: los atajos con variables
+> (`background: var(--x)`, `border: 1px solid var(--y)`; el navegador no los expone
+> como propiedades sueltas, y son ~1000 reglas, entre ellas el fondo de los
+> dialogos), las definiciones
 > derivadas (`--x: var(--white)`), las hojas que crecen en vivo (react-select y
 > Ant Design insertan reglas al abrir un dialogo; se vigilan y solo se procesan
 > las nuevas), los colores *inline* de ventanas, dialogos y avisos, y las capas

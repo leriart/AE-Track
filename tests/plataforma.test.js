@@ -305,6 +305,49 @@ ok('color: las definiciones de variables se reescriben por el rol del nombre',
     /--tab-bg-color:var\(--rpg-/.test(decCustom));
 ok('color: una custom property sin token mapeado no se toca',
     M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+// ATAJOS CON var(): comportamiento REAL de Chromium (verificado en headless).
+// Con `background: var(--x)` o `border: 1px solid var(--y)` el navegador lista
+// style[i] = background-color, border-top-color... con valor VACIO y deja el
+// texto solo en el atajo. Antes se recorria solo style[i] y se ignoraban ~1000
+// reglas de la plataforma (p. ej. .wizard-dlg-content-target{background:
+// var(--wizard-dialog-background)} => cuerpo de los dialogos BLANCO).
+function styleChromium(atajos, sueltas) {
+    const mapa = Object.assign({}, atajos, sueltas || {});
+    const nombres = [];
+    Object.keys(atajos).forEach((a) => {
+        const largos = a === 'background' ? ['background-image', 'background-color']
+            : a === 'border' ? ['border-top-color', 'border-top-style', 'border-top-width']
+            : [a + '-color'];
+        largos.forEach((l) => { nombres.push(l); mapa[l] = ''; });
+    });
+    Object.keys(sueltas || {}).forEach((k) => nombres.push(k));
+    const s = { length: nombres.length, getPropertyValue: (p) => (p in mapa ? mapa[p] : ''), getPropertyPriority: () => '' };
+    nombres.forEach((n, i) => { s[i] = n; });
+    return s;
+}
+(function () {
+    const MC = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+        '\nreturn { decl: rxDeclaracionesRondo, vars: _rxVars, inline: rxRemapearInline };')();
+    const d1 = MC.decl(styleChromium({ background: 'var(--wizard-dialog-background)' }));
+    ok('atajo con var(): background se reescribe aunque style[i] liste solo longhands vacios',
+        /^background:var\(--rpg-[\w]+\);$/.test(d1) && MC.vars[(d1.match(/--rpg-([\w]+)/) || [])[1]] === 'soft');
+    const d2 = MC.decl(styleChromium({ border: '1px solid var(--borders-color)' }));
+    ok('atajo con var(): border conserva grosor/estilo y cambia solo el color',
+        /^border:1px solid var\(--rpg-[\w]+\);$/.test(d2) && MC.vars[(d2.match(/--rpg-([\w]+)/) || [])[1]] === 'border');
+    ok('atajo con var(): un atajo con var() NO mapeada no se emite',
+        MC.decl(styleChromium({ background: 'var(--logo-background)' })) === '');
+    ok('atajo con var(): sin duplicar si la propiedad ya se emitio suelta',
+        (MC.decl(fakeStyle({ 'background': 'var(--base-bg-color)' })).match(/background:/g) || []).length === 1);
+    const elAtajo = (() => {
+        const mapa = { background: 'var(--white)', 'background-color': '', 'background-image': '' };
+        const st = { length: 2, 0: 'background-image', 1: 'background-color', getPropertyValue: (p) => mapa[p] || '',
+            getPropertyPriority: () => '', setProperty: (p, v) => { mapa[p] = v; } };
+        return { style: st, closest: () => null, _m: mapa };
+    })();
+    MC.inline(elAtajo);
+    ok('atajo con var(): tambien en estilos inline (style="background:var(--white)")',
+        /^var\(--rpg-/.test(elAtajo._m.background) && MC.vars[(elAtajo._m.background.match(/--rpg-([\w]+)/) || [])[1]] === 'soft');
+})();
 // Hojas CSS-in-JS (emotion de react-select, cssinjs de AntD): crecen con
 // insertRule al abrir un dialogo. Antes la hoja se daba por "vista" y esas
 // reglas (p. ej. .css-xxx-control{background:#fff}) quedaban sin tema.
