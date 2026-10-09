@@ -5265,6 +5265,12 @@ ta.value = '';
             // que el texto herede el color de la ventana (sin !important, para
             // no pisar los colores de estado inline rojo/verde).
             '[class*="_messageBox_"] *{color:inherit;}',
+            // Las celdas del perfil usan ._cell_*:not(.column) { color:
+            // var(--gray-900) }, especificidad (0,2,0), que gana al * anterior.
+            // Se sube a (0,3,0) repitiendo el selector, sin !important para no
+            // pisar los colores de estado inline (rojo/verde).
+            '[class*="_messageBox_"] [class*="_cell_"][class*="_cell_"],' +
+                '[class*="_messageBox_"] [class*="_row_"] [class*="_cell_"]{color:' + P.fg + ';}',
             // .wui-tooltip NO define fondo propio en la plataforma (solo
             // box-shadow/color/padding), asi que se transparentaba y se veia
             // el mapa detras. Se fuerza opaco + los fondos claros que la
