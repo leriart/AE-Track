@@ -5706,10 +5706,15 @@ ta.value = '';
             const cs = getComputedStyle(el);
             if (cs.display === 'none' || cs.visibility === 'hidden') continue;
             const col = parse(cs.color);
-            if (!col || col.lum > 0.4 || col.sat > 0.4) continue; // claro o de estado
-            if (bgDe(el) > 0.5) continue; // fondo claro: el texto oscuro esta bien
-            el.style.setProperty('color', fg, 'important');
-            el.style.setProperty('-webkit-text-fill-color', fg, 'important');
+            if (!col) continue;
+            // Los colores de ESTADO (rojo/verde) se conservan: se aclaran con
+            // el filter de la hoja, no se invierten a gris.
+            if (col.sat > 0.4) continue;
+            const bgLum = bgDe(el);
+            if (Math.abs(col.lum - bgLum) > 0.35) continue; // ya contrasta
+            const destino = bgLum > 0.5 ? '#1d2433' : fg; // inverso al fondo
+            el.style.setProperty('color', destino, 'important');
+            el.style.setProperty('-webkit-text-fill-color', destino, 'important');
             n++;
         }
         return n;
