@@ -259,6 +259,68 @@
         } catch (_) { adviceWarn('No se pudo descargar', 'Copia el texto manualmente.'); }
     }
     // Inyecta el bloque en la seccion Avanzado de Ajustes (una sola vez) y
+    /* ===== Inspector de fondos claros =================================
+     * Busca los elementos visibles que quedaron con fondo claro (islas que
+     * no se recolorearon) y, para cada uno, la regla CSS que lo pinta. No
+     * hay que inspeccionar a mano: el resultado dice exactamente que
+     * selector y que valor hay que corregir. Solo lectura. */
+    function rxFondosClaros() {
+        const out = [];
+        const parse = (c) => {
+            const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
+            if (!m) return null;
+            return { lum: (0.2126 * (+m[1]) + 0.7152 * (+m[2]) + 0.0722 * (+m[3])) / 255, a: m[4] === undefined ? 1 : +m[4] };
+        };
+        const claro = (c) => { const p = parse(c); return p && p.a > 0.5 && p.lum > 0.85; };
+        const corto = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') +
+            (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : '');
+        // 1) reglas accesibles que declaran fondo
+        const reglas = [];
+        for (let i = 0; i < document.styleSheets.length; i++) {
+            const sh = document.styleSheets[i];
+            let rs;
+            try { rs = sh.cssRules; } catch (_) { out.push('HOJA OCULTA (cross-origin): ' + (sh.href || 'inline')); continue; }
+            const href = (sh.href || 'inline').split('/').pop();
+            const walk = (lista) => {
+                for (let k = 0; k < lista.length; k++) {
+                    const r = lista[k];
+                    if (r.cssRules && (r.type === 4 || r.type === 12)) { walk(r.cssRules); continue; }
+                    if (!r.selectorText || !r.style) continue;
+                    const bg = r.style.getPropertyValue('background-color') || r.style.getPropertyValue('background');
+                    if (bg) reglas.push({ sel: r.selectorText, bg: bg, prio: r.style.getPropertyPriority('background-color') || r.style.getPropertyPriority('background'), href: href });
+                }
+            };
+            walk(rs);
+        }
+        // 2) candidatos: visibles y con fondo claro
+        const cand = [];
+        const todos = document.querySelectorAll('body *');
+        for (let i = 0; i < todos.length; i++) {
+            const el = todos[i];
+            const cs = window.getComputedStyle(el);
+            if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+            if (!claro(cs.backgroundColor)) continue;
+            const r = el.getBoundingClientRect();
+            if (r.width < 40 || r.height < 12) continue;
+            cand.push({ el: el, r: r, cs: cs });
+        }
+        cand.sort((a, b) => (b.r.width * b.r.height) - (a.r.width * a.r.height));
+        out.push('ELEMENTOS CON FONDO CLARO: ' + cand.length);
+        cand.slice(0, 25).forEach((c) => {
+            const el = c.el;
+            const reglasMatch = [];
+            for (let i = 0; i < reglas.length && reglasMatch.length < 4; i++) {
+                try { if (el.matches(reglas[i].sel)) reglasMatch.push(reglas[i].sel + '{' + reglas[i].bg + (reglas[i].prio ? ' !important' : '') + '} @' + reglas[i].href); } catch (_) { /* noop */ }
+            }
+            out.push('');
+            out.push(corto(el) + '  bg=' + c.cs.backgroundColor +
+                '  inline=' + (el.style.background || el.style.backgroundColor || '-') +
+                '  ' + Math.round(c.r.width) + 'x' + Math.round(c.r.height));
+            if (el.parentElement) out.push('   padre: ' + corto(el.parentElement));
+            for (let i = 0; i < reglasMatch.length; i++) out.push('   <- ' + reglasMatch[i]);
+        });
+        return out.join('\n');
+    }
     // cablea sus botones. Se llama desde init().
     function rxDiagBind() {
         const pane = document.querySelector('#rondo-config .cfg-pane[data-cfg="avanzado"]');
@@ -270,6 +332,7 @@
             '<button class="accbtn" id="rondo-diag-ver"><span class="rondo-usym">' + UIS.info + '</span> Ver diagnostico</button>' +
             '<button class="accbtn" id="rondo-diag-copiar"><span class="rondo-usym">' + UIS.export + '</span> Copiar</button>' +
             '<button class="accbtn" id="rondo-diag-estilos" title="Descarga el JSON con TODOS los colores literales y variables del tema de la plataforma (documento, shadow roots e iframes)"><span class="rondo-usym">' + UIS.export + '</span> Exportar estilos</button>' +
+            '<button class="accbtn" id="rondo-diag-fondos" title="Lista los elementos que quedaron con fondo claro y la regla CSS que los pinta (abre primero la ventana que quieras revisar)"><span class="rondo-usym">' + UIS.info + '</span> Fondos claros</button>' +
             '</div>' +
             '<div id="rondo-diag-out" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px;white-space:pre-wrap;font-family:monospace;line-height:1.45"></div>';
         pane.appendChild(box);
@@ -277,6 +340,17 @@
         if (ver) ver.addEventListener('click', rxDiagPintar);
         const est = box.querySelector('#rondo-diag-estilos');
         if (est) est.addEventListener('click', rxEstilosExportar);
+        const fondos = box.querySelector('#rondo-diag-fondos');
+        if (fondos) fondos.addEventListener('click', () => {
+            let txt;
+            try { txt = rxFondosClaros(); } catch (e) { adviceWarn('No se pudo inspeccionar', e && e.message); return; }
+            const salida = byId('rondo-diag-out');
+            if (salida) salida.textContent = txt;
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+                adviceOk('Fondos claros', 'Listado copiado y mostrado abajo. Pegalo tal cual.');
+            } catch (_) { adviceWarn('Copia el texto', 'Selecciona el texto de abajo.'); }
+        });
         const cop = box.querySelector('#rondo-diag-copiar');
         if (cop) cop.addEventListener('click', () => {
             const txt = rxDiagTexto(rxDiagRecolectar());
