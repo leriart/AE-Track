@@ -5280,6 +5280,15 @@ ta.value = '';
             // a currentColor (!important), que respeta el color del propio
             // elemento (asi los estados inline rojo/verde siguen igual).
             '[class*="_messageBox_"] *{-webkit-text-fill-color:currentColor !important;}',
+            // Los valores de umbral (sensor)* se pintan INLINE (rojo/verde)
+            // con colores para fondo claro y quedan apagados en oscuro. Se
+            // aclaran con brightness/saturate, que conserva el tono (no se
+            // puede tocar un color inline sin !important, y eso perderia el
+            // rojo vs verde).
+            '[class*="_messageBox_"] [class*="_value_"]{filter:brightness(1.8) saturate(1.2);}',
+            // Las barras de senal usan imagenes oscuras: se aclaran igual.
+            '[class*="_messageBox_"] [class*="_signal_"] img,[class*="_messageBox_"] [class*="_signal_"] svg{' +
+                'filter:brightness(1.8);}',
             // Las celdas del perfil usan ._cell_*:not(.column) { color:
             // var(--gray-900) }, especificidad (0,2,0), que gana al * anterior.
             // Se sube a (0,3,0) repitiendo el selector, sin !important para no
