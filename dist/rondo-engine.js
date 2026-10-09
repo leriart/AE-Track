@@ -5439,15 +5439,17 @@ ta.value = '';
     let _rxColorTimer = 0;
     let _rxColorSig = '';
     let _rxCompCSS = '';
-    function rxProgramarColoresPagina() {
+    let _rxColorInt = 0;
+    function rxProgramarColoresPagina(force) {
         clearTimeout(_rxColorTimer);
-        _rxColorTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 350);
+        _rxColorTimer = setTimeout(() => { try { rxAplicarColoresPagina(force); } catch (_) { /* noop */ } }, 350);
     }
-    function rxAplicarColoresPagina() {
+    function rxAplicarColoresPagina(force) {
         const elPrev = document.getElementById('rondo-colores-pagina');
         if (!(APP.config && APP.config.estiloPagina)) {
             if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
             if (_rxColorObs) { _rxColorObs.disconnect(); _rxColorObs = null; }
+            if (_rxColorInt) { clearInterval(_rxColorInt); _rxColorInt = 0; }
             _rxColorSig = '';
             return;
         }
@@ -5456,12 +5458,12 @@ ta.value = '';
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         const P = rxPaginaPaleta(claro);
-        // Nada que rehacer si no cambio el tema/acento ni el numero de hojas.
+        // Nada que rehacer si no cambio el tema/acento ni el numero de hojas
+        // (salvo que se fuerce: hay CSS-in-JS que llega tarde).
         const sig = (claro ? 'c' : 'o') + '|' + acc + '|' + (document.styleSheets ? document.styleSheets.length : 0);
-        if (elPrev && sig === _rxColorSig) return;
-        _rxColorSig = sig;
+        if (!force && elPrev && sig === _rxColorSig) return;
         const trozos = [];
-        let bytes = 0;
+        let bytes = 0, hojasOk = 0;
         try {
             const hojas = document.styleSheets;
             for (let i = 0; i < hojas.length; i++) {
@@ -5471,12 +5473,18 @@ ta.value = '';
                 let reglas;
                 try { reglas = h.cssRules; } catch (_) { continue; }
                 if (!reglas) continue;
+                hojasOk++;
                 const t = rxReglasRondo(reglas, P, acc, accD);
                 bytes += t.length;
                 trozos.push(t);
                 if (bytes > 2000000) break; // tope de seguridad
             }
         } catch (_) { /* noop */ }
+        // Solo se cachea la firma si hubo contenido: si fallo, se reintenta.
+        _rxColorSig = bytes > 0 ? sig : '';
+        if (hojasOk > 0 && bytes === 0 && APP.unlocked) {
+            try { console.warn('[Rondo] remap sin cambios; revisa si la pagina usa shadow DOM cerrado'); } catch (_) { /* noop */ }
+        }
         let el = elPrev;
         if (!el) {
             el = document.createElement('style');
@@ -5499,6 +5507,12 @@ ta.value = '';
                 }
             });
             try { _rxColorObs.observe(document.head || document.documentElement, { childList: true }); } catch (_) { _rxColorObs = null; }
+            // Reintento periodico (CSS-in-JS y shadow roots llegan tarde).
+            if (!_rxColorInt) {
+                _rxColorInt = setInterval(() => {
+                    if (APP.config && APP.config.estiloPagina) rxProgramarColoresPagina(true);
+                }, 30000);
+            }
         }
         // Las ventanas por vehiculo de la UI nueva viven en shadow DOM: ahi no
         // llegan las reglas del documento (solo heredan las variables). Se
