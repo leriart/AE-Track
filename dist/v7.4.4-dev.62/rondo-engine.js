@@ -4888,6 +4888,29 @@ ta.value = '';
         return '#' + [mix((n >> 16) & 255), mix((n >> 8) & 255), mix(n & 255)]
             .map((x) => x.toString(16).padStart(2, '0')).join('');
     }
+    function rxLum(c) {
+        const f = (v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    }
+    function rxContraste(h1, h2) {
+        const a = hexToRgb(h1), b = hexToRgb(h2);
+        if (!a || !b) return 21; // no se puede medir: se deja tal cual
+        const x = rxLum(a), y = rxLum(b);
+        return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+    }
+    // El acento sirve de FONDO (con texto blanco encima) pero como COLOR DE
+    // TEXTO sobre una superficie oscura puede quedar ilegible (el verde azulado
+    // #0d6e87 sobre #272d3c da ~2:1: pestana activa, "Cancel", "Restore..."). Se
+    // aclara (tema oscuro) u oscurece (claro) hasta llegar a 4.5:1 (WCAG AA).
+    function rxAcentoTexto(acc, P, extra) {
+        let c = acc;
+        const base = P && P.soft;
+        if (!base || !hexToRgb(c)) return c;
+        for (let i = 0; i < 10 && rxContraste(c, base) < 4.5; i++) {
+            c = P.claro ? oscurecer(c, 0.14) : aclarar(c, 0.14);
+        }
+        return extra ? (P.claro ? oscurecer(c, extra) : aclarar(c, extra)) : c;
+    }
     // v6.0.14 / v6.9.1: reestiliza la pagina de la plataforma con la paleta
     // de Rondo. Se apoya en las PROPIAS variables CSS del skin (las del
     // objeto de configuracion del CMS), asi que no reescribe el DOM: solo
@@ -5194,6 +5217,8 @@ ta.value = '';
         if (clave === 'transparent') return 'transparent';
         if (clave === 'accent-bg') return acc2 + '22';
         if (clave === 'accent-bg-hover') return acc2 + '33';
+        if (clave === 'acctxt') return rxAcentoTexto(acc, P);
+        if (clave === 'hovtxt') return rxAcentoTexto(acc, P, 0.12);
         return P[clave] || P.fg;
     }
     // Lee la paleta activa de Rondo (--rondo-*) con respaldo literal, para que
@@ -5211,6 +5236,7 @@ ta.value = '';
             strong: g('--rondo-bg-strong', '#eef2f7'), fg: g('--rondo-fg', '#1d2433'),
             dim: g('--rondo-fg-dim', '#5b6577'), mute: g('--rondo-fg-mute', '#8993a3'),
             border: g('--rondo-border', '#dfe4ec'), veil: 'rgba(23,35,54,.05)',
+            claro: true,
             okbg: '#edf7ee', warnbg: '#fff5e5', badbg: '#fff0f2', infobg: '#e7f4fd',
             okfg: '#2d8631', warnfg: '#c25e00', badfg: '#d11f1f', infofg: '#0073ce'
         } : {
@@ -5218,6 +5244,7 @@ ta.value = '';
             strong: g('--rondo-bg-strong', '#313849'), fg: g('--rondo-fg', '#e8ecf3'),
             dim: g('--rondo-fg-dim', '#9aa4b5'), mute: g('--rondo-fg-mute', '#6f7888'),
             border: g('--rondo-border', '#3a4252'), veil: 'rgba(255,255,255,.06)',
+            claro: false,
             okbg: '#22362c', warnbg: '#3a3326', badbg: '#3b2a30', infobg: '#213447',
             okfg: '#6bbd6f', warnfg: '#ffb952', badfg: '#ff8a80', infofg: '#6ab8f6'
         };
@@ -5240,6 +5267,7 @@ ta.value = '';
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         const P = rxPaginaPaleta(claro);
+        const accT = rxAcentoTexto(acc, P);
         const decl = [];
         Object.keys(RX_PAGINA_MAPA).forEach((v) => {
             decl.push('  --' + v + ':' + rxPaginaToken(RX_PAGINA_MAPA[v], P, acc, acc2, accD) + ' !important;');
@@ -5301,7 +5329,7 @@ ta.value = '';
             '.ant-table,.ant-table-cell,.ant-table-thead>tr>th{background:' + P.soft +
                 ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
             '.ant-tabs-tab,.ant-tabs-tab-btn{color:' + P.dim + ' !important;}',
-            '.ant-tabs-tab-active .ant-tabs-tab-btn{color:' + acc + ' !important;}',
+            '.ant-tabs-tab-active .ant-tabs-tab-btn{color:' + accT + ' !important;}',
             '.ant-checkbox-inner,.ant-radio-inner{background:' + P.soft + ' !important;border-color:' + P.border + ' !important;}',
             '.ant-checkbox-checked .ant-checkbox-inner,.ant-radio-checked .ant-radio-inner{background:' + acc + ' !important;border-color:' + acc + ' !important;}',
             '.ant-switch{background:' + P.strong + ' !important;}',
@@ -5320,11 +5348,18 @@ ta.value = '';
                 '.x-monitoring-units-extra-info-row{border-color:' + P.border + ' !important;}',
             '.pursuit-window .pursuit-top-container{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
             '.pursuit-window .panoram-disable-button{background:' + P.soft + ' !important;color:' + P.fg + ' !important;}',
-            '#tooltip a,#tooltip2 a,.x-unit-info a,.mini-window-extra a{color:' + acc + ' !important;}',
+            '#tooltip a,#tooltip2 a,.x-unit-info a,.mini-window-extra a{color:' + accT + ' !important;}',
             // Ventana de unidad: cabeceras de tabla, bordes y boton de mapa.
             '.x-unit-info > .unit-table-data th{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
+            // Contenedores de dialogos (propiedades de unidad, asistentes): si por
+            // orden de hojas o por especificidad ganase la regla original, el
+            // cuerpo saldria blanco con el texto claro del tema ilegible.
+            '.wizard-dlg-content-target,.help-window-content,.vtabs .tabs-containers{background:' + P.soft +
+                ' !important;color:' + P.fg + ' !important;}',
+            '.wizard-dlg-content-target .block:not(:first-child),.wizard-dlg-content-target .block-separator{border-color:' +
+                P.border + ' !important;}',
             // Valores de la tabla del unit-hint (velocidad, kilometraje, horas
             // de motor, satelites): van en <td class="icon"><div>...</div>. Se
             // fuerzan legibles (el icono del td si queda en color de icono).
@@ -5515,8 +5550,9 @@ ta.value = '';
         const sat = max === 0 ? 0 : (max - min) / max;
         if (sat > 0.25) {
             const hue = rxColorHue(c.r, c.g, c.b);
-            if (hue <= 20 || hue >= 330) return 'accent';                // rojo del skin
-            if (hue >= 190 && hue <= 265 && lum > 0.16) return 'accent'; // azul brillante
+            const esTexto = p === 'color' || p === 'fill' || p === 'stroke' || p === 'caret-color';
+            if (hue <= 20 || hue >= 330) return esTexto ? 'acctxt' : 'accent';                // rojo del skin
+            if (hue >= 190 && hue <= 265 && lum > 0.16) return esTexto ? 'acctxt' : 'accent'; // azul brillante
             if (lum > 0.16) return null;                                 // verde/ambar: estado
             // oscuro y saturado (azul marino del texto): cae a neutro
         }
@@ -5547,6 +5583,8 @@ ta.value = '';
         if (clave === 'accent-2') return aclarar(acc, 0.28);
         if (clave === 'accent-bg') return aclarar(acc, 0.28) + '22';
         if (clave === 'accent-bg-hover') return aclarar(acc, 0.28) + '33';
+        if (clave === 'acctxt') return rxAcentoTexto(acc, P);
+        if (clave === 'hovtxt') return rxAcentoTexto(acc, P, 0.12);
         return P[clave] || P.fg;
     }
     // Rol de una clave de paleta: a que propiedad pertenece.
@@ -5573,6 +5611,11 @@ ta.value = '';
         if (n.indexOf('background') >= 0 || /(^|-)bg(-|$)/.test(n)) return 'fondo';
         return 'texto';
     }
+    function rxAcentoComoTexto(clave) {
+        if (clave === 'accent') return 'acctxt';
+        if (clave === 'hover') return 'hovtxt';
+        return clave;
+    }
     // Clave de paleta para una variable del tema segun el ROL (texto, fondo o
     // borde) donde se use. Asi una variable que Wialon usa como fondo Y como
     // texto nunca contagia un rol con el otro. Los tokens de acento valen para
@@ -5581,7 +5624,7 @@ ta.value = '';
         if (RX_PAGINA_MIXTOS[tok]) return RX_PAGINA_MIXTOS[tok][rol] || RX_PAGINA_MIXTOS[tok].fondo;
         const clave = RX_PAGINA_MAPA[tok] || RX_PAGINA_GRISES_OSCURO[tok];
         if (!clave) return null;
-        if (rxPaginaRolClave(clave) === 'acento') return clave;
+        if (rxPaginaRolClave(clave) === 'acento') return rol === 'texto' ? rxAcentoComoTexto(clave) : clave;
         if (rol === rxPaginaRolClave(clave)) return clave;
         if (rol === 'fondo') return 'soft';
         if (rol === 'borde') return 'border';
@@ -5674,6 +5717,19 @@ ta.value = '';
                 if (inner) out.push((r.type === 4 ? '@media ' : '@supports ') + cond + '{' + inner + '}');
                 continue;
             }
+            // @layer / @container / @scope: la plataforma hoy solo usa @media y
+            // @supports, pero Vite/Ant Design ya emiten estos; sus reglas
+            // quedarian sin tema. Se conserva la cabecera para no cambiar la
+            // prioridad de las capas. (@keyframes y @font-face no se tocan.)
+            if (r.cssRules && !r.selectorText && r.type !== 4 && r.type !== 12 && r.type !== 7 &&
+                typeof r.cssText === 'string') {
+                const cab = /^@(layer|container|scope)\b[^{]*/.exec(r.cssText);
+                if (cab) {
+                    const inner = rxReglasRondo(r.cssRules, P, acc, acc2, accD);
+                    if (inner) out.push(cab[0].trim() + '{' + inner + '}');
+                }
+                continue;
+            }
             if (!r.selectorText || !r.style) continue;
             const decls = rxDeclaracionesRondo(r.style, P, acc, acc2, accD);
             if (decls) out.push(r.selectorText + '{' + decls + '}');
@@ -5746,6 +5802,26 @@ ta.value = '';
         rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
         return true;
     }
+    // Las hojas del remap deben ser las ULTIMAS del <head>. A igual especificidad
+    // gana la ultima en el orden del documento, y la plataforma carga modulos
+    // con sus hojas (<link>/<style>, emotion...) DESPUES de nuestra primera
+    // pasada: sin esto sus reglas (p. ej. .wizard-dlg-content-target{background:
+    // var(--wizard-dialog-background)}) volvian a ganar y el dialogo salia
+    // blanco. Solo se mueve si hace falta (reinsertar reparsea la hoja).
+    function rxMantenerAlFinal() {
+        try {
+            const head = document.head || document.documentElement;
+            const col = document.getElementById('rondo-colores-pagina');
+            if (!col || !head || !head.children) return false;
+            const tok = document.getElementById('rondo-tokens-pagina');
+            const h = head.children, n = h.length;
+            const bien = tok ? (n >= 2 && h[n - 1] === tok && h[n - 2] === col) : (n >= 1 && h[n - 1] === col);
+            if (bien) return false;
+            head.appendChild(col);
+            if (tok) head.appendChild(tok);
+            return true;
+        } catch (_) { return false; }
+    }
     // Suma de reglas de las hojas ajenas a Rondo (barato: ~60 hojas). Cambia
     // cuando la plataforma inserta reglas sin anadir ningun <style>.
     function rxContarReglas() {
@@ -5812,6 +5888,12 @@ ta.value = '';
         try {
             const roots = document.querySelectorAll(RX_VENTANA_SEL);
             for (let i = 0; i < roots.length; i++) { if (rxRemapearInlineArbol(roots[i])) cambiado = true; }
+            // Red de seguridad: cualquier otro nodo con color/fondo inline que ya
+            // exista (un contenedor de dialogo con otro id/clase). Con tope para
+            // no recorrer paginas enormes; los nodos NUEVOS los cubre el observador.
+            const sueltos = document.querySelectorAll('[style*="background"],[style*="color"]');
+            const tope = Math.min(sueltos.length, 1500);
+            for (let i = 0; i < tope; i++) { if (rxRemapearInline(sueltos[i])) cambiado = true; }
         } catch (_) { /* noop */ }
         return cambiado;
     }
@@ -5843,6 +5925,7 @@ ta.value = '';
         }
         rxRemapearVentanas();
         rxPintarTokens(P, acc, accD);
+        rxMantenerAlFinal();
         rxObservar();
     }
     // Vigila hojas NUEVAS. Un <link rel=stylesheet> recien insertado tiene
@@ -5862,7 +5945,7 @@ ta.value = '';
                     else if (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || '')) { hayNueva = true; rxEsperarHoja(n); }
                 }
             }
-            if (hayNueva) rxProgramarColoresPagina();
+            if (hayNueva) { rxMantenerAlFinal(); rxProgramarColoresPagina(); }
         });
         const head = document.head || document.documentElement;
         try { _rxObs.observe(head, { childList: true }); } catch (_) { _rxObs = null; }
