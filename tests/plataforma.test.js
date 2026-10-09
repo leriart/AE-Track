@@ -220,8 +220,11 @@ ok('logo RONDO: 85 puntos dentro del viewBox y sin NaN',
     })());
 ok('reestilizado: ventana de unidad y controles del mapa',
     /\.x-unit-info > \.unit-table-data th\{background:/.test(src) &&
-    /\.mapboxgl-ctrl-group\{background:transparent/.test(src) &&
+    /\.wui-button-icon-shadow\{background:/.test(src) &&
     /\.x-unit-info > \.unit-table-data \.td\{border-color:/.test(src));
+ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
+    /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
+    /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
 ok('reestilizado: inyecta tambien en shadow DOM (UI nueva)',
     /function rxSombrasPagina\(/.test(src) && /adoptedStyleSheets/.test(src) &&
     /rxSombrasPagina\(\)/.test(src));

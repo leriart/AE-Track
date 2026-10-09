@@ -5247,8 +5247,17 @@ ta.value = '';
             '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
             '.x-unit-info .entity-block-item > .image-container{border-color:' + P.border + ' !important;}',
-            // Botones junto al mapa: el contenedor blanco se oculta y cada
-            // boton queda como un cuadro redondeado suelto.
+            // Botones junto al mapa: el blanco real viene de
+            // .wui-button-icon-shadow (background-color:#fff), no de un
+            // contenedor, asi que se viste esa clase y setransparentan los
+            // contenedores que solo maquetan (ol-maps-control, ol-bar...).
+            '.wui-button-icon-shadow{background:' + P.soft + ' !important;border-radius:8px !important;}',
+            '.wui-button-icon-shadow:hover{background:' + P.strong + ' !important;}',
+            '.wui-button-icon-shadow button,.wui-button-icon-shadow:hover button{background:' + P.soft + ' !important;}',
+            '.ol-maps-control,.control-search,.ol-bar-container,.menu-smart-search,' +
+                '.ol-layers-control,.ol-tools-panel{background:transparent !important;}',
+            '.map-control-info{background:' + P.strong + ' !important;color:' + P.fg +
+                ' !important;border-color:' + P.border + ' !important;}',
             '.mapboxgl-ctrl-group{background:transparent !important;box-shadow:none !important;border-radius:0 !important;}',
             '.mapboxgl-ctrl-group button{background:' + P.soft + ' !important;border-radius:8px !important;' +
                 'margin:4px 0 !important;box-shadow:0 1px 3px rgba(0,0,0,.35) !important;}',
@@ -5256,8 +5265,6 @@ ta.value = '';
             '.MicrosoftMap .NavBar_Container,.MicrosoftMap .streetsideToolPanel{background:transparent !important;}',
             '.MicrosoftMap .NavBar_Button,.MicrosoftMap .streetsideToolPanelButton{background:' + P.soft +
                 ' !important;border-radius:8px !important;}',
-            '.ol-maps-control{background:transparent !important;box-shadow:none !important;border:none !important;}',
-            '.ol-maps-control .wui-button,.ol-maps-control button{background:' + P.soft + ' !important;border-radius:8px !important;}',
             // Ajusta el logo RONDO a su caja (el SVG trae su propio tamano).
             '.top .logo,.logo,#block_top_panel .logo,.logo-wrapper .logo{background-size:contain !important;' +
                 'background-repeat:no-repeat !important;background-position:center !important;}',
