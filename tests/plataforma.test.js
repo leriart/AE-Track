@@ -169,7 +169,7 @@ ok('reestilizado real: emite paneles superior/izquierdo/inferior',
     /--panel-bottom-background:.+ !important;/.test(cssOsc), cssOsc.slice(0, 80));
 ok('reestilizado real: la paleta --gray-* se adapta al tema (etiquetas legibles)',
     /--gray-900:#e8ecf3 !important;/.test(cssOsc) && /--gray-700:#9aa4b5 !important;/.test(cssOsc) &&
-    /--gray-200:#313849 !important;/.test(cssOsc));
+    /--gray-100:#313849 !important;/.test(cssOsc) && !/--gray-200:/.test(cssOsc) && !/--gray-300:/.test(cssOsc));
 ok('reestilizado real: en claro NO toca la paleta de grises de Wialon',
     !/--gray-900:/.test(generarEstilo({ theme: 'claro' })) &&
     !/--gray-200:/.test(generarEstilo({ theme: 'claro' })) &&
