@@ -305,6 +305,27 @@ ok('color: las definiciones de variables se reescriben por el rol del nombre',
     /--tab-bg-color:var\(--rpg-/.test(decCustom));
 ok('color: una custom property sin token mapeado no se toca',
     M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+// El remap (var(--rpg-*), rxColorValor) y la emision global (rxPaginaToken)
+// comparten el mapa de claves: deben dar SIEMPRE el mismo color. Si no, un
+// fondo "transparent" salia como el color de texto (botones blancos arriba).
+(function () {
+    const MK = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+        '\nreturn { aclarar: aclarar, valor: rxColorValor, tok: rxPaginaToken, mapa: RX_PAGINA_MAPA, mix: RX_PAGINA_MIXTOS, gris: RX_PAGINA_GRISES_OSCURO };')();
+    const Pk = { bg: '#1', soft: '#2', strong: '#3', fg: '#FG', dim: '#5', mute: '#6', border: '#7', veil: 'V',
+        okbg: 'a', warnbg: 'b', badbg: 'c', infobg: 'd', okfg: 'e', warnfg: 'f', badfg: 'g', infofg: 'h' };
+    const claves = {};
+    Object.keys(MK.mapa).forEach((k) => { claves[MK.mapa[k]] = 1; });
+    Object.keys(MK.gris).forEach((k) => { claves[MK.gris[k]] = 1; });
+    Object.keys(MK.mix).forEach((k) => Object.keys(MK.mix[k]).forEach((r) => { claves[MK.mix[k][r]] = 1; }));
+    const difieren = Object.keys(claves).filter((c) => MK.valor(c, Pk, '#0d6e87', '#0a5c72') !==
+        MK.tok(c, Pk, '#0d6e87', MK.aclarar('#0d6e87', 0.28), '#0a5c72'));
+    ok('mapa de claves: remap y emision global dan el mismo color para TODAS las claves',
+        difieren.length === 0, difieren.join(','));
+    ok('mapa de claves: "transparent" no cae al color de texto',
+        MK.valor('transparent', Pk, '#000', '#000') === 'transparent');
+    ok('mapa de claves: los tintes de acento se resuelven (no caen a fg)',
+        /22$/.test(MK.valor('accent-bg', Pk, '#0d6e87', '#000')) && /33$/.test(MK.valor('accent-bg-hover', Pk, '#0d6e87', '#000')));
+})();
 // ATAJOS CON var(): comportamiento REAL de Chromium (verificado en headless).
 // Con `background: var(--x)` o `border: 1px solid var(--y)` el navegador lista
 // style[i] = background-color, border-top-color... con valor VACIO y deja el
