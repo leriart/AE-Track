@@ -66,15 +66,13 @@
         'primary-color': 'fg', 'secondary-color': 'dim', 'light-color': 'mute',
         'icons-action-color': 'dim', 'color-text': 'fg', 'color-text-secondary': 'dim',
         'color-text-disabled': 'mute',
-        // --- base: superficies ---
-        'base-bg-color': 'bg', 'hover-bg-color': 'strong', 'editable-hover-bg-color': 'strong',
+        // --- base: superficies --- 'hover-bg-color': 'strong', 'editable-hover-bg-color': 'strong',
         'accent-gray-bg-color': 'strong', 'available-components-bg-color': 'soft',
         'disabled-components-bg-color': 'strong', 'table-selected-item-bg-color': 'strong',
         'higlighted-normal': 'strong', 'higlighted-hover': 'strong', 'higlighted-active': 'strong',
         'bg-dark-surface': 'strong', 'hover-bg-dark-surface': 'strong', 'active-bg-dark-surface': 'strong',
         'dialog-background-block': 'strong', 'preloader-box-background': 'soft',
-        // --- base: bordes ---
-        'borders-color': 'border', 'borders-color-inverted': 'border', 'borders-border-color': 'border',
+        // --- base: bordes --- 'borders-color-inverted': 'border', 'borders-border-color': 'border',
         'checkbox-borders-color': 'border', 'monitoring-button-border-color': 'border', 'color-border': 'border',
         // --- paneles y barra horizontal ---
         'panel-top-background': 'soft', 'panel-top-color': 'fg',
@@ -94,8 +92,7 @@
         'list-table-group-background': 'strong', 'list-table-group-background-hover': 'strong',
         'list-table-head-background': 'strong', 'list-row-hover-bg-color': 'strong',
         'icons-action-color-hover': 'strong', 'icons-action-color-active': 'strong',
-        // --- tooltip ---
-        'tooltip-bg-color': 'strong', 'tooltip-text-primary-color': 'fg',
+        // --- tooltip --- 'tooltip-text-primary-color': 'fg',
         'tooltip-text-secondary-color': 'dim', 'tooltip-separator-color': 'border',
         // --- acordeon ---
         'accordion-normal-background': 'soft', 'accordion-normal-color': 'fg',
@@ -127,13 +124,12 @@
         'list-table-tab_button-disabled-background': 'strong', 'list-table-tab_button-disabled-color': 'mute',
         'list-table-tab_button-disabled-border': 'border',
         // --- formularios ---
-        'input-background': 'soft', 'input-color': 'fg', 'input-border-color': 'border',
+        'input-background': 'soft', 'input-color': 'fg',
         'input-border-color-hover': 'border', 'input-stepper-active-bg-color': 'strong',
         'disabled-input-background-color': 'strong', 'disabled-input-color': 'mute', 'placeholder-color': 'mute',
         'select-border-color': 'border', 'select-hover-border-color': 'border',
         'chip-bg-color': 'strong', 'chip-bg-hover-color': 'strong', 'header-badge-bg-color': 'strong',
-        'checkbox-bg-color': 'soft', 'checkbox-checked-bg-color': 'accent', 'checkbox-checkmark-color': 'on',
-        'checkbox-hover-color': 'fg', 'checkbox-hover-color-secondary': 'hover',
+        'checkbox-bg-color': 'soft', 'checkbox-checked-bg-color': 'accent', 'checkbox-checkmark-color': 'on', 'checkbox-hover-color-secondary': 'hover',
         'checkbox-disabled-checked-bg-color': 'mute', 'switch-on-bg': 'accent',
         'switch-on-hover-bg': 'hover', 'switch-thumb-bg': 'on',
         'tag-text-color': 'fg', 'tag-bg-color': 'strong', 'tag-remove-hover-color': 'accent',
@@ -240,6 +236,19 @@
     // Wialon estos grises ya son correctos (texto oscuro / fondos claros), y
     // ademas estan MEZCLADOS (--gray-200/300 se usan de fondo y de texto), asi
     // que aplicarlos en claro pintaba el texto con color de fondo.
+    // Variables que Wialon usa a la vez como TEXTO y como FONDO. Mapearlas
+    // globalmente rompe uno de los dos roles; se resuelven por PROPIEDAD en el
+    // remap (texto -> color de texto, fondo -> color de fondo, borde -> borde).
+    const RX_PAGINA_MIXTOS = {
+        'base-bg-color': { texto: 'fg', fondo: 'bg' },
+        'hover-bg-color': { texto: 'fg', fondo: 'strong' },
+        'borders-color': { texto: 'dim', fondo: 'border', borde: 'border' },
+        'tooltip-bg-color': { texto: 'fg', fondo: 'strong' },
+        'input-border-color': { texto: 'fg', fondo: 'border', borde: 'border' },
+        'checkbox-hover-color': { texto: 'fg', fondo: 'strong' },
+        'gray-200': { texto: 'mute', fondo: 'strong' },
+        'gray-300': { texto: 'mute', fondo: 'border', borde: 'border' }
+    };
     // Solo los grises de USO CLARO: unos como texto (900/700/500/400) y otros
     // como superficie (100/50/800/600). Se EXCLUYEN gray-200 y gray-300 porque
     // Wialon los usa a la vez de fondo Y de texto (fecha, direccion): mapearlos
@@ -632,13 +641,24 @@
         _rxVarsOrden.push(id);
         return id;
     }
-    function rxDeclaracionesRondo(style) {
+    function rxDeclaracionesRondo(style, P, acc, acc2, accD) {
         let cambio = false;
         const partes = [];
         for (let i = 0; i < style.length; i++) {
             const prop = style[i];
             let val = style.getPropertyValue(prop);
             if (prop.indexOf('--') !== 0 && /color|background|border|outline|fill|stroke|caret/.test(prop)) {
+                // Variables mezcladas: se resuelven segun la PROPIEDAD.
+                const esBorde = /^(border|outline|column-rule)/.test(prop);
+                const esFondo = prop.indexOf('background') === 0;
+                val = val.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
+                    const m = RX_PAGINA_MIXTOS[tok];
+                    if (!m) return full;
+                    const rol = esBorde ? 'borde' : (esFondo ? 'fondo' : 'texto');
+                    const clave = m[rol] || m.fondo;
+                    cambio = true;
+                    return 'var(--rpg-' + rxVarId('mix:' + tok + ':' + clave, clave) + ')';
+                });
                 val = val.replace(RX_COLOR_LIT, (lit) => {
                     const clave = rxColorClave(lit, prop);
                     if (clave) { cambio = true; return 'var(--rpg-' + rxVarId(lit, clave) + ')'; }
@@ -650,18 +670,18 @@
         }
         return cambio ? partes.join('') : '';
     }
-    function rxReglasRondo(reglas) {
+    function rxReglasRondo(reglas, P, acc, acc2, accD) {
         const out = [];
         for (let i = 0; i < reglas.length; i++) {
             const r = reglas[i];
             if (r.cssRules && (r.type === 4 || r.type === 12)) {
                 const cond = r.conditionText || (r.media && r.media.mediaText) || '';
-                const inner = rxReglasRondo(r.cssRules);
+                const inner = rxReglasRondo(r.cssRules, P, acc, acc2, accD);
                 if (inner) out.push((r.type === 4 ? '@media ' : '@supports ') + cond + '{' + inner + '}');
                 continue;
             }
             if (!r.selectorText || !r.style) continue;
-            const decls = rxDeclaracionesRondo(r.style);
+            const decls = rxDeclaracionesRondo(r.style, P, acc, acc2, accD);
             if (decls) out.push(r.selectorText + '{' + decls + '}');
         }
         return out.join('');
@@ -707,7 +727,7 @@
     }
     // Procesa una hoja si aun no se vio. Incremental: nunca reparsea una hoja
     // ya hecha, asi que se puede llamar sin coste sobre todas las hojas.
-    function rxProcesarHoja(hoja) {
+    function rxProcesarHoja(hoja, P, acc, acc2, accD) {
         if (!hoja) return false;
         if (!_rxHojasVistas) _rxHojasVistas = typeof WeakSet === 'function' ? new WeakSet() : null;
         if (_rxHojasVistas) {
@@ -715,7 +735,7 @@
             _rxHojasVistas.add(hoja);
         }
         let t = '';
-        try { t = rxReglasRondo(hoja.cssRules || []); } catch (_) { return false; }
+        try { t = rxReglasRondo(hoja.cssRules || [], P, acc, acc2, accD); } catch (_) { return false; }
         if (!t) return false;
         rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
         return true;
@@ -723,6 +743,7 @@
     function rxAplicarColoresPagina() {
         if (!(APP.config && APP.config.estiloPagina)) { rxDesactivarColores(); return; }
         const acc = (APP.config.temaPlataforma && rxPlatAcento()) ? rxPlatAcento() : (APP.config.acento || '#850D22');
+        const acc2 = aclarar(acc, 0.28);
         const accD = oscurecer(acc, 0.14);
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
@@ -737,7 +758,7 @@
                 const h = hojas[i];
                 const owner = h.ownerNode;
                 if (owner && owner.id && owner.id.indexOf('rondo') === 0) continue;
-                try { if (h.cssRules) { if (rxProcesarHoja(h)) procesadas++; } else bloqueadas++; }
+                try { if (h.cssRules) { if (rxProcesarHoja(h, P, acc, acc2, accD)) procesadas++; } else bloqueadas++; }
                 catch (_) { bloqueadas++; }
             }
         } catch (_) { /* noop */ }
