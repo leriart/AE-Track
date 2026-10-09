@@ -75,9 +75,9 @@ ok('init llama a rxDiagBind', /try \{ rxDiagBind\(\); \} catch/.test(src));
 ok('writeJSON contabiliza fallos', /writeJSON\._fallos = \(writeJSON\._fallos \|\| 0\) \+ 1/.test(src));
 ok('writeSession contabiliza fallos', /writeSession\._fallos = \(writeSession\._fallos \|\| 0\) \+ 1/.test(src));
 
-ok('diagnostico: inspiector de fondos claros (boton + funcion)',
-    /function rxFondosClaros\(/.test(src) && /"rondo-diag-fondos"/.test(src) &&
-    /ELEMENTOS CON FONDO CLARO/.test(src) && /HOJA OCULTA \(cross-origin\)/.test(src));
+ok('diagnostico: captura de ventana con fondo claro (boton + funcion)',
+    /function rxCapturarVentana\(/.test(src) && /"rondo-diag-fondos"/.test(src) &&
+    /CAPTURADO: /.test(src) && /rxCapturarVentana\(25\)/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
