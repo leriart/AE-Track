@@ -290,6 +290,22 @@ const decTok = M.decl(fakeStyle({ 'background': 'var(--gray-900)', 'color': 'var
 const idsTok = decTok.match(/var\(--rpg-([\w]+)\)/g) || [];
 ok('color: una variable del tema se resuelve distinto como texto y como fondo',
     idsTok.length === 2 && idsTok[0] !== idsTok[1]);
+// --white es la causa de las ventanas/tarjetas invisibles: Wialon lo usa a la
+// vez de fondo (botones, pestanas, cuadro de unidad) y de texto (sobre acento).
+const decWhite = M.decl(fakeStyle({ 'background-color': 'var(--white)', 'color': 'var(--white)' }));
+const idsWhite = decWhite.match(/var\(--rpg-([\w]+)\)/g) || [];
+ok('color: --white se resuelve distinto como fondo y como texto (no contagia)',
+    idsWhite.length === 2 && idsWhite[0] !== idsWhite[1]);
+const decBox = M.decl(fakeStyle({ 'background-color': 'var(--white-color-message-box)' }));
+ok('color: el fondo de la ventana de unidad ya no queda forzado a blanco',
+    /background-color:var\(--rpg-/.test(decBox));
+// Indireccion: una definicion --x: var(--token) se reescribe segun el NOMBRE.
+const decCustom = M.decl(fakeStyle({ '--tab-bg-color': 'var(--white)' }));
+ok('color: las definiciones de variables se reescriben por el rol del nombre',
+    /--tab-bg-color:var\(--rpg-/.test(decCustom));
+ok('color: una custom property sin token mapeado no se toca',
+    M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+
 ok('color: named colors basicos',
     M.clave('white', 'background-color') === 'soft' && M.clave('black', 'color') === 'fg');
 ok('reestilizado real: scrollbars acordes al tema',

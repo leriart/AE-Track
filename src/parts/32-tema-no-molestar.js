@@ -195,7 +195,7 @@
         'panel-list-group-expanded-button-noaccent-progress-bg': 'border',
         'panel-list-item-input-button-noaccent-hover-bg': 'strong',
         'panel-list-item-input-button-noaccent-active-bg': 'strong', 'secondary-color-message-box': 'dim',
-        'white-color-message-box': 'on', 'checkbox-border-color': 'border',
+        'checkbox-border-color': 'border',
         'list-table-tab_button-active-disabled-color': 'on',
         'list-table-tab_button-active-disabled-background': 'accent',
         'panel-list-item-button-noaccent-color': 'dim',
@@ -236,6 +236,21 @@
     // globalmente rompe uno de los dos roles; se resuelven por PROPIEDAD en el
     // remap (texto -> color de texto, fondo -> color de fondo, borde -> borde).
     const RX_PAGINA_MIXTOS = {
+        // El skin define --white como blanco y lo usa de FONDO de botones,
+        // pestanas, checkboxes, calendario y del cuadro de mensaje de unidad,
+        // pero tambien de TEXTO (iconos/botones sobre acento). Forzarlo a blanco
+        // dejaba, en tema oscuro, texto claro sobre fondo blanco (invisible);
+        // forzarlo a superficie pintaba de oscuro el texto. Se resuelve por
+        // propiedad en el remap: fondo -> superficie, texto -> blanco (on).
+        'white': { texto: 'on', fondo: 'soft', borde: 'border' },
+        // ._messageBox_ (ventana/tarjeta flotante de unidad) saca su fondo de
+        // aqui. Su texto es --primary-color-message-box. Si el fondo queda
+        // blanco y el texto claro (tema oscuro), la ventana se ve vacia.
+        'white-color-message-box': { texto: 'on', fondo: 'soft' },
+        'white-color-border-message-box': { texto: 'border', fondo: 'border', borde: 'border' },
+        'popup-background-suggestion': { texto: 'fg', fondo: 'soft' },
+        'inline-background-suggestion': { texto: 'fg', fondo: 'strong' },
+        'gray-50': { texto: 'on', fondo: 'soft' },
         'base-bg-color': { texto: 'fg', fondo: 'bg' },
         'hover-bg-color': { texto: 'fg', fondo: 'strong' },
         'borders-color': { texto: 'dim', fondo: 'border', borde: 'border' },
@@ -641,22 +656,28 @@
         if (prop.indexOf('background') === 0) return 'fondo';
         return 'texto';
     }
-    // Clave de paleta para una variable del tema segun DONDE se use. Asi una
-    // variable que Wialon usa como fondo Y como texto nunca contagia un rol
-    // con el otro: se resuelve la clave correcta para esa propiedad.
-    function rxTokenClave(tok, prop) {
-        if (RX_PAGINA_MIXTOS[tok]) {
-            const rol = rxPropRol(prop);
-            return RX_PAGINA_MIXTOS[tok][rol] || RX_PAGINA_MIXTOS[tok].fondo;
-        }
+    // Rol de una CUSTOM PROPERTY (--tab-bg-color, --color-text...) por su
+    // NOMBRE. Sirve para reescribir definiciones tipo `--x: var(--white)`:
+    // el rol del token destino manda (una variable *-background es fondo
+    // aunque apunte a --white, que tambien vale como texto).
+    function rxRolNombre(name) {
+        const n = String(name || '').replace(/^--/, '').toLowerCase();
+        if (n.indexOf('border') >= 0) return 'borde';
+        if (n.indexOf('background') >= 0 || /(^|-)bg(-|$)/.test(n)) return 'fondo';
+        return 'texto';
+    }
+    // Clave de paleta para una variable del tema segun el ROL (texto, fondo o
+    // borde) donde se use. Asi una variable que Wialon usa como fondo Y como
+    // texto nunca contagia un rol con el otro. Los tokens de acento valen para
+    // cualquier rol.
+    function rxTokenClave(tok, rol) {
+        if (RX_PAGINA_MIXTOS[tok]) return RX_PAGINA_MIXTOS[tok][rol] || RX_PAGINA_MIXTOS[tok].fondo;
         const clave = RX_PAGINA_MAPA[tok] || RX_PAGINA_GRISES_OSCURO[tok];
         if (!clave) return null;
-        const rolClave = rxPaginaRolClave(clave);
-        if (rolClave === 'acento') return clave;
-        const rolProp = rxPropRol(prop);
-        if (rolProp === rolClave) return clave;
-        if (rolProp === 'fondo') return 'soft';
-        if (rolProp === 'borde') return 'border';
+        if (rxPaginaRolClave(clave) === 'acento') return clave;
+        if (rol === rxPaginaRolClave(clave)) return clave;
+        if (rol === 'fondo') return 'soft';
+        if (rol === 'borde') return 'border';
         return 'fg';
     }
     // Literales de color dentro de un valor (hex o rgb/rgba).
@@ -683,21 +704,32 @@
         const partes = [];
         for (let i = 0; i < style.length; i++) {
             const prop = style[i];
-            let val = style.getPropertyValue(prop);
-            if (prop.indexOf('--') !== 0 && /color|background|border|outline|fill|stroke|caret/.test(prop)) {
-                // Variables mezcladas: se resuelven segun la PROPIEDAD.
+            const val0 = style.getPropertyValue(prop);
+            let val = val0;
+            const esCustom = prop.indexOf('--') === 0;
+            // Propiedades de color Y definiciones de variables: en ambos casos
+            // se sustituye `var(--token)` por el color del rol correcto. Para
+            // las custom properties el rol sale del NOMBRE (--tab-bg-color ->
+            // fondo), porque el valor de la var no dice donde se usara.
+            if (esCustom || /color|background|border|outline|fill|stroke|caret/.test(prop)) {
+                const rol = esCustom ? rxRolNombre(prop) : rxPropRol(prop);
                 val = val.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
-                    const clave = rxTokenClave(tok, prop);
+                    const clave = rxTokenClave(tok, rol);
                     if (!clave) return full;
-                    cambio = true;
                     return 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave) + ')';
                 });
-                val = val.replace(RX_COLOR_LIT, (lit) => {
-                    const clave = rxColorClave(lit, prop);
-                    if (clave) { cambio = true; return 'var(--rpg-' + rxVarId(lit, clave) + ')'; }
-                    return lit;
-                });
+                // Los literales solo en reglas normales: reescribir el valor de
+                // una variable por un literal la fijaria fuera del tema.
+                if (!esCustom) {
+                    val = val.replace(RX_COLOR_LIT, (lit) => {
+                        const clave = rxColorClave(lit, prop);
+                        if (clave) return 'var(--rpg-' + rxVarId(lit, clave) + ')';
+                        return lit;
+                    });
+                }
             }
+            if (val === val0) continue; // solo se emite lo que cambio
+            cambio = true;
             const prio = style.getPropertyPriority(prop);
             partes.push(prop + ':' + val + (prio ? ' !important' : '') + ';');
         }
