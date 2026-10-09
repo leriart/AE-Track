@@ -3543,6 +3543,8 @@ ta.value = '';
     /* ====================== REFRESH ====================== */
     async function refresh() {
         if (APP.refBusy || !currentUser()) return;
+        // v6.19.7: en modo rendimiento no se refresca con la pestana oculta.
+        if (APP.config.rendimientoPagina && document.hidden) return;
         APP.refBusy = true;
         try {
             const unidades = await fetchUnits();
@@ -5051,6 +5053,37 @@ ta.value = '';
         'monitoring-login-secondary-button-hover-border-color': 'hover',
         'monitoring-login-form-bg-color': 'soft', 'monitoring-login-separator-color': 'border',
         'monitoring-login-separator-text-color': 'mute',
+        // --- pestañas, calendario, avisos, estados ---
+        'tab-color': 'fg', 'tab-color-hover': 'fg', 'vtab-color-active': 'fg',
+        'tab-border-color': 'border', 'tab-border-color-hover': 'border', 'tab-border-color-active': 'border',
+        'tabs-item-hover-bg-color': 'strong',
+        'featured-dot-background': 'accent', 'notify-name-color': 'accent',
+        'calendar-main-text-color': 'accent', 'calendar-today-color': 'accent',
+        'calendar-restore-data-color': 'accent', 'calendar-main-text-hover-color': 'hover',
+        'calendar-weeknumber-text-color': 'dim',
+        'help-window-collapser-header-color': 'dim',
+        'switch-off-hover-bg': 'strong', 'switch-thumb-hover-border-color': 'border',
+        'switch-off-bg': 'strong', 'switch-disabled-bg': 'border',
+        'panel-list-item-button-noaccent-progress-bg': 'border',
+        'panel-list-group-button-noaccent-progress-bg': 'border',
+        'panel-list-group-expanded-button-noaccent-progress-bg': 'border',
+        'panel-list-item-input-button-noaccent-hover-bg': 'strong',
+        'panel-list-item-input-button-noaccent-active-bg': 'strong',
+        'primary-color-message-box': 'fg', 'secondary-color-message-box': 'dim',
+        'white-color-message-box': 'on', 'checkbox-border-color': 'border',
+        'list-table-tab_button-active-disabled-color': 'on',
+        'list-table-tab_button-active-disabled-background': 'accent',
+        'panel-list-item-button-noaccent-color': 'dim',
+        'panel-list-item-button-noaccent-hover-color': 'fg',
+        'panel-list-item-button-noaccent-disabled-color': 'mute',
+        'panel-list-item-input-button-noaccent-color': 'dim',
+        'panel-list-group-button-noaccent-color': 'dim',
+        'panel-list-group-button-noaccent-hover-color': 'fg',
+        'panel-list-group-button-noaccent-disabled-color': 'mute',
+        'panel-list-group-expanded-button-noaccent-color': 'dim',
+        'panel-list-group-expanded-button-noaccent-hover-color': 'fg',
+        'panel-list-group-expanded-button-noaccent-disabled-color': 'mute',
+        'panel-list-item-add-disabled-color': 'mute',
         // --- compatibilidad con nombres sueltos de la version previa ---
         'background': 'bg', 'background-content': 'bg', 'background-body': 'bg', 'background-app': 'bg',
         'background-header': 'soft', 'background-sidebar': 'soft', 'background-panel': 'soft',
@@ -5064,7 +5097,25 @@ ta.value = '';
         'border-color': 'border', 'border-color-soft': 'strong', 'divider-color': 'strong'
     };
     // Unico token que espera el shorthand completo "1px solid <color>".
-    const RX_PAGINA_BORDE_SHORTHAND = { 'list-table-tab_button-active-border': 'accent' };
+    const RX_PAGINA_BORDE_SHORTHAND = {
+        'list-table-tab_button-active-border': 'accent',
+        'list-table-tab_button-border': 'border',
+        'button-border': 'border'
+    };
+    // Todas las familias de scrollbar comparten la misma forma (bg + thumb +
+    // hover + active). Con estos prefijos se cubren las ~120 variables sin
+    // enumerarlas una a una.
+    const RX_PAGINA_SCROLL = ['default', 'modal', 'help', 'panel-left', 'input', 'tooltip',
+        'popup-hint', 'popup-help', 'popup-warning', 'popup-error', 'popup-success',
+        'banner-hint', 'banner-help', 'banner-warning', 'banner-error', 'banner-success'];
+    // Redondeos: la plataforma usa 4px; Rondo es mas suave (8-12px). Como son
+    // tokens, cambiarlos redondea de golpe botones, inputs, tarjetas y dialogos.
+    const RX_PAGINA_RADIOS = {
+        'controls-border-radius': '8px', 'other-border-radius': '8px', 'modal-border-radius': '12px',
+        'button-border-radius': '8px', 'input-border-radius': '8px', 'tag-border-radius': '6px',
+        'panel-list-item-border-radius': '8px', 'panel-list-group-border-radius': '8px',
+        'tooltip-border-radius': '8px'
+    };
     // Resuelve una clave del mapa al color de la paleta activa.
     function rxPaginaToken(clave, P, acc, acc2, accD) {
         if (clave === 'accent') return acc;
@@ -5075,6 +5126,28 @@ ta.value = '';
         if (clave === 'accent-bg') return acc2 + '22';
         if (clave === 'accent-bg-hover') return acc2 + '33';
         return P[clave] || P.fg;
+    }
+    // Lee la paleta activa de Rondo (--rondo-*) con respaldo literal, para que
+    // la pagina use EXACTAMENTE los mismos colores que el panel (y siga los
+    // cambios de tema sin duplicar valores a mano).
+    function rxPaginaPaleta(claro) {
+        let cs = null;
+        try { cs = getComputedStyle(document.body || document.documentElement); } catch (_) { cs = null; }
+        const g = (n, def) => {
+            const v = cs && (cs.getPropertyValue(n) || '').trim();
+            return v || def;
+        };
+        return claro ? {
+            bg: g('--rondo-bg', '#f5f7fa'), soft: g('--rondo-bg-soft', '#ffffff'),
+            strong: g('--rondo-bg-strong', '#eef2f7'), fg: g('--rondo-fg', '#1d2433'),
+            dim: g('--rondo-fg-dim', '#5b6577'), mute: g('--rondo-fg-mute', '#8993a3'),
+            border: g('--rondo-border', '#dfe4ec')
+        } : {
+            bg: g('--rondo-bg', '#1f2330'), soft: g('--rondo-bg-soft', '#272d3c'),
+            strong: g('--rondo-bg-strong', '#313849'), fg: g('--rondo-fg', '#e8ecf3'),
+            dim: g('--rondo-fg-dim', '#9aa4b5'), mute: g('--rondo-fg-mute', '#6f7888'),
+            border: g('--rondo-border', '#3a4252')
+        };
     }
     function rxAplicarEstiloPagina() {
         const elPrev = document.getElementById('rondo-estilo-pagina');
@@ -5088,18 +5161,12 @@ ta.value = '';
             ? rxPlatAcento() : (APP.config.acento || '#850D22');
         const acc2 = aclarar(acc, 0.28);
         const accD = oscurecer(acc, 0.14);
-        // Paleta de superficies/texto segun el tema efectivo.
+        // Paleta de superficies/texto segun el tema efectivo. Se leen los
+        // tokens --rondo-* reales (con respaldo literal) para que la pagina use
+        // EXACTAMENTE los mismos colores que el panel.
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
-        const P = claro ? {
-            bg: '#f5f7fa', soft: '#ffffff', strong: '#eef2f7',
-            fg: '#1d2433', dim: '#5b6577', mute: '#8993a3',
-            border: '#dfe4ec'
-        } : {
-            bg: '#1f2330', soft: '#272d3c', strong: '#313849',
-            fg: '#e8ecf3', dim: '#9aa4b5', mute: '#6f7888',
-            border: '#3a4252'
-        };
+        const P = rxPaginaPaleta(claro);
         const decl = [];
         Object.keys(RX_PAGINA_MAPA).forEach((v) => {
             decl.push('  --' + v + ':' + rxPaginaToken(RX_PAGINA_MAPA[v], P, acc, acc2, accD) + ' !important;');
@@ -5108,12 +5175,30 @@ ta.value = '';
             decl.push('  --' + v + ':1px solid ' +
                 rxPaginaToken(RX_PAGINA_BORDE_SHORTHAND[v], P, acc, acc2, accD) + ' !important;');
         });
+        Object.keys(RX_PAGINA_RADIOS).forEach((v) => {
+            decl.push('  --' + v + ':' + RX_PAGINA_RADIOS[v] + ' !important;');
+        });
+        // Scrollbars acordes al tema (color + hover + activo).
+        decl.push('  --scrollbar-bg:' + P.bg + ' !important;');
+        RX_PAGINA_SCROLL.forEach((p) => {
+            decl.push('  --' + p + '-scrollbar-bg:' + P.bg + ' !important;');
+            decl.push('  --' + p + '-scrollbar-thumb-color:' + P.border + ' !important;');
+            decl.push('  --' + p + '-scrollbar-thumb-hover-color:' + P.dim + ' !important;');
+            decl.push('  --' + p + '-scrollbar-thumb-active-color:' + acc + ' !important;');
+        });
+        // Logo "RONDO" (Ndot) en lugar del de SkyTracking.
+        decl.push('  --logo-background:' + rondoLogoURI(acc) + ' no-repeat center center !important;');
+        decl.push('  --monitoring-login-logo:' + rondoLogoURI(acc) + ' !important;');
+        decl.push('  --login-logo-bg-url:' + rondoLogoURI(acc) + ' !important;');
         // v6.19.4: los componentes base de Wialon (wui-*) no siempre leen las
         // variables del skin, asi que se visten aparte para que no queden
         // islas con el tema original. Se limita a clases wui-* y a los
         // contenedores raiz; nunca a etiquetas sueltas (romperia el panel).
         const comp = [
             'html,body{background:' + P.bg + ' !important;color:' + P.fg + ' !important;}',
+            '::selection{background:' + acc + ' !important;color:#fff !important;}',
+            'input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,' +
+                '.ant-btn:focus-visible,.wui-button:focus-visible{outline:2px solid ' + acc + ' !important;outline-offset:1px;}',
             '.wui-input,.wui-select,.wui-textarea,.wui-combobox input{background:' + P.soft +
                 ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
             '.wui-checkmark{border-color:' + P.border + ' !important;}',
@@ -5142,7 +5227,26 @@ ta.value = '';
             '.ant-checkbox-checked .ant-checkbox-inner,.ant-radio-checked .ant-radio-inner{background:' + acc + ' !important;border-color:' + acc + ' !important;}',
             '.ant-switch{background:' + P.strong + ' !important;}',
             '.ant-switch-checked{background:' + acc + ' !important;}',
-            '.ant-tag{background:' + P.strong + ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}'
+            '.ant-tag{background:' + P.strong + ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
+            // Ventanas y tarjetas por vehiculo de Wialon: traen colores
+            // literales (rgb(255,255,255), #172336...), no leen el skin. Se
+            // visten a mano para que no queden islas claras en tema oscuro.
+            '#tooltip,#tooltip2,.mini-window-extra,.x-unit-info,.x-unit-tooltip,' +
+                '.x-monitoring-units-extra-info-row,.monitoring_units_state_gps_wrapper,' +
+                '.workspace-units-panel,.workspace-units-panel-main,.workspace-units-caption,' +
+                '.x-map-report-marker-info,.map-control-info,.control-with-info,' +
+                '.items-group-page-window,.notifications-list-dialog-window-container,' +
+                '.gdpr-wizard-dialog-window,.help-window{background:' + P.soft + ' !important;color:' + P.fg + ' !important;}',
+            '#tooltip .block-header,#tooltip2 .block-header,.x-unit-tooltip>.header,' +
+                '.x-monitoring-units-extra-info-row{border-color:' + P.border + ' !important;}',
+            '.pursuit-window .pursuit-top-container{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
+            '.pursuit-window .panoram-disable-button{background:' + P.soft + ' !important;color:' + P.fg + ' !important;}',
+            '#tooltip a,#tooltip2 a,.x-unit-info a,.mini-window-extra a{color:' + acc + ' !important;}',
+            // Ajusta el logo RONDO a su caja (el SVG trae su propio tamano).
+            '.top .logo,.logo,#block_top_panel .logo,.logo-wrapper .logo{background-size:contain !important;' +
+                'background-repeat:no-repeat !important;background-position:center !important;}',
+            '._LoginContainerLogo,.logo-img,#monitoringLoginLogo{background-size:contain !important;' +
+                'background-repeat:no-repeat !important;background-position:center !important;}'
         ].join('\n');
         let el = elPrev;
         if (!el) {
@@ -5153,6 +5257,268 @@ ta.value = '';
         // Se aplica a :root, html y body para ganar a las variables del skin
         // que la plataforma declare en cualquiera de esos niveles.
         el.textContent = ':root,html,body{\n' + decl.join('\n') + '\n}\n' + comp + '\n';
+    }
+    // v6.19.5: capa de rendimiento CSS. No toca JS ni red: reduce el trabajo de
+    // pintado/composicion del navegador sobre la plataforma, que es lo que
+    // produce el "trabado" al hacer scroll o animar. Es opt-in y reversible.
+    function rxAplicarRendimientoPagina() {
+        const elPrev = document.getElementById('rondo-rendimiento-pagina');
+        if (!(APP.config && APP.config.rendimientoPagina)) {
+            if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
+            return;
+        }
+        let el = elPrev;
+        if (!el) {
+            el = document.createElement('style');
+            el.id = 'rondo-rendimiento-pagina';
+            (document.head || document.documentElement).appendChild(el);
+        }
+        const reglas = [
+            // Controles nativos (inputs, scrollbars, date pickers...) con el
+            // esquema del tema: menos repintado y sin estilos de scrollbar por
+            // JS. Barra fina con color de borde de Rondo.
+            'html{color-scheme:' + (APP.config.theme === 'claro' ? 'light'
+                : (APP.config.theme === 'auto' ? 'light dark' : 'dark')) + ' !important;}',
+            '*{scrollbar-width:thin;scrollbar-color:var(--rondo-border) transparent;}',
+            // Los desenfoques (backdrop-filter) son de lo mas caro por frame.
+            '*{-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}',
+            // El scroll suave va por el hilo principal: fuera.
+            'html{scroll-behavior:auto !important;}',
+            // Filas/cartas fuera de pantalla: no se calculan ni se pintan.
+            '.wui2-list_row,.wui-list_item,.ant-table-row,.ant-list-item,.ant-select-item,' +
+                '.ant-table-tbody>tr,.wui2-list_group-row{content-visibility:auto;contain-intrinsic-size:auto 38px;}',
+            // Cada fila se pinta aislada: un cambio dentro no refluye el resto.
+            '.wui2-list_row,.wui-list_item,.ant-table-row{contain:layout style paint;}',
+            // Transiciones cortas y solo de propiedades que no repintan.
+            '.wui-button,.wui-icon,.ant-btn,.wui2-button{transition:background-color .1s,color .1s,border-color .1s,opacity .1s !important;}',
+            // Respeta "reducir movimiento" del sistema.
+            '@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}'
+        ].join('\n');
+        el.textContent = reglas + '\n';
+    }
+    /* --- Remapeo de colores literales (v6.19.6) -------------------------
+     * Solo ~9% de las reglas de la plataforma traen color literal, pero son
+     * las "islas" que no siguen el tema (tarjetas y ventanas por vehiculo,
+     * grillas viejas como .flexigrid, controles del mapa .MicrosoftMap,
+     * .date_selector...). En vez de enumerar cientos de selectores, se
+     * recorren las hojas y se reescriben esas declaraciones segun su
+     * PROPIEDAD, que es lo que quita la ambiguedad:
+     *   - fondo claro      -> superficie (soft/strong/bg)
+     *   - texto            -> fg/dim/mute (o #fff si era casi blanco)
+     *   - borde            -> borde de Rondo
+     *   - azul/rojo saturado -> acento (verde/naranja de estado se respetan)
+     * Se ignoran los valores con var() y las custom properties: eso ya lo
+     * cubre el mapa de tokens. La hoja reescrita se inserta al final del
+     * head, asi gana en cascada sin usar !important (no rompe :hover). */
+    function rxColorParse(v) {
+        const t = String(v || '').trim().toLowerCase();
+        if (t === 'white') return { r: 255, g: 255, b: 255, a: 1 };
+        if (t === 'black') return { r: 0, g: 0, b: 0, a: 1 };
+        if (t === 'transparent' || t === 'currentcolor' || t === 'inherit' || t === 'none') return null;
+        let m = /^#([0-9a-f]{3,8})$/.exec(t);
+        if (m) {
+            let h = m[1];
+            if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+            else if (h.length === 4) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2] + h[3] + h[3];
+            if (h.length === 6) h += 'ff';
+            if (h.length !== 8) return null;
+            return {
+                r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16),
+                b: parseInt(h.slice(4, 6), 16), a: parseInt(h.slice(6, 8), 16) / 255
+            };
+        }
+        m = /^rgba?\(([^)]*)\)$/.exec(t);
+        if (m) {
+            const p = m[1].split(',').map((x) => x.trim());
+            if (p.length < 3) return null;
+            const num = (x) => (x.indexOf('%') >= 0 ? Math.round(parseFloat(x) * 2.55) : parseFloat(x));
+            const r = num(p[0]), g = num(p[1]), b = num(p[2]);
+            const a = p[3] === undefined ? 1 : (p[3].indexOf('%') >= 0 ? parseFloat(p[3]) / 100 : parseFloat(p[3]));
+            if (![r, g, b].every((x) => isFinite(x)) || !isFinite(a)) return null;
+            return { r: r, g: g, b: b, a: a };
+        }
+        return null;
+    }
+    function rxColorHue(r, g, b) {
+        r /= 255; g /= 255; b /= 255;
+        const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+        if (!d) return 0;
+        let h;
+        if (mx === r) h = ((g - b) / d) % 6;
+        else if (mx === g) h = (b - r) / d + 2;
+        else h = (r - g) / d + 4;
+        h *= 60;
+        return h < 0 ? h + 360 : h;
+    }
+    function rxColorRondo(v, prop, P, acc, accD) {
+        const c = rxColorParse(v);
+        if (!c) return null;
+        const p = String(prop || '').toLowerCase();
+        if (p.indexOf('--') === 0) return null;
+        if (/shadow|image|filter|transition|animation|opacity|transform|content/.test(p)) return null;
+        if (c.a < 0.08) return null;
+        const max = Math.max(c.r, c.g, c.b), min = Math.min(c.r, c.g, c.b);
+        const lum = (0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b) / 255;
+        const sat = max === 0 ? 0 : (max - min) / max;
+        if (sat > 0.25) {
+            const hue = rxColorHue(c.r, c.g, c.b);
+            if (hue <= 20 || hue >= 330) return acc;                 // rojo del skin -> acento
+            if (hue >= 190 && hue <= 265 && lum > 0.16) return acc;  // azul brillante -> acento
+            if (lum > 0.16) return null; // estado saturado brillante: se respeta
+            // oscuro y saturado (p. ej. el azul marino del texto): cae a neutro
+        }
+        if (p.indexOf('background') === 0) {
+            if (lum > 0.9) return P.soft;
+            if (lum > 0.45) return P.strong;
+            return P.bg;
+        }
+        if (p.indexOf('border') === 0 || p.indexOf('outline') === 0 || p.indexOf('column-rule') === 0) return P.border;
+        if (p === 'color' || p === 'fill' || p === 'stroke' || p === 'caret-color') {
+            if (c.a < 0.98) return null;
+            if (lum > 0.85) return '#ffffff';
+            if (lum > 0.55) return P.mute;
+            if (lum > 0.3) return P.dim;
+            return P.fg;
+        }
+        return null;
+    }
+    // Literales de color dentro de un valor (hex o rgb/rgba).
+    const RX_COLOR_LIT = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
+    function rxDeclaracionesRondo(style, P, acc, accD) {
+        let cambio = false;
+        const partes = [];
+        for (let i = 0; i < style.length; i++) {
+            const prop = style[i];
+            let val = style.getPropertyValue(prop);
+            if (prop.indexOf('--') !== 0 && /color|background|border|outline|fill|stroke|caret/.test(prop)) {
+                val = val.replace(RX_COLOR_LIT, (lit) => {
+                    const c = rxColorRondo(lit, prop, P, acc, accD);
+                    if (c) { cambio = true; return c; }
+                    return lit;
+                });
+            }
+            const prio = style.getPropertyPriority(prop);
+            partes.push(prop + ':' + val + (prio ? ' !important' : '') + ';');
+        }
+        return cambio ? partes.join('') : '';
+    }
+    function rxReglasRondo(reglas, P, acc, accD) {
+        const out = [];
+        for (let i = 0; i < reglas.length; i++) {
+            const r = reglas[i];
+            if (r.cssRules && (r.type === 4 || r.type === 12)) {
+                const cond = r.conditionText || (r.media && r.media.mediaText) || '';
+                const inner = rxReglasRondo(r.cssRules, P, acc, accD);
+                if (inner) out.push((r.type === 4 ? '@media ' : '@supports ') + cond + '{' + inner + '}');
+                continue;
+            }
+            if (!r.selectorText || !r.style) continue;
+            const decls = rxDeclaracionesRondo(r.style, P, acc, accD);
+            if (decls) out.push(r.selectorText + '{' + decls + '}');
+        }
+        return out.join('');
+    }
+    let _rxColorObs = null;
+    let _rxColorTimer = 0;
+    let _rxColorSig = '';
+    function rxProgramarColoresPagina() {
+        clearTimeout(_rxColorTimer);
+        _rxColorTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 350);
+    }
+    function rxAplicarColoresPagina() {
+        const elPrev = document.getElementById('rondo-colores-pagina');
+        if (!(APP.config && APP.config.estiloPagina)) {
+            if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
+            if (_rxColorObs) { _rxColorObs.disconnect(); _rxColorObs = null; }
+            _rxColorSig = '';
+            return;
+        }
+        const acc = (APP.config.temaPlataforma && rxPlatAcento()) ? rxPlatAcento() : (APP.config.acento || '#850D22');
+        const accD = oscurecer(acc, 0.14);
+        const claro = APP.config.theme === 'claro' ||
+            (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
+        const P = rxPaginaPaleta(claro);
+        // Nada que rehacer si no cambio el tema/acento ni el numero de hojas.
+        const sig = (claro ? 'c' : 'o') + '|' + acc + '|' + (document.styleSheets ? document.styleSheets.length : 0);
+        if (elPrev && sig === _rxColorSig) return;
+        _rxColorSig = sig;
+        const trozos = [];
+        let bytes = 0;
+        try {
+            const hojas = document.styleSheets;
+            for (let i = 0; i < hojas.length; i++) {
+                const h = hojas[i];
+                const owner = h.ownerNode;
+                if (owner && owner.id && owner.id.indexOf('rondo') === 0) continue;
+                let reglas;
+                try { reglas = h.cssRules; } catch (_) { continue; }
+                if (!reglas) continue;
+                const t = rxReglasRondo(reglas, P, acc, accD);
+                bytes += t.length;
+                trozos.push(t);
+                if (bytes > 2000000) break; // tope de seguridad
+            }
+        } catch (_) { /* noop */ }
+        let el = elPrev;
+        if (!el) {
+            el = document.createElement('style');
+            el.id = 'rondo-colores-pagina';
+            (document.head || document.documentElement).appendChild(el);
+        }
+        el.textContent = trozos.join('');
+        if (!_rxColorObs && window.MutationObserver) {
+            _rxColorObs = new MutationObserver((muts) => {
+                for (let i = 0; i < muts.length; i++) {
+                    const nodos = muts[i].addedNodes;
+                    for (let j = 0; j < nodos.length; j++) {
+                        const n = nodos[j];
+                        if (!n || n.nodeType !== 1) continue;
+                        if (n.id && n.id.indexOf('rondo') === 0) continue;
+                        const esHoja = n.tagName === 'STYLE' ||
+                            (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || ''));
+                        if (esHoja) { rxProgramarColoresPagina(); return; }
+                    }
+                }
+            });
+            try { _rxColorObs.observe(document.head || document.documentElement, { childList: true }); } catch (_) { _rxColorObs = null; }
+        }
+    }
+    // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
+    // embebido para no depender de fuentes externas ni CDN: la plataforma lo
+    // usa como background-image (--logo-background) y el panel como SVG inline
+    // con currentColor. Mapa 5x7 por glifo (solo las letras de RONDO).
+    const RX_NDOT = {
+        R: ['11110', '10001', '10001', '11110', '10100', '10010', '10001'],
+        O: ['01110', '10001', '10001', '10001', '10001', '10001', '01110'],
+        N: ['10001', '11001', '10101', '10011', '10001', '10001', '10001'],
+        D: ['11110', '10001', '10001', '10001', '10001', '10001', '11110'],
+        ' ': ['00000', '00000', '00000', '00000', '00000', '00000', '00000']
+    };
+    function rondoLogoSVG(color) {
+        const txt = 'RONDO';
+        const filas = 7, paso = 10, radio = 4.4;
+        let col = 0;
+        let circles = '';
+        for (let i = 0; i < txt.length; i++) {
+            const g = RX_NDOT[txt[i]] || RX_NDOT[' '];
+            for (let r = 0; r < filas; r++) {
+                const row = g[r] || '';
+                for (let c = 0; c < row.length; c++) {
+                    if (row[c] === '1') {
+                        circles += '<circle cx="' + (col + c) * paso + paso / 2 +
+                            '" cy="' + r * paso + paso / 2 + '" r="' + radio + '"/>';
+                    }
+                }
+            }
+            col += 6; // 5 columnas + 1 de separacion
+        }
+        const w = (col - 1) * paso, h = filas * paso;
+        return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + w + ' ' + h +
+            '" width="' + w + '" height="' + h + '" role="img" aria-label="RONDO" fill="' +
+            (color || 'currentColor') + '">' + circles + '</svg>';
+    }
+    function rondoLogoURI(color) {
+        return 'url("data:image/svg+xml,' + encodeURIComponent(rondoLogoSVG(color)) + '")';
     }
     function applyTheme() {
         const c = APP.config;
@@ -5181,6 +5547,8 @@ ta.value = '';
         document.documentElement.style.setProperty('--rondo-esc', String(normalizarEscala(c.escalaUI)));
         // v6.0.14: aplica/quita el reestilizado de la pagina de la plataforma.
         try { rxAplicarEstiloPagina(); } catch (_) { /* noop */ }
+        // v6.19.5: aplica/quita la capa de rendimiento CSS.
+        try { rxAplicarRendimientoPagina(); } catch (_) { /* noop */ }
     }
     // Normaliza el factor de escala de UI a uno de los valores permitidos.
     const ESCALAS_UI = [1, 1.15, 1.3, 1.5];

@@ -84,6 +84,9 @@
             "@keyframes rondoRailIn{from{opacity:0;transform:translateY(-50%) scale(.8)}to{opacity:1;transform:translateY(-50%) scale(1)}}\n" +
             "#rondo-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--rondo-bg-strong),var(--rondo-bg-soft));cursor:move;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
             "#rondo-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}\n" +
+            // Logo RONDO en tipografia Ndot (SVG de puntos, ver rondoLogoSVG).
+            "#rondo-panel header .rondo-nlogo{display:inline-flex;align-items:center;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel header .rondo-nlogo svg{height:calc(15px * var(--rondo-esc));width:auto;display:block}\n" +
             // v5.14.2: chip de version en linea con el titulo. v5.14.1 lo
             // puso como boton aparte al final de la cabecera; el usuario
             // prefierio tenerlo pegado al 'Rondo'. Sigue siendo boton
@@ -1602,7 +1605,7 @@
             '</div>' +
 '<header id="rondo-drag">' +
              '<span id="rondo-estado-barra" class="rondo-badge-estado"></span>' +
-             '<h3>' + esc(LANG.titlePanel) +
+             '<h3><span class="rondo-nlogo" title="' + esc(LANG.titlePanel) + '">' + rondoLogoSVG('currentColor') + '</span>' +
              // v5.14.2: chip de version en linea con el titulo. Color por
              // estado del check (verde=al dia, rojo=update, ambar=unknown,
              // azul=checking, gris=ahead). Click = fuerza check;
@@ -2210,6 +2213,7 @@
             checkRow('c-tema-plat', 'Usar el color de acento de la plataforma') +
             '<span id="rondo-plat-info" style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin:-2px 0 6px"></span>' +
             checkRow('c-estilo-pag', 'Aplicar el estilo de Rondo a la pagina (experimental)') +
+            checkRow('c-rendimiento-pag', 'Modo rendimiento de la pagina (menos repintado)') +
             checkRow('c-idioma-plat', 'Usar el idioma de la plataforma para la voz') +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
@@ -5667,6 +5671,8 @@
             }
             const cEstiloPag = g('c-estilo-pag');
             if (cEstiloPag) cEstiloPag.checked = !!APP.config.estiloPagina;
+            const cRendPag = g('c-rendimiento-pag');
+            if (cRendPag) cRendPag.checked = !!APP.config.rendimientoPagina;
             const cIdiomaPlat = g('c-idioma-plat');
             if (cIdiomaPlat) cIdiomaPlat.checked = !!APP.config.idiomaPlataforma;
             g('c-coords').checked = !!APP.config.mostrarCoords;
@@ -5950,6 +5956,8 @@
             cf.temaPlataforma = !!(cTemaPlat2 && cTemaPlat2.checked);
             const cEstiloPag2 = g('c-estilo-pag');
             cf.estiloPagina = !!(cEstiloPag2 && cEstiloPag2.checked);
+            const cRendPag2 = g('c-rendimiento-pag');
+            cf.rendimientoPagina = !!(cRendPag2 && cRendPag2.checked);
             const cIdiomaPlat2 = g('c-idioma-plat');
             cf.idiomaPlataforma = !!(cIdiomaPlat2 && cIdiomaPlat2.checked);
             // v6.0.14: si se usa el idioma de la plataforma, ajusta la voz.
@@ -6815,6 +6823,8 @@
         if (APP._iniciado) return;
         APP._iniciado = true;
         const primerUso = !localStorage.getItem(LS.cfg);
+        // v6.19.7: adelanta DNS/TLS a los origenes que se van a usar.
+        try { precargarOrigenes(); } catch (_) { /* noop */ }
         injectCSS();
         buildUI();
         try { rxBarridoAutofill(); } catch (_) { /* noop */ }
@@ -6908,7 +6918,12 @@
         };
         window.addEventListener('focus', focusHandler);
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) focusHandler();
+            if (!document.hidden) {
+                focusHandler();
+                // v6.19.7: si en modo rendimiento se pauso el polling estando
+                // oculta, al volver se refresca una vez para no quedar obsoleto.
+                if (APP.config.rendimientoPagina) { try { refresh(); } catch (_) { /* noop */ } }
+            }
         });
         // Las ventanas de unidad pueden restaurarse despues de cargar la pagina;
         // revalidamos el contorno varias veces al inicio.
@@ -6917,6 +6932,33 @@
         // pendiente recibe su ruta en background. Si ya hay ruta valida para
         // el destino actual, no se recalcula.
         setTimeout(() => { autoTrazarRutas(); }, 2500);
+    }
+    // v6.19.7: pista de bajo nivel para que cargue antes. Inserta preconnect y
+    // dns-prefetch hacia la API de la plataforma y los servicios de OSM que
+    // usan Rondo y los mapas. No cambia el comportamiento: solo adelanta la
+    // resolucion DNS y el handshake TLS de la primera peticion real.
+    function precargarOrigenes() {
+        const head = document.head || document.documentElement;
+        if (!head) return;
+        const origenes = [];
+        try { if (rxPlatApiUrl()) origenes.push(rxPlatApiUrl()); } catch (_) { /* noop */ }
+        origenes.push('https://tile.openstreetmap.org', 'https://nominatim.openstreetmap.org',
+            'https://overpass-api.de', 'https://router.project-osrm.org');
+        const ya = {};
+        const previos = head.querySelectorAll('link[rel="preconnect"],link[rel="dns-prefetch"]');
+        for (let i = 0; i < previos.length; i++) ya[previos[i].href] = 1;
+        origenes.forEach((o) => {
+            let base;
+            try { base = new URL(o).origin; } catch (_) { return; }
+            if (!base || ya[base] || base === location.origin) return;
+            ya[base] = 1;
+            const pc = document.createElement('link');
+            pc.rel = 'preconnect'; pc.href = base; pc.crossOrigin = '';
+            head.appendChild(pc);
+            const dp = document.createElement('link');
+            dp.rel = 'dns-prefetch'; dp.href = base;
+            head.appendChild(dp);
+        });
     }
     function log() { try { console.log.apply(console, ['[Rondo]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 
