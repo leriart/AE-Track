@@ -209,6 +209,22 @@ const P = { bg: '#1f2330', soft: '#272d3c', strong: '#313849', fg: '#e8ecf3', di
 const ACC = '#850D22', ACCD = '#720B1D';
 ok('logo RONDO: SVG dot-matrix con circulos y etiqueta',
     /^<svg[^>]*aria-label="RONDO"/.test(M.svg('#fff')) && /<circle /.test(M.svg('#fff')));
+ok('logo RONDO: 85 puntos dentro del viewBox y sin NaN',
+    (function () {
+        const svg = M.svg('#fff');
+        const cxs = (svg.match(/cx="(\d+)"/g) || []).map((x) => +x.slice(4, -1));
+        const cys = (svg.match(/cy="(\d+)"/g) || []).map((y) => +y.slice(4, -1));
+        return (svg.match(/<circle/g) || []).length === 85 &&
+            Math.max.apply(null, cxs) <= 290 && Math.max.apply(null, cys) <= 70 &&
+            !/cx="0\d/.test(svg) && !/cy="0\d/.test(svg);
+    })());
+ok('reestilizado: ventana de unidad y controles del mapa',
+    /\.x-unit-info > \.unit-table-data th\{background:/.test(src) &&
+    /\.mapboxgl-ctrl-group\{background:transparent/.test(src) &&
+    /\.x-unit-info > \.unit-table-data \.td\{border-color:/.test(src));
+ok('reestilizado: inyecta tambien en shadow DOM (UI nueva)',
+    /function rxSombrasPagina\(/.test(src) && /adoptedStyleSheets/.test(src) &&
+    /rxSombrasPagina\(P, acc, accD\)/.test(src));
 ok('logo RONDO: URI de datos lista para CSS', /^url\("data:image\/svg\+xml,/.test(M.uri('#850D22')));
 ok('color: blanco de fondo -> superficie', M.color('#ffffff', 'background-color', P, ACC, ACCD) === P.soft);
 ok('color: blanco de texto -> #fff', M.color('rgb(255, 255, 255)', 'color', P, ACC, ACCD) === '#ffffff');
