@@ -420,6 +420,11 @@
             // a currentColor (!important), que respeta el color del propio
             // elemento (asi los estados inline rojo/verde siguen igual).
             '[class*="_messageBox_"] *{-webkit-text-fill-color:currentColor !important;}',
+            // La plataforma limita el alto del contenido de la ventana a
+            // calc(100vh - 142px) (y 75vh). El bloque del conductor queda al
+            // final y se RECORTA. Se le da mas alto para que entre completo.
+            '[class*="_contentWrapper_"],[class*="_messageBox_"] .monitoringUnitHint{' +
+                'max-height:calc(100vh - 70px) !important;}',
             // Los valores de umbral (sensor)* se pintan INLINE (rojo/verde)
             // con colores para fondo claro y quedan apagados en oscuro. Se
             // aclaran con brightness/saturate, que conserva el tono (no se

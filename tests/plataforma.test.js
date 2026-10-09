@@ -245,6 +245,9 @@ ok('reestilizado: el arreglo de contraste no toca los colores de estado',
 ok('reestilizado: refuerzo directo de color en la ventana y observer de contenido',
     /\[class\*="_messageBox_"\] \[class\]\{color:inherit;\}/.test(src) &&
     /document\.querySelector\('\[class\*="_messageBox_"\],\.tippy-box'\)/.test(src));
+ok('reestilizado: la ventana da mas alto para que el conductor no se recorte',
+    /max-height:calc\(100vh - 70px\) !important/.test(src) &&
+    /\[class\*="_contentWrapper_"\]/.test(src));
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
