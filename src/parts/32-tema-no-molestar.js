@@ -273,6 +273,23 @@
         'primary-color-message-box': { texto: 'fg', fondo: 'strong' },
         'wizard-dialog-background': { texto: 'fg', fondo: 'soft' },
     };
+    // Colores de ESTADO (aviso/exito/error/ayuda). Wialon usa pasteles claros
+    // (--red-50, --orange-50...) de fondo y tonos 700 de texto; sobre un panel
+    // oscuro quedaban como islas claras con el texto del tema (claro) encima, o
+    // el texto de estado (rojo oscuro) sobre fondo oscuro. Cada tema trae su
+    // pareja fondo/texto en la paleta (en claro coinciden con los originales).
+    const RX_PAGINA_ESTADOS = {
+        'red-50': 'badbg', 'green-50': 'okbg', 'orange-50': 'warnbg', 'amber-50': 'warnbg',
+        'yellow-50': 'warnbg', 'blue-50': 'infobg',
+        'inline-background-error': 'badbg', 'inline-background-warning': 'warnbg',
+        'inline-background-success': 'okbg', 'inline-background-help': 'infobg',
+        'popup-background-warning': 'warnbg',
+        'higlighted-normal': 'infobg', 'higlighted-hover': 'infobg', 'higlighted-active': 'infobg',
+        'list-table-background-warn': 'warnbg', 'list-table-background-error': 'badbg',
+        'red-700': 'badfg', 'green-700': 'okfg', 'orange-700': 'warnfg', 'blue-700': 'infofg',
+        'color-danger': 'badfg'
+    };
+    Object.keys(RX_PAGINA_ESTADOS).forEach((k) => { RX_PAGINA_MAPA[k] = RX_PAGINA_ESTADOS[k]; });
     // Solo los grises de USO CLARO: unos como texto (900/700/500/400) y otros
     // como superficie (100/50/800/600). Se EXCLUYEN gray-200 y gray-300 porque
     // Wialon los usa a la vez de fondo Y de texto (fecha, direccion): mapearlos
@@ -326,12 +343,16 @@
             bg: g('--rondo-bg', '#f5f7fa'), soft: g('--rondo-bg-soft', '#ffffff'),
             strong: g('--rondo-bg-strong', '#eef2f7'), fg: g('--rondo-fg', '#1d2433'),
             dim: g('--rondo-fg-dim', '#5b6577'), mute: g('--rondo-fg-mute', '#8993a3'),
-            border: g('--rondo-border', '#dfe4ec'), veil: 'rgba(23,35,54,.05)'
+            border: g('--rondo-border', '#dfe4ec'), veil: 'rgba(23,35,54,.05)',
+            okbg: '#edf7ee', warnbg: '#fff5e5', badbg: '#fff0f2', infobg: '#e7f4fd',
+            okfg: '#2d8631', warnfg: '#c25e00', badfg: '#d11f1f', infofg: '#0073ce'
         } : {
             bg: g('--rondo-bg', '#1f2330'), soft: g('--rondo-bg-soft', '#272d3c'),
             strong: g('--rondo-bg-strong', '#313849'), fg: g('--rondo-fg', '#e8ecf3'),
             dim: g('--rondo-fg-dim', '#9aa4b5'), mute: g('--rondo-fg-mute', '#6f7888'),
-            border: g('--rondo-border', '#3a4252'), veil: 'rgba(255,255,255,.06)'
+            border: g('--rondo-border', '#3a4252'), veil: 'rgba(255,255,255,.06)',
+            okbg: '#22362c', warnbg: '#3a3326', badbg: '#3b2a30', infobg: '#213447',
+            okfg: '#6bbd6f', warnfg: '#ffb952', badfg: '#ff8a80', infofg: '#6ab8f6'
         };
     }
     function rxAplicarEstiloPagina() {
@@ -656,6 +677,8 @@
     // Rol de una clave de paleta: a que propiedad pertenece.
     function rxPaginaRolClave(clave) {
         if (clave === 'bg' || clave === 'soft' || clave === 'strong' || clave === 'veil') return 'fondo';
+        if (/^(ok|warn|bad|info)bg$/.test(clave)) return 'fondo';
+        if (/^(ok|warn|bad|info)fg$/.test(clave)) return 'texto';
         if (clave === 'border') return 'borde';
         if (clave === 'fg' || clave === 'dim' || clave === 'mute' || clave === 'on') return 'texto';
         return 'acento'; // accent, hover, accent-2, accent-bg*, transparent
@@ -762,7 +785,12 @@
     }
     let _rxObs = null;
     let _rxObsBody = null;
+    // hoja -> n.o de reglas ya procesadas. Las hojas CSS-in-JS (emotion de
+    // react-select, cssinjs de Ant Design) CRECEN con insertRule cuando se abre
+    // un dialogo; si la hoja se diera por "vista" esas reglas quedarian sin tema.
     let _rxHojasVistas = null;
+    let _rxPoll = 0;
+    let _rxUltimoN = -1;
     let _rxTimer = 0;
     let _rxCompCSS = '';
     function rxHojaRondo(id) {
@@ -800,21 +828,40 @@
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
         _rxHojasVistas = null;
+        if (_rxPoll) { clearInterval(_rxPoll); _rxPoll = 0; }
+        _rxUltimoN = -1;
     }
-    // Procesa una hoja si aun no se vio. Incremental: nunca reparsea una hoja
-    // ya hecha, asi que se puede llamar sin coste sobre todas las hojas.
+    // Procesa las reglas de una hoja que aun no se vieron. Incremental: una hoja
+    // ya hecha no se reparsea, pero si ha ganado reglas (CSS-in-JS) solo se
+    // procesan las NUEVAS. Si encoge (deleteRule) se reprocesa entera.
     function rxProcesarHoja(hoja, P, acc, acc2, accD) {
         if (!hoja) return false;
-        if (!_rxHojasVistas) _rxHojasVistas = typeof WeakSet === 'function' ? new WeakSet() : null;
-        if (_rxHojasVistas) {
-            if (_rxHojasVistas.has(hoja)) return false;
-            _rxHojasVistas.add(hoja);
-        }
+        if (!_rxHojasVistas) _rxHojasVistas = typeof WeakMap === 'function' ? new WeakMap() : null;
+        let rs;
+        try { rs = hoja.cssRules || []; } catch (_) { return false; }
+        let desde = _rxHojasVistas ? (_rxHojasVistas.get(hoja) || 0) : 0;
+        if (rs.length < desde) desde = 0;
+        if (rs.length === desde) return false;
+        if (_rxHojasVistas) _rxHojasVistas.set(hoja, rs.length);
         let t = '';
-        try { t = rxReglasRondo(hoja.cssRules || [], P, acc, acc2, accD); } catch (_) { return false; }
+        try { t = rxReglasRondo(desde ? Array.prototype.slice.call(rs, desde) : rs, P, acc, acc2, accD); } catch (_) { return false; }
         if (!t) return false;
         rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
         return true;
+    }
+    // Suma de reglas de las hojas ajenas a Rondo (barato: ~60 hojas). Cambia
+    // cuando la plataforma inserta reglas sin anadir ningun <style>.
+    function rxContarReglas() {
+        let n = 0;
+        try {
+            const hs = document.styleSheets;
+            for (let i = 0; i < hs.length; i++) {
+                const o = hs[i].ownerNode;
+                if (o && o.id && o.id.indexOf('rondo') === 0) continue;
+                try { n += hs[i].cssRules.length; } catch (_) { /* cross-origin */ }
+            }
+        } catch (_) { /* noop */ }
+        return n;
     }
     // Wialon pinta los valores de sensores/tarjetas con colores INLINE
     // (style="background-color:#fff; color:#fff"). El remap de hojas no los ve,
@@ -824,7 +871,10 @@
     const RX_VENTANA_SEL = '[class*="_messageBox_"],[class*="_messageBoxWrapper_"],[class*="_contentWrapper_"],' +
         '[class*="_content-wrapper_"],[class*="_cell_"],[class*="_row_"],[class*="_table_"],' +
         '.tippy-box,.wui2-message-box,.wui-message-box,#tooltip,#tooltip2,.wui-tooltip,.x-unit-info,' +
-        '.mini-window-extra,.x-monitoring-units-extra-info-row';
+        '.mini-window-extra,.x-monitoring-units-extra-info-row,' +
+        // dialogos (propiedades de unidad...), ayuda, avisos y notificaciones
+        '#TB_window,.wizard-dlg-content-target,.help-window,.x-popup,.wui-toast-alert,.wui2-banner,' +
+        '.ant-modal,.ant-notification,.ant-popover,.ant-message';
     function rxEsRondo(el) {
         try { return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-rail,#rondo-nmolestar,#rondo-btn-panel')); }
         catch (_) { return false; }
@@ -943,6 +993,16 @@
             });
             const body = document.body || document.documentElement;
             try { _rxObsBody.observe(body, { childList: true, subtree: true }); } catch (_) { _rxObsBody = null; }
+        }
+        // Las reglas insertadas con insertRule no disparan ningun observador:
+        // se vigila el recuento y se reprocesa solo si cambia.
+        if (!_rxPoll) {
+            _rxUltimoN = rxContarReglas();
+            _rxPoll = setInterval(() => {
+                if (document.hidden) return;
+                const n = rxContarReglas();
+                if (n !== _rxUltimoN) { _rxUltimoN = n; rxProgramarColoresPagina(); }
+            }, 1500);
         }
     }
     // Un <link rel=stylesheet> tiene .sheet = null hasta que carga. Se vuelve a

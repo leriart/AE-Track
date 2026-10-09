@@ -305,6 +305,56 @@ ok('color: las definiciones de variables se reescriben por el rol del nombre',
     /--tab-bg-color:var\(--rpg-/.test(decCustom));
 ok('color: una custom property sin token mapeado no se toca',
     M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+// Hojas CSS-in-JS (emotion de react-select, cssinjs de AntD): crecen con
+// insertRule al abrir un dialogo. Antes la hoja se daba por "vista" y esas
+// reglas (p. ej. .css-xxx-control{background:#fff}) quedaban sin tema.
+(function () {
+    const code = 'const els = {};\n' +
+        'const document = { getElementById: (id) => els[id] || null, ' +
+        'createElement: () => ({ id: "", textContent: "", parentNode: null }), ' +
+        'head: { appendChild: (e) => { els[e.id] = e; } }, documentElement: { appendChild: (e) => { els[e.id] = e; } } };\n' +
+        'const window = { matchMedia: () => ({ matches: false }) };\n' + bloqueCSS +
+        '\nreturn { proc: rxProcesarHoja, el: () => els["rondo-colores-pagina"], cont: rxContarReglas };';
+    let H;
+    try { H = new Function(code)(); } catch (e) { H = null; }
+    ok('hojas dinamicas: el harness compila', !!H);
+    if (!H) return;
+    const mk = (obj, sel) => { const k = Object.keys(obj); const st = { length: k.length, getPropertyValue: (p) => obj[p], getPropertyPriority: () => '' }; k.forEach((q, i) => { st[i] = q; }); return { selectorText: sel, style: st }; };
+    const hoja = { cssRules: [mk({ 'background-color': '#ffffff' }, '.a')] };
+    const Pp = { bg: '#1f2330', soft: '#272d3c', strong: '#313849', fg: '#e8ecf3', dim: '#9aa4b5', mute: '#6f7888', border: '#3a4252' };
+    ok('hojas dinamicas: primera pasada procesa la regla inicial', H.proc(hoja, Pp, '#000', '#000', '#000') === true);
+    ok('hojas dinamicas: sin reglas nuevas no repite trabajo', H.proc(hoja, Pp, '#000', '#000', '#000') === false);
+    hoja.cssRules.push(mk({ 'background-color': '#ffffff' }, '.css-lfqavr-control'));
+    ok('hojas dinamicas: una regla insertada despues SI se procesa', H.proc(hoja, Pp, '#000', '#000', '#000') === true);
+    const css = H.el().textContent;
+    ok('hojas dinamicas: solo se anade la regla nueva (no duplica la vieja)',
+        css.indexOf('.css-lfqavr-control{') > 0 && (css.match(/\.a\{/g) || []).length === 1);
+    hoja.cssRules.length = 0;
+    hoja.cssRules.push(mk({ 'color': '#172336' }, '.b'));
+    ok('hojas dinamicas: si la hoja encoge se reprocesa entera', H.proc(hoja, Pp, '#000', '#000', '#000') === true);
+    ok('hojas dinamicas: el recuento de reglas ignora hojas de Rondo',
+        /o\.id\.indexOf\('rondo'\) === 0/.test(src) && /setInterval\(\(\) => \{\s*if \(document\.hidden\) return;/.test(src));
+})();
+// Colores de ESTADO (avisos, notificaciones, toasts): pasteles claros de fondo
+// y tonos 700 de texto; cada tema tiene su pareja legible.
+const cssClaro = generarEstilo({ theme: 'claro' });
+ok('estado: en oscuro el pastel de error/exito/aviso/ayuda pasa a fondo oscuro',
+    /--red-50:#3b2a30 !important;/.test(cssOsc) && /--green-50:#22362c !important;/.test(cssOsc) &&
+    /--orange-50:#3a3326 !important;/.test(cssOsc) && /--blue-50:#213447 !important;/.test(cssOsc) &&
+    /--inline-background-error:#3b2a30 !important;/.test(cssOsc));
+ok('estado: en oscuro el texto de estado se aclara (legible sobre el fondo oscuro)',
+    /--red-700:#ff8a80 !important;/.test(cssOsc) && /--green-700:#6bbd6f !important;/.test(cssOsc) &&
+    /--color-danger:#ff8a80 !important;/.test(cssOsc));
+ok('estado: en claro coincide con los pasteles originales de Wialon',
+    /--red-50:#fff0f2 !important;/.test(cssClaro) && /--green-700:#2d8631 !important;/.test(cssClaro));
+ok('estado: el fondo de estado y su texto no se contagian (rol por propiedad)',
+    (function () {
+        const ME = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+            '\nreturn { decl: rxDeclaracionesRondo, vars: _rxVars };')();
+        const d = ME.decl(fakeStyle({ 'background-color': 'var(--red-50)', 'color': 'var(--red-700)' }));
+        const ids = (d.match(/var\(--rpg-([\w]+)\)/g) || []).map((q) => q.slice(10, -1));
+        return ids.length === 2 && ME.vars[ids[0]] === 'badbg' && ME.vars[ids[1]] === 'badfg';
+    })());
 // CAUSA REAL de los campos "vacios" del hint de unidad (velocidad, km, horas
 // de motor, satelites, conductor): td::before{position:absolute;inset:0;
 // z-index:0;background:var(--accent-gray-bg-color)} es una CAPA sobre el texto.
@@ -397,7 +447,7 @@ ok('remap: ignora las hojas propias y los enlaces que no son CSS',
     /n\.id\.indexOf\('rondo'\) === 0/.test(src) && /\/stylesheet\/i\.test\(n\.rel/.test(src));
 ok('remap: procesa cada hoja una sola vez (WeakSet)',
     /_rxHojasVistas/.test(src) && /function rxProcesarHoja\(/.test(src) &&
-    /_rxHojasVistas\.has\(hoja\)/.test(src));
+    /_rxHojasVistas\.get\(hoja\)/.test(src));
 ok('remap: se dispara desde applyTheme (si no, nunca corria)',
     /try \{ rxProgramarColoresPagina\(\); \}/.test(src));
 ok('remap: no reanaliza lo ya hecho y solo repinta variables al cambiar tema',

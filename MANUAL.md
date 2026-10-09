@@ -1272,6 +1272,26 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 > y el inventario de hojas. No envia nada a ningun servidor. Sirve para
 > revisar de donde sale cada color de la plataforma.
 
+> **Diagnostico: campos "vacios" o ilegibles.** Si un campo de una ventana de la
+> plataforma sale del color del fondo, hay tres botones en la misma seccion:
+> **Copiar ventana** (espera a que aparezca la ventana de unidad, copia su HTML
+> y el color/fondo efectivo de cada texto), **Textos invisibles** (30 s de
+> muestreo mientras pasas el raton por las unidades; acumula los elementos cuyo
+> texto casi coincide con su fondo) y el propio **Exportar estilos**, que ahora
+> incluye la lista `invisibles`. Todo se calcula en local y se copia al
+> portapapeles. Si la lista sale vacia, el campo no esta en blanco por color
+> sino tapado por una capa translucida o fuera de la caja.
+
+> **Estilo de Rondo en la pagina: que cubre.** Ademas de las variables del skin
+> y los colores literales de todas las hojas, reescribe: las definiciones
+> derivadas (`--x: var(--white)`), las hojas que crecen en vivo (react-select y
+> Ant Design insertan reglas al abrir un dialogo; se vigilan y solo se procesan
+> las nuevas), los colores *inline* de ventanas, dialogos y avisos, y las capas
+> `::before` translucidas de las tablas (se mantienen translucidas para no tapar
+> el dato). Los colores de estado (error, exito, aviso, ayuda) pasan a una pareja
+> fondo/texto propia de cada tema, legible en oscuro y con los pasteles
+> originales en claro.
+
 > **Ajustes, mas rapidos.** El campo **Buscar ajuste...** de la cabecera filtra
 > las opciones de todas las secciones a la vez y salta a la primera con
 > coincidencias (vale el texto visible o el nombre interno, p. ej. `velMax`);
