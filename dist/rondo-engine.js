@@ -5242,12 +5242,29 @@ ta.value = '';
             '.pursuit-window .pursuit-top-container{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
             '.pursuit-window .panoram-disable-button{background:' + P.soft + ' !important;color:' + P.fg + ' !important;}',
             '#tooltip a,#tooltip2 a,.x-unit-info a,.mini-window-extra a{color:' + acc + ' !important;}',
+            // Ventana de unidad: cabeceras de tabla, bordes y boton de mapa.
+            '.x-unit-info > .unit-table-data th{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
+            '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
+            '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
+            '.x-unit-info .entity-block-item > .image-container{border-color:' + P.border + ' !important;}',
+            // Botones junto al mapa: el contenedor blanco se oculta y cada
+            // boton queda como un cuadro redondeado suelto.
+            '.mapboxgl-ctrl-group{background:transparent !important;box-shadow:none !important;border-radius:0 !important;}',
+            '.mapboxgl-ctrl-group button{background:' + P.soft + ' !important;border-radius:8px !important;' +
+                'margin:4px 0 !important;box-shadow:0 1px 3px rgba(0,0,0,.35) !important;}',
+            '.mapboxgl-ctrl-group button+button{border-top:none !important;}',
+            '.MicrosoftMap .NavBar_Container,.MicrosoftMap .streetsideToolPanel{background:transparent !important;}',
+            '.MicrosoftMap .NavBar_Button,.MicrosoftMap .streetsideToolPanelButton{background:' + P.soft +
+                ' !important;border-radius:8px !important;}',
+            '.ol-maps-control{background:transparent !important;box-shadow:none !important;border:none !important;}',
+            '.ol-maps-control .wui-button,.ol-maps-control button{background:' + P.soft + ' !important;border-radius:8px !important;}',
             // Ajusta el logo RONDO a su caja (el SVG trae su propio tamano).
             '.top .logo,.logo,#block_top_panel .logo,.logo-wrapper .logo{background-size:contain !important;' +
                 'background-repeat:no-repeat !important;background-position:center !important;}',
             '._LoginContainerLogo,.logo-img,#monitoringLoginLogo{background-size:contain !important;' +
                 'background-repeat:no-repeat !important;background-position:center !important;}'
         ].join('\n');
+        _rxCompCSS = comp;
         let el = elPrev;
         if (!el) {
             el = document.createElement('style');
@@ -5421,6 +5438,7 @@ ta.value = '';
     let _rxColorObs = null;
     let _rxColorTimer = 0;
     let _rxColorSig = '';
+    let _rxCompCSS = '';
     function rxProgramarColoresPagina() {
         clearTimeout(_rxColorTimer);
         _rxColorTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 350);
@@ -5482,6 +5500,63 @@ ta.value = '';
             });
             try { _rxColorObs.observe(document.head || document.documentElement, { childList: true }); } catch (_) { _rxColorObs = null; }
         }
+        // Las ventanas por vehiculo de la UI nueva viven en shadow DOM: ahi no
+        // llegan las reglas del documento (solo heredan las variables). Se
+        // reescriben tambien los estilos de cada shadow root abierto.
+        try { rxSombrasPagina(P, acc, accD); } catch (_) { /* noop */ }
+    }
+    // Reescribe los colores literales dentro de cada shadow root abierto y le
+    // inyecta ademas los componentes base de Rondo (comp). Usa una hoja
+    // compartida (adoptedStyleSheets) para no duplicar memoria.
+    function rxSombrasPagina(P, acc, accD) {
+        const raices = [];
+        const visitar = (raiz) => {
+            let nodos;
+            try { nodos = raiz.querySelectorAll('*'); } catch (_) { return; }
+            for (let i = 0; i < nodos.length; i++) {
+                const sr = nodos[i].shadowRoot;
+                if (sr) { raices.push(sr); visitar(sr); }
+            }
+        };
+        visitar(document);
+        for (let i = 0; i < raices.length; i++) {
+            const root = raices[i];
+            let texto = _rxCompCSS;
+            try {
+                const hojas = [];
+                const adoptadas = root.adoptedStyleSheets || [];
+                for (let k = 0; k < adoptadas.length; k++) hojas.push(adoptadas[k]);
+                const estilos = root.querySelectorAll('style');
+                for (let k = 0; k < estilos.length; k++) if (estilos[k].sheet) hojas.push(estilos[k].sheet);
+                for (let k = 0; k < hojas.length; k++) {
+                    let reglas;
+                    try { reglas = hojas[k].cssRules; } catch (_) { continue; }
+                    if (reglas) texto += rxReglasRondo(reglas, P, acc, accD);
+                }
+            } catch (_) { /* noop */ }
+            rxSombraAdoptar(root, texto);
+        }
+    }
+    function rxSombraAdoptar(root, texto) {
+        const prev = root.querySelector('style[data-rondo]');
+        if (typeof CSSStyleSheet === 'function' && 'adoptedStyleSheets' in root) {
+            try {
+                const hoja = new CSSStyleSheet();
+                hoja.replaceSync(texto);
+                hoja.__rondo = true;
+                const base = [];
+                const actuales = root.adoptedStyleSheets || [];
+                for (let i = 0; i < actuales.length; i++) if (!actuales[i].__rondo) base.push(actuales[i]);
+                root.adoptedStyleSheets = base.concat([hoja]);
+                if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+                return;
+            } catch (_) { /* cae al <style> */ }
+        }
+        if (prev) { prev.textContent = texto; return; }
+        const s = document.createElement('style');
+        s.setAttribute('data-rondo', '1');
+        s.textContent = texto;
+        root.appendChild(s);
     }
     // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
     // embebido para no depender de fuentes externas ni CDN: la plataforma lo
@@ -5505,8 +5580,8 @@ ta.value = '';
                 const row = g[r] || '';
                 for (let c = 0; c < row.length; c++) {
                     if (row[c] === '1') {
-                        circles += '<circle cx="' + (col + c) * paso + paso / 2 +
-                            '" cy="' + r * paso + paso / 2 + '" r="' + radio + '"/>';
+                        circles += '<circle cx="' + ((col + c) * paso + paso / 2) +
+                            '" cy="' + (r * paso + paso / 2) + '" r="' + radio + '"/>';
                     }
                 }
             }
