@@ -119,7 +119,8 @@ ok('reestilizado: mapea los tokens del tema a la paleta',
     /const RX_PAGINA_MAPA = \{/.test(src) && /function rxPaginaToken\(/.test(src));
 ok('reestilizado: cubre los tokens base del tema de la plataforma',
     /'accent-color': 'accent'/.test(src) && /'primary-color': 'fg'/.test(src) &&
-    /'base-bg-color': 'bg'/.test(src) && /'borders-color': 'border'/.test(src) &&
+    /'base-bg-color': \{ texto: 'fg', fondo: 'bg' \}/.test(src) &&
+    /'borders-color': \{ texto: 'dim', fondo: 'border'/.test(src) &&
     /'icons-action-color': 'dim'/.test(src));
 ok('reestilizado: paleta segun tema claro/oscuro',
     /const claro = APP\.config\.theme === 'claro'/.test(src) && /const P = rxPaginaPaleta\(claro\)/.test(src));
@@ -177,8 +178,6 @@ ok('reestilizado real: en claro NO toca la paleta de grises de Wialon',
 ok('reestilizado real: cubre los tokens base (acento, texto, bordes)',
     /--accent-color:#B30B27 !important;/.test(cssOsc) &&
     /--primary-color:#e8ecf3 !important;/.test(cssOsc) &&
-    /--base-bg-color:#1f2330 !important;/.test(cssOsc) &&
-    /--borders-color:#3a4252 !important;/.test(cssOsc) &&
     /--icons-action-color:#9aa4b5 !important;/.test(cssOsc));
 ok('reestilizado real: texto sobre acento en blanco',
     /--horizontal-bar-item-active-color:#ffffff !important;/.test(cssOsc) &&
@@ -282,6 +281,11 @@ ok('color: el mismo literal+rol reutiliza la misma variable',
     !!idUno && dec2.indexOf('var(--rpg-' + idUno + ')') >= 0);
 ok('color: un literal sin mapeo se deja intacto',
     M.decl(fakeStyle({ 'box-shadow': '0 0 2px #123456' })) === '');
+const decMix = M.decl(fakeStyle({ 'background': 'var(--base-bg-color)', 'color': 'var(--base-bg-color)' }));
+const idsMix = decMix.match(/var\(--rpg-([\w]+)\)/g) || [];
+ok('color: las variables mezcladas se resuelven por propiedad (texto != fondo)',
+    idsMix.length === 2 && idsMix[0] !== idsMix[1] &&
+    /background:var\(--rpg-/.test(decMix) && /color:var\(--rpg-/.test(decMix));
 ok('color: named colors basicos',
     M.clave('white', 'background-color') === 'soft' && M.clave('black', 'color') === 'fg');
 ok('reestilizado real: scrollbars acordes al tema',
@@ -303,7 +307,7 @@ ok('reestilizado real: apagado no emite hoja', generarEstilo({ estiloPagina: fal
 ok('reestilizado real: tema claro usa superficies claras',
     /--panel-top-background:#ffffff !important;/.test(generarEstilo({ theme: 'claro' })));
 ok('reestilizado real: usa los tokens --rondo-* reales',
-    /--base-bg-color:#010203 !important;/.test(generarEstilo({ temaPlataforma: true }, '#B30B27', {
+    /--background:#010203 !important;/.test(generarEstilo({ temaPlataforma: true }, '#B30B27', {
         '--rondo-bg': '#010203', '--rondo-bg-soft': '#040506', '--rondo-bg-strong': '#070809',
         '--rondo-fg': '#0a0b0c', '--rondo-fg-dim': '#0d0e0f', '--rondo-fg-mute': '#101112',
         '--rondo-border': '#131415'
