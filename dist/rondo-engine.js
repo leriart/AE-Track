@@ -5283,6 +5283,10 @@ ta.value = '';
             '.x-unit-info > .unit-table-data th{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
+            // Valores de la tabla del unit-hint (velocidad, kilometraje, horas
+            // de motor, satelites): van en <td class="icon"><div>...</div>. Se
+            // fuerzan legibles (el icono del td si queda en color de icono).
+            '[class*="_table_10z2h_"] td>div:not([class]){color:' + P.fg + ' !important;}',
             // La ventana flotante de unidad (que sale al pasar el raton) es un
             // tippy: .tippy-box._messageBox_*. Su fondo sale de
             // --white-color-message-box (que tambien es el texto blanco de los
