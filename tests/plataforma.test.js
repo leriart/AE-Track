@@ -193,9 +193,13 @@ ok('reestilizado real: viste los componentes ant-* de Ant Design',
     /\.ant-input,.ant-input-affix-wrapper/.test(cssOsc) &&
     /\.ant-modal-content/.test(cssOsc));
 ok('reestilizado real: viste las ventanas por vehiculo de Wialon',
-    /#tooltip,#tooltip2,\.mini-window-extra,\.x-unit-info/.test(cssOsc) &&
+    /#tooltip,#tooltip2,\.wui-tooltip,\.mini-window-extra,\.pursuit-window,\.x-unit-info/.test(cssOsc) &&
     /\.pursuit-window \.pursuit-top-container/.test(cssOsc) &&
     /\.workspace-units-panel/.test(cssOsc));
+ok('reestilizado real: el tooltip queda opaco (no define fondo la plataforma)',
+    /#tooltip td\.h-separator,#tooltip2 td\.h-separator/.test(cssOsc) &&
+    /#tooltip \.block-mixed tr\.colored-row/.test(cssOsc) &&
+    /\.pursuit-window \.no-flash/.test(cssOsc));
 ok('reestilizado real: redondeos estilo Rondo',
     /--controls-border-radius:8px !important;/.test(cssOsc) &&
     /--modal-border-radius:12px !important;/.test(cssOsc));

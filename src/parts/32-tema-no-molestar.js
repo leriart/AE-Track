@@ -364,7 +364,7 @@
             // Ventanas y tarjetas por vehiculo de Wialon: traen colores
             // literales (rgb(255,255,255), #172336...), no leen el skin. Se
             // visten a mano para que no queden islas claras en tema oscuro.
-            '#tooltip,#tooltip2,.mini-window-extra,.x-unit-info,.x-unit-tooltip,' +
+            '#tooltip,#tooltip2,.wui-tooltip,.mini-window-extra,.pursuit-window,.x-unit-info,.x-unit-tooltip,' +
                 '.x-monitoring-units-extra-info-row,.monitoring_units_state_gps_wrapper,' +
                 '.workspace-units-panel,.workspace-units-panel-main,.workspace-units-caption,' +
                 '.x-map-report-marker-info,.map-control-info,.control-with-info,' +
@@ -379,6 +379,22 @@
             '.x-unit-info > .unit-table-data th{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
+            // .wui-tooltip NO define fondo propio en la plataforma (solo
+            // box-shadow/color/padding), asi que se transparentaba y se veia
+            // el mapa detras. Se fuerza opaco + los fondos claros que la
+            // plataforma si declara dentro de la ventana.
+            '#tooltip td.h-separator,#tooltip2 td.h-separator,' +
+                '#tooltip .block-mixed tr.colored-row,#tooltip2 .block-mixed tr.colored-row,' +
+                '#tooltip #tooltip_zone .zone-units tr:nth-child(2n+1),' +
+                '.hittest-ctrl-point-description .block-mixed tr.colored-row,' +
+                'tr.unit-cmds-response-row,tr.unit-cmds-response-row-msg,' +
+                '.pursuit-window .no-flash,' +
+                'div.pursuit-window div.mini-window-extra#tooltip,' +
+                'div.pursuit-window div.mini-window-extra#tooltip2{background:' + P.soft + ' !important;}',
+            'div.pursuit-window #tooltip .win-video-cams-table{background:' + P.soft + ' !important;}',
+            'div.pursuit-window #tooltip .win-video-grid-panel{background:' + P.strong + ' !important;}',
+            'div.pursuit-window #tooltip .win-video-header{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
+            '#tooltip h3,#tooltip2 h3,.wui-tooltip h3{color:' + P.fg + ' !important;}',
             '.x-unit-info .entity-block-item > .image-container{border-color:' + P.border + ' !important;}',
             // Botones junto al mapa: el blanco real viene de
             // .wui-button-icon-shadow (background-color:#fff), no de un
