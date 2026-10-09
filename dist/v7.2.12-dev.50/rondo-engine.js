@@ -5107,10 +5107,13 @@ ta.value = '';
     // Wialon estos grises ya son correctos (texto oscuro / fondos claros), y
     // ademas estan MEZCLADOS (--gray-200/300 se usan de fondo y de texto), asi
     // que aplicarlos en claro pintaba el texto con color de fondo.
+    // Solo los grises de USO CLARO: unos como texto (900/700/500/400) y otros
+    // como superficie (100/50/800/600). Se EXCLUYEN gray-200 y gray-300 porque
+    // Wialon los usa a la vez de fondo Y de texto (fecha, direccion): mapearlos
+    // pintaba ese texto con color de fondo.
     const RX_PAGINA_GRISES_OSCURO = {
         'gray-900': 'fg', 'gray-800': 'strong', 'gray-700': 'dim', 'gray-600': 'strong',
-        'gray-500': 'mute', 'gray-400': 'mute', 'gray-300': 'border', 'gray-200': 'strong',
-        'gray-100': 'strong', 'gray-50': 'soft'
+        'gray-500': 'mute', 'gray-400': 'mute', 'gray-100': 'strong', 'gray-50': 'soft'
     };
     // Unico token que espera el shorthand completo "1px solid <color>".
     const RX_PAGINA_BORDE_SHORTHAND = {
