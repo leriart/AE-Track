@@ -408,6 +408,11 @@
             // que el texto herede el color de la ventana (sin !important, para
             // no pisar los colores de estado inline rojo/verde).
             '[class*="_messageBox_"] *{color:inherit;}',
+            // Algunas reglas pintan el glifo con -webkit-text-fill-color, que
+            // gana a 'color': el texto computa claro pero se ve oscuro. Se fija
+            // a currentColor (!important), que respeta el color del propio
+            // elemento (asi los estados inline rojo/verde siguen igual).
+            '[class*="_messageBox_"] *{-webkit-text-fill-color:currentColor !important;}',
             // Las celdas del perfil usan ._cell_*:not(.column) { color:
             // var(--gray-900) }, especificidad (0,2,0), que gana al * anterior.
             // Se sube a (0,3,0) repitiendo el selector, sin !important para no
