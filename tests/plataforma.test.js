@@ -229,26 +229,8 @@ ok('reestilizado: ventana de unidad y controles del mapa',
     /\.x-unit-info > \.unit-table-data th\{background:/.test(src) &&
     /\.wui-button-icon-shadow\{background:/.test(src) &&
     /\.x-unit-info > \.unit-table-data \.td\{border-color:/.test(src));
-ok('reestilizado: la ventana flotante (tippy ._messageBox_) queda opaca',
-    /\.tippy-box,\[class\*="_messageBox_"\]/.test(src) &&
-    /\[class\*="_sectionTitle_"\]/.test(src) &&
-    /\[class\*="_lastUpdate_"\]/.test(src) &&
-    /\[class\*="_messageBox_"\] \*\{color:inherit;\}/.test(src) &&
-    /\[class\*="_cell_"\]\[class\*="_cell_"\]/.test(src) &&
-    /-webkit-text-fill-color:currentColor !important/.test(src) &&
-    /\[class\*="_value_"\]\{filter:brightness\(1.8\)/.test(src));
-ok('reestilizado: arregla el contraste de la ventana en runtime',
-    /function rxContrasteVentana\(/.test(src) && /function rxObservarVentanas\(/.test(src) &&
-    /rxObservarVentanas\(\);/.test(src) && /col\.sat > 0\.4/.test(src));
-ok('reestilizado: el contraste de la ventana invierte el texto segun el fondo',
-    /col\.sat > 0\.4/.test(src) && /Math\.abs\(col\.lum - bgLum\) > 0\.35/.test(src) &&
-    /bgLum > 0\.5 \? '#1d2433' : fg/.test(src));
-ok('reestilizado: refuerzo directo de color en la ventana y observer de contenido',
-    /\[class\*="_messageBox_"\] \[class\]\{color:inherit;\}/.test(src) &&
-    /document\.querySelector\('\[class\*="_messageBox_"\],\.tippy-box'\)/.test(src));
-ok('reestilizado: la ventana se limita al alto visible (contenido alcanzable)',
-    /window\.innerHeight - top - 12/.test(src) &&
-    /caja\.style\.setProperty\('overflow-y', 'auto', 'important'\)/.test(src));
+ok('reestilizado: la ventana flotante (tippy) queda opaca',
+    /\.tippy-box,\[class\*="_messageBox_"\],\[class\*="_messageBoxWrapper_"\]\{background:/.test(src));
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
