@@ -242,6 +242,9 @@ ok('reestilizado: arregla el contraste de la ventana en runtime',
     /rxObservarVentanas\(\);/.test(src) && /col\.sat > 0\.4/.test(src));
 ok('reestilizado: el arreglo de contraste no toca los colores de estado',
     /col\.lum > 0\.4 \|\| col\.sat > 0\.4/.test(src) && /bgDe\(el\) > 0\.5/.test(src));
+ok('reestilizado: refuerzo directo de color en la ventana y observer de contenido',
+    /\[class\*="_messageBox_"\] \[class\]\{color:inherit;\}/.test(src) &&
+    /document\.querySelector\('\[class\*="_messageBox_"\],\.tippy-box'\)/.test(src));
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
