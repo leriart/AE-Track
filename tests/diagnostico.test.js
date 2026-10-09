@@ -81,6 +81,9 @@ ok('diagnostico: captura de ventana con fondo claro (boton + funcion)',
 ok('diagnostico: el export detecta textos invisibles (color == fondo)',
     /const invisibles = \[\]/.test(src) && /resumen: \{[^}]*invisibles/.test(src) &&
     /invisibles: invisibles/.test(src) && /getComputedStyle\(p\)\.backgroundColor/.test(src));
+ok('diagnostico: escaner continuo de textos invisibles (boton + funcion)',
+    /function rxEscanearInvisibles\(/.test(src) && /"rondo-diag-invisibles"/.test(src) &&
+    /rxEscanearInvisibles\(30\)/.test(src) && /const cs = getComputedStyle\(el\)/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

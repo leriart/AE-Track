@@ -381,6 +381,71 @@
             } catch (_) { adviceWarn('Copia el texto', 'Selecciona el texto de abajo.'); }
         }, 200);
     }
+    // Escanea (en varios ticks, mientras mueves el raton) el documento en
+    // busca de elementos cuyo TEXTO casi coincide con su fondo efectivo. El
+    // tooltip de unidad se cierra al mover el raton, por eso no basta un clic:
+    // se acumula lo que aparezca durante N segundos.
+    function rxEscanearInvisibles(segundos) {
+        const salida = byId('rondo-diag-out');
+        const parseC = (c) => {
+            const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
+            return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null;
+        };
+        const ruta = (el) => {
+            const p = []; let n = el, c = 0;
+            while (n && n.nodeType === 1 && c < 5) {
+                let s = n.tagName.toLowerCase();
+                if (n.id) s += '#' + n.id;
+                else if (typeof n.className === 'string' && n.className.trim()) s += '.' + n.className.trim().split(/\s+/).slice(0, 3).join('.');
+                p.unshift(s); n = n.parentElement; c++;
+            }
+            return p.join(' > ');
+        };
+        const encontrados = new Map();
+        if (salida) salida.textContent = 'Escaneando ' + (segundos || 30) + ' s... pasa el raton por las unidades para que salga la ventana.';
+        const limite = Date.now() + (segundos || 30) * 1000;
+        const t = setInterval(() => {
+            let todos = [];
+            try { todos = document.querySelectorAll('body *'); } catch (_) { /* noop */ }
+            for (let i = 0; i < todos.length; i++) {
+                const el = todos[i];
+                if (el.id && el.id.indexOf('rondo') === 0) continue;
+                if (el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-rail')) continue;
+                let txt = '';
+                for (let ch = el.firstChild; ch; ch = ch.nextSibling) if (ch.nodeType === 3) txt += ch.nodeValue;
+                txt = txt.trim();
+                if (!txt || txt.length > 80) continue;
+                const cs = getComputedStyle(el);
+                if (cs.display === 'none' || cs.visibility === 'hidden' || +cs.opacity === 0) continue;
+                const f = parseC(cs.color);
+                if (!f || f.a < 0.5) continue;
+                let bg = 'rgba(0, 0, 0, 0)', p = el;
+                while (p) { const c2 = getComputedStyle(p).backgroundColor; if (c2 && !/rgba\(0, 0, 0, 0\)|transparent/.test(c2)) { bg = c2; break; } p = p.parentElement; }
+                const b = parseC(bg);
+                if (!b) continue;
+                const d = Math.abs(f.r - b.r) + Math.abs(f.g - b.g) + Math.abs(f.b - b.b);
+                if (d < 40) {
+                    const k = ruta(el);
+                    if (!encontrados.has(k)) encontrados.set(k, {
+                        ruta: k, texto: txt.slice(0, 60), color: cs.color, fondo: bg,
+                        inline: String(el.getAttribute('style') || '').slice(0, 220),
+                        html: String(el.outerHTML || '').slice(0, 500)
+                    });
+                }
+            }
+            if (Date.now() > limite) {
+                clearInterval(t);
+                const arr = [];
+                encontrados.forEach((v) => arr.push(v));
+                const txt = JSON.stringify(arr, null, 1);
+                if (salida) salida.textContent = arr.length ? txt : 'No se detectaron textos invisibles (si el campo sigue vacio, no es un problema de color).';
+                try {
+                    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt);
+                    adviceOk('Escaneo terminado', arr.length + ' texto(s) invisible(s). Copiado al portapapeles.');
+                } catch (_) { adviceWarn('Escaneo terminado', arr.length + ' texto(s). Selecciona y copia.'); }
+            }
+        }, 800);
+    }
     // cablea sus botones. Se llama desde init().
     function rxDiagBind() {
         const pane = document.querySelector('#rondo-config .cfg-pane[data-cfg="avanzado"]');
@@ -393,6 +458,7 @@
             '<button class="accbtn" id="rondo-diag-copiar"><span class="rondo-usym">' + UIS.export + '</span> Copiar</button>' +
             '<button class="accbtn" id="rondo-diag-estilos" title="Descarga el JSON con TODOS los colores literales y variables del tema de la plataforma (documento, shadow roots e iframes)"><span class="rondo-usym">' + UIS.export + '</span> Exportar estilos</button>' +
             '<button class="accbtn" id="rondo-diag-fondos" title="Espera 25 s y captura la primera ventana con fondo claro que aparezca (mueve el raton sobre una unidad para que salga el tooltip)"><span class="rondo-usym">' + UIS.info + '</span> Fondos claros</button>' +
+            '<button class="accbtn" id="rondo-diag-invisibles" title="Durante 30 s busca textos del mismo color que su fondo. Mueve el raton sobre las unidades para que salga el tooltip"><span class="rondo-usym">' + UIS.info + '</span> Textos invisibles</button>' +
             '</div>' +
             '<div id="rondo-diag-out" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px;white-space:pre-wrap;font-family:monospace;line-height:1.45"></div>';
         pane.appendChild(box);
@@ -403,6 +469,10 @@
         const fondos = box.querySelector('#rondo-diag-fondos');
         if (fondos) fondos.addEventListener('click', () => {
             try { rxCapturarVentana(25); } catch (e) { adviceWarn('No se pudo inspeccionar', e && e.message); }
+        });
+        const invis = box.querySelector('#rondo-diag-invisibles');
+        if (invis) invis.addEventListener('click', () => {
+            try { rxEscanearInvisibles(30); } catch (e) { adviceWarn('No se pudo escanear', e && e.message); }
         });
         const cop = box.querySelector('#rondo-diag-copiar');
         if (cop) cop.addEventListener('click', () => {
