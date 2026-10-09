@@ -5582,6 +5582,7 @@ ta.value = '';
             if (el && el.parentNode) el.parentNode.removeChild(el);
         });
         if (_rxObs) { _rxObs.disconnect(); _rxObs = null; }
+        if (_rxVentObs) { _rxVentObs.disconnect(); _rxVentObs = null; }
         Object.keys(_rxVars).forEach((k) => delete _rxVars[k]);
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
@@ -5629,6 +5630,8 @@ ta.value = '';
         }
         rxPintarTokens(P, acc, accD);
         rxObservar();
+        rxObservarVentanas();
+        rxArreglarVentanas();
     }
     // Vigila hojas NUEVAS. Un <link rel=stylesheet> recien insertado tiene
     // .sheet = null hasta que termina de cargar: si no se espera su evento
@@ -5657,6 +5660,76 @@ ta.value = '';
     function rxEsperarHoja(link) {
         if (link.sheet) return;
         try { link.addEventListener('load', () => { try { rxProgramarColoresPagina(); } catch (_) { /* noop */ } }, { once: true }); } catch (_) { /* noop */ }
+    }
+    /* Arreglo de contraste en runtime para la ventana flotante. No se puede
+     * cubrir todo con selectores (colores inline, tokens, especificidad de
+     * :not, hashes de CSS-modules). Cuando aparece la ventana se mide el color
+     * real de cada texto: si es un gris/neutro OSCURO sobre un fondo OSCURO,
+     * se fuerza a legible. Se salta los colores de ESTADO (rojo/verde: saturacion
+     * alta), que deben conservarse. */
+    function rxContrasteVentana(raiz) {
+        const parse = (c) => {
+            const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
+            if (!m) return null;
+            const r = +m[1], g = +m[2], b = +m[3];
+            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+            return { lum: (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255, sat: mx === 0 ? 0 : (mx - mn) / mx, a: m[4] === undefined ? 1 : +m[4] };
+        };
+        const fg = (getComputedStyle(document.documentElement).getPropertyValue('--rondo-fg') || '#e8ecf3').trim();
+        const bgDe = (el) => {
+            let p = el;
+            while (p) {
+                const c = parse(getComputedStyle(p).backgroundColor);
+                if (c && c.a > 0.5) return c.lum;
+                p = p.parentElement;
+            }
+            return 0.2;
+        };
+        let n = 0;
+        const nodos = raiz.querySelectorAll ? raiz.querySelectorAll('*') : [];
+        for (let i = 0; i < nodos.length; i++) {
+            const el = nodos[i];
+            if (el.children.length) continue;
+            if (!String(el.textContent || '').trim()) continue;
+            const cs = getComputedStyle(el);
+            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
+            const col = parse(cs.color);
+            if (!col || col.lum > 0.4 || col.sat > 0.4) continue; // claro o de estado
+            if (bgDe(el) > 0.5) continue; // fondo claro: el texto oscuro esta bien
+            el.style.setProperty('color', fg, 'important');
+            el.style.setProperty('-webkit-text-fill-color', fg, 'important');
+            n++;
+        }
+        return n;
+    }
+    // Vigila la aparicion de ventanas (tippy/messageBox) y les arregla el
+    // contraste. Un <link> de CSS no lo dispara.
+    let _rxVentObs = null;
+    let _rxVentTimer = 0;
+    function rxObservarVentanas() {
+        if (_rxVentObs || !window.MutationObserver || !document.body) return;
+        _rxVentObs = new MutationObserver((muts) => {
+            let hay = false;
+            for (let i = 0; i < muts.length; i++) {
+                const ns = muts[i].addedNodes;
+                for (let j = 0; j < ns.length; j++) {
+                    const el = ns[j];
+                    if (!el || el.nodeType !== 1) continue;
+                    const cl = typeof el.className === 'string' ? el.className : '';
+                    if (cl.indexOf('tippy-box') >= 0 || cl.indexOf('_messageBox_') >= 0 ||
+                        (el.querySelector && el.querySelector('[class*="_messageBox_"]'))) { hay = true; break; }
+                }
+                if (hay) break;
+            }
+            if (hay) { clearTimeout(_rxVentTimer); _rxVentTimer = setTimeout(rxArreglarVentanas, 120); }
+        });
+        try { _rxVentObs.observe(document.body, { childList: true, subtree: true }); } catch (_) { _rxVentObs = null; }
+    }
+    function rxArreglarVentanas() {
+        const cajas = document.querySelectorAll('[class*="_messageBox_"],.tippy-box');
+        for (let i = 0; i < cajas.length; i++) {
+            try { rxContrasteVentana(cajas[i]); } catch (_) { /* noop */ }
+        }
     }
     // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
     // embebido para no depender de fuentes externas ni CDN: la plataforma lo

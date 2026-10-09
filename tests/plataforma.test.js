@@ -237,6 +237,11 @@ ok('reestilizado: la ventana flotante (tippy ._messageBox_) queda opaca',
     /\[class\*="_cell_"\]\[class\*="_cell_"\]/.test(src) &&
     /-webkit-text-fill-color:currentColor !important/.test(src) &&
     /\[class\*="_value_"\]\{filter:brightness\(1.8\)/.test(src));
+ok('reestilizado: arregla el contraste de la ventana en runtime',
+    /function rxContrasteVentana\(/.test(src) && /function rxObservarVentanas\(/.test(src) &&
+    /rxObservarVentanas\(\);/.test(src) && /col\.sat > 0\.4/.test(src));
+ok('reestilizado: el arreglo de contraste no toca los colores de estado',
+    /col\.lum > 0\.4 \|\| col\.sat > 0\.4/.test(src) && /bgDe\(el\) > 0\.5/.test(src));
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
