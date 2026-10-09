@@ -286,6 +286,10 @@ const idsMix = decMix.match(/var\(--rpg-([\w]+)\)/g) || [];
 ok('color: las variables mezcladas se resuelven por propiedad (texto != fondo)',
     idsMix.length === 2 && idsMix[0] !== idsMix[1] &&
     /background:var\(--rpg-/.test(decMix) && /color:var\(--rpg-/.test(decMix));
+const decTok = M.decl(fakeStyle({ 'background': 'var(--gray-900)', 'color': 'var(--gray-900)' }));
+const idsTok = decTok.match(/var\(--rpg-([\w]+)\)/g) || [];
+ok('color: una variable del tema se resuelve distinto como texto y como fondo',
+    idsTok.length === 2 && idsTok[0] !== idsTok[1]);
 ok('color: named colors basicos',
     M.clave('white', 'background-color') === 'soft' && M.clave('black', 'color') === 'fg');
 ok('reestilizado real: scrollbars acordes al tema',
