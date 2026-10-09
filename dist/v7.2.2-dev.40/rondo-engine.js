@@ -5084,6 +5084,16 @@ ta.value = '';
         'panel-list-group-expanded-button-noaccent-hover-color': 'fg',
         'panel-list-group-expanded-button-noaccent-disabled-color': 'mute',
         'panel-list-item-add-disabled-color': 'mute',
+        // ------------------------------------------------------------------
+        // Paleta de grises. En la plataforma esta pensada para tema CLARO:
+        // --gray-900 (#172336) es texto oscuro, --gray-200 (#EFEFF1) es fondo
+        // claro. En un tema oscuro quedan invisibles. Se mapea cada nivel por
+        // su USO REAL (texto vs fondo, ver volcado): los oscuros -> texto de
+        // Rondo, los claros -> superficie.
+        // ------------------------------------------------------------------
+        'gray-900': 'fg', 'gray-800': 'strong', 'gray-700': 'dim', 'gray-600': 'strong',
+        'gray-500': 'mute', 'gray-400': 'mute', 'gray-300': 'border', 'gray-200': 'strong',
+        'gray-100': 'strong', 'gray-50': 'soft',
         // --- compatibilidad con nombres sueltos de la version previa ---
         'background': 'bg', 'background-content': 'bg', 'background-body': 'bg', 'background-app': 'bg',
         'background-header': 'soft', 'background-sidebar': 'soft', 'background-panel': 'soft',
@@ -5269,6 +5279,10 @@ ta.value = '';
             // var(--gray-900) }, especificidad (0,2,0), que gana al * anterior.
             // Se sube a (0,3,0) repitiendo el selector, sin !important para no
             // pisar los colores de estado inline (rojo/verde).
+            // --gray-900 se usa tambien de fondo en 2 sitios: al volverse claro
+            // hay que forzarlos oscuros.
+            '.win-video-cams-wrapper{background:' + P.bg + ' !important;}',
+            '[class*="_backdrop_"]{background:rgba(0,0,0,.5) !important;}',
             '[class*="_messageBox_"] [class*="_cell_"][class*="_cell_"],' +
                 '[class*="_messageBox_"] [class*="_row_"] [class*="_cell_"]{color:' + P.fg + ';}',
             // .wui-tooltip NO define fondo propio en la plataforma (solo
