@@ -4910,68 +4910,172 @@ ta.value = '';
     //   paso un bug: `execute-button-border-color` y los bordes del login
     //   son colores sueltos, no el shorthand `1px solid`, y antes se
     //   pintaban como "1px solid <color>" (invalido).
-    // Fondos que toman el acento tal cual.
-    const RX_PAGINA_VARS = [
-        'horizontal-bar-item-active-background',
-        'tabs-item-text-color', 'tabs-selected-item-text-color', 'tabs-selected-item-line-color',
-        'button-color',
-        'execute-button-background', 'accordion-active-background',
-        'list-table-tab_button-active-background', 'list-table-tab_button-color',
-        'wizard-dialog-header-background', 'help-window-header-background',
-        'monitoring-login-primary-button-color', 'monitoring-login-secondary-button-color',
-        'monitoring-login-forgot-pwd-color',
-        'execute-button-border-color', 'monitoring-login-primary-button-border-color',
-        'monitoring-login-secondary-button-border-color'
-    ];
-    // Variantes de hover/activo: acento oscurecido.
-    const RX_PAGINA_HOVER = [
-        'horizontal-bar-item-hover-background', 'tabs-item-hover-text-color', 'tab-color-active',
-        'button-hover-color',
-        'execute-button-hover-background', 'execute-button-hover-border-color',
-        'list-table-tab_button-hover-color',
-        'monitoring-login-primary-button-hover-color', 'monitoring-login-primary-button-hover-border-color',
-        'monitoring-login-secondary-button-hover-color', 'monitoring-login-secondary-button-hover-border-color',
-        'monitoring-login-forgot-pwd-hover-color'
-    ];
-    // Texto sobre un fondo de acento (barra activa, botones, acordeon).
-    const RX_PAGINA_SOBRE_ACENTO = [
-        'horizontal-bar-item-active-color', 'horizontal-bar-item-hover-color',
-        'execute-button-color', 'execute-button-hover-color',
-        'accordion-active-color', 'list-table-tab_button-active-color',
-        'monitoring-login-primary-button-text-color', 'monitoring-login-primary-button-hover-text-color',
-        'monitoring-login-secondary-button-text-color', 'monitoring-login-secondary-button-hover-text-color'
-    ];
-    // Unicas variables que no llevan caja propia.
-    const RX_PAGINA_TRANSPARENTES = ['horizontal-bar-item-background'];
-    // La unica variable que espera el shorthand completo "1px solid <color>".
-    const RX_PAGINA_BORDES = ['list-table-tab_button-active-border'];
-    // Superficies: variable del skin -> clave de la paleta de Rondo.
-    const RX_PAGINA_SUPERFICIES = {
+    // v6.19.4: el mapa se extrae del :root real de la plataforma (728 tokens
+    //   con nombre propio). Muchos se DEFINEN como var(--otro) (p. ej.
+    //   --featured-dot-background: var(--accent-color)), asi que basta con
+    //   reescribir los tokens BASE y el resto se recolorea en cascada; los que
+    //   llevan color literal se mapean uno a uno. Clave -> color de Rondo
+    //   (lo resuelve rxPaginaToken):
+    //     accent / accent-2 / hover      acento, acento claro, hover oscuro
+    //     on                             texto sobre acento (#fff)
+    //     accent-bg / accent-bg-hover    tinte de acento translucido
+    //     bg / soft / strong             superficies (fondo, paneles, tarjetas)
+    //     fg / dim / mute / border       texto y bordes
+    //     transparent
+    const RX_PAGINA_MAPA = {
+        // --- base: acento ---
+        'accent-color': 'accent', 'accent-hover-color': 'hover', 'accent-active-color': 'hover',
+        'accent-bg-color': 'strong', 'accent-bg-color-hover': 'strong',
+        'accent-bg-color-active': 'accent-bg', 'accent-bg-light': 'strong',
+        // --- base: texto ---
+        'primary-color': 'fg', 'secondary-color': 'dim', 'light-color': 'mute',
+        'icons-action-color': 'dim', 'color-text': 'fg', 'color-text-secondary': 'dim',
+        'color-text-disabled': 'mute',
+        // --- base: superficies ---
+        'base-bg-color': 'bg', 'hover-bg-color': 'strong', 'editable-hover-bg-color': 'strong',
+        'accent-gray-bg-color': 'strong', 'available-components-bg-color': 'soft',
+        'disabled-components-bg-color': 'strong', 'table-selected-item-bg-color': 'strong',
+        'higlighted-normal': 'strong', 'higlighted-hover': 'strong', 'higlighted-active': 'strong',
+        'bg-dark-surface': 'strong', 'hover-bg-dark-surface': 'strong', 'active-bg-dark-surface': 'strong',
+        'dialog-background-block': 'strong', 'preloader-box-background': 'soft',
+        // --- base: bordes ---
+        'borders-color': 'border', 'borders-color-inverted': 'border', 'borders-border-color': 'border',
+        'checkbox-borders-color': 'border', 'monitoring-button-border-color': 'border', 'color-border': 'border',
+        // --- paneles y barra horizontal ---
+        'panel-top-background': 'soft', 'panel-top-color': 'fg',
+        'panel-left-background': 'soft', 'panel-left-sub-background': 'bg',
+        'panel-left-color': 'fg', 'panel-left-sub-color': 'fg',
+        'panel-bottom-background': 'soft', 'panel-bottom-color': 'fg',
+        'panel-bottom-item-active-background': 'strong',
+        'horizontal-bar-item-color': 'fg', 'horizontal-bar-item-background': 'transparent',
+        'horizontal-bar-item-hover-color': 'on', 'horizontal-bar-item-hover-background': 'accent',
+        'horizontal-bar-item-active-color': 'on', 'horizontal-bar-item-active-background': 'accent',
+        'panel-top-border-color': 'border', 'panel-left-border-color': 'border',
+        'panel-bottom-border-color': 'border', 'panel-center-border-color': 'border',
+        // --- listas y tablas ---
+        'list-table-background': 'soft', 'list-table-background-warn': 'soft',
+        'list-table-background-error': 'soft', 'list-table-background-gray': 'strong',
+        'list-table-color': 'fg', 'list-table-separator-color': 'border',
+        'list-table-group-background': 'strong', 'list-table-group-background-hover': 'strong',
+        'list-table-head-background': 'strong', 'list-row-hover-bg-color': 'strong',
+        'icons-action-color-hover': 'strong', 'icons-action-color-active': 'strong',
+        // --- tooltip ---
+        'tooltip-bg-color': 'strong', 'tooltip-text-primary-color': 'fg',
+        'tooltip-text-secondary-color': 'dim', 'tooltip-separator-color': 'border',
+        // --- acordeon ---
+        'accordion-normal-background': 'soft', 'accordion-normal-color': 'fg',
+        'accordion-active-background': 'accent', 'accordion-active-color': 'on',
+        'accordion-hover-background': 'strong', 'accordion-hover-color': 'fg',
+        'accordion-border-color': 'border',
+        // --- wizard / ayuda / modal ---
+        'wizard-dialog-header-background': 'accent', 'wizard-dialog-header-color': 'on',
+        'wizard-dialog-background': 'soft', 'modal-background': 'soft',
+        'help-window-background': 'soft', 'help-window-header-background': 'accent',
+        'help-window-header-color': 'on', 'help-window-collapser-header-background': 'strong',
+        // --- pestañas ---
+        'tab-bg-color': 'soft', 'tab-bg-color-hover': 'strong', 'tab-color-active': 'hover',
+        'tabs-item-text-color': 'accent', 'tabs-item-hover-text-color': 'hover',
+        'tabs-selected-item-text-color': 'accent', 'tabs-selected-item-line-color': 'accent',
+        // --- botones ---
+        'execute-button-background': 'accent', 'execute-button-color': 'on',
+        'execute-button-border-color': 'accent', 'execute-button-hover-background': 'hover',
+        'execute-button-hover-color': 'on', 'execute-button-hover-border-color': 'hover',
+        'button-background': 'soft', 'button-color': 'accent', 'button-hover-background': 'strong',
+        'button-hover-color': 'hover', 'button-hover-border-color': 'border', 'button-border-color': 'border',
+        'button-disabled-background': 'strong', 'button-disabled-color': 'mute', 'button-disabled-border-color': 'border',
+        'fast-button-background': 'soft', 'fast-button-background-hover': 'strong',
+        'fast-button-color': 'accent', 'fast-button-border-color': 'border', 'fast-button-border-color-hover': 'border',
+        'split-button-divider-color': 'border',
+        'list-table-tab_button-background': 'soft', 'list-table-tab_button-color': 'accent',
+        'list-table-tab_button-active-background': 'accent', 'list-table-tab_button-active-color': 'on',
+        'list-table-tab_button-hover-background': 'strong', 'list-table-tab_button-hover-color': 'hover',
+        'list-table-tab_button-disabled-background': 'strong', 'list-table-tab_button-disabled-color': 'mute',
+        'list-table-tab_button-disabled-border': 'border',
+        // --- formularios ---
+        'input-background': 'soft', 'input-color': 'fg', 'input-border-color': 'border',
+        'input-border-color-hover': 'border', 'input-stepper-active-bg-color': 'strong',
+        'disabled-input-background-color': 'strong', 'disabled-input-color': 'mute', 'placeholder-color': 'mute',
+        'select-border-color': 'border', 'select-hover-border-color': 'border',
+        'chip-bg-color': 'strong', 'chip-bg-hover-color': 'strong', 'header-badge-bg-color': 'strong',
+        'checkbox-bg-color': 'soft', 'checkbox-checked-bg-color': 'accent', 'checkbox-checkmark-color': 'on',
+        'checkbox-hover-color': 'fg', 'checkbox-hover-color-secondary': 'hover',
+        'checkbox-disabled-checked-bg-color': 'mute', 'switch-on-bg': 'accent',
+        'switch-on-hover-bg': 'hover', 'switch-thumb-bg': 'on',
+        'tag-text-color': 'fg', 'tag-bg-color': 'strong', 'tag-remove-hover-color': 'accent',
+        'preloader-text-color': 'fg',
+        // --- panel lateral (wui2) ---
+        'panel-list-item-color': 'fg', 'panel-list-item-description-color': 'dim',
+        'panel-list-item-bg': 'strong', 'panel-list-item-hover-bg': 'strong', 'panel-list-item-active-bg': 'strong',
+        'panel-list-item-resizer-color': 'border', 'panel-list-item-resizer-active-color': 'accent',
+        'panel-list-item-icon-color': 'dim', 'panel-list-item-input-color': 'fg',
+        'panel-list-item-input-icon-color': 'dim', 'panel-list-item-input-readonly-color': 'fg',
+        'panel-list-item-input-disabled-bg': 'strong', 'panel-list-item-input-border-color': 'border',
+        'panel-list-item-input-hover-border-color': 'border', 'panel-list-item-input-focused-border-color': 'accent',
+        'panel-list-item-input-disabled-border-color': 'border',
+        'panel-list-item-add-color': 'accent', 'panel-list-item-add-hover-color': 'accent',
+        'panel-list-item-add-hover-bg': 'strong', 'panel-list-item-add-active-bg': 'strong',
+        'panel-list-item-header-color': 'dim', 'panel-list-item-header-icon-color': 'dim',
+        'panel-list-item-header-hover-color': 'fg', 'panel-list-item-header-bg': 'bg',
+        'panel-list-item-header-hover-bg': 'strong', 'panel-list-item-header-active-bg': 'strong',
+        'panel-list-item-header-border-color': 'border', 'panel-list-item-footer-color': 'dim',
+        'panel-list-item-footer-bg': 'strong', 'panel-list-item-footer-hover-bg': 'strong',
+        'panel-list-item-footer-border-color': 'border',
+        'panel-list-item-button-noaccent-hover-bg': 'strong', 'panel-list-item-button-noaccent-active-bg': 'strong',
+        'panel-list-group-color': 'fg', 'panel-list-group-expanded-color': 'fg',
+        'panel-list-group-icon-color': 'dim', 'transfer-list-item-hover-bg': 'strong',
+        'transfer-list-item-active-bg': 'strong',
+        // --- calendario ---
+        'calendar-background': 'soft', 'calendar-main-text-hover-background': 'strong',
+        'calendar-othermonth-text-color': 'dim', 'calendar-border-color': 'border',
+        // --- iconos y enlaces ---
+        'icon-grey-dark-color': 'dim', 'icon-disabled-color': 'mute', 'icon-hover-color': 'fg',
+        'icon-button-active-bg-color': 'accent', 'icon-button-hover-bg-color': 'strong',
+        'link-initial-color': 'accent', 'link-hover-color': 'hover', 'link-disabled-color': 'mute',
+        // --- login ---
+        'monitoring-login-text-color': 'fg', 'monitoring-login-forgot-pwd-color': 'accent',
+        'monitoring-login-forgot-pwd-hover-color': 'hover', 'monitoring-login-input-bg-color': 'soft',
+        'monitoring-login-input-hover-bg-color': 'soft', 'monitoring-login-input-focused-bg-color': 'soft',
+        'monitoring-login-input-text-color': 'fg', 'monitoring-login-input-text-hover-color': 'fg',
+        'monitoring-login-input-text-focused-color': 'fg', 'monitoring-login-input-placeholder-color': 'mute',
+        'monitoring-login-input-border-color': 'border', 'monitoring-login-input-border-hover-color': 'border',
+        'monitoring-login-input-border-focused-color': 'accent', 'monitoring-login-language-border-color': 'border',
+        'monitoring-login-primary-button-color': 'accent', 'monitoring-login-primary-button-text-color': 'on',
+        'monitoring-login-primary-button-border-color': 'accent',
+        'monitoring-login-primary-button-hover-color': 'hover',
+        'monitoring-login-primary-button-hover-text-color': 'on',
+        'monitoring-login-primary-button-hover-border-color': 'hover',
+        'monitoring-login-secondary-button-color': 'accent', 'monitoring-login-secondary-button-text-color': 'on',
+        'monitoring-login-secondary-button-border-color': 'accent',
+        'monitoring-login-secondary-button-hover-color': 'hover',
+        'monitoring-login-secondary-button-hover-text-color': 'on',
+        'monitoring-login-secondary-button-hover-border-color': 'hover',
+        'monitoring-login-form-bg-color': 'soft', 'monitoring-login-separator-color': 'border',
+        'monitoring-login-separator-text-color': 'mute',
+        // --- compatibilidad con nombres sueltos de la version previa ---
         'background': 'bg', 'background-content': 'bg', 'background-body': 'bg', 'background-app': 'bg',
         'background-header': 'soft', 'background-sidebar': 'soft', 'background-panel': 'soft',
         'background-item': 'soft', 'background-dialog': 'soft', 'background-popup': 'soft',
         'background-modal': 'soft', 'background-menu': 'soft', 'background-dropdown': 'soft',
-        'background-input': 'bg', 'background-tooltip': 'strong',
-        'background-item-hover': 'strong', 'background-table-header': 'strong',
-        'background-table-row': 'soft', 'background-table-row-hover': 'strong',
-        'panel-top-background': 'soft', 'panel-left-background': 'soft', 'panel-left-sub-background': 'bg',
-        'panel-bottom-background': 'soft',
-        'help-window-background': 'soft', 'wizard-dialog-background': 'soft',
-        'accordion-normal-background': 'soft', 'accordion-hover-background': 'strong',
-        'monitoring-login-form-bg-color': 'soft'
-    };
-    // Texto: variable del skin -> clave de la paleta de Rondo.
-    const RX_PAGINA_TEXTOS = {
+        'background-input': 'bg', 'background-tooltip': 'strong', 'background-item-hover': 'strong',
+        'background-table-header': 'strong', 'background-table-row': 'soft', 'background-table-row-hover': 'strong',
         'text-color': 'fg', 'text-color-primary': 'fg', 'text-color-strong': 'fg',
         'text-color-secondary': 'dim', 'text-color-dim': 'dim', 'text-color-muted': 'mute',
         'text-color-disabled': 'mute', 'input-text-color': 'fg', 'input-placeholder-color': 'mute',
-        'panel-bottom-color': 'fg', 'horizontal-bar-item-color': 'fg',
-        'accordion-normal-color': 'fg', 'accordion-hover-color': 'fg'
+        'border-color': 'border', 'border-color-soft': 'strong', 'divider-color': 'strong'
     };
-    // Bordes genericos.
-    const RX_PAGINA_BORDES_GEN = {
-        'border-color': 'border', 'border-color-soft': 'soft', 'divider-color': 'soft', 'input-border-color': 'border'
-    };
+    // Unico token que espera el shorthand completo "1px solid <color>".
+    const RX_PAGINA_BORDE_SHORTHAND = { 'list-table-tab_button-active-border': 'accent' };
+    // Resuelve una clave del mapa al color de la paleta activa.
+    function rxPaginaToken(clave, P, acc, acc2, accD) {
+        if (clave === 'accent') return acc;
+        if (clave === 'accent-2') return acc2;
+        if (clave === 'hover') return accD;
+        if (clave === 'on') return '#ffffff';
+        if (clave === 'transparent') return 'transparent';
+        if (clave === 'accent-bg') return acc2 + '22';
+        if (clave === 'accent-bg-hover') return acc2 + '33';
+        return P[clave] || P.fg;
+    }
     function rxAplicarEstiloPagina() {
         const elPrev = document.getElementById('rondo-estilo-pagina');
         if (!(APP.config && APP.config.estiloPagina)) {
@@ -4997,22 +5101,13 @@ ta.value = '';
             border: '#3a4252'
         };
         const decl = [];
-        RX_PAGINA_VARS.forEach((v) => decl.push('  --' + v + ':' + acc + ' !important;'));
-        RX_PAGINA_HOVER.forEach((v) => decl.push('  --' + v + ':' + accD + ' !important;'));
-        RX_PAGINA_SOBRE_ACENTO.forEach((v) => decl.push('  --' + v + ':#ffffff !important;'));
-        RX_PAGINA_TRANSPARENTES.forEach((v) => decl.push('  --' + v + ':transparent !important;'));
-        RX_PAGINA_BORDES.forEach((v) => decl.push('  --' + v + ':1px solid ' + acc + ' !important;'));
-        Object.keys(RX_PAGINA_SUPERFICIES).forEach((v) => {
-            decl.push('  --' + v + ':' + P[RX_PAGINA_SUPERFICIES[v]] + ' !important;');
+        Object.keys(RX_PAGINA_MAPA).forEach((v) => {
+            decl.push('  --' + v + ':' + rxPaginaToken(RX_PAGINA_MAPA[v], P, acc, acc2, accD) + ' !important;');
         });
-        Object.keys(RX_PAGINA_TEXTOS).forEach((v) => {
-            decl.push('  --' + v + ':' + P[RX_PAGINA_TEXTOS[v]] + ' !important;');
+        Object.keys(RX_PAGINA_BORDE_SHORTHAND).forEach((v) => {
+            decl.push('  --' + v + ':1px solid ' +
+                rxPaginaToken(RX_PAGINA_BORDE_SHORTHAND[v], P, acc, acc2, accD) + ' !important;');
         });
-        Object.keys(RX_PAGINA_BORDES_GEN).forEach((v) => {
-            decl.push('  --' + v + ':' + P[RX_PAGINA_BORDES_GEN[v]] + ' !important;');
-        });
-        decl.push('  --accent-bg-color:' + acc2 + '22 !important;');
-        decl.push('  --accent-bg-color-hover:' + acc2 + '33 !important;');
         // v6.19.4: los componentes base de Wialon (wui-*) no siempre leen las
         // variables del skin, asi que se visten aparte para que no queden
         // islas con el tema original. Se limita a clases wui-* y a los
@@ -5024,7 +5119,30 @@ ta.value = '';
             '.wui-checkmark{border-color:' + P.border + ' !important;}',
             '.wui-checkbox input:checked~.wui-checkmark{background:' + acc + ' !important;border-color:' + acc + ' !important;}',
             '.wui-tooltip,.wui-popup,.wui-dropdown,.wui-menu{background:' + P.strong +
-                ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}'
+                ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
+            // Ant Design compila los colores en cada regla (no usa variables),
+            // asi que se visten sus componentes base a mano. Sin esto, en tema
+            // oscuro el texto de AntD quedaria oscuro sobre oscuro.
+            '.ant-btn-primary{background:' + acc + ' !important;border-color:' + acc + ' !important;color:#fff !important;}',
+            '.ant-btn-primary:hover{background:' + accD + ' !important;border-color:' + accD + ' !important;}',
+            '.ant-btn-default{background:' + P.soft + ' !important;border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
+            '.ant-btn,.ant-typography,.ant-form-item-label>label,.ant-descriptions-item-label,.ant-descriptions-item-content{color:' + P.fg + ' !important;}',
+            '.ant-input,.ant-input-affix-wrapper,.ant-input-number,.ant-select-selector,.ant-picker{background:' + P.soft +
+                ' !important;border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
+            '.ant-input::placeholder,.ant-input-affix-wrapper input::placeholder{color:' + P.mute + ' !important;}',
+            '.ant-select-dropdown,.ant-dropdown-menu,.ant-picker-panel-container,.ant-modal-content,.ant-drawer-content,' +
+                '.ant-popover-inner,.ant-notification-notice,.ant-message-notice-content,.ant-cascader-menu{background:' + P.soft +
+                ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
+            '.ant-modal-header,.ant-drawer-header,.ant-tooltip-inner{background:' + P.soft + ' !important;color:' + P.fg + ' !important;}',
+            '.ant-table,.ant-table-cell,.ant-table-thead>tr>th{background:' + P.soft +
+                ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
+            '.ant-tabs-tab,.ant-tabs-tab-btn{color:' + P.dim + ' !important;}',
+            '.ant-tabs-tab-active .ant-tabs-tab-btn{color:' + acc + ' !important;}',
+            '.ant-checkbox-inner,.ant-radio-inner{background:' + P.soft + ' !important;border-color:' + P.border + ' !important;}',
+            '.ant-checkbox-checked .ant-checkbox-inner,.ant-radio-checked .ant-radio-inner{background:' + acc + ' !important;border-color:' + acc + ' !important;}',
+            '.ant-switch{background:' + P.strong + ' !important;}',
+            '.ant-switch-checked{background:' + acc + ' !important;}',
+            '.ant-tag{background:' + P.strong + ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}'
         ].join('\n');
         let el = elPrev;
         if (!el) {
