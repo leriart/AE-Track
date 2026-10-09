@@ -240,8 +240,9 @@ ok('reestilizado: la ventana flotante (tippy ._messageBox_) queda opaca',
 ok('reestilizado: arregla el contraste de la ventana en runtime',
     /function rxContrasteVentana\(/.test(src) && /function rxObservarVentanas\(/.test(src) &&
     /rxObservarVentanas\(\);/.test(src) && /col\.sat > 0\.4/.test(src));
-ok('reestilizado: el arreglo de contraste no toca los colores de estado',
-    /col\.lum > 0\.4 \|\| col\.sat > 0\.4/.test(src) && /bgDe\(el\) > 0\.5/.test(src));
+ok('reestilizado: el contraste de la ventana invierte el texto segun el fondo',
+    /col\.sat > 0\.4/.test(src) && /Math\.abs\(col\.lum - bgLum\) > 0\.35/.test(src) &&
+    /bgLum > 0\.5 \? '#1d2433' : fg/.test(src));
 ok('reestilizado: refuerzo directo de color en la ventana y observer de contenido',
     /\[class\*="_messageBox_"\] \[class\]\{color:inherit;\}/.test(src) &&
     /document\.querySelector\('\[class\*="_messageBox_"\],\.tippy-box'\)/.test(src));
