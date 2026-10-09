@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '6.21.2-dev.32';
+    const VER = '6.22.0-dev.33';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -698,10 +698,9 @@
         // (experimental, opt-in). Cubre acento, superficies, texto y bordes; se
         // aplica con !important sobre :root,html,body y respeta el tema claro/oscuro.
         estiloPagina: false,
-        // v6.19.5: capa de rendimiento CSS sobre la plataforma (experimental,
-        // opt-in): menos repintado y composicion (fuera los desenfoques, las
-        // filas fuera de pantalla no se pintan, transiciones baratas). No toca
-        // la red ni el JS de la plataforma.
+        // v6.19.5: capa de rendimiento CSS sobre la plataforma (opt-in): menos
+        // repintado y composicion (fuera desenfoques, filas fuera de pantalla
+        // no se pintan, transiciones baratas). No toca la red ni su JS.
         rendimientoPagina: false,
         idiomaPlataforma: false,
         escalaUI: 1,
