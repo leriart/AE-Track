@@ -199,6 +199,37 @@ ok('reestilizado real: viste las ventanas por vehiculo de Wialon',
 ok('reestilizado real: redondeos estilo Rondo',
     /--controls-border-radius:8px !important;/.test(cssOsc) &&
     /--modal-border-radius:12px !important;/.test(cssOsc));
+ok('reestilizado real: pone el logo RONDO (Ndot)',
+    /--logo-background:url\("data:image\/svg\+xml,/.test(cssOsc));
+
+// Remap de colores literales y logo RONDO: se evaluan las funciones puras.
+const M = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+    '\nreturn { svg: rondoLogoSVG, uri: rondoLogoURI, parse: rxColorParse, color: rxColorRondo, decl: rxDeclaracionesRondo };')();
+const P = { bg: '#1f2330', soft: '#272d3c', strong: '#313849', fg: '#e8ecf3', dim: '#9aa4b5', mute: '#6f7888', border: '#3a4252' };
+const ACC = '#850D22', ACCD = '#720B1D';
+ok('logo RONDO: SVG dot-matrix con circulos y etiqueta',
+    /^<svg[^>]*aria-label="RONDO"/.test(M.svg('#fff')) && /<circle /.test(M.svg('#fff')));
+ok('logo RONDO: URI de datos lista para CSS', /^url\("data:image\/svg\+xml,/.test(M.uri('#850D22')));
+ok('color: blanco de fondo -> superficie', M.color('#ffffff', 'background-color', P, ACC, ACCD) === P.soft);
+ok('color: blanco de texto -> #fff', M.color('rgb(255, 255, 255)', 'color', P, ACC, ACCD) === '#ffffff');
+ok('color: texto oscuro -> fg', M.color('#172336', 'color', P, ACC, ACCD) === P.fg);
+ok('color: borde -> border', M.color('#e3e4e6', 'border-color', P, ACC, ACCD) === P.border);
+ok('color: rojo del skin -> acento', M.color('#b30b27', 'background-color', P, ACC, ACCD) === ACC);
+ok('color: azul antiguo -> acento', M.color('rgb(51, 153, 255)', 'color', P, ACC, ACCD) === ACC);
+ok('color: verde de estado se respeta', M.color('#4db251', 'background-color', P, ACC, ACCD) === null);
+ok('color: transparente y custom props se ignoran',
+    M.color('rgba(0, 0, 0, 0)', 'background-color', P, ACC, ACCD) === null &&
+    M.color('#fff', '--x', P, ACC, ACCD) === null);
+function fakeStyle(obj) {
+    const keys = Object.keys(obj);
+    const s = { length: keys.length, getPropertyValue: (p) => obj[p], getPropertyPriority: () => '' };
+    keys.forEach((k, i) => { s[i] = k; });
+    return s;
+}
+const dec = M.decl(fakeStyle({ 'background-color': '#ffffff', 'color': '#172336', 'border': '1px solid #e3e4e6' }), P, ACC, ACCD);
+ok('color: reescribe declaraciones por propiedad',
+    /background-color:#272d3c;/.test(dec) && /color:#e8ecf3;/.test(dec) &&
+    /border:1px solid #3a4252;/.test(dec));
 ok('reestilizado real: hereda el acento de la plataforma en opt-in',
     generarEstilo({ temaPlataforma: true }, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
 ok('reestilizado real: por defecto usa el acento de Rondo',
