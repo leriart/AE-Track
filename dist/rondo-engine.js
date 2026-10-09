@@ -3543,6 +3543,8 @@ ta.value = '';
     /* ====================== REFRESH ====================== */
     async function refresh() {
         if (APP.refBusy || !currentUser()) return;
+        // v6.19.7: en modo rendimiento no se refresca con la pestana oculta.
+        if (APP.config.rendimientoPagina && document.hidden) return;
         APP.refBusy = true;
         try {
             const unidades = await fetchUnits();
@@ -5272,6 +5274,12 @@ ta.value = '';
             (document.head || document.documentElement).appendChild(el);
         }
         const reglas = [
+            // Controles nativos (inputs, scrollbars, date pickers...) con el
+            // esquema del tema: menos repintado y sin estilos de scrollbar por
+            // JS. Barra fina con color de borde de Rondo.
+            'html{color-scheme:' + (APP.config.theme === 'claro' ? 'light'
+                : (APP.config.theme === 'auto' ? 'light dark' : 'dark')) + ' !important;}',
+            '*{scrollbar-width:thin;scrollbar-color:var(--rondo-border) transparent;}',
             // Los desenfoques (backdrop-filter) son de lo mas caro por frame.
             '*{-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}',
             // El scroll suave va por el hilo principal: fuera.
@@ -5464,10 +5472,11 @@ ta.value = '';
                     const nodos = muts[i].addedNodes;
                     for (let j = 0; j < nodos.length; j++) {
                         const n = nodos[j];
-                        if (n && n.nodeType === 1 && (n.tagName === 'STYLE' || n.tagName === 'LINK')) {
-                            rxProgramarColoresPagina();
-                            return;
-                        }
+                        if (!n || n.nodeType !== 1) continue;
+                        if (n.id && n.id.indexOf('rondo') === 0) continue;
+                        const esHoja = n.tagName === 'STYLE' ||
+                            (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || ''));
+                        if (esHoja) { rxProgramarColoresPagina(); return; }
                     }
                 }
             });

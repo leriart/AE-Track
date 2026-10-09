@@ -6,6 +6,8 @@
         if (APP._iniciado) return;
         APP._iniciado = true;
         const primerUso = !localStorage.getItem(LS.cfg);
+        // v6.19.7: adelanta DNS/TLS a los origenes que se van a usar.
+        try { precargarOrigenes(); } catch (_) { /* noop */ }
         injectCSS();
         buildUI();
         try { rxBarridoAutofill(); } catch (_) { /* noop */ }
@@ -99,7 +101,12 @@
         };
         window.addEventListener('focus', focusHandler);
         document.addEventListener('visibilitychange', () => {
-            if (!document.hidden) focusHandler();
+            if (!document.hidden) {
+                focusHandler();
+                // v6.19.7: si en modo rendimiento se pauso el polling estando
+                // oculta, al volver se refresca una vez para no quedar obsoleto.
+                if (APP.config.rendimientoPagina) { try { refresh(); } catch (_) { /* noop */ } }
+            }
         });
         // Las ventanas de unidad pueden restaurarse despues de cargar la pagina;
         // revalidamos el contorno varias veces al inicio.
@@ -108,6 +115,33 @@
         // pendiente recibe su ruta en background. Si ya hay ruta valida para
         // el destino actual, no se recalcula.
         setTimeout(() => { autoTrazarRutas(); }, 2500);
+    }
+    // v6.19.7: pista de bajo nivel para que cargue antes. Inserta preconnect y
+    // dns-prefetch hacia la API de la plataforma y los servicios de OSM que
+    // usan Rondo y los mapas. No cambia el comportamiento: solo adelanta la
+    // resolucion DNS y el handshake TLS de la primera peticion real.
+    function precargarOrigenes() {
+        const head = document.head || document.documentElement;
+        if (!head) return;
+        const origenes = [];
+        try { if (rxPlatApiUrl()) origenes.push(rxPlatApiUrl()); } catch (_) { /* noop */ }
+        origenes.push('https://tile.openstreetmap.org', 'https://nominatim.openstreetmap.org',
+            'https://overpass-api.de', 'https://router.project-osrm.org');
+        const ya = {};
+        const previos = head.querySelectorAll('link[rel="preconnect"],link[rel="dns-prefetch"]');
+        for (let i = 0; i < previos.length; i++) ya[previos[i].href] = 1;
+        origenes.forEach((o) => {
+            let base;
+            try { base = new URL(o).origin; } catch (_) { return; }
+            if (!base || ya[base] || base === location.origin) return;
+            ya[base] = 1;
+            const pc = document.createElement('link');
+            pc.rel = 'preconnect'; pc.href = base; pc.crossOrigin = '';
+            head.appendChild(pc);
+            const dp = document.createElement('link');
+            dp.rel = 'dns-prefetch'; dp.href = base;
+            head.appendChild(dp);
+        });
     }
     function log() { try { console.log.apply(console, ['[Rondo]'].concat(Array.prototype.slice.call(arguments))); } catch (_) { /* noop */ } }
 

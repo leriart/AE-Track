@@ -272,6 +272,16 @@ ok('rendimiento: filas fuera de pantalla no se pintan',
 ok('rendimiento: scroll real y transiciones baratas',
     /scroll-behavior:auto/.test(cssPerf) && /transition:background-color .1s/.test(cssPerf));
 ok('rendimiento: apagado no emite hoja', generarRendimiento({ rendimientoPagina: false }) === '');
+ok('rendimiento: controles nativos y scrollbar finos',
+    /color-scheme:/.test(cssPerf) && /scrollbar-width:thin/.test(cssPerf) &&
+    /scrollbar-color:var\(--rondo-border\)/.test(cssPerf));
+ok('rendimiento: pausa el refresh con la pestana oculta',
+    /APP\.config\.rendimientoPagina && document\.hidden/.test(src));
+ok('bajo nivel: preconnect a los origenes que usa la app',
+    /function precargarOrigenes\(/.test(src) && /rel = 'preconnect'/.test(src) &&
+    /dns-prefetch/.test(src) && /precargarOrigenes\(\);/.test(src));
+ok('remap: ignora las hojas propias y los enlaces que no son CSS',
+    /n\.id\.indexOf\('rondo'\) === 0/.test(src) && /\/stylesheet\/i\.test\(n\.rel/.test(src));
 
 ok('detecta la pantalla de login',
     /function rxEnLogin\(/.test(src) && /getElementById\('login_body'\)/.test(src) &&

@@ -1,6 +1,8 @@
     /* ====================== REFRESH ====================== */
     async function refresh() {
         if (APP.refBusy || !currentUser()) return;
+        // v6.19.7: en modo rendimiento no se refresca con la pestana oculta.
+        if (APP.config.rendimientoPagina && document.hidden) return;
         APP.refBusy = true;
         try {
             const unidades = await fetchUnits();
