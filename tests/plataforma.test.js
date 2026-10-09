@@ -231,6 +231,9 @@ ok('reestilizado: ventana de unidad y controles del mapa',
     /\.x-unit-info > \.unit-table-data \.td\{border-color:/.test(src));
 ok('reestilizado: la ventana flotante (tippy) queda opaca',
     /\.tippy-box,\[class\*="_messageBox_"\],\[class\*="_messageBoxWrapper_"\]\{background:/.test(src));
+ok('ui: numeros del panel legibles en tema claro',
+    /body\[data-rondo-theme='claro'\] #rondo-panel \.kpi \.kpi-val/.test(src) &&
+    /body\[data-rondo-theme='claro'\] #rondo-panel \.tab \.contador\{background:#eef2f7/.test(src));
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
