@@ -641,6 +641,7 @@
             checkRow('c-tema-plat', 'Usar el color de acento de la plataforma') +
             '<span id="rondo-plat-info" style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin:-2px 0 6px"></span>' +
             checkRow('c-estilo-pag', 'Aplicar el estilo de Rondo a la pagina (experimental)') +
+            checkRow('c-rendimiento-pag', 'Modo rendimiento de la pagina (menos repintado)') +
             checkRow('c-idioma-plat', 'Usar el idioma de la plataforma para la voz') +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +

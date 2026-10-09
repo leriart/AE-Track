@@ -2210,6 +2210,7 @@
             checkRow('c-tema-plat', 'Usar el color de acento de la plataforma') +
             '<span id="rondo-plat-info" style="font-size:11px;color:var(--rondo-fg-dim);display:block;margin:-2px 0 6px"></span>' +
             checkRow('c-estilo-pag', 'Aplicar el estilo de Rondo a la pagina (experimental)') +
+            checkRow('c-rendimiento-pag', 'Modo rendimiento de la pagina (menos repintado)') +
             checkRow('c-idioma-plat', 'Usar el idioma de la plataforma para la voz') +
             checkRow('c-coords', 'Mostrar lat/lon en unidades') +
             checkRow('c-contornos', 'Remarcar contornos de ventanas abiertas') +
@@ -5667,6 +5668,8 @@
             }
             const cEstiloPag = g('c-estilo-pag');
             if (cEstiloPag) cEstiloPag.checked = !!APP.config.estiloPagina;
+            const cRendPag = g('c-rendimiento-pag');
+            if (cRendPag) cRendPag.checked = !!APP.config.rendimientoPagina;
             const cIdiomaPlat = g('c-idioma-plat');
             if (cIdiomaPlat) cIdiomaPlat.checked = !!APP.config.idiomaPlataforma;
             g('c-coords').checked = !!APP.config.mostrarCoords;
@@ -5950,6 +5953,8 @@
             cf.temaPlataforma = !!(cTemaPlat2 && cTemaPlat2.checked);
             const cEstiloPag2 = g('c-estilo-pag');
             cf.estiloPagina = !!(cEstiloPag2 && cEstiloPag2.checked);
+            const cRendPag2 = g('c-rendimiento-pag');
+            cf.rendimientoPagina = !!(cRendPag2 && cRendPag2.checked);
             const cIdiomaPlat2 = g('c-idioma-plat');
             cf.idiomaPlataforma = !!(cIdiomaPlat2 && cIdiomaPlat2.checked);
             // v6.0.14: si se usa el idioma de la plataforma, ajusta la voz.

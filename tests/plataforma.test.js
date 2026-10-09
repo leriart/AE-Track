@@ -122,7 +122,7 @@ ok('reestilizado: cubre los tokens base del tema de la plataforma',
     /'base-bg-color': 'bg'/.test(src) && /'borders-color': 'border'/.test(src) &&
     /'icons-action-color': 'dim'/.test(src));
 ok('reestilizado: paleta segun tema claro/oscuro',
-    /const claro = APP\.config\.theme === 'claro'/.test(src) && /const P = claro \? \{/.test(src));
+    /const claro = APP\.config\.theme === 'claro'/.test(src) && /const P = rxPaginaPaleta\(claro\)/.test(src));
 
 // v6.19.3: mapeo completo del skin. Cada variable cae en su categoria; en
 // particular los paneles del cromo que antes no se pintaban y el texto sobre
@@ -140,16 +140,26 @@ ok('reestilizado: los bordes-color son color, no shorthand',
 // Prueba funcional: se evalua la funcion con un DOM simulado y se revisan las
 // declaraciones emitidas (asi el bug de los bordes no puede volver).
 const bloqueCSS = src.slice(src.indexOf('function aclarar('), src.indexOf('function applyTheme()'));
-function generarEstilo(cfg, acentoPlat) {
+function generarEstilo(cfg, acentoPlat, rondoVars) {
     const code = 'const APP = { config: Object.assign({ acento: "#850D22", theme: "oscuro", ' +
         'estiloPagina: true, density: "normal" }, ' + JSON.stringify(cfg || {}) + '), noMolestar: null };\n' +
         'let _el = null;\n' +
-        'const document = { getElementById: () => _el, ' +
+        'const getComputedStyle = () => ({ getPropertyValue: (n) => (' + JSON.stringify(rondoVars || {}) + ')[n] || "" });\n' +
+        'const document = { getElementById: () => _el, body: {}, ' +
         'createElement: () => ({ id: "", parentNode: null, textContent: "" }), ' +
         'head: { appendChild: (e) => { _el = e; } }, documentElement: { appendChild: (e) => { _el = e; } } };\n' +
         'const window = { matchMedia: () => ({ matches: false }) };\n' +
         'const rxPlatAcento = () => ' + JSON.stringify(acentoPlat || '#B30B27') + ';\n' +
         bloqueCSS + '\nreturn rxAplicarEstiloPagina(), (_el ? _el.textContent : "");';
+    try { return new Function(code)(); } catch (e) { return 'ERR:' + e.message; }
+}
+function generarRendimiento(cfg) {
+    const code = 'const APP = { config: Object.assign({ rendimientoPagina: true }, ' + JSON.stringify(cfg || {}) + ') };\n' +
+        'let _el = null;\n' +
+        'const document = { getElementById: () => _el, ' +
+        'createElement: () => ({ id: "", parentNode: null, textContent: "" }), ' +
+        'head: { appendChild: (e) => { _el = e; } }, documentElement: { appendChild: (e) => { _el = e; } } };\n' +
+        bloqueCSS + '\nreturn rxAplicarRendimientoPagina(), (_el ? _el.textContent : "");';
     try { return new Function(code)(); } catch (e) { return 'ERR:' + e.message; }
 }
 const cssOsc = generarEstilo({ temaPlataforma: true });
@@ -180,8 +190,15 @@ ok('reestilizado real: viste los componentes wui-* de Wialon',
     /\.wui-checkbox input:checked~\.wui-checkmark\{background:#B30B27 !important/.test(cssOsc));
 ok('reestilizado real: viste los componentes ant-* de Ant Design',
     /\.ant-btn-primary\{background:#B30B27 !important/.test(cssOsc) &&
-    /\.ant-input,\.ant-input-affix-wrapper/.test(cssOsc) &&
+    /\.ant-input,.ant-input-affix-wrapper/.test(cssOsc) &&
     /\.ant-modal-content/.test(cssOsc));
+ok('reestilizado real: viste las ventanas por vehiculo de Wialon',
+    /#tooltip,#tooltip2,\.mini-window-extra,\.x-unit-info/.test(cssOsc) &&
+    /\.pursuit-window \.pursuit-top-container/.test(cssOsc) &&
+    /\.workspace-units-panel/.test(cssOsc));
+ok('reestilizado real: redondeos estilo Rondo',
+    /--controls-border-radius:8px !important;/.test(cssOsc) &&
+    /--modal-border-radius:12px !important;/.test(cssOsc));
 ok('reestilizado real: hereda el acento de la plataforma en opt-in',
     generarEstilo({ temaPlataforma: true }, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
 ok('reestilizado real: por defecto usa el acento de Rondo',
@@ -189,6 +206,27 @@ ok('reestilizado real: por defecto usa el acento de Rondo',
 ok('reestilizado real: apagado no emite hoja', generarEstilo({ estiloPagina: false }) === '');
 ok('reestilizado real: tema claro usa superficies claras',
     /--panel-top-background:#ffffff !important;/.test(generarEstilo({ theme: 'claro' })));
+ok('reestilizado real: usa los tokens --rondo-* reales',
+    /--base-bg-color:#010203 !important;/.test(generarEstilo({ temaPlataforma: true }, '#B30B27', {
+        '--rondo-bg': '#010203', '--rondo-bg-soft': '#040506', '--rondo-bg-strong': '#070809',
+        '--rondo-fg': '#0a0b0c', '--rondo-fg-dim': '#0d0e0f', '--rondo-fg-mute': '#101112',
+        '--rondo-border': '#131415'
+    })) &&
+    /--primary-color:#0a0b0c !important;/.test(generarEstilo({ temaPlataforma: true }, '#B30B27', {
+        '--rondo-fg': '#0a0b0c'
+    })));
+
+// v6.19.5: capa de rendimiento CSS (opt-in).
+ok('DEFAULTS declara rendimientoPagina apagado', /rendimientoPagina: false,/.test(src));
+ok('Ajustes guarda rendimientoPagina', /cf\.rendimientoPagina = !!\(cRendPag2 && cRendPag2\.checked\)/.test(src));
+ok('rendimiento: se aplica desde applyTheme', /try \{ rxAplicarRendimientoPagina\(\); \}/.test(src));
+const cssPerf = generarRendimiento({});
+ok('rendimiento: fuera los desenfoques', /backdrop-filter:none !important/.test(cssPerf));
+ok('rendimiento: filas fuera de pantalla no se pintan',
+    /content-visibility:auto/.test(cssPerf) && /contain-intrinsic-size:auto 38px/.test(cssPerf));
+ok('rendimiento: scroll real y transiciones baratas',
+    /scroll-behavior:auto/.test(cssPerf) && /transition:background-color .1s/.test(cssPerf));
+ok('rendimiento: apagado no emite hoja', generarRendimiento({ rendimientoPagina: false }) === '');
 
 ok('detecta la pantalla de login',
     /function rxEnLogin\(/.test(src) && /getElementById\('login_body'\)/.test(src) &&

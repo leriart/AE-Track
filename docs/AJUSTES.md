@@ -6,7 +6,7 @@ Referencia generada automaticamente desde `DEFAULTS`
 usa `APP.config`, asi que puedes consultarla desde la consola del navegador
 (`APP.config.pollMs`).
 
-Total: **105 claves**.
+Total: **106 claves**.
 
 | Clave | Tipo | Valor por defecto | Descripcion |
 | --- | --- | --- | --- |
@@ -63,6 +63,7 @@ Total: **105 claves**.
 | `acento` | string | `'#850D22'` |  |
 | `temaPlataforma` | boolean | `false` | v6.0.14: heredar el color de acento del skin de la plataforma (AE-Track/Wialon) para que el panel combine con la pagina. Opt-in. |
 | `estiloPagina` | boolean | `false` | v6.9.1: reestiliza la pagina de la plataforma con la paleta de Rondo (experimental, opt-in). Cubre acento, superficies, texto y bordes; se aplica con !important sobre :root,html,body y respeta el tema claro/oscuro. |
+| `rendimientoPagina` | boolean | `false` | opt-in): menos repintado y composicion (fuera los desenfoques, las filas fuera de pantalla no se pintan, transiciones baratas). No toca la red ni el JS de la plataforma. |
 | `idiomaPlataforma` | boolean | `false` |  |
 | `escalaUI` | number | `1` |  |
 | `contornos` | boolean | `true` |  |
