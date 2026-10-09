@@ -629,9 +629,9 @@
         return out.join('');
     }
     let _rxObs = null;
+    let _rxHojasVistas = null;
     let _rxTimer = 0;
     let _rxCompCSS = '';
-    let _rxDocHecho = false;
     function rxHojaRondo(id) {
         let el = document.getElementById(id);
         if (!el) {
@@ -665,9 +665,22 @@
         Object.keys(_rxVars).forEach((k) => delete _rxVars[k]);
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
-        _rxDocHecho = false;
         _rxHojasVistas = null;
-        _rxBuffer = '';
+    }
+    // Procesa una hoja si aun no se vio. Incremental: nunca reparsea una hoja
+    // ya hecha, asi que se puede llamar sin coste sobre todas las hojas.
+    function rxProcesarHoja(hoja) {
+        if (!hoja) return false;
+        if (!_rxHojasVistas) _rxHojasVistas = typeof WeakSet === 'function' ? new WeakSet() : null;
+        if (_rxHojasVistas) {
+            if (_rxHojasVistas.has(hoja)) return false;
+            _rxHojasVistas.add(hoja);
+        }
+        let t = '';
+        try { t = rxReglasRondo(hoja.cssRules || []); } catch (_) { return false; }
+        if (!t) return false;
+        rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
+        return true;
     }
     function rxAplicarColoresPagina() {
         if (!(APP.config && APP.config.estiloPagina)) { rxDesactivarColores(); return; }
@@ -676,73 +689,54 @@
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         const P = rxPaginaPaleta(claro);
-        // El barrido del documento se hace UNA SOLA VEZ: de ahi en adelante las
-        // reglas ya apuntan a variables y solo se repintan al cambiar el tema.
-        if (!_rxDocHecho) {
-            const trozos = [];
-            let bytes = 0;
-            try {
-                const hojas = document.styleSheets;
-                for (let i = 0; i < hojas.length; i++) {
-                    const h = hojas[i];
-                    const owner = h.ownerNode;
-                    if (owner && owner.id && owner.id.indexOf('rondo') === 0) continue;
-                    let reglas;
-                    try { reglas = h.cssRules; } catch (_) { continue; }
-                    if (!reglas) continue;
-                    const t = rxReglasRondo(reglas);
-                    if (t) { bytes += t.length; trozos.push(t); }
-                    if (bytes > 2000000) break; // tope de seguridad
-                }
-            } catch (_) { /* noop */ }
-            if (bytes) { rxHojaRondo('rondo-colores-pagina').textContent = trozos.join(''); _rxDocHecho = true; }
+        // Se procesan TODAS las hojas cargadas; rxProcesarHoja ignora las ya
+        // vistas, asi que esto es barato y no deja ninguna sin reescribir (la
+        // plataforma carga el CSS de las ventanas de unidad en diferido).
+        let bloqueadas = 0, procesadas = 0;
+        try {
+            const hojas = document.styleSheets;
+            for (let i = 0; i < hojas.length; i++) {
+                const h = hojas[i];
+                const owner = h.ownerNode;
+                if (owner && owner.id && owner.id.indexOf('rondo') === 0) continue;
+                try { if (h.cssRules) { if (rxProcesarHoja(h)) procesadas++; } else bloqueadas++; }
+                catch (_) { bloqueadas++; }
+            }
+        } catch (_) { /* noop */ }
+        if (APP.unlocked && !rxAplicarColoresPagina._avisado && procesadas === 0 && bloqueadas > 0) {
+            rxAplicarColoresPagina._avisado = true;
+            try { console.warn('[Rondo] ' + bloqueadas + ' hojas CSS no accesibles (cross-origin); el remap no puede leerlas.'); } catch (_) { /* noop */ }
         }
         rxPintarTokens(P, acc, accD);
         rxObservar();
     }
-    // Solo mira lo NUEVO que se inserta: hojas de estilo nuevas y shadow roots
-    // nuevos. Nunca vuelve a recorrer todo el documento.
+    // Vigila hojas NUEVAS. Un <link rel=stylesheet> recien insertado tiene
+    // .sheet = null hasta que termina de cargar: si no se espera su evento
+    // 'load', su CSS (p. ej. el de la ventana de unidad) se perderia.
     function rxObservar() {
         if (_rxObs || !window.MutationObserver) return;
         _rxObs = new MutationObserver((muts) => {
+            let hayNueva = false;
             for (let i = 0; i < muts.length; i++) {
                 const nodos = muts[i].addedNodes;
                 for (let j = 0; j < nodos.length; j++) {
                     const n = nodos[j];
                     if (!n || n.nodeType !== 1) continue;
                     if (n.id && n.id.indexOf('rondo') === 0) continue;
-                    if (n.tagName === 'STYLE' || (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || ''))) {
-                        rxHojaCSS(n);
-                    }
+                    if (n.tagName === 'STYLE') hayNueva = true;
+                    else if (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || '')) { hayNueva = true; rxEsperarHoja(n); }
                 }
             }
+            if (hayNueva) rxProgramarColoresPagina();
         });
-        try { _rxObs.observe(document.head || document.documentElement, { childList: true }); } catch (_) { _rxObs = null; }
+        const head = document.head || document.documentElement;
+        try { _rxObs.observe(head, { childList: true }); } catch (_) { _rxObs = null; }
     }
-    // Une al final las reglas de una hoja recien insertada (CSS-in-JS). No se
-    // reprocesa una hoja ya vista y no se reparsea el texto completo: se
-    // acumulan en un buffer que se vuelca una sola vez.
-    let _rxHojasVistas = null;
-    let _rxBuffer = '';
-    function rxVaciarBuffer() {
-        if (!_rxBuffer) return;
-        rxHojaRondo('rondo-colores-pagina').textContent += '\n' + _rxBuffer;
-        _rxBuffer = '';
-    }
-    function rxHojaCSS(nodo) {
-        const hoja = nodo.sheet;
-        if (!hoja) return;
-        if (!_rxHojasVistas) _rxHojasVistas = typeof WeakSet === 'function' ? new WeakSet() : null;
-        if (_rxHojasVistas) {
-            if (_rxHojasVistas.has(hoja)) return;
-            _rxHojasVistas.add(hoja);
-        }
-        let t = '';
-        try { t = rxReglasRondo(hoja.cssRules || []); } catch (_) { return; }
-        if (!t) return;
-        _rxBuffer += '\n' + t;
-        clearTimeout(_rxTimer);
-        _rxTimer = setTimeout(rxVaciarBuffer, 120);
+    // Un <link rel=stylesheet> tiene .sheet = null hasta que carga. Se vuelve a
+    // disparar el barrido cuando termina, para no perder su CSS.
+    function rxEsperarHoja(link) {
+        if (link.sheet) return;
+        try { link.addEventListener('load', () => { try { rxProgramarColoresPagina(); } catch (_) { /* noop */ } }, { once: true }); } catch (_) { /* noop */ }
     }
     // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
     // embebido para no depender de fuentes externas ni CDN: la plataforma lo

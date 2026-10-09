@@ -318,13 +318,16 @@ ok('bajo nivel: preconnect a los origenes que usa la app',
     /dns-prefetch/.test(src) && /precargarOrigenes\(\);/.test(src));
 ok('remap: ignora las hojas propias y los enlaces que no son CSS',
     /n\.id\.indexOf\('rondo'\) === 0/.test(src) && /\/stylesheet\/i\.test\(n\.rel/.test(src));
-ok('remap: no reprocesa una hoja ya vista ni reparsea el texto',
-    /_rxHojasVistas/.test(src) && /_rxBuffer/.test(src) && /rxVaciarBuffer/.test(src));
+ok('remap: procesa cada hoja una sola vez (WeakSet)',
+    /_rxHojasVistas/.test(src) && /function rxProcesarHoja\(/.test(src) &&
+    /_rxHojasVistas\.has\(hoja\)/.test(src));
 ok('remap: se dispara desde applyTheme (si no, nunca corria)',
     /try \{ rxProgramarColoresPagina\(\); \}/.test(src));
-ok('remap: recorre el documento UNA sola vez y despues solo variables',
-    /if \(!_rxDocHecho\)/.test(src) && /rxHojaRondo\('rondo-tokens-pagina'\)/.test(src) &&
-    /function rxPintarTokens\(/.test(src));
+ok('remap: no reanaliza lo ya hecho y solo repinta variables al cambiar tema',
+    /function rxPintarTokens\(/.test(src) && /rxHojaRondo\('rondo-tokens-pagina'\)/.test(src) &&
+    !/_rxDocHecho/.test(src));
+ok('remap: no pierde las hojas que cargan tarde (<link> .sheet nulo)',
+    /function rxEsperarHoja\(/.test(src) && /addEventListener\('load'/.test(src));
 ok('remap: sin reescaneo periodico de todo el documento',
     !/setInterval\([^)]*rxProgramarColoresPagina\(true\)/.test(src) &&
     !/_rxColorSig/.test(src));
