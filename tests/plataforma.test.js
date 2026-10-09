@@ -107,8 +107,9 @@ ok('reestilizado de la pagina: usa las variables del skin y es reversible',
 ok('reestilizado: los bordes se emiten como 1px solid',
     /const RX_PAGINA_BORDES = \[/.test(src) && /':1px solid ' \+ acc \+ ' !important;'/.test(src));
 ok('reestilizado: se aplica desde applyTheme', /try \{ rxAplicarEstiloPagina\(\); \} catch/.test(src));
-ok('applyTheme usa el acento de la plataforma si el estilo esta activo',
-    /const acc = rxPlatAcento\(\) \|\| APP\.config\.acento \|\| '#850D22';/.test(src));
+ok('reestilizado: hereda el acento de la plataforma solo si esta activo',
+    /const acc = \(APP\.config\.temaPlataforma && rxPlatAcento\(\)\)/.test(src) &&
+    /: \(APP\.config\.acento \|\| '#850D22'\);/.test(src));
 // v6.9.1: el reestilizado de la pagina se endurece para que SI se aplique.
 ok('reestilizado: emite !important en las declaraciones',
     /:1px solid ' \+ acc \+ ' !important;'/.test(src) && /\+ P\[RX_PAGINA_SUPERFICIES\[v\]\] \+ ' !important;'/.test(src));
@@ -147,7 +148,7 @@ function generarEstilo(cfg, acentoPlat) {
         bloqueCSS + '\nreturn rxAplicarEstiloPagina(), (_el ? _el.textContent : "");';
     try { return new Function(code)(); } catch (e) { return 'ERR:' + e.message; }
 }
-const cssOsc = generarEstilo({});
+const cssOsc = generarEstilo({ temaPlataforma: true });
 ok('reestilizado real: emite paneles superior/izquierdo/inferior',
     /--panel-top-background:.+ !important;/.test(cssOsc) &&
     /--panel-left-background:.+ !important;/.test(cssOsc) &&
@@ -155,13 +156,22 @@ ok('reestilizado real: emite paneles superior/izquierdo/inferior',
 ok('reestilizado real: texto sobre acento en blanco',
     /--horizontal-bar-item-active-color:#ffffff !important;/.test(cssOsc) &&
     /--execute-button-color:#ffffff !important;/.test(cssOsc));
+ok('reestilizado real: texto de los botones de login en blanco',
+    /--monitoring-login-primary-button-text-color:#ffffff !important;/.test(cssOsc) &&
+    /--monitoring-login-secondary-button-text-color:#ffffff !important;/.test(cssOsc));
 ok('reestilizado real: borde de color sin "1px solid"',
     /--execute-button-border-color:#B30B27 !important;/.test(cssOsc) &&
     !/--execute-button-border-color:1px/.test(cssOsc));
 ok('reestilizado real: el shorthand si lleva "1px solid"',
     /--list-table-tab_button-active-border:1px solid #B30B27 !important;/.test(cssOsc));
-ok('reestilizado real: usa el acento de la plataforma',
-    generarEstilo({}, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
+ok('reestilizado real: viste los componentes wui-* de Wialon',
+    /\.wui-input,\.wui-select,\.wui-textarea/.test(cssOsc) &&
+    /html,body\{background:#1f2330 !important/.test(cssOsc) &&
+    /\.wui-checkbox input:checked~\.wui-checkmark\{background:#B30B27 !important/.test(cssOsc));
+ok('reestilizado real: hereda el acento de la plataforma en opt-in',
+    generarEstilo({ temaPlataforma: true }, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
+ok('reestilizado real: por defecto usa el acento de Rondo',
+    generarEstilo({}, '#00A0B0').indexOf('--button-color:#850D22 !important;') >= 0);
 ok('reestilizado real: apagado no emite hoja', generarEstilo({ estiloPagina: false }) === '');
 ok('reestilizado real: tema claro usa superficies claras',
     /--panel-top-background:#ffffff !important;/.test(generarEstilo({ theme: 'claro' })));
