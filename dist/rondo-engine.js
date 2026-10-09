@@ -5246,6 +5246,18 @@ ta.value = '';
             '.x-unit-info > .unit-table-data th{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
+            // La ventana flotante de unidad (que sale al pasar el raton) es un
+            // tippy: .tippy-box._messageBox_*. Su fondo sale de
+            // --white-color-message-box (que tambien es el texto blanco de los
+            // popups de severidad, por eso NO se toca el token). Se viste la
+            // clase del contenedor con [class*=] para sobrevivir a los hashes.
+            '.tippy-box,[class*="_messageBox_"],[class*="_messageBoxWrapper_"]{background:' + P.soft +
+                ' !important;color:' + P.fg + ' !important;}',
+            '[class*="_content-wrapper_"],[class*="_contentText_"],[class*="_contentWrapper_"],' +
+                '.tippy-content{background:transparent !important;color:' + P.fg + ' !important;}',
+            '[class*="_sectionTitle_"]{color:' + P.dim + ' !important;}',
+            '[class*="_mainInfo_"],[class*="_addressName_"],[class*="_geoName_"]{color:' + P.fg + ' !important;}',
+            '[class*="_lastUpdate_"]{color:' + P.dim + ' !important;}',
             // .wui-tooltip NO define fondo propio en la plataforma (solo
             // box-shadow/color/padding), asi que se transparentaba y se veia
             // el mapa detras. Se fuerza opaco + los fondos claros que la
