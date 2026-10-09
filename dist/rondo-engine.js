@@ -4937,7 +4937,9 @@ ta.value = '';
     const RX_PAGINA_SOBRE_ACENTO = [
         'horizontal-bar-item-active-color', 'horizontal-bar-item-hover-color',
         'execute-button-color', 'execute-button-hover-color',
-        'accordion-active-color', 'list-table-tab_button-active-color'
+        'accordion-active-color', 'list-table-tab_button-active-color',
+        'monitoring-login-primary-button-text-color', 'monitoring-login-primary-button-hover-text-color',
+        'monitoring-login-secondary-button-text-color', 'monitoring-login-secondary-button-hover-text-color'
     ];
     // Unicas variables que no llevan caja propia.
     const RX_PAGINA_TRANSPARENTES = ['horizontal-bar-item-background'];
@@ -4976,7 +4978,10 @@ ta.value = '';
             if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
             return;
         }
-        const acc = rxPlatAcento() || APP.config.acento || '#850D22';
+        // Acento: el de Rondo, salvo que se pida heredar el de la plataforma
+        // (mismo criterio que applyTheme para el panel).
+        const acc = (APP.config.temaPlataforma && rxPlatAcento())
+            ? rxPlatAcento() : (APP.config.acento || '#850D22');
         const acc2 = aclarar(acc, 0.28);
         const accD = oscurecer(acc, 0.14);
         // Paleta de superficies/texto segun el tema efectivo.
@@ -5008,6 +5013,19 @@ ta.value = '';
         });
         decl.push('  --accent-bg-color:' + acc2 + '22 !important;');
         decl.push('  --accent-bg-color-hover:' + acc2 + '33 !important;');
+        // v6.19.4: los componentes base de Wialon (wui-*) no siempre leen las
+        // variables del skin, asi que se visten aparte para que no queden
+        // islas con el tema original. Se limita a clases wui-* y a los
+        // contenedores raiz; nunca a etiquetas sueltas (romperia el panel).
+        const comp = [
+            'html,body{background:' + P.bg + ' !important;color:' + P.fg + ' !important;}',
+            '.wui-input,.wui-select,.wui-textarea,.wui-combobox input{background:' + P.soft +
+                ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
+            '.wui-checkmark{border-color:' + P.border + ' !important;}',
+            '.wui-checkbox input:checked~.wui-checkmark{background:' + acc + ' !important;border-color:' + acc + ' !important;}',
+            '.wui-tooltip,.wui-popup,.wui-dropdown,.wui-menu{background:' + P.strong +
+                ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}'
+        ].join('\n');
         let el = elPrev;
         if (!el) {
             el = document.createElement('style');
@@ -5016,7 +5034,7 @@ ta.value = '';
         }
         // Se aplica a :root, html y body para ganar a las variables del skin
         // que la plataforma declare en cualquiera de esos niveles.
-        el.textContent = ':root,html,body{\n' + decl.join('\n') + '\n}\n';
+        el.textContent = ':root,html,body{\n' + decl.join('\n') + '\n}\n' + comp + '\n';
     }
     function applyTheme() {
         const c = APP.config;
