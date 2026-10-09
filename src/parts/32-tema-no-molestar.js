@@ -817,7 +817,14 @@
             document.documentElement.style.setProperty('--rondo-accent-2', a2);
             document.documentElement.style.setProperty('--rondo-accent-grad', 'linear-gradient(135deg,' + acento + ',' + a2 + ')');
             const rgb = hexToRgb(acento);
-            if (rgb) document.documentElement.style.setProperty('--rondo-accent-rgb', rgb.r + ',' + rgb.g + ',' + rgb.b);
+            if (rgb) {
+                document.documentElement.style.setProperty('--rondo-accent-rgb', rgb.r + ',' + rgb.g + ',' + rgb.b);
+                // Texto legible sobre el acento: si el acento es CLARO, el
+                // texto sobre el va oscuro; si es oscuro, blanco. Asi los
+                // iconos/numeros sobre pestañas, tiles y botones siempre se ven.
+                const lumA = (0.2126 * rgb.r + 0.7152 * rgb.g + 0.0722 * rgb.b) / 255;
+                document.documentElement.style.setProperty('--rondo-accent-fg', lumA < 0.55 ? '#ffffff' : '#10151f');
+            }
         }
         const p = byId('rondo-panel');
         if (p) p.classList.toggle('density-compact', c.density === 'compact');
