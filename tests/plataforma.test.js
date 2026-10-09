@@ -204,7 +204,7 @@ ok('reestilizado real: pone el logo RONDO (Ndot)',
 
 // Remap de colores literales y logo RONDO: se evaluan las funciones puras.
 const M = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
-    '\nreturn { svg: rondoLogoSVG, uri: rondoLogoURI, parse: rxColorParse, color: rxColorRondo, decl: rxDeclaracionesRondo };')();
+    '\nreturn { svg: rondoLogoSVG, uri: rondoLogoURI, parse: rxColorParse, clave: rxColorClave, valor: rxColorValor, decl: rxDeclaracionesRondo };')();
 const P = { bg: '#1f2330', soft: '#272d3c', strong: '#313849', fg: '#e8ecf3', dim: '#9aa4b5', mute: '#6f7888', border: '#3a4252' };
 const ACC = '#850D22', ACCD = '#720B1D';
 ok('logo RONDO: SVG dot-matrix con circulos y etiqueta',
@@ -228,20 +228,25 @@ ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
 ok('reestilizado: cubre reportes, avisos y listas legacy del volcado',
     /\.report-result-body-table,/.test(src) && /\.notify_dlg_table/.test(src) &&
     /\.chart_tooltip/.test(src) && /html \.ol-viewport\{background:/.test(src));
-ok('reestilizado: inyecta tambien en shadow DOM (UI nueva)',
-    /function rxSombrasPagina\(/.test(src) && /adoptedStyleSheets/.test(src) &&
-    /rxSombrasPagina\(\)/.test(src));
+// El runtime del remap no debe buscar shadow roots: el volcado de la
+// plataforma da shadowRoots:0. Solo el exportador de Diagnostico los recorre.
+const runtimeTema = (src.match(/const P = rxPaginaPaleta\(claro\);[\s\S]*?function rxPintarTokens/) || [''])[0];
+ok('reestilizado: el runtime no busca shadow roots (solo el exportador)',
+    !/rxSombrasPagina/.test(runtimeTema) && !/shadowRoot/.test(runtimeTema) &&
+    /rxSombrasPagina/.test(src) === false && /shadowRoot/.test(src) === true);
 ok('logo RONDO: URI de datos lista para CSS', /^url\("data:image\/svg\+xml,/.test(M.uri('#850D22')));
-ok('color: blanco de fondo -> superficie', M.color('#ffffff', 'background-color', P, ACC, ACCD) === P.soft);
-ok('color: blanco de texto -> #fff', M.color('rgb(255, 255, 255)', 'color', P, ACC, ACCD) === '#ffffff');
-ok('color: texto oscuro -> fg', M.color('#172336', 'color', P, ACC, ACCD) === P.fg);
-ok('color: borde -> border', M.color('#e3e4e6', 'border-color', P, ACC, ACCD) === P.border);
-ok('color: rojo del skin -> acento', M.color('#b30b27', 'background-color', P, ACC, ACCD) === ACC);
-ok('color: azul antiguo -> acento', M.color('rgb(51, 153, 255)', 'color', P, ACC, ACCD) === ACC);
-ok('color: verde de estado se respeta', M.color('#4db251', 'background-color', P, ACC, ACCD) === null);
+ok('color: blanco de fondo -> superficie',
+    M.valor(M.clave('#ffffff', 'background-color'), P, ACC, ACCD) === P.soft);
+ok('color: blanco de texto -> #fff',
+    M.valor(M.clave('rgb(255, 255, 255)', 'color'), P, ACC, ACCD) === '#ffffff');
+ok('color: texto oscuro -> fg', M.valor(M.clave('#172336', 'color'), P, ACC, ACCD) === P.fg);
+ok('color: borde -> border', M.valor(M.clave('#e3e4e6', 'border-color'), P, ACC, ACCD) === P.border);
+ok('color: rojo del skin -> acento', M.clave('#b30b27', 'background-color') === 'accent');
+ok('color: azul antiguo -> acento', M.clave('rgb(51, 153, 255)', 'color') === 'accent');
+ok('color: verde de estado se respeta', M.clave('#4db251', 'background-color') === null);
 ok('color: transparente y custom props se ignoran',
-    M.color('rgba(0, 0, 0, 0)', 'background-color', P, ACC, ACCD) === null &&
-    M.color('#fff', '--x', P, ACC, ACCD) === null);
+    M.clave('rgba(0, 0, 0, 0)', 'background-color') === null &&
+    M.clave('#fff', '--x') === null);
 function fakeStyle(obj) {
     const keys = Object.keys(obj);
     const s = { length: keys.length, getPropertyValue: (p) => obj[p], getPropertyPriority: () => '' };
@@ -259,8 +264,7 @@ ok('color: el mismo literal+rol reutiliza la misma variable',
 ok('color: un literal sin mapeo se deja intacto',
     M.decl(fakeStyle({ 'box-shadow': '0 0 2px #123456' })) === '');
 ok('color: named colors basicos',
-    M.color('white', 'background-color', P, ACC, ACCD) === P.soft &&
-    M.color('black', 'color', P, ACC, ACCD) === P.fg);
+    M.clave('white', 'background-color') === 'soft' && M.clave('black', 'color') === 'fg');
 ok('reestilizado real: scrollbars acordes al tema',
     /--scrollbar-bg:#1f2330 !important;/.test(cssOsc) &&
     /--default-scrollbar-thumb-color:#3a4252 !important;/.test(cssOsc) &&
@@ -310,6 +314,8 @@ ok('bajo nivel: preconnect a los origenes que usa la app',
     /dns-prefetch/.test(src) && /precargarOrigenes\(\);/.test(src));
 ok('remap: ignora las hojas propias y los enlaces que no son CSS',
     /n\.id\.indexOf\('rondo'\) === 0/.test(src) && /\/stylesheet\/i\.test\(n\.rel/.test(src));
+ok('remap: no reprocesa una hoja ya vista ni reparsea el texto',
+    /_rxHojasVistas/.test(src) && /_rxBuffer/.test(src) && /rxVaciarBuffer/.test(src));
 ok('remap: se dispara desde applyTheme (si no, nunca corria)',
     /try \{ rxProgramarColoresPagina\(\); \}/.test(src));
 ok('remap: recorre el documento UNA sola vez y despues solo variables',

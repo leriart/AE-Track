@@ -559,11 +559,6 @@
         if (clave === 'on') return '#ffffff';
         return P[clave] || P.fg;
     }
-    // Envoltura con color concreto (compatibilidad con las pruebas).
-    function rxColorRondo(v, prop, P, acc, accD) {
-        const k = rxColorClave(v, prop);
-        return k ? rxColorValor(k, P, acc, accD) : null;
-    }
     // Literales de color dentro de un valor (hex o rgb/rgba).
     const RX_COLOR_LIT = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
     // Registro de variables del remap: un id por (literal + rol).
@@ -621,7 +616,6 @@
     let _rxTimer = 0;
     let _rxCompCSS = '';
     let _rxDocHecho = false;
-    let _rxSombras = null;
     function rxHojaRondo(id) {
         let el = document.getElementById(id);
         if (!el) {
@@ -656,7 +650,8 @@
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
         _rxDocHecho = false;
-        _rxSombras = null;
+        _rxHojasVistas = null;
+        _rxBuffer = '';
     }
     function rxAplicarColoresPagina() {
         if (!(APP.config && APP.config.estiloPagina)) { rxDesactivarColores(); return; }
@@ -686,70 +681,13 @@
             } catch (_) { /* noop */ }
             if (bytes) { rxHojaRondo('rondo-colores-pagina').textContent = trozos.join(''); _rxDocHecho = true; }
         }
-        rxSombrasPagina();
         rxPintarTokens(P, acc, accD);
         rxObservar();
-    }
-    // Shadow DOM: solo se procesa cada raiz una vez. Las variables heredan
-    // desde :root, asi que en la sombra basta con sus reglas reescritas.
-    function rxSombrasPagina(desde) {
-        if (!_rxSombras) _rxSombras = typeof WeakSet === 'function' ? new WeakSet() : null;
-        const procesadas = [];
-        const visitar = (raiz) => {
-            let nodos;
-            try { nodos = raiz.querySelectorAll('*'); } catch (_) { return; }
-            for (let i = 0; i < nodos.length; i++) {
-                const sr = nodos[i].shadowRoot;
-                if (sr && !(_rxSombras && _rxSombras.has(sr))) { procesadas.push(sr); visitar(sr); }
-            }
-        };
-        if (desde && desde.querySelectorAll) visitar(desde);
-        else visitar(document);
-        for (let i = 0; i < procesadas.length; i++) {
-            const root = procesadas[i];
-            if (_rxSombras) _rxSombras.add(root);
-            let texto = _rxCompCSS;
-            try {
-                const hojas = [];
-                const adoptadas = root.adoptedStyleSheets || [];
-                for (let k = 0; k < adoptadas.length; k++) hojas.push(adoptadas[k]);
-                const estilos = root.querySelectorAll('style');
-                for (let k = 0; k < estilos.length; k++) if (estilos[k].sheet) hojas.push(estilos[k].sheet);
-                for (let k = 0; k < hojas.length; k++) {
-                    let reglas;
-                    try { reglas = hojas[k].cssRules; } catch (_) { continue; }
-                    if (reglas) texto += rxReglasRondo(reglas);
-                }
-            } catch (_) { /* noop */ }
-            rxSombraAdoptar(root, texto);
-        }
-    }
-    function rxSombraAdoptar(root, texto) {
-        const prev = root.querySelector('style[data-rondo]');
-        if (typeof CSSStyleSheet === 'function' && 'adoptedStyleSheets' in root) {
-            try {
-                const hoja = new CSSStyleSheet();
-                hoja.replaceSync(texto);
-                hoja.__rondo = true;
-                const base = [];
-                const actuales = root.adoptedStyleSheets || [];
-                for (let i = 0; i < actuales.length; i++) if (!actuales[i].__rondo) base.push(actuales[i]);
-                root.adoptedStyleSheets = base.concat([hoja]);
-                if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
-                return;
-            } catch (_) { /* cae al <style> */ }
-        }
-        if (prev) { prev.textContent = texto; return; }
-        const s = document.createElement('style');
-        s.setAttribute('data-rondo', '1');
-        s.textContent = texto;
-        root.appendChild(s);
     }
     // Solo mira lo NUEVO que se inserta: hojas de estilo nuevas y shadow roots
     // nuevos. Nunca vuelve a recorrer todo el documento.
     function rxObservar() {
         if (_rxObs || !window.MutationObserver) return;
-        let pend;
         _rxObs = new MutationObserver((muts) => {
             for (let i = 0; i < muts.length; i++) {
                 const nodos = muts[i].addedNodes;
@@ -759,24 +697,36 @@
                     if (n.id && n.id.indexOf('rondo') === 0) continue;
                     if (n.tagName === 'STYLE' || (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || ''))) {
                         rxHojaCSS(n);
-                        continue;
                     }
-                    // Puede traer shadow roots dentro: revision diferida y acotada.
-                    clearTimeout(pend);
-                    pend = setTimeout(() => { try { rxSombrasPagina(n); } catch (_) { /* noop */ } }, 500);
                 }
             }
         });
-        try { _rxObs.observe(document.documentElement, { childList: true, subtree: true }); } catch (_) { _rxObs = null; }
+        try { _rxObs.observe(document.head || document.documentElement, { childList: true }); } catch (_) { _rxObs = null; }
     }
-    // Une al final las reglas de una hoja recien insertada (CSS-in-JS).
+    // Une al final las reglas de una hoja recien insertada (CSS-in-JS). No se
+    // reprocesa una hoja ya vista y no se reparsea el texto completo: se
+    // acumulan en un buffer que se vuelca una sola vez.
+    let _rxHojasVistas = null;
+    let _rxBuffer = '';
+    function rxVaciarBuffer() {
+        if (!_rxBuffer) return;
+        rxHojaRondo('rondo-colores-pagina').textContent += '\n' + _rxBuffer;
+        _rxBuffer = '';
+    }
     function rxHojaCSS(nodo) {
         const hoja = nodo.sheet;
         if (!hoja) return;
-        try {
-            const t = rxReglasRondo(hoja.cssRules || []);
-            if (t) rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
-        } catch (_) { /* noop */ }
+        if (!_rxHojasVistas) _rxHojasVistas = typeof WeakSet === 'function' ? new WeakSet() : null;
+        if (_rxHojasVistas) {
+            if (_rxHojasVistas.has(hoja)) return;
+            _rxHojasVistas.add(hoja);
+        }
+        let t = '';
+        try { t = rxReglasRondo(hoja.cssRules || []); } catch (_) { return; }
+        if (!t) return;
+        _rxBuffer += '\n' + t;
+        clearTimeout(_rxTimer);
+        _rxTimer = setTimeout(rxVaciarBuffer, 120);
     }
     // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
     // embebido para no depender de fuentes externas ni CDN: la plataforma lo
