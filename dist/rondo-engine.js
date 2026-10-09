@@ -5256,6 +5256,16 @@ ta.value = '';
             '.wui-button-icon-shadow button,.wui-button-icon-shadow:hover button{background:' + P.soft + ' !important;}',
             '.ol-maps-control,.control-search,.ol-bar-container,.menu-smart-search,' +
                 '.ol-layers-control,.ol-tools-panel{background:transparent !important;}',
+            // Reportes, avisos, rutas y listas legacy (del volcado de estilos).
+            '.report-result-body-table,.report-dialog-tables-dialog,.report-table-filters,.notify_dlg_table,' +
+                '.unit-cmds-response-table,.x-cookie-policy,.whats-new-box,.chart_tooltip,' +
+                '.route-control-create-cp-actions,.report-result-toolbar-icon,.waypoint_toolbar_btn,' +
+                '.export-control,.time-tags-container,.map_webgis_search_list{background:' + P.soft +
+                ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
+            '.report-result-body-table th,.report-dialog-tables-dialog th,.notify_dlg_table th,' +
+                '.report-table-filters th{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
+            '.tag-switcher,.trackbar,.x-cookie-policy{color:' + P.dim + ' !important;}',
+            'html .ol-viewport{background:' + P.bg + ' !important;}',
             '.map-control-info{background:' + P.strong + ' !important;color:' + P.fg +
                 ' !important;border-color:' + P.border + ' !important;}',
             '.mapboxgl-ctrl-group{background:transparent !important;box-shadow:none !important;border-radius:0 !important;}',
