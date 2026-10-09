@@ -5091,9 +5091,6 @@ ta.value = '';
         // su USO REAL (texto vs fondo, ver volcado): los oscuros -> texto de
         // Rondo, los claros -> superficie.
         // ------------------------------------------------------------------
-        'gray-900': 'fg', 'gray-800': 'strong', 'gray-700': 'dim', 'gray-600': 'strong',
-        'gray-500': 'mute', 'gray-400': 'mute', 'gray-300': 'border', 'gray-200': 'strong',
-        'gray-100': 'strong', 'gray-50': 'soft',
         // --- compatibilidad con nombres sueltos de la version previa ---
         'background': 'bg', 'background-content': 'bg', 'background-body': 'bg', 'background-app': 'bg',
         'background-header': 'soft', 'background-sidebar': 'soft', 'background-panel': 'soft',
@@ -5105,6 +5102,15 @@ ta.value = '';
         'text-color-secondary': 'dim', 'text-color-dim': 'dim', 'text-color-muted': 'mute',
         'text-color-disabled': 'mute', 'input-text-color': 'fg', 'input-placeholder-color': 'mute',
         'border-color': 'border', 'border-color-soft': 'strong', 'divider-color': 'strong'
+    };
+    // Paleta de grises: SOLO se aplica en tema OSCURO. En el tema claro de
+    // Wialon estos grises ya son correctos (texto oscuro / fondos claros), y
+    // ademas estan MEZCLADOS (--gray-200/300 se usan de fondo y de texto), asi
+    // que aplicarlos en claro pintaba el texto con color de fondo.
+    const RX_PAGINA_GRISES_OSCURO = {
+        'gray-900': 'fg', 'gray-800': 'strong', 'gray-700': 'dim', 'gray-600': 'strong',
+        'gray-500': 'mute', 'gray-400': 'mute', 'gray-300': 'border', 'gray-200': 'strong',
+        'gray-100': 'strong', 'gray-50': 'soft'
     };
     // Unico token que espera el shorthand completo "1px solid <color>".
     const RX_PAGINA_BORDE_SHORTHAND = {
@@ -5188,6 +5194,12 @@ ta.value = '';
         Object.keys(RX_PAGINA_RADIOS).forEach((v) => {
             decl.push('  --' + v + ':' + RX_PAGINA_RADIOS[v] + ' !important;');
         });
+        // Los grises solo en oscuro (en claro, los de Wialon ya valen).
+        if (!claro) {
+            Object.keys(RX_PAGINA_GRISES_OSCURO).forEach((v) => {
+                decl.push('  --' + v + ':' + rxPaginaToken(RX_PAGINA_GRISES_OSCURO[v], P, acc, acc2, accD) + ' !important;');
+            });
+        }
         // Scrollbars acordes al tema (color + hover + activo).
         decl.push('  --scrollbar-bg:' + P.bg + ' !important;');
         RX_PAGINA_SCROLL.forEach((p) => {
