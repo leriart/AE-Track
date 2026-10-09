@@ -5283,6 +5283,10 @@ ta.value = '';
             '.x-unit-info > .unit-table-data th{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
+            // Valores de la tabla del unit-hint (velocidad, kilometraje, horas
+            // de motor, satelites): van en <td class="icon"><div>...</div>. Se
+            // fuerzan legibles (el icono del td si queda en color de icono).
+            '[class*="_table_10z2h_"] td>div:not([class]){color:' + P.fg + ' !important;}',
             // La ventana flotante de unidad (que sale al pasar el raton) es un
             // tippy: .tippy-box._messageBox_*. Su fondo sale de
             // --white-color-message-box (que tambien es el texto blanco de los
@@ -5492,6 +5496,36 @@ ta.value = '';
         if (clave === 'on') return '#ffffff';
         return P[clave] || P.fg;
     }
+    // Rol de una clave de paleta: a que propiedad pertenece.
+    function rxPaginaRolClave(clave) {
+        if (clave === 'bg' || clave === 'soft' || clave === 'strong') return 'fondo';
+        if (clave === 'border') return 'borde';
+        if (clave === 'fg' || clave === 'dim' || clave === 'mute' || clave === 'on') return 'texto';
+        return 'acento'; // accent, hover, accent-2, accent-bg*, transparent
+    }
+    function rxPropRol(prop) {
+        if (/^(border|outline|column-rule)/.test(prop)) return 'borde';
+        if (prop.indexOf('background') === 0) return 'fondo';
+        return 'texto';
+    }
+    // Clave de paleta para una variable del tema segun DONDE se use. Asi una
+    // variable que Wialon usa como fondo Y como texto nunca contagia un rol
+    // con el otro: se resuelve la clave correcta para esa propiedad.
+    function rxTokenClave(tok, prop) {
+        if (RX_PAGINA_MIXTOS[tok]) {
+            const rol = rxPropRol(prop);
+            return RX_PAGINA_MIXTOS[tok][rol] || RX_PAGINA_MIXTOS[tok].fondo;
+        }
+        const clave = RX_PAGINA_MAPA[tok] || RX_PAGINA_GRISES_OSCURO[tok];
+        if (!clave) return null;
+        const rolClave = rxPaginaRolClave(clave);
+        if (rolClave === 'acento') return clave;
+        const rolProp = rxPropRol(prop);
+        if (rolProp === rolClave) return clave;
+        if (rolProp === 'fondo') return 'soft';
+        if (rolProp === 'borde') return 'border';
+        return 'fg';
+    }
     // Literales de color dentro de un valor (hex o rgb/rgba).
     const RX_COLOR_LIT = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
     // Registro de variables del remap: un id por (literal + rol).
@@ -5519,15 +5553,11 @@ ta.value = '';
             let val = style.getPropertyValue(prop);
             if (prop.indexOf('--') !== 0 && /color|background|border|outline|fill|stroke|caret/.test(prop)) {
                 // Variables mezcladas: se resuelven segun la PROPIEDAD.
-                const esBorde = /^(border|outline|column-rule)/.test(prop);
-                const esFondo = prop.indexOf('background') === 0;
                 val = val.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
-                    const m = RX_PAGINA_MIXTOS[tok];
-                    if (!m) return full;
-                    const rol = esBorde ? 'borde' : (esFondo ? 'fondo' : 'texto');
-                    const clave = m[rol] || m.fondo;
+                    const clave = rxTokenClave(tok, prop);
+                    if (!clave) return full;
                     cambio = true;
-                    return 'var(--rpg-' + rxVarId('mix:' + tok + ':' + clave, clave) + ')';
+                    return 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave) + ')';
                 });
                 val = val.replace(RX_COLOR_LIT, (lit) => {
                     const clave = rxColorClave(lit, prop);
