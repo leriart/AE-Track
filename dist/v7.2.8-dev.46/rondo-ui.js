@@ -251,6 +251,12 @@
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);padding:0 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
             "#rondo-panel .tab.activo .contador{background:rgba(0,0,0,.3);color:#fff;border-color:transparent}\n" +
+            // En tema claro, los numeros (contadores y valores KPI) deben ser
+            // oscuros: si las variables del tema no bastan, se fuerzan.
+            "body[data-rondo-theme='claro'] #rondo-panel .tab .contador{background:#eef2f7;color:#1d2433;border-color:#dfe4ec}\n" +
+            "body[data-rondo-theme='claro'] #rondo-panel .tab.activo .contador{background:rgba(0,0,0,.32);color:#fff;border-color:transparent}\n" +
+            "body[data-rondo-theme='claro'] #rondo-panel .kpi .kpi-val,body[data-rondo-theme='claro'] #rondo-panel .rondo-riesgo-kpi .kpi-val{color:#1d2433}\n" +
+            "body[data-rondo-theme='claro'] #rondo-panel .contador{color:#1d2433}\n" +
             "#rondo-panel .tools{display:flex;gap:6px;padding:7px 9px;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;align-items:center;background:var(--rondo-bg-soft)}\n" +
             "#rondo-panel .tools button{display:inline-flex;align-items:center;gap:4px;background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:5px 9px;cursor:pointer;font-size:11px;font-weight:600;transition:background .15s,transform .1s,box-shadow .15s,border-color .15s}\n" +
             "#rondo-panel .tools button:hover{background:var(--rondo-bg);border-color:var(--rondo-fg-mute);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +
