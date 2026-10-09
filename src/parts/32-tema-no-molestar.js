@@ -420,11 +420,6 @@
             // a currentColor (!important), que respeta el color del propio
             // elemento (asi los estados inline rojo/verde siguen igual).
             '[class*="_messageBox_"] *{-webkit-text-fill-color:currentColor !important;}',
-            // La plataforma limita el alto del contenido de la ventana a
-            // calc(100vh - 142px) (y 75vh). El bloque del conductor queda al
-            // final y se RECORTA. Se le da mas alto para que entre completo.
-            '[class*="_contentWrapper_"],[class*="_messageBox_"] .monitoringUnitHint{' +
-                'max-height:calc(100vh - 70px) !important;}',
             // Los valores de umbral (sensor)* se pintan INLINE (rojo/verde)
             // con colores para fondo claro y quedan apagados en oscuro. Se
             // aclaran con brightness/saturate, que conserva el tono (no se
@@ -874,7 +869,22 @@
         const cajas = document.querySelectorAll('[class*="_messageBox_"],.tippy-box');
         if (!cajas.length) return;
         for (let i = 0; i < cajas.length; i++) {
-            try { rxContrasteVentana(cajas[i]); } catch (_) { /* noop */ }
+            const caja = cajas[i];
+            try { rxContrasteVentana(caja); } catch (_) { /* noop */ }
+            // La ventana sobresale del viewport (Tippy la abre donde cabe pero
+            // el contenido puede pasarse y el final queda fuera de pantalla).
+            // Se limita su alto al espacio visible y se deja que el contenido
+            // haga scroll dentro, para que nada quede inalcanzable.
+            try {
+                const r = caja.getBoundingClientRect();
+                if (r.width < 50 || r.height < 50) continue;
+                const top = Math.max(0, r.top);
+                const disp = window.innerHeight - top - 12;
+                if (disp > 160 && r.height > disp + 4) {
+                    caja.style.setProperty('max-height', disp + 'px', 'important');
+                    caja.style.setProperty('overflow-y', 'auto', 'important');
+                }
+            } catch (_) { /* noop */ }
         }
     }
     // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
