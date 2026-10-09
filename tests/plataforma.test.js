@@ -230,6 +230,20 @@ const dec = M.decl(fakeStyle({ 'background-color': '#ffffff', 'color': '#172336'
 ok('color: reescribe declaraciones por propiedad',
     /background-color:#272d3c;/.test(dec) && /color:#e8ecf3;/.test(dec) &&
     /border:1px solid #3a4252;/.test(dec));
+ok('color: named colors basicos',
+    M.color('white', 'background-color', P, ACC, ACCD) === P.soft &&
+    M.color('black', 'color', P, ACC, ACCD) === P.fg);
+ok('reestilizado real: scrollbars acordes al tema',
+    /--scrollbar-bg:#1f2330 !important;/.test(cssOsc) &&
+    /--default-scrollbar-thumb-color:#3a4252 !important;/.test(cssOsc) &&
+    /--modal-scrollbar-thumb-active-color:#B30B27 !important;/.test(cssOsc));
+ok('reestilizado real: seleccion y foco en color de acento',
+    /::selection\{background:#B30B27 !important/.test(cssOsc) && /:focus-visible/.test(cssOsc));
+ok('reestilizado: shorthand de borde y familias de scrollbar',
+    /'button-border': 'border'/.test(src) && /RX_PAGINA_SCROLL = \[/.test(src) &&
+    /'calendar-today-color': 'accent'/.test(src) && /'checkbox-border-color': 'border'/.test(src));
+ok('reestilizado: switch off y message-box en la paleta',
+    /'switch-off-bg': 'strong'/.test(src) && /'primary-color-message-box': 'fg'/.test(src));
 ok('reestilizado real: hereda el acento de la plataforma en opt-in',
     generarEstilo({ temaPlataforma: true }, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
 ok('reestilizado real: por defecto usa el acento de Rondo',
