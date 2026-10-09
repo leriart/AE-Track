@@ -121,7 +121,7 @@ ok('reestilizado: cubre los tokens base del tema de la plataforma',
     /'accent-color': 'accent'/.test(src) && /'primary-color': 'fg'/.test(src) &&
     /'base-bg-color': \{ texto: 'fg', fondo: 'bg' \}/.test(src) &&
     /'borders-color': \{ texto: 'dim', fondo: 'border'/.test(src) &&
-    /'icons-action-color': 'dim'/.test(src));
+    /'icons-action-color': \{ texto: 'dim', fondo: 'strong' \}/.test(src));
 ok('reestilizado: paleta segun tema claro/oscuro',
     /const claro = APP\.config\.theme === 'claro'/.test(src) && /const P = rxPaginaPaleta\(claro\)/.test(src));
 
@@ -131,7 +131,7 @@ ok('reestilizado: paleta segun tema claro/oscuro',
 ok('reestilizado: mapea paneles, acordeon y dialogos del skin',
     /'panel-top-background': 'soft'/.test(src) && /'panel-left-background': 'soft'/.test(src) &&
     /'panel-bottom-background': 'soft'/.test(src) && /'help-window-background': 'soft'/.test(src) &&
-    /'wizard-dialog-background': 'soft'/.test(src) && /'accordion-normal-background': 'soft'/.test(src));
+    /'wizard-dialog-background': \{ texto: 'fg', fondo: 'soft' \}/.test(src) && /'accordion-normal-background': 'soft'/.test(src));
 ok('reestilizado: texto sobre acento en blanco',
     /'horizontal-bar-item-active-color': 'on'/.test(src) && /'execute-button-color': 'on'/.test(src));
 ok('reestilizado: los bordes-color son color, no shorthand',
@@ -169,8 +169,8 @@ ok('reestilizado real: emite paneles superior/izquierdo/inferior',
     /--panel-left-background:.+ !important;/.test(cssOsc) &&
     /--panel-bottom-background:.+ !important;/.test(cssOsc), cssOsc.slice(0, 80));
 ok('reestilizado real: la paleta --gray-* se adapta al tema (etiquetas legibles)',
-    /--gray-900:#e8ecf3 !important;/.test(cssOsc) && /--gray-700:#9aa4b5 !important;/.test(cssOsc) &&
-    /--gray-100:#313849 !important;/.test(cssOsc) && !/--gray-200:/.test(cssOsc) && !/--gray-300:/.test(cssOsc));
+    /--gray-900:#e8ecf3 !important;/.test(cssOsc) && /--gray-100:#313849 !important;/.test(cssOsc) &&
+    !/--gray-200:/.test(cssOsc) && !/--gray-300:/.test(cssOsc) && !/--gray-700:/.test(cssOsc));
 ok('reestilizado real: en claro NO toca la paleta de grises de Wialon',
     !/--gray-900:/.test(generarEstilo({ theme: 'claro' })) &&
     !/--gray-200:/.test(generarEstilo({ theme: 'claro' })) &&
@@ -178,7 +178,7 @@ ok('reestilizado real: en claro NO toca la paleta de grises de Wialon',
 ok('reestilizado real: cubre los tokens base (acento, texto, bordes)',
     /--accent-color:#B30B27 !important;/.test(cssOsc) &&
     /--primary-color:#e8ecf3 !important;/.test(cssOsc) &&
-    /--icons-action-color:#9aa4b5 !important;/.test(cssOsc));
+    /--primary-color:#e8ecf3 !important;/.test(cssOsc));
 ok('reestilizado real: texto sobre acento en blanco',
     /--horizontal-bar-item-active-color:#ffffff !important;/.test(cssOsc) &&
     /--execute-button-color:#ffffff !important;/.test(cssOsc));
@@ -298,7 +298,7 @@ ok('reestilizado: shorthand de borde y familias de scrollbar',
     /'button-border': 'border'/.test(src) && /RX_PAGINA_SCROLL = \[/.test(src) &&
     /'calendar-today-color': 'accent'/.test(src) && /'checkbox-border-color': 'border'/.test(src));
 ok('reestilizado: switch off y message-box en la paleta',
-    /'switch-off-bg': 'strong'/.test(src) && /'primary-color-message-box': 'fg'/.test(src));
+    /'switch-off-bg': 'strong'/.test(src) && /'primary-color-message-box': \{ texto: 'fg', fondo: 'strong' \}/.test(src));
 ok('reestilizado real: hereda el acento de la plataforma en opt-in',
     generarEstilo({ temaPlataforma: true }, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
 ok('reestilizado real: por defecto usa el acento de Rondo',

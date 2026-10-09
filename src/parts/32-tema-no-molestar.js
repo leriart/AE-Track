@@ -63,8 +63,7 @@
         'accent-bg-color': 'strong', 'accent-bg-color-hover': 'strong',
         'accent-bg-color-active': 'accent-bg', 'accent-bg-light': 'strong',
         // --- base: texto ---
-        'primary-color': 'fg', 'secondary-color': 'dim', 'light-color': 'mute',
-        'icons-action-color': 'dim', 'color-text': 'fg', 'color-text-secondary': 'dim',
+        'primary-color': 'fg', 'secondary-color': 'dim', 'color-text-secondary': 'dim',
         'color-text-disabled': 'mute',
         // --- base: superficies --- 'hover-bg-color': 'strong', 'editable-hover-bg-color': 'strong',
         'accent-gray-bg-color': 'strong', 'available-components-bg-color': 'soft',
@@ -100,8 +99,7 @@
         'accordion-hover-background': 'strong', 'accordion-hover-color': 'fg',
         'accordion-border-color': 'border',
         // --- wizard / ayuda / modal ---
-        'wizard-dialog-header-background': 'accent', 'wizard-dialog-header-color': 'on',
-        'wizard-dialog-background': 'soft', 'modal-background': 'soft',
+        'wizard-dialog-header-background': 'accent', 'wizard-dialog-header-color': 'on', 'modal-background': 'soft',
         'help-window-background': 'soft', 'help-window-header-background': 'accent',
         'help-window-header-color': 'on', 'help-window-collapser-header-background': 'strong',
         // --- pestañas ---
@@ -129,8 +127,7 @@
         'disabled-input-background-color': 'strong', 'disabled-input-color': 'mute', 'placeholder-color': 'mute',
         'select-border-color': 'border', 'select-hover-border-color': 'border',
         'chip-bg-color': 'strong', 'chip-bg-hover-color': 'strong', 'header-badge-bg-color': 'strong',
-        'checkbox-bg-color': 'soft', 'checkbox-checked-bg-color': 'accent', 'checkbox-checkmark-color': 'on', 'checkbox-hover-color-secondary': 'hover',
-        'checkbox-disabled-checked-bg-color': 'mute', 'switch-on-bg': 'accent',
+        'checkbox-bg-color': 'soft', 'checkbox-checked-bg-color': 'accent', 'checkbox-checkmark-color': 'on', 'checkbox-hover-color-secondary': 'hover', 'switch-on-bg': 'accent',
         'switch-on-hover-bg': 'hover', 'switch-thumb-bg': 'on',
         'tag-text-color': 'fg', 'tag-bg-color': 'strong', 'tag-remove-hover-color': 'accent',
         'preloader-text-color': 'fg',
@@ -197,8 +194,7 @@
         'panel-list-group-button-noaccent-progress-bg': 'border',
         'panel-list-group-expanded-button-noaccent-progress-bg': 'border',
         'panel-list-item-input-button-noaccent-hover-bg': 'strong',
-        'panel-list-item-input-button-noaccent-active-bg': 'strong',
-        'primary-color-message-box': 'fg', 'secondary-color-message-box': 'dim',
+        'panel-list-item-input-button-noaccent-active-bg': 'strong', 'secondary-color-message-box': 'dim',
         'white-color-message-box': 'on', 'checkbox-border-color': 'border',
         'list-table-tab_button-active-disabled-color': 'on',
         'list-table-tab_button-active-disabled-background': 'accent',
@@ -247,15 +243,22 @@
         'input-border-color': { texto: 'fg', fondo: 'border', borde: 'border' },
         'checkbox-hover-color': { texto: 'fg', fondo: 'strong' },
         'gray-200': { texto: 'mute', fondo: 'strong' },
-        'gray-300': { texto: 'mute', fondo: 'border', borde: 'border' }
+        'gray-300': { texto: 'mute', fondo: 'border', borde: 'border' },
+        'icons-action-color': { texto: 'dim', fondo: 'strong' },
+        'checkbox-disabled-checked-bg-color': { texto: 'mute', fondo: 'strong' },
+        'gray-700': { texto: 'dim', fondo: 'strong' },
+        'color-text': { texto: 'fg', fondo: 'strong' },
+        'light-color': { texto: 'mute', fondo: 'strong' },
+        'primary-color-message-box': { texto: 'fg', fondo: 'strong' },
+        'wizard-dialog-background': { texto: 'fg', fondo: 'soft' },
     };
     // Solo los grises de USO CLARO: unos como texto (900/700/500/400) y otros
     // como superficie (100/50/800/600). Se EXCLUYEN gray-200 y gray-300 porque
     // Wialon los usa a la vez de fondo Y de texto (fecha, direccion): mapearlos
     // pintaba ese texto con color de fondo.
     const RX_PAGINA_GRISES_OSCURO = {
-        'gray-900': 'fg', 'gray-800': 'strong', 'gray-700': 'dim', 'gray-600': 'strong',
-        'gray-500': 'mute', 'gray-400': 'mute', 'gray-100': 'strong', 'gray-50': 'soft'
+        'gray-900': 'fg', 'gray-800': 'strong', 'gray-600': 'strong',
+        'gray-500': 'mute', 'gray-400': 'mute', 'gray-100': 'strong'
     };
     // Unico token que espera el shorthand completo "1px solid <color>".
     const RX_PAGINA_BORDE_SHORTHAND = {
