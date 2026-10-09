@@ -5247,8 +5247,17 @@ ta.value = '';
             '.x-unit-info > .unit-table-data .td{border-color:' + P.border + ' !important;color:' + P.fg + ' !important;}',
             '.x-unit-info .external-map-link{background-color:' + P.soft + ' !important;}',
             '.x-unit-info .entity-block-item > .image-container{border-color:' + P.border + ' !important;}',
-            // Botones junto al mapa: el contenedor blanco se oculta y cada
-            // boton queda como un cuadro redondeado suelto.
+            // Botones junto al mapa: el blanco real viene de
+            // .wui-button-icon-shadow (background-color:#fff), no de un
+            // contenedor, asi que se viste esa clase y setransparentan los
+            // contenedores que solo maquetan (ol-maps-control, ol-bar...).
+            '.wui-button-icon-shadow{background:' + P.soft + ' !important;border-radius:8px !important;}',
+            '.wui-button-icon-shadow:hover{background:' + P.strong + ' !important;}',
+            '.wui-button-icon-shadow button,.wui-button-icon-shadow:hover button{background:' + P.soft + ' !important;}',
+            '.ol-maps-control,.control-search,.ol-bar-container,.menu-smart-search,' +
+                '.ol-layers-control,.ol-tools-panel{background:transparent !important;}',
+            '.map-control-info{background:' + P.strong + ' !important;color:' + P.fg +
+                ' !important;border-color:' + P.border + ' !important;}',
             '.mapboxgl-ctrl-group{background:transparent !important;box-shadow:none !important;border-radius:0 !important;}',
             '.mapboxgl-ctrl-group button{background:' + P.soft + ' !important;border-radius:8px !important;' +
                 'margin:4px 0 !important;box-shadow:0 1px 3px rgba(0,0,0,.35) !important;}',
@@ -5256,8 +5265,6 @@ ta.value = '';
             '.MicrosoftMap .NavBar_Container,.MicrosoftMap .streetsideToolPanel{background:transparent !important;}',
             '.MicrosoftMap .NavBar_Button,.MicrosoftMap .streetsideToolPanelButton{background:' + P.soft +
                 ' !important;border-radius:8px !important;}',
-            '.ol-maps-control{background:transparent !important;box-shadow:none !important;border:none !important;}',
-            '.ol-maps-control .wui-button,.ol-maps-control button{background:' + P.soft + ' !important;border-radius:8px !important;}',
             // Ajusta el logo RONDO a su caja (el SVG trae su propio tamano).
             '.top .logo,.logo,#block_top_panel .logo,.logo-wrapper .logo{background-size:contain !important;' +
                 'background-repeat:no-repeat !important;background-position:center !important;}',
@@ -5367,7 +5374,11 @@ ta.value = '';
         h *= 60;
         return h < 0 ? h + 360 : h;
     }
-    function rxColorRondo(v, prop, P, acc, accD) {
+    // Rol (clave de paleta) de un color literal segun la PROPIEDAD donde
+    // aparece. Devuelve la clave, NO un color: la regla reescrita usara
+    // var(--rpg-*) y cambiar de tema sera solo repintar esas variables, sin
+    // volver a recorrer el CSS de la pagina.
+    function rxColorClave(v, prop) {
         const c = rxColorParse(v);
         if (!c) return null;
         const p = String(prop || '').toLowerCase();
@@ -5379,29 +5390,57 @@ ta.value = '';
         const sat = max === 0 ? 0 : (max - min) / max;
         if (sat > 0.25) {
             const hue = rxColorHue(c.r, c.g, c.b);
-            if (hue <= 20 || hue >= 330) return acc;                 // rojo del skin -> acento
-            if (hue >= 190 && hue <= 265 && lum > 0.16) return acc;  // azul brillante -> acento
-            if (lum > 0.16) return null; // estado saturado brillante: se respeta
-            // oscuro y saturado (p. ej. el azul marino del texto): cae a neutro
+            if (hue <= 20 || hue >= 330) return 'accent';                // rojo del skin
+            if (hue >= 190 && hue <= 265 && lum > 0.16) return 'accent'; // azul brillante
+            if (lum > 0.16) return null;                                 // verde/ambar: estado
+            // oscuro y saturado (azul marino del texto): cae a neutro
         }
         if (p.indexOf('background') === 0) {
-            if (lum > 0.9) return P.soft;
-            if (lum > 0.45) return P.strong;
-            return P.bg;
+            if (lum > 0.9) return 'soft';
+            if (lum > 0.45) return 'strong';
+            return 'bg';
         }
-        if (p.indexOf('border') === 0 || p.indexOf('outline') === 0 || p.indexOf('column-rule') === 0) return P.border;
+        if (p.indexOf('border') === 0 || p.indexOf('outline') === 0 || p.indexOf('column-rule') === 0) return 'border';
         if (p === 'color' || p === 'fill' || p === 'stroke' || p === 'caret-color') {
             if (c.a < 0.98) return null;
-            if (lum > 0.85) return '#ffffff';
-            if (lum > 0.55) return P.mute;
-            if (lum > 0.3) return P.dim;
-            return P.fg;
+            if (lum > 0.85) return 'on';
+            if (lum > 0.55) return 'mute';
+            if (lum > 0.3) return 'dim';
+            return 'fg';
         }
         return null;
     }
+    function rxColorValor(clave, P, acc, accD) {
+        if (clave === 'accent') return acc;
+        if (clave === 'hover') return accD;
+        if (clave === 'on') return '#ffffff';
+        return P[clave] || P.fg;
+    }
+    // Envoltura con color concreto (compatibilidad con las pruebas).
+    function rxColorRondo(v, prop, P, acc, accD) {
+        const k = rxColorClave(v, prop);
+        return k ? rxColorValor(k, P, acc, accD) : null;
+    }
     // Literales de color dentro de un valor (hex o rgb/rgba).
     const RX_COLOR_LIT = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
-    function rxDeclaracionesRondo(style, P, acc, accD) {
+    // Registro de variables del remap: un id por (literal + rol).
+    const _rxVars = {};
+    const _rxVarsOrden = [];
+    const _rxVarLit = {};
+    function rxVarId(lit, clave) {
+        const k = String(lit).trim().toLowerCase() + '|' + clave;
+        if (_rxVarLit[k]) return _rxVarLit[k];
+        let h = 5381;
+        for (let i = 0; i < k.length; i++) h = ((h << 5) + h + k.charCodeAt(i)) | 0;
+        let id = 'c' + (h >>> 0).toString(36);
+        let n = 1;
+        while (_rxVars[id] !== undefined) { id = 'c' + (h >>> 0).toString(36) + 'x' + n; n++; }
+        _rxVarLit[k] = id;
+        _rxVars[id] = clave;
+        _rxVarsOrden.push(id);
+        return id;
+    }
+    function rxDeclaracionesRondo(style) {
         let cambio = false;
         const partes = [];
         for (let i = 0; i < style.length; i++) {
@@ -5409,8 +5448,8 @@ ta.value = '';
             let val = style.getPropertyValue(prop);
             if (prop.indexOf('--') !== 0 && /color|background|border|outline|fill|stroke|caret/.test(prop)) {
                 val = val.replace(RX_COLOR_LIT, (lit) => {
-                    const c = rxColorRondo(lit, prop, P, acc, accD);
-                    if (c) { cambio = true; return c; }
+                    const clave = rxColorClave(lit, prop);
+                    if (clave) { cambio = true; return 'var(--rpg-' + rxVarId(lit, clave) + ')'; }
                     return lit;
                 });
             }
@@ -5419,108 +5458,113 @@ ta.value = '';
         }
         return cambio ? partes.join('') : '';
     }
-    function rxReglasRondo(reglas, P, acc, accD) {
+    function rxReglasRondo(reglas) {
         const out = [];
         for (let i = 0; i < reglas.length; i++) {
             const r = reglas[i];
             if (r.cssRules && (r.type === 4 || r.type === 12)) {
                 const cond = r.conditionText || (r.media && r.media.mediaText) || '';
-                const inner = rxReglasRondo(r.cssRules, P, acc, accD);
+                const inner = rxReglasRondo(r.cssRules);
                 if (inner) out.push((r.type === 4 ? '@media ' : '@supports ') + cond + '{' + inner + '}');
                 continue;
             }
             if (!r.selectorText || !r.style) continue;
-            const decls = rxDeclaracionesRondo(r.style, P, acc, accD);
+            const decls = rxDeclaracionesRondo(r.style);
             if (decls) out.push(r.selectorText + '{' + decls + '}');
         }
         return out.join('');
     }
-    let _rxColorObs = null;
-    let _rxColorTimer = 0;
-    let _rxColorSig = '';
+    let _rxObs = null;
+    let _rxTimer = 0;
     let _rxCompCSS = '';
+    let _rxDocHecho = false;
+    let _rxSombras = null;
+    function rxHojaRondo(id) {
+        let el = document.getElementById(id);
+        if (!el) {
+            el = document.createElement('style');
+            el.id = id;
+            (document.head || document.documentElement).appendChild(el);
+        }
+        return el;
+    }
+    // Pinta SOLO las variables del remap (barato): es lo unico que hay que
+    // rehacer al cambiar de tema o acento.
+    function rxPintarTokens(P, acc, accD) {
+        if (!_rxVarsOrden.length) return;
+        const partes = [];
+        for (let i = 0; i < _rxVarsOrden.length; i++) {
+            const id = _rxVarsOrden[i];
+            partes.push('  --rpg-' + id + ':' + rxColorValor(_rxVars[id], P, acc, accD) + ';');
+        }
+        rxHojaRondo('rondo-tokens-pagina').textContent = ':root,html,body{\n' + partes.join('\n') + '\n}\n';
+    }
     function rxProgramarColoresPagina() {
-        clearTimeout(_rxColorTimer);
-        _rxColorTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 350);
+        clearTimeout(_rxTimer);
+        _rxTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 400);
+    }
+    function rxDesactivarColores() {
+        ['rondo-colores-pagina', 'rondo-tokens-pagina'].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el && el.parentNode) el.parentNode.removeChild(el);
+        });
+        if (_rxObs) { _rxObs.disconnect(); _rxObs = null; }
+        Object.keys(_rxVars).forEach((k) => delete _rxVars[k]);
+        _rxVarsOrden.length = 0;
+        Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
+        _rxDocHecho = false;
+        _rxSombras = null;
     }
     function rxAplicarColoresPagina() {
-        const elPrev = document.getElementById('rondo-colores-pagina');
-        if (!(APP.config && APP.config.estiloPagina)) {
-            if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
-            if (_rxColorObs) { _rxColorObs.disconnect(); _rxColorObs = null; }
-            _rxColorSig = '';
-            return;
-        }
+        if (!(APP.config && APP.config.estiloPagina)) { rxDesactivarColores(); return; }
         const acc = (APP.config.temaPlataforma && rxPlatAcento()) ? rxPlatAcento() : (APP.config.acento || '#850D22');
         const accD = oscurecer(acc, 0.14);
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         const P = rxPaginaPaleta(claro);
-        // Nada que rehacer si no cambio el tema/acento ni el numero de hojas.
-        const sig = (claro ? 'c' : 'o') + '|' + acc + '|' + (document.styleSheets ? document.styleSheets.length : 0);
-        if (elPrev && sig === _rxColorSig) return;
-        _rxColorSig = sig;
-        const trozos = [];
-        let bytes = 0;
-        try {
-            const hojas = document.styleSheets;
-            for (let i = 0; i < hojas.length; i++) {
-                const h = hojas[i];
-                const owner = h.ownerNode;
-                if (owner && owner.id && owner.id.indexOf('rondo') === 0) continue;
-                let reglas;
-                try { reglas = h.cssRules; } catch (_) { continue; }
-                if (!reglas) continue;
-                const t = rxReglasRondo(reglas, P, acc, accD);
-                bytes += t.length;
-                trozos.push(t);
-                if (bytes > 2000000) break; // tope de seguridad
-            }
-        } catch (_) { /* noop */ }
-        let el = elPrev;
-        if (!el) {
-            el = document.createElement('style');
-            el.id = 'rondo-colores-pagina';
-            (document.head || document.documentElement).appendChild(el);
-        }
-        el.textContent = trozos.join('');
-        if (!_rxColorObs && window.MutationObserver) {
-            _rxColorObs = new MutationObserver((muts) => {
-                for (let i = 0; i < muts.length; i++) {
-                    const nodos = muts[i].addedNodes;
-                    for (let j = 0; j < nodos.length; j++) {
-                        const n = nodos[j];
-                        if (!n || n.nodeType !== 1) continue;
-                        if (n.id && n.id.indexOf('rondo') === 0) continue;
-                        const esHoja = n.tagName === 'STYLE' ||
-                            (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || ''));
-                        if (esHoja) { rxProgramarColoresPagina(); return; }
-                    }
+        // El barrido del documento se hace UNA SOLA VEZ: de ahi en adelante las
+        // reglas ya apuntan a variables y solo se repintan al cambiar el tema.
+        if (!_rxDocHecho) {
+            const trozos = [];
+            let bytes = 0;
+            try {
+                const hojas = document.styleSheets;
+                for (let i = 0; i < hojas.length; i++) {
+                    const h = hojas[i];
+                    const owner = h.ownerNode;
+                    if (owner && owner.id && owner.id.indexOf('rondo') === 0) continue;
+                    let reglas;
+                    try { reglas = h.cssRules; } catch (_) { continue; }
+                    if (!reglas) continue;
+                    const t = rxReglasRondo(reglas);
+                    if (t) { bytes += t.length; trozos.push(t); }
+                    if (bytes > 2000000) break; // tope de seguridad
                 }
-            });
-            try { _rxColorObs.observe(document.head || document.documentElement, { childList: true }); } catch (_) { _rxColorObs = null; }
+            } catch (_) { /* noop */ }
+            if (bytes) { rxHojaRondo('rondo-colores-pagina').textContent = trozos.join(''); _rxDocHecho = true; }
         }
-        // Las ventanas por vehiculo de la UI nueva viven en shadow DOM: ahi no
-        // llegan las reglas del documento (solo heredan las variables). Se
-        // reescriben tambien los estilos de cada shadow root abierto.
-        try { rxSombrasPagina(P, acc, accD); } catch (_) { /* noop */ }
+        rxSombrasPagina();
+        rxPintarTokens(P, acc, accD);
+        rxObservar();
     }
-    // Reescribe los colores literales dentro de cada shadow root abierto y le
-    // inyecta ademas los componentes base de Rondo (comp). Usa una hoja
-    // compartida (adoptedStyleSheets) para no duplicar memoria.
-    function rxSombrasPagina(P, acc, accD) {
-        const raices = [];
+    // Shadow DOM: solo se procesa cada raiz una vez. Las variables heredan
+    // desde :root, asi que en la sombra basta con sus reglas reescritas.
+    function rxSombrasPagina(desde) {
+        if (!_rxSombras) _rxSombras = typeof WeakSet === 'function' ? new WeakSet() : null;
+        const procesadas = [];
         const visitar = (raiz) => {
             let nodos;
             try { nodos = raiz.querySelectorAll('*'); } catch (_) { return; }
             for (let i = 0; i < nodos.length; i++) {
                 const sr = nodos[i].shadowRoot;
-                if (sr) { raices.push(sr); visitar(sr); }
+                if (sr && !(_rxSombras && _rxSombras.has(sr))) { procesadas.push(sr); visitar(sr); }
             }
         };
-        visitar(document);
-        for (let i = 0; i < raices.length; i++) {
-            const root = raices[i];
+        if (desde && desde.querySelectorAll) visitar(desde);
+        else visitar(document);
+        for (let i = 0; i < procesadas.length; i++) {
+            const root = procesadas[i];
+            if (_rxSombras) _rxSombras.add(root);
             let texto = _rxCompCSS;
             try {
                 const hojas = [];
@@ -5531,7 +5575,7 @@ ta.value = '';
                 for (let k = 0; k < hojas.length; k++) {
                     let reglas;
                     try { reglas = hojas[k].cssRules; } catch (_) { continue; }
-                    if (reglas) texto += rxReglasRondo(reglas, P, acc, accD);
+                    if (reglas) texto += rxReglasRondo(reglas);
                 }
             } catch (_) { /* noop */ }
             rxSombraAdoptar(root, texto);
@@ -5557,6 +5601,39 @@ ta.value = '';
         s.setAttribute('data-rondo', '1');
         s.textContent = texto;
         root.appendChild(s);
+    }
+    // Solo mira lo NUEVO que se inserta: hojas de estilo nuevas y shadow roots
+    // nuevos. Nunca vuelve a recorrer todo el documento.
+    function rxObservar() {
+        if (_rxObs || !window.MutationObserver) return;
+        let pend;
+        _rxObs = new MutationObserver((muts) => {
+            for (let i = 0; i < muts.length; i++) {
+                const nodos = muts[i].addedNodes;
+                for (let j = 0; j < nodos.length; j++) {
+                    const n = nodos[j];
+                    if (!n || n.nodeType !== 1) continue;
+                    if (n.id && n.id.indexOf('rondo') === 0) continue;
+                    if (n.tagName === 'STYLE' || (n.tagName === 'LINK' && /stylesheet/i.test(n.rel || ''))) {
+                        rxHojaCSS(n);
+                        continue;
+                    }
+                    // Puede traer shadow roots dentro: revision diferida y acotada.
+                    clearTimeout(pend);
+                    pend = setTimeout(() => { try { rxSombrasPagina(n); } catch (_) { /* noop */ } }, 500);
+                }
+            }
+        });
+        try { _rxObs.observe(document.documentElement, { childList: true, subtree: true }); } catch (_) { _rxObs = null; }
+    }
+    // Une al final las reglas de una hoja recien insertada (CSS-in-JS).
+    function rxHojaCSS(nodo) {
+        const hoja = nodo.sheet;
+        if (!hoja) return;
+        try {
+            const t = rxReglasRondo(hoja.cssRules || []);
+            if (t) rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
+        } catch (_) { /* noop */ }
     }
     // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
     // embebido para no depender de fuentes externas ni CDN: la plataforma lo
@@ -5624,6 +5701,9 @@ ta.value = '';
         try { rxAplicarEstiloPagina(); } catch (_) { /* noop */ }
         // v6.19.5: aplica/quita la capa de rendimiento CSS.
         try { rxAplicarRendimientoPagina(); } catch (_) { /* noop */ }
+        // v6.19.3: remap de los colores literales de la plataforma (una vez;
+        // despues solo se repintan las variables al cambiar de tema).
+        try { rxProgramarColoresPagina(); } catch (_) { /* noop */ }
     }
     // Normaliza el factor de escala de UI a uno de los valores permitidos.
     const ESCALAS_UI = [1, 1.15, 1.3, 1.5];
