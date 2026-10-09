@@ -244,7 +244,6 @@
             "#rondo-panel .rondo-ia-head.ia-on .rondo-ia-badge::after{content:'';position:absolute;left:2.5px;top:0.5px;width:3px;height:5px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}\n" +
             "#rondo-panel .tabs{display:flex;gap:3px;background:var(--rondo-bg-soft);padding:5px 6px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:9px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
-            +
             "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
@@ -623,7 +622,6 @@
             "#rondo-panel .rondo-riesgo-filters-row .mini .rondo-usym{font-size:13px}\n" +
             "#rondo-panel .rondo-riesgo-grupo-head .rondo-usym{font-size:14px;margin-right:2px}\n" +
             "#rondo-panel .rondo-riesgo-card .rb-actions button .rondo-usym{font-size:13px}\n" +
-            +
             "#rondo-panel .rondo-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
             "#rondo-panel .rondo-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 6px rgba(var(--rondo-accent-rgb),.3)}\n" +
@@ -762,8 +760,6 @@
             "#rondo-panel .tab:hover .rondo-usym{opacity:1}\n" +
             "#rondo-panel .tab.activo .rondo-usym{opacity:1;transform:scale(1.08)}\n" +
             "#rondo-panel .tab .contador{font-size:9.5px;padding:1px 5px;margin-left:0}\n" +
-            +
-            +
             "#rondo-panel .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
             "#rondo-panel .kpi .etq{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
             "#rondo-panel .kpi .valor{font:600 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
@@ -1039,7 +1035,6 @@
             "#rondo-body td.ruta .ruta-bar{margin-top:3px;height:4px;background:var(--rondo-bg-alt);border-radius:3px;overflow:hidden;min-width:96px}\n" +
             "#rondo-body td.ruta .ruta-bar-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s ease}\n" +
             "#rondo-body td.ruta .ruta-meta{margin-top:2px;font:500 10px monospace;color:var(--rondo-fg-dim);white-space:nowrap}\n" +
-            +
             /* ── Responsive ── */
             "@media (max-width:720px){\n" +
             "  #rondo-panel{min-width:0;max-width:96vw}\n" +
@@ -1220,7 +1215,352 @@
             "#rondo-panel .rondo-geo-role{font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.3px;flex:0 0 auto}\n" +
             "#rondo-panel .rondo-geo-card.rol-base .rondo-geo-role{color:var(--rondo-ok-fg);border-color:rgba(67,160,71,.5)}\n" +
             "#rondo-panel .rondo-geo-card.rol-carga .rondo-geo-role{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.5)}\n" +
-            "#rondo-panel .rondo-geo-card .rondo-geo-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n";
+            "#rondo-panel .rondo-geo-card .rondo-geo-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n" +
+            // ── v6.12: alerta de geocercas (pestana Zonas > Geocercas) ─────
+            // Tarjeta: barra lateral y badge con gravedad + disparador.
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga{color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-bajo{color:var(--rondo-fg-dim);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-medio{color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-color:transparent}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-alto{color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-color:transparent}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-critico{color:var(--rondo-bad-fg);background:var(--rondo-bad-bg);border-color:transparent}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel{border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-bajo{box-shadow:inset 3px 0 0 var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-medio{box-shadow:inset 3px 0 0 var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-alto{box-shadow:inset 3px 0 0 var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-critico{box-shadow:inset 3px 0 0 var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge{display:inline-flex;align-items:center;gap:4px;flex:0 1 auto;min-width:0;max-width:82px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 8.5px var(--rondo-font);letter-spacing:.4px;padding:2px 7px;border-radius:8px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-bajo{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-medio,#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-alto{color:var(--rondo-warn-fg);border-color:rgba(249,168,37,.45);background:var(--rondo-warn-bg)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-critico{color:var(--rondo-bad-fg);border-color:transparent;background:var(--rondo-bad-bg)}\n" +
+            "#rondo-panel .rondo-geo-kpi:last-child b{color:var(--rondo-warn-fg)}\n" +
+            // Franja resumen (una sola linea, sin desbordes).
+            "#rondo-panel #rondo-geo-ga-resumen:empty{display:none}\n" +
+            "#rondo-panel .rondo-ga-res{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);min-width:0}\n" +
+            "#rondo-panel .rondo-ga-res.on{border-color:rgba(249,168,37,.5)}\n" +
+            "#rondo-panel .rondo-ga-resico{font-size:15px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-ga-res.on .rondo-ga-resico{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-ga-restxt{flex:0 1 auto;min-width:0;display:flex;flex-direction:column;gap:0}\n" +
+            "#rondo-panel .rondo-ga-restxt b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-ga-restxt span{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-ga-pills{display:flex;gap:4px;flex-wrap:wrap;flex:1 1 190px;min-width:0;max-height:52px;overflow-y:auto}\n" +
+            "#rondo-panel .rondo-ga-pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;min-width:0;padding:2px 8px;border-radius:999px;cursor:pointer;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);font:600 10px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-ga-pill:hover{border-color:var(--rondo-border);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill i{width:6px;height:6px;border-radius:50%;background:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-ga-pill .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ga-pill em{font:500 9px var(--rondo-font);font-style:normal;opacity:.7;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ga-pill b{font:700 9px var(--rondo-font);padding:0 5px;border-radius:7px;background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill.sev-bajo i{background:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-ga-pill.sev-medio i,#rondo-panel .rondo-ga-pill.sev-alto i{background:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill.sev-critico i{background:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill.avisa{border-color:var(--rondo-warn-fg);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-ga-resacc{display:inline-flex;gap:4px;flex:0 0 auto;margin-left:auto}\n" +
+            // Menu de la alerta de una geocerca (dentro del dialogo propio).
+            "#rondo-dialog .rondo-ga-d{display:flex;flex-direction:column;gap:9px;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dhead{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:3px solid var(--rondo-fg-mute);min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-bajo{border-left-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-medio,#rondo-dialog .rondo-ga-dhead.sev-alto{border-left-color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-critico{border-left-color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dico{font-size:16px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-medio .rondo-ga-dico,#rondo-dialog .rondo-ga-dhead.sev-alto .rondo-ga-dico{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-critico .rondo-ga-dico{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dht{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}\n" +
+            "#rondo-dialog .rondo-ga-dht b{font:600 12px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rondo-ga-dht span{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rondo-ga-dbody{display:flex;flex-direction:column;gap:8px;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dbody.off{opacity:.5;pointer-events:none}\n" +
+            "#rondo-dialog .rondo-ga-drow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dlb{flex:0 0 82px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-chip{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:3px 10px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);text-align:left;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rondo-ga-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-dialog .rondo-ga-chip.ancho{white-space:normal}\n" +
+            "#rondo-dialog .rondo-ga-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 1px 6px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            "#rondo-dialog .rondo-ga-chip.sev-bajo.activo{background:var(--rondo-bg-strong);color:var(--rondo-fg);border-color:var(--rondo-border);box-shadow:none}\n" +
+            "#rondo-dialog .rondo-ga-chip.sev-critico.activo{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent;box-shadow:none}\n" +
+            "#rondo-dialog .rondo-ga-dnum{display:inline-flex;align-items:center;gap:5px;font:600 9.5px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.3px}\n" +
+            "#rondo-dialog .rondo-ga-dnum input{width:62px;padding:3px 6px;font:600 11px var(--rondo-font)}\n" +
+            "#rondo-dialog .rondo-ga-dhint{flex:1;min-width:170px;margin:0;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-dprev{display:flex;flex-direction:column;gap:3px;padding:7px 9px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dprev > b{font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-dpv{display:flex;flex-direction:column;gap:2px;padding-left:9px;border-left:2px solid var(--rondo-fg-mute);min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dpv.sev-medio,#rondo-dialog .rondo-ga-dpv.sev-alto{border-left-color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dpv.sev-critico{border-left-color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dpv .pv-t{font:600 10.5px var(--rondo-font);color:var(--rondo-fg);overflow-wrap:anywhere}\n" +
+            "#rondo-dialog .rondo-ga-dpv .pv-d{font:500 10px var(--rondo-font);color:var(--rondo-fg-dim);overflow-wrap:anywhere}\n" +
+            // Interruptor del menu (mismo lenguaje visual que el resto).
+            "#rondo-dialog .rondo-ga-sw{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:3px 9px 3px 4px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10px var(--rondo-font);white-space:nowrap}\n" +
+            "#rondo-dialog .rondo-ga-sw .knob{width:20px;height:11px;border-radius:999px;background:var(--rondo-fg-mute);position:relative;flex:0 0 auto;transition:background .18s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rondo-ga-sw .knob::after{content:'';position:absolute;top:1.5px;left:1.5px;width:8px;height:8px;border-radius:50%;background:var(--rondo-bg);transition:transform .18s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rondo-ga-sw.on{color:var(--rondo-warn-fg);border-color:rgba(249,168,37,.5)}\n" +
+            "#rondo-dialog .rondo-ga-sw.on .knob{background:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-sw.on .knob::after{transform:translateX(9px)}\n" +
+            // Tarjetas estrechas: la alerta no come el ancho de la lista.
+            "@media (max-width:420px){#rondo-panel .rondo-geo-card .rondo-geo-gabadge{display:none}#rondo-panel .rondo-ga-resacc{margin-left:0}}\n" +
+            // Escala de interfaz (Ajustes > Visual): el menu respeta el tamaño.
+            "#rondo-dialog .rondo-ga-dhead b,#rondo-dialog .rondo-ga-dht b{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-dht span{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-dlb,#rondo-dialog .rondo-ga-dnum,#rondo-dialog .rondo-ga-dprev > b{font-size:calc(9.5px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-chip,#rondo-dialog .rondo-ga-dhint,#rondo-dialog .rondo-ga-dpv .pv-t{font-size:calc(10.5px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-dpv .pv-d,#rondo-dialog .rondo-ga-sw{font-size:calc(10px * var(--rondo-esc))}\n" +
+            // ── v6.13: geocercas de la app (mapa de dibujo + paneles) ─────
+            // Mismo lenguaje que el editor de paradas (.rpm-*): tarjeta con
+            // cabecera, cuerpo y pie; botones planos, chips redondeados y
+            // acento en la accion principal.
+            "#rondo-geocerca-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:14px}\n" +
+            "#rondo-geocerca-modal.abierto{display:flex}\n" +
+            "#rondo-geocerca-modal .gg-card{position:relative;width:min(1240px,97vw);height:min(92vh,780px);display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font);min-width:0}\n" +
+            // Cabecera
+            "#rondo-geocerca-modal .gg-head{display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700;flex:0 0 auto;flex-wrap:wrap;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-head .rondo-usym{color:var(--rondo-accent-2);font-size:18px;flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-head b{font-size:14px;letter-spacing:.2px}\n" +
+            "#rondo-geocerca-modal .gg-headsub{font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);font-weight:500;padding-left:9px;border-left:1px solid var(--rondo-border);white-space:nowrap}\n" +
+            "#rondo-geocerca-modal .gg-x{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);cursor:pointer;color:var(--rondo-fg-dim);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-x:hover{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent}\n" +
+            // Cuerpo: mapa a la izquierda, paneles a la derecha.
+            "#rondo-geocerca-modal .gg-cuerpo{flex:1;min-height:0;display:flex;gap:11px;padding:11px 13px;min-width:0}\n" +
+            "#rondo-geocerca-modal .rondo-gg-mapa{position:relative;flex:1;min-width:0;overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);touch-action:none}\n" +
+            "#rondo-geocerca-modal .rondo-gg-mapa .rondo-mm{cursor:crosshair;border:0;border-radius:0}\n" +
+            // Las dos capas SVG van por encima de los tiles del mini-mapa.
+            "#rondo-geocerca-modal .rondo-gg-ctx,#rondo-geocerca-modal .rondo-gg-capa{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}\n" +
+            "#rondo-geocerca-modal .rondo-gg-ctx{z-index:2}\n" +
+            "#rondo-geocerca-modal .rondo-gg-capa{z-index:3}\n" +
+            "#rondo-geocerca-modal .rondo-gg-atrib{position:absolute;right:5px;bottom:4px;font-size:9px;color:#222;background:rgba(255,255,255,.75);padding:1px 4px;border-radius:4px;pointer-events:none;z-index:4}\n" +
+            // Chapa flotante sobre el mapa: modo actual + como se dibuja.
+            "#rondo-geocerca-modal .gg-hud{position:absolute;left:9px;top:9px;z-index:4;display:flex;flex-direction:column;gap:5px;align-items:flex-start;max-width:min(72%,320px);pointer-events:none}\n" +
+            "#rondo-geocerca-modal .gg-hud-m{display:inline-flex;align-items:center;gap:6px;background:rgba(20,24,34,.82);color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:3px 10px;font:600 10.5px var(--rondo-font);backdrop-filter:blur(2px)}\n" +
+            "#rondo-geocerca-modal .gg-hud-m .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-hud-h{background:rgba(20,24,34,.72);color:#e6e9f0;border-radius:8px;padding:3px 8px;font:500 10px var(--rondo-font);line-height:1.35}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-m,body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-h{background:rgba(255,255,255,.9);color:#1d2433;border-color:rgba(0,0,0,.1)}\n" +
+            "#rondo-geocerca-modal .rondo-gg-plat{z-index:1}\n" +
+            // Leyenda del mapa: que color es cada origen y cuantas hay.
+            "#rondo-geocerca-modal .gg-leyenda{position:absolute;left:9px;bottom:9px;z-index:4;display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:calc(100% - 18px);pointer-events:none}\n" +
+            "#rondo-geocerca-modal .gg-ley-b{display:inline-flex;align-items:center;gap:5px;pointer-events:auto;cursor:pointer;background:rgba(20,24,34,.8);color:#e6e9f0;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:2px 8px;font:600 9.5px var(--rondo-font);backdrop-filter:blur(2px);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b:hover{border-color:rgba(255,255,255,.3);color:#fff}\n" +
+            "#rondo-geocerca-modal .gg-ley-b.activo{background:var(--rondo-warn-fg);color:#2a1d00;border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-ley-b b{font-weight:800}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i{width:9px;height:9px;border-radius:3px;flex:0 0 auto;border:1.5px dashed rgba(255,255,255,.5);background:rgba(255,255,255,.12)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b.activo i{border-color:rgba(0,0,0,.45);background:rgba(0,0,0,.12)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i.sw-app{border-color:#7d8595;background:rgba(125,133,149,.28)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i.sw-plat{border-color:#5c7a99;background:rgba(92,122,153,.28)}\n" +
+            "#rondo-geocerca-modal .gg-ley-draft{pointer-events:none;display:inline-flex;align-items:center;gap:5px;background:rgba(20,24,34,.8);color:#ffe082;border:1px solid rgba(249,168,37,.5);border-radius:999px;padding:2px 8px;font:600 9.5px var(--rondo-font);text-transform:none;letter-spacing:0}\n" +
+            "#rondo-geocerca-modal .gg-ley-draft::before{content:'';width:9px;height:9px;border-radius:3px;background:rgba(249,168,37,.35);border:1.5px solid #f9a817}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b{background:rgba(255,255,255,.9);color:#1d2433;border-color:rgba(0,0,0,.12)}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b.activo{background:var(--rondo-warn-fg);color:#3a2b00}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b i{border-color:rgba(0,0,0,.3);background:rgba(0,0,0,.08)}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-draft{background:rgba(255,255,255,.9);color:#8d6b00}\n" +
+            // Paneles laterales
+            "#rondo-geocerca-modal .gg-lados{flex:0 0 296px;min-width:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:2px}\n" +
+            "#rondo-geocerca-modal .gg-lado{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lado h4{margin:0;font:700 10px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);display:flex;align-items:center;gap:6px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .rondo-usym{font-size:13px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .gg-count{margin-left:auto;font:700 9.5px var(--rondo-font);background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:1px 7px;color:var(--rondo-fg-dim);font-style:normal}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .gg-modo-tag{margin-left:auto;font:700 8.5px var(--rondo-font);font-style:normal;letter-spacing:.4px;background:var(--rondo-accent-grad);color:#fff;border-radius:7px;padding:1px 7px}\n" +
+            "#rondo-geocerca-modal .gg-sec{font:700 9px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);padding-top:2px;border-top:1px solid var(--rondo-border-soft)}\n" +
+            // Campos
+            "#rondo-geocerca-modal .gg-lab{display:flex;flex-direction:column;gap:3px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute);min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lab input{width:100%;min-width:0;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font:500 12px var(--rondo-font);text-transform:none;letter-spacing:0;transition:border-color .15s,box-shadow .15s}\n" +
+            "#rondo-geocerca-modal .gg-lab input:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            "#rondo-geocerca-modal .gg-two{display:flex;gap:5px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-two input{flex:1;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-ir{flex:0 0 auto;align-self:stretch}\n" +
+            "#rondo-geocerca-modal .gg-unit{position:relative;display:block}\n" +
+            "#rondo-geocerca-modal .gg-unit input{padding-right:26px}\n" +
+            "#rondo-geocerca-modal .gg-unit i{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:700 9.5px var(--rondo-font);font-style:normal;letter-spacing:.3px;color:var(--rondo-fg-mute);pointer-events:none}\n" +
+            // Chips de modo
+            "#rondo-geocerca-modal .gg-modos{display:flex;gap:4px}\n" +
+            "#rondo-geocerca-modal .gg-chip{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:5px 7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 11px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-chip .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-geocerca-modal .gg-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.32)}\n" +
+            // Tira de cifras
+            "#rondo-geocerca-modal .gg-stats{display:flex;gap:5px}\n" +
+            "#rondo-geocerca-modal .gg-stat{flex:1;min-width:0;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:5px 6px;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-geocerca-modal .gg-stat.ok{border-color:rgba(67,160,71,.42);background:var(--rondo-ok-bg)}\n" +
+            "#rondo-geocerca-modal .gg-stat b{font:700 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-stat.ok b{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-geocerca-modal .gg-stat span{font:700 8.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute)}\n" +
+            // Botones: el modal vive fuera de #rondo-panel, asi que los .mini
+            // de la app no le alcanzan: se redefinen aqui con su mismo estilo.
+            "#rondo-geocerca-modal .mini{display:inline-flex;align-items:center;justify-content:center;gap:4px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:var(--rondo-radius-sm);cursor:pointer;padding:4px 9px;font:600 11px var(--rondo-font);white-space:nowrap;transition:background .15s,color .15s,transform .1s,border-color .15s}\n" +
+            "#rondo-geocerca-modal .mini:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-geocerca-modal .mini:active{transform:translateY(0)}\n" +
+            "#rondo-geocerca-modal .gg-acciones{display:flex;gap:5px;flex-wrap:wrap}\n" +
+            "#rondo-geocerca-modal .gg-acciones .mini{flex:1;min-width:88px}\n" +
+            "#rondo-geocerca-modal .gg-pista{margin:0;display:flex;gap:6px;align-items:flex-start;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:5px 7px}\n" +
+            "#rondo-geocerca-modal .gg-pista .rondo-usym{font-size:12px;flex:0 0 auto;margin-top:1px}\n" +
+            // Dialogo de importacion (seleccion de geocercas)
+            "#rondo-dialog .gg-imp-t{margin:0;font-size:12px;color:var(--rondo-fg-dim);line-height:1.5}\n" +
+            "#rondo-dialog .gg-imp-t b{color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .gg-imp-av{color:var(--rondo-warn-fg);font-size:11px}\n" +
+            "#rondo-dialog .gg-imp-l{display:flex;flex-direction:column;gap:4px;max-height:min(44vh,320px);overflow-y:auto}\n" +
+            "#rondo-dialog .gg-imp{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .gg-imp:hover{border-color:var(--rondo-border);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .gg-imp.sel{border-color:var(--rondo-accent-2);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .gg-imp input{margin:0;flex:0 0 auto}\n" +
+            "#rondo-dialog .gg-imp .nm{flex:1;min-width:0;display:flex;align-items:center;gap:5px;font:600 12px var(--rondo-font);color:var(--rondo-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-dialog .gg-imp .nm .rondo-usym{font-size:12px;color:var(--rondo-warn-fg);flex:0 0 auto}\n" +
+            "#rondo-dialog .gg-imp em{flex:0 0 auto;font:500 10px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute);white-space:nowrap}\n" +
+            "#rondo-dialog .gg-imp-a{display:flex;align-items:center;gap:6px}\n" +
+            "#rondo-dialog .gg-imp-a .mini{padding:3px 9px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .gg-imp-a .mini:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .gg-imp-a span{margin-left:auto;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            // Selector de origen de la lista
+            "#rondo-geocerca-modal .gg-filtro{display:flex;gap:4px}\n" +
+            "#rondo-geocerca-modal .gg-fchip{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:3px 6px;cursor:pointer;color:var(--rondo-fg-dim);font:600 9.5px var(--rondo-font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-fchip b{font-weight:800;opacity:.75}\n" +
+            "#rondo-geocerca-modal .gg-fchip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-geocerca-modal .gg-fchip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-fchip.activo b{opacity:.9}\n" +
+            // Etiqueta de origen en cada fila
+            "#rondo-geocerca-modal .gg-origen{display:inline-block;vertical-align:1px;margin-left:6px;font:700 7.5px var(--rondo-font);font-style:normal;letter-spacing:.5px;padding:1px 4px;border-radius:5px;background:var(--rondo-bg-strong);color:var(--rondo-fg-mute);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-geocerca-modal .gg-origen.o-app{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-origen.o-plat{background:rgba(92,122,153,.22);color:#a8c6e0;border-color:transparent}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-origen.o-plat{background:#e4edf5;color:#33607f}\n" +
+            "#rondo-geocerca-modal .gg-lock{display:inline-flex;vertical-align:-2px;margin-left:4px;color:var(--rondo-ok-fg)}\n" +
+            "#rondo-geocerca-modal .gg-lock .rondo-usym{font-size:10px}\n" +
+            // Lista de geocercas
+            "#rondo-geocerca-modal .gg-lista{display:flex;flex-direction:column;gap:4px;max-height:236px;overflow-y:auto}\n" +
+            "#rondo-geocerca-modal .gg-item{display:flex;align-items:center;gap:7px;padding:6px 7px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;min-width:0;transition:border-color .15s,background .15s}\n" +
+            "#rondo-geocerca-modal .gg-item:hover{border-color:var(--rondo-border);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-geocerca-modal .gg-ptag{flex:0 0 auto;width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);color:var(--rondo-accent-2)}\n" +
+            "#rondo-geocerca-modal .gg-ptag .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-in{flex:1;min-width:0;display:flex;flex-direction:column}\n" +
+            "#rondo-geocerca-modal .gg-in b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-in span{font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-tag-alerta{flex:0 0 auto;font:700 8px var(--rondo-font);font-style:normal;letter-spacing:.4px;color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-radius:7px;padding:2px 5px}\n" +
+            "#rondo-geocerca-modal .gg-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-acc .mini{padding:3px 5px}\n" +
+            "#rondo-geocerca-modal .gg-acc .mini .rondo-usym{font-size:12px}\n" +
+            "#rondo-geocerca-modal .gg-acc .gg-al.on{color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-acc .gg-del:hover{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-vacio{display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 8px;text-align:center;border:1px dashed var(--rondo-border-soft);border-radius:8px}\n" +
+            "#rondo-geocerca-modal .gg-vacio .rondo-usym{font-size:20px;color:var(--rondo-fg-mute);opacity:.7}\n" +
+            "#rondo-geocerca-modal .gg-vacio b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-geocerca-modal .gg-vacio span{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            // Importar / exportar
+            "#rondo-geocerca-modal .gg-io{display:grid;grid-template-columns:1fr 1fr;gap:5px}\n" +
+            "#rondo-geocerca-modal .gg-io .mini{width:100%}\n" +
+            "#rondo-geocerca-modal .gg-check{display:flex;align-items:flex-start;gap:7px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-dim);cursor:pointer;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px 8px;transition:border-color .15s}\n" +
+            "#rondo-geocerca-modal .gg-check:hover{border-color:var(--rondo-border)}\n" +
+            "#rondo-geocerca-modal .gg-check input{margin:1px 0 0}\n" +
+            "#rondo-geocerca-modal .gg-check span{display:flex;flex-direction:column;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-check b{font:600 11px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-geocerca-modal .gg-check i{font:500 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            // Pie
+            "#rondo-geocerca-modal .gg-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft);flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-foot .gg-pie{flex:1;min-width:200px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            "#rondo-geocerca-modal .gg-foot button{display:inline-flex;align-items:center;gap:5px;padding:7px 15px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font:600 12px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-foot button:hover{border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-geocerca-modal .gg-foot button.primary{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 10px rgba(var(--rondo-accent-rgb),.32)}\n" +
+            "#rondo-geocerca-modal .gg-foot button.primary:hover{box-shadow:0 4px 16px rgba(var(--rondo-accent-rgb),.44)}\n" +
+            // Barra de scroll discreta, como en el resto del panel.
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar{width:8px}\n" +
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-thumb,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-thumb{background:var(--rondo-border);border-radius:4px}\n" +
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-track,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-track{background:transparent}\n" +
+            // Pantallas estrechas: mapa arriba, paneles debajo.
+            "@media (max-width:900px){#rondo-geocerca-modal{padding:8px}#rondo-geocerca-modal .gg-cuerpo{flex-direction:column;gap:9px}#rondo-geocerca-modal .rondo-gg-mapa{flex:0 0 40vh}#rondo-geocerca-modal .gg-lados{flex:1;flex-basis:auto}}\n" +
+            "@media (max-width:900px){#rondo-geocerca-modal .gg-lados{display:grid;grid-template-columns:1fr 1fr;align-items:start}}\n" +
+            "@media (max-width:620px){#rondo-geocerca-modal .gg-lados{grid-template-columns:1fr}#rondo-geocerca-modal .gg-headsub{display:none}#rondo-geocerca-modal .gg-foot .gg-pie{display:none}}\n" +
+            // ── v6.15: informe por geocerca (dialogo) ──────────────────
+            // Mismo lenguaje que el resto de la app: tarjetas con borde
+            // suave, chips redondeados, KPIs y tablas legibles.
+            "#rondo-dialog .rgi{display:flex;flex-direction:column;gap:10px;min-width:0}\n" +
+            // Cabecera del informe: icono, geocerca y su origen.
+            "#rondo-dialog .rgi-hero{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:4px solid var(--rondo-accent-2);min-width:0}\n" +
+            "#rondo-dialog .rgi-hero.o-app{border-left-color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-heroico{font-size:19px;color:var(--rondo-accent-2);flex:0 0 auto}\n" +
+            "#rondo-dialog .rgi-hero.o-app .rgi-heroico{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-herot{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-dialog .rgi-herot b{font:700 13px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rgi-herot span{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rgi-ori{flex:0 0 auto;font:700 8.5px var(--rondo-font);font-style:normal;letter-spacing:.4px;padding:2px 7px;border-radius:7px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-ori.o-app{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg);border-color:transparent}\n" +
+            // Bloque de filtros.
+            "#rondo-dialog .rgi-cfg{display:flex;flex-direction:column;gap:7px;padding:9px 11px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);min-width:0}\n" +
+            "#rondo-dialog .rgi-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}\n" +
+            "#rondo-dialog .rgi-lb{flex:0 0 74px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rgi select{flex:1;min-width:180px;max-width:100%;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font:500 12px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi select:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            "#rondo-dialog .rgi-chip{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:4px 11px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);white-space:nowrap;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            // Herramienta: mapa arriba, barra de progreso y caja de datos.
+            "#rondo-dialog .rgi-tool{display:flex;flex-direction:column;gap:9px;min-width:0}\n" +
+            "#rondo-dialog .rgi-mapa{position:relative;height:190px;border-radius:var(--rondo-radius-sm);overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-mapa .rondo-mm{border:0;border-radius:0}\n" +
+            "#rondo-dialog .rgi-mapa-vacio{display:flex;align-items:center;justify-content:center;height:100%;font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);text-align:center;padding:10px}\n" +
+            "#rondo-dialog .rgi-carga{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-carga > span:first-child{flex:0 0 auto;font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);white-space:nowrap}\n" +
+            "#rondo-dialog .rgi-barra{flex:1;min-width:0;height:6px;border-radius:999px;background:var(--rondo-bg-strong);overflow:hidden;display:block}\n" +
+            "#rondo-dialog .rgi-barra i{display:block;height:100%;width:0;border-radius:999px;background:var(--rondo-accent-grad);transition:width .25s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 9px;border-radius:8px;background:var(--rondo-warn-bg);border:1px solid rgba(249,168,37,.35);font:500 10.5px var(--rondo-font);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-aviso .mini{margin-left:auto;padding:4px 10px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg);font:600 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-aviso .mini:hover{border-color:var(--rondo-fg-mute)}\n" +
+            // Boton "Generar reporte": la carga es a peticion, no en cada cambio.
+            "#rondo-dialog .rgi-generar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:8px 10px;border-radius:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen{flex:0 0 auto;flex-direction:row;align-items:center;gap:7px;padding:7px 13px;background:var(--rondo-bg-strong);border-color:var(--rondo-border)}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen b{font-size:12.5px}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen i{display:none}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen.pulsa{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 2px 12px rgba(var(--rondo-accent-rgb),.42);animation:rgiPulsa 1.6s var(--rondo-easing) infinite}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen.pulsa .rondo-usym{color:#fff}\n" +
+            "@keyframes rgiPulsa{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}\n" +
+            "#rondo-dialog .rgi-gen-hint{flex:1;min-width:0;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            // Barra de acciones de descarga.
+            "#rondo-dialog .rgi-io{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px}\n" +
+            "#rondo-dialog .rgi-btn{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:7px 10px;border-radius:9px;border:1px solid var(--rondo-border);background:var(--rondo-bg-soft);color:var(--rondo-fg);cursor:pointer;text-align:left;min-width:0;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-btn .rondo-usym{font-size:15px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-btn b{font:700 12px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-btn i{font:500 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}\n" +
+            "#rondo-dialog .rgi-btn:hover{border-color:var(--rondo-fg-mute);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
+            "#rondo-dialog .rgi-btn.primary{background:var(--rondo-accent-grad);border-color:transparent;box-shadow:0 2px 10px rgba(var(--rondo-accent-rgb),.3)}\n" +
+            "#rondo-dialog .rgi-btn.primary .rondo-usym,#rondo-dialog .rgi-btn.primary b{color:#fff}\n" +
+            "#rondo-dialog .rgi-btn.primary i{color:rgba(255,255,255,.75)}\n" +
+            // Buscador de geocerca dentro del dialogo.
+            "#rondo-dialog .rgi-busca{display:inline-flex;align-items:center;gap:6px;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rgi-busca .rondo-usym{font-size:13px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-dialog .rgi-busca input{flex:1;min-width:120px}\n" +
+            "#rondo-dialog .rgi-busca i{flex:0 0 auto;font:700 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-row-geo{margin-bottom:-2px}\n" +
+            "#rondo-dialog .rgi-rango{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rgi-rango input[type=date]{flex:1;min-width:118px;max-width:168px;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font:500 11.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-rango .sep{font:700 11px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-rango .mini{padding:3px 8px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-rango .mini:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            // KPIs
+            "#rondo-dialog .rgi-kpis{display:flex;gap:5px;flex-wrap:wrap}\n" +
+            "#rondo-dialog .rgi-kpi{flex:1 1 68px;min-width:64px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:1px;text-align:center;border-top:2px solid var(--rondo-border)}\n" +
+            "#rondo-dialog .rgi-kpi.ok{border-top-color:var(--rondo-ok)}\n" +
+            "#rondo-dialog .rgi-kpi.vivo{border-top-color:var(--rondo-warn-fg);background:var(--rondo-warn-bg)}\n" +
+            "#rondo-dialog .rgi-kpi b{font:700 15px/1.1 var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-kpi.vivo b{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-kpi span{font:700 8.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute)}\n" +
+            // Fila de unidades dentro ahora.
+            "#rondo-dialog .rgi-dentro{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:6px 9px;border-radius:8px;background:var(--rondo-ok-bg);border:1px solid rgba(67,160,71,.35)}\n" +
+            "#rondo-dialog .rgi-dl{font:700 9px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-ok-fg)}\n" +
+            "#rondo-dialog .rgi-dchip{display:inline-flex;align-items:center;gap:4px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:2px 8px;font:600 10px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-dchip .rondo-usym{font-size:11px;color:var(--rondo-ok)}\n" +
+            "#rondo-dialog .rgi-dmore{font:700 10px var(--rondo-font);color:var(--rondo-ok-fg)}\n" +
+            "#rondo-dialog .rgi-res{margin:0;font:500 11px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:3px solid var(--rondo-accent-2);border-radius:8px;padding:6px 9px;line-height:1.45}\n" +
+            // Vista previa (tabla del informe general, en oscuro).
+            "#rondo-dialog .rgi-prev{border:1px solid var(--rondo-border-soft);border-radius:8px;overflow:hidden;background:var(--rondo-bg-soft)}\n" +
+            "#rondo-dialog .rgi-prev table{width:100%;border-collapse:collapse;font:500 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-prev th{background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);font:700 8.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:5px 7px;border-bottom:1px solid var(--rondo-border-soft);white-space:nowrap;position:sticky;top:0}\n" +
+            "#rondo-dialog .rgi-prev td{padding:4px 7px;border-bottom:1px solid var(--rondo-border-soft);color:var(--rondo-fg);white-space:nowrap}\n" +
+            "#rondo-dialog .rgi-prev tbody tr:last-child td{border-bottom:none}\n" +
+            "#rondo-dialog .rgi-prev tbody tr:nth-child(even){background:rgba(255,255,255,.025)}\n" +
+            "#rondo-dialog .rgi-prev tbody tr:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .rgi-prev{max-height:236px;overflow:auto}\n" +
+            "#rondo-dialog .rgi-more{margin:0;padding:6px 9px;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            // Salidas
+            "#rondo-dialog .rgi-io{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}\n" +
+            "#rondo-dialog .rgi-io .mini{width:100%;justify-content:center;padding:6px 8px}\n" +
+            "@media (max-width:460px){#rondo-dialog .rgi-io{grid-template-columns:1fr}#rondo-dialog .rgi-lb{flex-basis:100%}}\n" +
+            // Tarjeta de geocerca de la app: distintivo violeta/acento.
+            "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:#fff}\n" +
+            "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";
 
         const style = makeEl('style');
         style.textContent = css;
@@ -1321,6 +1661,9 @@
             '<button id="rondo-carga-btn" class="rondo-tool" data-tabs="unidades" title="Carga rapida: pega la lista de clientes del embarque y asigna la ruta a una unidad"><span class="rondo-usym">' + UIS.watch + '</span> Carga rapida</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
             '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+            // v6.15: informe por geocerca (cruces y paradas dentro). Elige la
+            // geocerca, el periodo y los datos; sale en PDF, CSV o Markdown.
+            '<button id="rondo-informe-geo" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas,zonas" title="Informe por geocerca: cruces y unidades paradas dentro de una geocerca"><span class="rondo-usym">' + UIS.zone + '</span></button>' +
             '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
@@ -1533,6 +1876,9 @@
              '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido con las opciones elegidas"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
              '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
              '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
+             // v6.15: el informe por geocerca tambien desde aqui; al abrirlo
+             // toma las fechas del recorrido que se esta viendo.
+             '<button class="mini" id="rondo-replay-informe-geo" title="Informe de una geocerca: cruces y unidades paradas dentro, en un rango de dias"><span class="rondo-usym">' + UIS.zone + '</span> Informe geocerca</button>' +
              '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
@@ -1567,7 +1913,11 @@
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-ocupadas">0</b><span>Con unidades</span></div>' +
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-base">0</b><span>Base</span></div>' +
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-carga">0</b><span>Carga</span></div>' +
+            '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-alerta">0</b><span>En alerta</span></div>' +
             '</div>' +
+            // v6.12: franja de la alerta de geocercas (resumen de las
+            // geocercas vigiladas). El detalle de cada una esta en su campana.
+            '<div id="rondo-geo-ga-resumen"></div>' +
             '<div class="rondo-geo-filters">' +
             '<input id="rondo-geo-buscar" class="filtro" placeholder="Buscar geocerca o unidad\u2026">' +
             '<select id="rondo-geo-orden" class="filtro" title="Ordenar">' +
@@ -1580,7 +1930,9 @@
             '<option value="base">Base</option>' +
             '<option value="carga">Carga</option>' +
             '<option value="ocupadas">Con unidades</option>' +
+            '<option value="app">De la app</option>' +
             '</select>' +
+            '<button class="mini" id="rondo-geo-nueva" title="Dibujar una geocerca nueva en Rondo (fuera de la plataforma)"><span class="rondo-usym">' + UIS.zone + '</span> Nueva</button>' +
             '<button class="mini" id="rondo-geo-csv" title="Descargar CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
             '<button class="mini" id="rondo-geo-geo" title="Descargar GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
             '</div>' +
@@ -1761,6 +2113,7 @@
             checkRow('c-r-geo-det', 'Detenida en geocerca') +
             numRow('c-geo-det-min', 'Min detenido para alertar (min)') +
             numRow('c-geo-estable', 'Confirmar cambio de geocerca (s)') +
+            checkRow('c-r-geo-alerta', 'Alerta de geocercas (interruptor general)') +
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
@@ -1770,6 +2123,8 @@
             checkRow('c-r-riesgo', 'Perdi\u00f3 se\u00f1al en zona de riesgo') +
             checkRow('c-r-riesgo-pre', 'Aproximaci\u00f3n a zona de riesgo (predictiva)') +
             '</div>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:0 0 6px">Este es el interruptor general. Cada geocerca se vigila por separado (a quien, ' +
+            'gravedad y si dispara al pasar, al detenerse o al detenerse con el motor apagado) desde la <b>campana</b> de su tarjeta en <b>Zonas &gt; Geocercas</b>.</p>' +
             '<h4>Zonas de riesgo</h4>' +
             '<label>URL del CSV / JSON <span style="color:var(--rondo-fg-dim);font-size:11px">(opcional; se consulta en cada arranque; el repo no incluye datos)</span>' +
             '<input type="text" id="c-riesgo-url" style="width:100%;margin-top:4px" placeholder="pega la URL aqu\u00ed (https://...)">' +
@@ -3113,12 +3468,16 @@
         const items = geocercasSubsetVisible();
         if (!items.length) { adviceWarn('Sin geocercas', 'Nada que exportar con los filtros actuales'); return; }
         const unidades = (APP.unidades || []).filter(shouldWatch).map((u) => ({ st: unitState(u), info: parseUnitName(u) }));
-        const filas = [['nombre', 'rol', 'area_km2', 'lat', 'lon', 'unidades']];
+        const filas = [['nombre', 'origen', 'guardado', 'rol', 'area_km2', 'lat', 'lon', 'unidades']];
         for (let i = 0; i < items.length; i++) {
             const z = items[i];
             const c = centroDeZona(z) || {};
             const ecos = unidades.filter((u) => u.st.online && u.st.lat != null && inZone(u.st.lat, u.st.lon, z)).map((u) => u.info.eco);
-            filas.push([z.n || ('Zona ' + z.id), zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3),
+            // v6.14: origen explicito, para no confundir una geocerca dibujada
+            // en Rondo con una de la plataforma al abrir el CSV.
+            const org = glocOrigen(z);
+            filas.push([z.n || ('Zona ' + z.id), org.corto, (org.id === 'app' ? (org.guardado ? 'navegador' : 'sesion') : ''),
+                zonaRol(z), (zonaAreaM2(z) / 1e6).toFixed(3),
                 c.lat == null ? '' : c.lat, c.lon == null ? '' : c.lon, ecos.join(' ')]);
         }
         const csv = filas.map((r) => r.map(rxCsvCelda).join(',')).join('\n');
@@ -3137,7 +3496,15 @@
             const geom = zonaGeometry(z);
             return {
                 type: 'Feature',
-                properties: { nombre: z.n || ('Zona ' + z.id), rol: zonaRol(z), area_km2: +(zonaAreaM2(z) / 1e6).toFixed(3), unidades: ecos },
+                properties: (function () {
+                    const org = glocOrigen(z);
+                    return {
+                        nombre: z.n || ('Zona ' + z.id), rol: zonaRol(z),
+                        area_km2: +(zonaAreaM2(z) / 1e6).toFixed(3), unidades: ecos,
+                        origen: org.id === 'app' ? 'rondo-app' : 'plataforma',
+                        guardado: (org.id === 'app') ? (org.guardado ? 'navegador' : 'sesion') : null
+                    };
+                })(),
                 geometry: geom || { type: 'Point', coordinates: [0, 0] }
             };
         });
@@ -3184,6 +3551,7 @@
     }
 
     function paintGeocercas() {
+        paintGeoAlertas();
         const body = byId('rondo-body-zonas');
         const countEl = byId('rondo-geo-count');
         const zonas = APP.zonas || [];
@@ -3227,6 +3595,7 @@
         });
         if (rol === 'base' || rol === 'carga') lista = lista.filter((x) => x.rol === rol);
         else if (rol === 'ocupadas') lista = lista.filter((x) => x.ecos.length);
+        else if (rol === 'app') lista = lista.filter((x) => glocEsApp(x.z));
         if (f) {
             lista = lista.filter((x) => ((x.z.n || '').toLowerCase().indexOf(f) >= 0) || x.ecos.some((e) => (e || '').toLowerCase().indexOf(f) >= 0));
         }
@@ -3239,11 +3608,21 @@
         const cards = lista.map((x) => {
             const z = x.z;
             const rolTxt = x.rol === 'base' ? 'Base' : (x.rol === 'carga' ? 'Carga' : 'Normal');
-            const areaTxt = x.area ? fmtArea(x.area / 1e6) : '';
-            return '<div class="rondo-geo-card' + (x.ecos.length ? ' ocupada' : '') + ' rol-' + x.rol + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
+            // v6.13: para circulos el area no viene de zonaAreaM2; se usa la
+            // de la propia geocerca (pi*r2) para que el dato sea correcto.
+            const areaTxt = (z.t === 3) ? glocTextoTam(z) : (x.area ? fmtArea(x.area / 1e6) : '');
+            // v6.12: la campana abre el menu de alerta DE ESTA geocerca
+            // (alcance, gravedad, disparador y tiempos). El badge muestra su
+            // gravedad y disparador cuando esta vigilada.
+            const nomZ = z.n || ('Zona ' + z.id);
+            const gac = geoAlertaCfgZona(nomZ);
+            const esApp = glocEsApp(z);
+            return '<div class="rondo-geo-card' + (x.ecos.length ? ' ocupada' : '') + (gac ? ' alerta-sel sev-' + gac.severidad : '') + ' rol-' + x.rol + (esApp ? ' de-la-app' : '') + '" data-zona="' + esc(z.n || '') + '" title="' + esc(z.n || '') + '">' +
                 '<span class="rondo-geo-dot"></span>' +
                 '<div class="rondo-geo-body">' +
-                '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) + '</b>' +
+                '<b class="rondo-geo-name">' + esc(z.n || ('Zona ' + z.id)) +
+                (esApp ? '<span class="rondo-geo-app" title="' + esc(glocOrigen(z).largo) + '">' + esc(glocOrigen(z).corto) + '</span>' : '') +
+                '</b>' +
                 '<span class="rondo-geo-inside">' +
                 (x.ecos.length
                     ? esc(x.ecos.slice(0, 8).join(' \u00b7 ')) + (x.ecos.length > 8 ? ' +' + (x.ecos.length - 8) : '')
@@ -3251,7 +3630,11 @@
                 '</span>' +
                 '</div>' +
                 '<span class="rondo-geo-role">' + rolTxt + (areaTxt ? ' \u00b7 ' + areaTxt : '') + '</span>' +
+                (gac ? '<span class="rondo-geo-gabadge sev-' + gac.severidad + '" title="' + esc(geoAlertaEtiqueta(nomZ, gac).sub) + '">' +
+                    '<i></i>' + esc(GEO_ALERTA_ETIQUETAS[gac.disparo] || '') + '</span>' : '') +
                 '<span class="rondo-geo-acc">' +
+                (esApp ? '<button class="mini rondo-geo-edit" data-zona="' + esc(nomZ) + '" title="Editar en el mapa de Rondo"><span class="rondo-usym">' + UIS.watch + '</span></button>' : '') +
+                '<button class="mini rondo-geo-ga' + (gac ? ' on sev-' + gac.severidad : '') + '" data-zona="' + esc(nomZ) + '" title="' + (gac ? 'Ajustar la alerta de esta geocerca' : 'Vigilar esta geocerca') + '"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
                 '<button class="mini rondo-geo-usar" data-zona="' + esc(z.n || '') + '" title="Anadir como parada a una unidad"><span class="rondo-usym">' + UIS.route + '</span></button>' +
                 '<button class="mini rondo-geo-copy" data-zona="' + esc(z.n || '') + '" title="Copiar nombre y centro"><span class="rondo-usym">' + UIS.copy + '</span></button>' +
                 '</span>' +
@@ -3277,6 +3660,9 @@
         try {
             APP.config.loadZones = true;
             APP.zonas = await fetchZones();
+            // v6.13: Recargar solo repone las de la plataforma; las dibujadas
+            // en Rondo se vuelven a fusionar (glocSincroniza las separa).
+            glocSincroniza();
             paintGeocercas();
             if (APP.tab === 'zonas') paintRiesgo();
             if (APP.zonas.length) adviceOk('Geocercas recargadas', APP.zonas.length + ' geocercas');
@@ -4607,6 +4993,8 @@
                 if (ctxEl && ctxEl.style.display === 'flex') { hideMenu(); return; }
                 const planM = byId('rondo-plan-modal');
                 if (planM && planM.classList.contains('abierto')) { cerrarEditorParadas(); return; }
+                const glocM = byId('rondo-geocerca-modal');
+                if (glocM && glocM.classList.contains('abierto')) { cerrarGeocercaApp(); return; }
                 const ventanas = [modalEl, cfgWinEl, ayudaEl];
                 for (let i = ventanas.length - 1; i >= 0; i--) {
                     const w = ventanas[i];
@@ -4758,6 +5146,8 @@
         byId('rondo-informe').addEventListener('click', () => exportReportePDF());
         const informeMd = byId('rondo-informe-md');
         if (informeMd) informeMd.addEventListener('click', exportInforme);
+        const informeGeo = byId('rondo-informe-geo');
+        if (informeGeo) informeGeo.addEventListener('click', abrirInformeGeocerca);
         const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {
@@ -5296,6 +5686,9 @@
             if (cGeoDetMin) cGeoDetMin.value = APP.config.geocercaDetenidoMin != null ? APP.config.geocercaDetenidoMin : DEFAULTS.geocercaDetenidoMin;
             const cGeoEst = byId('c-geo-estable');
             if (cGeoEst) cGeoEst.value = APP.config.geocercaEstableSeg != null ? APP.config.geocercaEstableSeg : DEFAULTS.geocercaEstableSeg;
+            // v6.12: la alerta de geocercas se configura en Zonas; aqui solo
+            // el interruptor, para poder apagarla sin ir a la pestana.
+            const cRGeoAl = byId('c-r-geo-alerta'); if (cRGeoAl) cRGeoAl.checked = !!APP.config.reglas.geoAlerta;
             g('c-r-des').checked = !!APP.config.reglas.destino;
             g('c-r-dis').checked = !!APP.config.reglas.desconexion;
             g('c-r-vel').checked = !!APP.config.reglas.velocidad;
@@ -5577,6 +5970,14 @@
             if (geoDetMinEl) cf.geocercaDetenidoMin = clamp(isoNum(geoDetMinEl.value, DEFAULTS.geocercaDetenidoMin), 1, 240);
             const geoEstEl = g('c-geo-estable');
             if (geoEstEl) cf.geocercaEstableSeg = clamp(isoNum(geoEstEl.value, DEFAULTS.geocercaEstableSeg), 2, 300);
+            // v6.12: interruptor de la alerta de geocercas (el resto vive en
+            // la pestana Zonas). Cambiarlo reinicia los episodios medidos.
+            const rGeoAlEl = g('c-r-geo-alerta');
+            if (rGeoAlEl) {
+                const antes = !!cf.reglas.geoAlerta;
+                cf.reglas.geoAlerta = !!rGeoAlEl.checked;
+                if (antes !== cf.reglas.geoAlerta) geoAlertaReinicia();
+            }
             cf.reglas.destino = g('c-r-des').checked;
             cf.reglas.desconexion = g('c-r-dis').checked;
             cf.reglas.velocidad = g('c-r-vel').checked;
@@ -5922,6 +6323,9 @@
         // ── Geocercas de la plataforma (pestana Zonas) ────────────────
         const geoRec = byId('rondo-geo-recargar');
         if (geoRec) geoRec.addEventListener('click', () => recargarGeocercas());
+        // v6.13: editor de geocercas de Rondo (mapa propio, dibujo a mano).
+        const geoNueva = byId('rondo-geo-nueva');
+        if (geoNueva) geoNueva.addEventListener('click', () => abrirGeocercaApp());
         const geoCfg = byId('rondo-geo-configurar');
         if (geoCfg) geoCfg.addEventListener('click', () => abrirAjustes());
         // v5.15: filtros, orden y acciones de las geocercas.
@@ -5944,6 +6348,11 @@
             const b = ev.target.closest && ev.target.closest('button');
             if (!b) return;
             const nombre = b.dataset.zona;
+            // La campana abre el menu de alerta de ESA geocerca (alcance,
+            // gravedad, disparador y tiempos).
+            if (b.classList.contains('rondo-geo-ga')) { abrirGeoAlerta(nombre); return; }
+            // v6.13: editar en el mapa la geocerca creada en Rondo.
+            if (b.classList.contains('rondo-geo-edit')) { abrirGeocercaApp(nombre); return; }
             const z = (APP.zonas || []).find((x) => (x.n || '') === nombre);
             if (!z) return;
             if (b.classList.contains('rondo-geo-usar')) elegirUnidadParaGeocerca(z);
@@ -5952,6 +6361,8 @@
                 copiarAlPortapapeles((z.n || '') + (c ? '\n' + c.lat.toFixed(6) + ',' + c.lon.toFixed(6) : ''), 'Geocerca copiada', z.n || '');
             }
         });
+        // v6.12: franja resumen de la alerta de geocercas (pills y acciones).
+        bindGeoAlerta();
         // ── Botones existentes (recargar / limpiar / archivo) ─────────
         const rec = byId('rondo-riesgo-recargar');
         if (rec) rec.addEventListener('click', () => cargarRiesgo());
@@ -7822,6 +8233,9 @@
         if (csv) csv.addEventListener('click', () => rxReplayExportarParadasCSV());
         const pdf = byId('rondo-replay-pdf');
         if (pdf) pdf.addEventListener('click', () => exportReplayPDF());
+        // v6.15: informe por geocerca (abre con las fechas de este recorrido).
+        const informeGeo = byId('rondo-replay-informe-geo');
+        if (informeGeo) informeGeo.addEventListener('click', () => abrirInformeGeocerca('replay'));
         // Rangos rapidos.
         document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((b) => {
             b.addEventListener('click', () => {
@@ -8397,6 +8811,20 @@
             },
             zonas: (APP.zonas || []).length,
             zonasDiag: APP.zonasDiag || null,
+            // v6.12: estado de la alerta dirigida por geocerca (util para
+            // saber por que no avisa: geocercas elegidas, alcance, etc).
+            geoAlerta: (function () {
+                try {
+                    const mapa = geoAlertaPorZona();
+                    const nom = Object.keys(mapa);
+                    return {
+                        activa: !!(APP.config.reglas && APP.config.reglas.geoAlerta),
+                        geocercas: nom.length,
+                        flotas: nom.filter((k) => mapa[k].alcance === 'todas').length,
+                        dentro: Object.keys(APP.geoAlertaVivo || {}).length
+                    };
+                } catch (_) { return null; }
+            })(),
             unidades: (APP.unidades || []).length,
             historial: (APP.historial || []).length,
             ia: {
@@ -8433,6 +8861,12 @@
         L.push('IA hoy: ' + (d.ia.hoy.llamadas || 0) + (d.ia.limite ? '/' + d.ia.limite : '') +
             ' (errores ' + (d.ia.hoy.errores || 0) + ') \u00b7 TTL cache ' + Math.round((+d.ia.cacheTTL || 0) / 60) + ' min');
         L.push('Reglas: ' + (d.stats.erroresReglas || 0) + ' error(es) \u00b7 A* tope: ' + (d.stats.astarCap || 0));
+        if (d.geoAlerta) {
+            const g = d.geoAlerta;
+            L.push('Alerta de geocercas: ' + (g.activa ? 'activa' : 'apagada') +
+                ' \u00b7 ' + g.geocercas + ' geocerca(s) \u00b7 ' + g.flotas + ' en toda la flota' +
+                ' \u00b7 ' + g.dentro + ' dentro ahora');
+        }
         L.push('Fallos de escritura: local ' + d.fallos.json + ' \u00b7 sesion ' + d.fallos.session);
         if (d.zonasDiag) {
             try { L.push('Geocercas: ' + JSON.stringify(d.zonasDiag).slice(0, 300)); } catch (_) { /* noop */ }
@@ -8474,3 +8908,3091 @@
             } catch (_) { adviceWarn('No se pudo copiar', 'Selecciona el texto y copialo a mano.'); }
         });
     }
+/* ====================== ALERTA DE GEOCERCAS: NUCLEO ======================
+ * Cada geocerca lleva SU PROPIA alerta. En lugar de una configuracion global
+ * que se aplicaba a un grupo de geocercas, aqui cada una se configura desde
+ * su tarjeta (la campana abre el menu) y decide por separado:
+ *
+ *   - si esta vigilada o no,
+ *   - a quien: solo las unidades vigiladas o toda la flota,
+ *   - con que gravedad avisa,
+ *   - y QUE dispara dentro: solo pasar, quedarse parado, o pararse con el
+ *     motor apagado,
+ *   - mas sus tiempos y un cooldown propio.
+ *
+ * Por que NO reutiliza reglaGeocerca: aquella avisa de entrar y salir de
+ * CUALQUIER geocerca, para las unidades vigiladas y con severidad fija.
+ * Aqui es por geocerca, con el ambito, la gravedad y el disparador a
+ * eleccion del operador.
+ *
+ * El nucleo de este fragmento es puro (no toca DOM ni red) para poder
+ * probarlo aislado en tests/geocerca-alerta.test.js.
+ */
+const GEO_ALERTA_MAX_ZONAS = 60;
+// Margen (m) para DAR LA SALIDA de una geocerca. Sin el, un vehiculo parado
+// en el borde alterna dentro/fuera cada reporte y el episodio nunca termina.
+const GEO_ALERTA_MARGEN_M = 40;
+// Por debajo de esta velocidad (km/h) la unidad se considera parada.
+const GEO_ALERTA_VEL_PARADA = 1.5;
+// Campos personalizados donde una instalacion puede publicar el estado del
+// motor/ignicion. Si no hay ninguno, se estima por el corte de reporte.
+const GEO_ALERTA_MOTOR_KEYS = Object.freeze([
+    'ENGINE', 'ENG', 'ENGINESTATUS', 'IGNITION', 'IGNITIONSTATUS', 'ACC', 'MOTOR',
+    'ENCENDIDO', 'IGNICION', 'ENGINEOPERATION', 'MOTORON', 'STATUSMOTOR'
+]);
+// Los tres disparadores que se pueden elegir en cada geocerca.
+const GEO_ALERTA_DISPAROS = Object.freeze({
+    paso: { txt: 'Solo pas\u00f3', corto: 'paso', icono: 'zone', ayuda: 'Avisa una vez al entrar y mantenerse dentro. El margen de borde evita el parpadeo.' },
+    detenida: { txt: 'Se detuvo', corto: 'detenida', icono: 'stopped', ayuda: 'Avisa una vez cuando la unidad lleva los minutos de parada dentro. Si se mueve o sale, se rearma.' },
+    motor: { txt: 'Motor apagado', corto: 'motor', icono: 'offline', ayuda: 'Avisa cuando la unidad lleva ese tiempo quieta sin reportar posicion dentro. Usa el sensor si la unidad publica motor/ignicion; si no, lo estima por el corte de reporte.' }
+});
+// Gravedad, de menos a mas (la UI las pinta en este orden).
+const GEO_ALERTA_SEVS = Object.freeze([
+    { k: 'bajo', txt: 'Baja' },
+    { k: 'medio', txt: 'Media' },
+    { k: 'alto', txt: 'Alta' },
+    { k: 'critico', txt: 'Cr\u00edtica' }
+]);
+// Sub-etiqueta para el reloj en vivo: "se detuvo" y "motor" cuentan minutos
+// distintos, asi que la lista en vivo puede mostrar uno u otro.
+const GEO_ALERTA_ETIQUETAS = Object.freeze({
+    paso: 'DENTRO', detenida: 'PARADA', motor: 'MOTOR'
+});
+
+function geoAlertaNum(v, def) {
+    const n = Number(v);
+    return (v == null || !Number.isFinite(n)) ? def : n;
+}
+// Geocerca llamada "__proto__", "constructor" o "prototype" no debe poder
+// tocar el prototipo al guardar o leer el mapa por nombre.
+function geoAlertaKeyOk(k) {
+    return !!k && k !== '__proto__' && k !== 'constructor' && k !== 'prototype';
+}
+function geoAlertaSev(k) {
+    return GEO_ALERTA_SEVS.some((s) => s.k === k) ? k : DEFAULTS.geoAlertas.severidad;
+}
+// Configuracion por defecto de UNA geocerca (la que se ofrece en el menu
+// cuando todavia no hay nada guardado para ella).
+function geoAlertaDef() {
+    const d = DEFAULTS.geoAlertas;
+    return {
+        on: false,
+        alcance: d.alcance,
+        severidad: d.severidad,
+        disparo: d.disparo,
+        minMin: d.minMin,
+        motorMin: d.motorMin,
+        estableSeg: d.estableSeg,
+        cooldownS: d.cooldownS
+    };
+}
+// Normaliza un objeto de configuracion: nunca lanza y nunca deja campos
+// raros (un cfg editado a mano o de una version vieja no puede romper el
+// refresco). Es la unica puerta por la que se leen estos valores.
+function geoAlertaLimpia(raw) {
+    const d = DEFAULTS.geoAlertas;
+    const g = (raw && typeof raw === 'object') ? raw : {};
+    return {
+        on: !!g.on,
+        alcance: (g.alcance === 'todas') ? 'todas' : 'vigiladas',
+        severidad: geoAlertaSev(g.severidad),
+        disparo: GEO_ALERTA_DISPAROS[g.disparo] ? g.disparo : d.disparo,
+        minMin: clamp(geoAlertaNum(g.minMin, d.minMin), 1, 240),
+        motorMin: clamp(geoAlertaNum(g.motorMin, d.motorMin), 1, 720),
+        estableSeg: clamp(geoAlertaNum(g.estableSeg, d.estableSeg), 0, 600),
+        cooldownS: clamp(geoAlertaNum(g.cooldownS, d.cooldownS), 0, 86400)
+    };
+}
+// Mapa nombre -> configuracion de las geocercas vigiladas, ya saneado.
+// hasOwnProperty evita que un nombre tipo "__proto__" o "constructor" lea o
+// escriba propiedades del prototipo.
+function geoAlertaPorZona() {
+    const g = (APP.config && APP.config.geoAlertas) || {};
+    const crudo = (g.porZona && typeof g.porZona === 'object') ? g.porZona : {};
+    const out = {};
+    for (const k of Object.keys(crudo)) {
+        if (!geoAlertaKeyOk(k) || !Object.prototype.hasOwnProperty.call(crudo, k)) continue;
+        const c = geoAlertaLimpia(crudo[k]);
+        if (c.on) out[k] = c;
+    }
+    return out;
+}
+// Configuracion de una geocerca (null si no esta vigilada). Devuelve un
+// objeto NUEVO: el menu edita una copia, no el config guardado.
+function geoAlertaCfgZona(nombre, mapa) {
+    if (!geoAlertaKeyOk(nombre)) return null;
+    const m = mapa || geoAlertaPorZona();
+    if (!Object.prototype.hasOwnProperty.call(m, nombre)) return null;
+    return m[nombre];
+}
+function geoAlertaVigiladas(mapa) {
+    return Object.keys(mapa || geoAlertaPorZona()).slice(0, GEO_ALERTA_MAX_ZONAS);
+}
+// Geocercas de la plataforma que tienen alerta. Las configuradas que ya no
+// existen (borradas en la plataforma) se ignoran sin perder el ajuste: el
+// nombre guardado sobrevive por si la geocerca vuelve.
+function geoAlertaZonasDe(mapa) {
+    const m = mapa || geoAlertaPorZona();
+    const out = [];
+    for (const z of (APP.zonas || [])) {
+        if (!z) continue;
+        const nom = z.n || ('Zona ' + z.id);
+        if (geoAlertaKeyOk(nom) && Object.prototype.hasOwnProperty.call(m, nom)) out.push(z);
+    }
+    return out;
+}
+// Pertenencia con margen: la entrada exige estar dentro (inZone), la salida
+// exige estar fuera del bbox ampliado. Asi el borde no genera parpadeo.
+function geoAlertaDentro(z, lat, lon, margen) {
+    if (!z || lat == null || lon == null) return false;
+    try {
+        if (inZone(lat, lon, z)) return true;
+        const mg = geoAlertaNum(margen, 0);
+        if (mg <= 0) return false;
+        const b = z.b;
+        if (!b || b.min_x == null || b.min_y == null) return false;
+        const mx = 111320 * Math.cos(lat * Math.PI / 180) || 111320;
+        const dl = mg / mx, da = mg / 110540;
+        return (+lon >= b.min_x - dl && +lon <= b.max_x + dl &&
+            +lat >= b.min_y - da && +lat <= b.max_y + da);
+    } catch (_) { return false; }
+}
+// Estado del motor: 1) sensor (campo personalizado de la unidad) si la
+// instalacion lo publica; 2) estimado por el corte de reporte: una unidad
+// parada que lleva motorMin sin reportar posicion dejo de emitir, y la causa
+// tipica es el motor apagado. Es la misma heuristica que usa el Replay.
+function geoAlertaMotor(u, st, motorMin) {
+    const flds = u && u.flds;
+    if (flds && typeof flds === 'object') {
+        for (const k of Object.keys(flds)) {
+            if (GEO_ALERTA_MOTOR_KEYS.indexOf(norm(k).replace(/[^A-Z0-9]/g, '')) < 0) continue;
+            const v = flds[k];
+            if (v === true || v === 1) return { off: false, fuente: 'sensor' };
+            if (v === false || v === 0) return { off: true, fuente: 'sensor' };
+            const s = String(v).trim().toLowerCase();
+            if (s === '1' || s === 'on' || s === 'true' || s === 'encendido') return { off: false, fuente: 'sensor' };
+            if (s === '0' || s === 'off' || s === 'false' || s === 'apagado') return { off: true, fuente: 'sensor' };
+        }
+    }
+    if (!st || geoAlertaNum(st.vel, 0) > GEO_ALERTA_VEL_PARADA) return { off: false, fuente: 'en marcha' };
+    const gap = Math.max(0, geoAlertaNum(st.edadMin, 0));
+    return { off: gap >= clamp(geoAlertaNum(motorMin, 15), 1, 720), fuente: 'estimado' };
+}
+// Maquina de estados de UNA geocerca y UNA unidad. Devuelve el estado
+// siguiente y el evento a emitir en este tick (o null).
+//
+// e (estado previo, se persiste en R.geoAlerta por geocerca):
+//   d  dentro confirmado · p  entrada pendiente · ps  inicio del pendiente
+//   ds desde cuando esta parada dentro · da ya aviso "detenida"
+//   ms desde cuando el motor esta apagado · ma ya aviso "motor"
+//
+// o (observacion del tick): dentro, vel, online, motorOff, motorAntiguedadMin,
+// ahora (segundos) y cfg (la config de ESA geocerca).
+//
+// Sin estado previo se toma la foto inicial sin avisar: si la alerta se
+// activa con una unidad ya dentro, no queremos un "ha pasado" fantasma.
+function geoAlertaEvalua(e, o) {
+    const cfg = geoAlertaLimpia(o.cfg);
+    const estSeg = cfg.estableSeg;
+    const minMin = cfg.minMin;
+    const motorMin = cfg.motorMin;
+    const disparo = cfg.disparo;
+    const ahora = geoAlertaNum(o.ahora, Math.floor(Date.now() / 1000));
+    const dentro = !!o.dentro;
+    const online = (o.online !== false);
+    const vel = geoAlertaNum(o.vel, 0);
+    const n = {
+        d: e && e.d ? 1 : 0, p: e && e.p ? 1 : 0, ps: e ? geoAlertaNum(e.ps, 0) : 0,
+        ds: e ? geoAlertaNum(e.ds, 0) : 0, da: e && e.da ? 1 : 0,
+        ms: e ? geoAlertaNum(e.ms, 0) : 0, ma: e && e.ma ? 1 : 0
+    };
+    const salida = { e: n, evento: null, minutos: 0, minutosMotor: 0, dentro: false };
+    if (!dentro) {
+        // Salida confirmada: el episodio se rearma por completo.
+        n.d = 0; n.p = 0; n.ps = 0; n.ds = 0; n.da = 0; n.ms = 0; n.ma = 0;
+        return salida;
+    }
+    if (!e) {
+        // Foto inicial: la unidad ya estaba dentro cuando se creo el estado.
+        n.d = 1;
+        salida.dentro = true;
+        salida.e = n;
+        return salida;
+    }
+    // Histeresis de entrada: con estableSeg 0 confirma en el mismo tick. Sin
+    // senal no se confirma nada (su ultima posicion puede ser de hace media
+    // hora), salvo con el disparador de motor: ese busca justamente el corte
+    // de reporte, asi que trabaja con la posicion congelada.
+    const puede = online || disparo === 'motor';
+    if (!n.d && puede) {
+        if (!n.p) { n.p = 1; n.ps = ahora; }
+        if ((ahora - n.ps) >= estSeg) { n.d = 1; n.p = 0; n.ps = 0; }
+    }
+    // Parada dentro de la geocerca (solo con la unidad reportando).
+    const entra = (n.d === 1 && e.d !== 1);
+    if (vel > GEO_ALERTA_VEL_PARADA) {
+        n.ds = 0; n.da = 0; n.ms = 0; n.ma = 0;
+    } else if (online && !n.ds) {
+        n.ds = ahora;
+    }
+    // Motor apagado: solo cuenta si la unidad esta parada y dentro. El corte
+    // de reporte se data hacia atras (motorAntiguedadMin) para no pedir N
+    // minutos adicionales de los que la unidad lleva ya apagada.
+    if (n.d && o.motorOff && vel <= GEO_ALERTA_VEL_PARADA) {
+        if (!n.ms) n.ms = ahora - Math.max(0, geoAlertaNum(o.motorAntiguedadMin, 0)) * 60;
+    } else if (online || vel > GEO_ALERTA_VEL_PARADA) {
+        n.ms = 0;
+    }
+    if (n.d) {
+        salida.dentro = true;
+        salida.minutos = n.ds ? Math.max(0, (ahora - n.ds) / 60) : 0;
+        salida.minutosMotor = n.ms ? Math.max(0, (ahora - n.ms) / 60) : 0;
+        if (entra && disparo === 'paso') {
+            salida.evento = 'paso';
+        } else if (disparo === 'detenida' && !n.da && salida.minutos >= minMin) {
+            n.da = 1;
+            salida.evento = 'detenida';
+        } else if (disparo === 'motor' && !n.ma && salida.minutosMotor >= motorMin) {
+            n.ma = 1;
+            salida.evento = 'motor';
+        }
+    }
+    return salida;
+}
+// Cooldown propio de la alerta (por unidad + geocerca). Si el operador lo
+// deja en 0 se usa el cooldown global de alertas, que ya aplica pushAlert.
+function geoAlertaPermitido(clave, zona, cfg, ahora) {
+    if (!APP.cooldowns) return true;
+    const seg = Math.max(1, (Number(cfg && cfg.cooldownS) || 0));
+    const ck = 'geoAlerta::' + clave + '::' + zona;
+    const t = geoAlertaNum(ahora, Date.now());
+    const cd = seg * 1000;
+    if (APP.cooldowns[ck] && (t * 1000) - APP.cooldowns[ck] < cd) return false;
+    APP.cooldowns[ck] = t * 1000;
+    return true;
+}
+
+/* ====================== ALERTA DE GEOCERCAS: MOTOR ====================== */
+function geoAlertaTextoEvento(evento, zona, etq, minutos, cfg) {
+    const m = Math.max(0, Math.round(minutos));
+    if (evento === 'paso') {
+        return {
+            titulo: 'PASO POR GEOCERCA \u00b7 ' + zona + ' \u00b7 ' + etq,
+            detalle: 'La unidad ' + etq + ' pas\u00f3 por la geocerca vigilada ' + zona,
+            hablar: 'La unidad ' + etq + ' pas\u00f3 por la geocerca ' + zona
+        };
+    }
+    if (evento === 'motor') {
+        const src = (cfg && cfg.motorFuente === 'estimado') ? ' \u00b7 motor apagado estimado' : '';
+        return {
+            titulo: 'MOTOR APAGADO EN GEOCERCA \u00b7 ' + zona + ' \u00b7 ' + etq,
+            detalle: 'La unidad ' + etq + ' lleva ' + m + ' min detenida con el motor apagado dentro de la geocerca vigilada ' + zona + src,
+            hablar: 'La unidad ' + etq + ' est\u00e1 detenida con el motor apagado en la geocerca ' + zona
+        };
+    }
+    return {
+        titulo: 'DETENIDA EN GEOCERCA VIGILADA \u00b7 ' + zona + ' \u00b7 ' + etq,
+        detalle: 'La unidad ' + etq + ' lleva ' + m + ' min detenida dentro de la geocerca vigilada ' + zona,
+        hablar: 'La unidad ' + etq + ' est\u00e1 detenida en la geocerca ' + zona
+    };
+}
+// Suavizado de velocidad para las unidades que no son vigiladas (el motor
+// normal ya lo hace en evaluateUnit). Misma media exponencial ponderada por
+// tiempo que alli, para que el umbral de parada no baile con el GPS.
+function geoAlertaSuaviza(info, st) {
+    const clave = info && info.clave;
+    if (!clave || !st || !Number.isFinite(st.vel)) return;
+    const pv = APP.velSuave[clave];
+    const ahoraS = Date.now() / 1000;
+    if (pv == null) {
+        APP.velSuave[clave] = st.vel;
+        APP.velSuaveTs[clave] = ahoraS;
+        return;
+    }
+    const pollSeg = Math.max(1, (Number(APP.config.pollMs) || 10000) / 1000);
+    const dtSeg = APP.velSuaveTs[clave] ? (ahoraS - APP.velSuaveTs[clave]) : pollSeg;
+    const a = alphaEMA(dtSeg, pollSeg * 2.32);
+    APP.velSuave[clave] = pv * (1 - a) + st.vel * a;
+    APP.velSuaveTs[clave] = ahoraS;
+}
+// Regla de la alerta. Se llama desde evaluateUnit (unidades vigiladas) y
+// desde geoAlertaFlota (flota completa). Lee el estado de R.geoAlerta y lo
+// sustituye por el del tick; publica en APP.geoAlertaVivo lo que la UI
+// pinta como "ahora".
+function reglaGeoAlerta(u, info, st, R) {
+    const clave = (info && info.clave) || '';
+    // El estado previo vive en R.geoAlerta: evaluateUnit lo inicializa con
+    // el memo de la unidad y la flota completa lo pasa a mano.
+    const estado = (R.geoAlerta && typeof R.geoAlerta === 'object') ? R.geoAlerta : {};
+    // El "vivo" se repone al final si la unidad sigue dentro de una geocerca
+    // vigilada; hasta entonces sale de la lista en vivo.
+    if (clave) delete APP.geoAlertaVivo[clave];
+    const mapa = geoAlertaPorZona();
+    if (!(APP.config.reglas && APP.config.reglas.geoAlerta) || !Object.keys(mapa).length ||
+        !APP.config.loadZones || !info || !clave || !st || st.lat == null || st.lon == null) {
+        R.geoAlerta = null;
+        return;
+    }
+    const zonas = geoAlertaZonasDe(mapa);
+    if (!zonas.length) { R.geoAlerta = null; return; }
+    const ahora = Math.floor(Date.now() / 1000);
+    const etq = (info.eco || info.placa || info.nombre || info.id || '');
+    const vel = geoAlertaNum(velSuavizada(info, st), st.vel);
+    const nuevo = {};
+    const vivos = [];
+    for (let i = 0; i < zonas.length; i++) {
+        const z = zonas[i];
+        const nom = z.n || ('Zona ' + z.id);
+        const cfg = mapa[nom];
+        const e0 = estado[nom];
+        const mot = geoAlertaMotor(u, st, cfg.motorMin);
+        const antiguedad = mot.off ? Math.max(0, geoAlertaNum(st.edadMin, 0)) : 0;
+        const res = geoAlertaEvalua(e0, {
+            dentro: geoAlertaDentro(z, st.lat, st.lon, (e0 && e0.d) ? GEO_ALERTA_MARGEN_M : 0),
+            vel: vel,
+            online: st.online,
+            motorOff: mot.off,
+            motorAntiguedadMin: antiguedad,
+            ahora: ahora,
+            cfg: cfg
+        });
+        nuevo[nom] = res.e;
+        if (res.dentro) {
+            // "cumple" es si AHORA se cumple el disparador de esa geocerca:
+            // lo que cuenta para el KPI "En alerta" y para resaltar la fila.
+            const cumple = (cfg.disparo === 'paso') ||
+                (cfg.disparo === 'detenida' ? res.minutos >= cfg.minMin : res.minutosMotor >= cfg.motorMin);
+            vivos.push({
+                zona: nom,
+                minutos: res.minutos,
+                minutosMotor: res.minutosMotor,
+                motor: res.minutosMotor > 0,
+                cumple: cumple,
+                vel: vel,
+                disparo: cfg.disparo
+            });
+        }
+        if (res.evento && geoAlertaPermitido(clave, nom, cfg, ahora)) {
+            const mins = (res.evento === 'motor') ? res.minutosMotor : res.minutos;
+            const c2 = Object.assign({}, cfg, { motorFuente: mot.fuente });
+            const t = geoAlertaTextoEvento(res.evento, nom, etq, mins, c2);
+            pushAlert({
+                regla: 'geoAlerta', sev: cfg.severidad, clave: clave, eco: info.eco, zona: nom,
+                icono: (GEO_ALERTA_DISPAROS[cfg.disparo] || GEO_ALERTA_DISPAROS.paso).icono,
+                titulo: t.titulo, detalle: t.detalle, hablar: t.hablar,
+                lat: st.lat, lon: st.lon
+            });
+        }
+    }
+    R.geoAlerta = nuevo;
+    // Una unidad puede estar en varias geocercas vigiladas: se guarda la
+    // mas avanzada para la lista en vivo y, en `zonas`, los nombres de las
+    // que esta cumpliendo ahora (asi las pills pueden contarlas).
+    if (clave && vivos.length) {
+        vivos.sort((a, b) => (b.cumple === a.cumple) ? (b.minutos - a.minutos) : ((b.cumple ? 1 : 0) - (a.cumple ? 1 : 0)));
+        const t = vivos[0];
+        APP.geoAlertaVivo[clave] = {
+            zona: t.zona, minutos: t.minutos, minutosMotor: t.minutosMotor,
+            motor: t.motor, cumple: t.cumple, vel: t.vel, disparo: t.disparo,
+            zonas: vivos.filter((v) => v.cumple).map((v) => v.zona)
+        };
+    }
+}
+// Segunda pasada del refresco para el alcance "toda la flota": el motor
+// normal solo evalua las unidades vigiladas, asi que las demas se recorren
+// aqui SOLO para esta regla (sin odometro, sin traza, sin reglas globales).
+// Tambien poda el estado vivo de unidades que ya no reportan.
+function geoAlertaFlota(unidades, clavesVigiladas) {
+    const mapa = geoAlertaPorZona();
+    const lista = unidades || [];
+    const algunaTodas = Object.keys(mapa).some((k) => mapa[k].alcance === 'todas');
+    const activa = !!(APP.config.reglas && APP.config.reglas.geoAlerta) && APP.config.loadZones;
+    if (!activa || !algunaTodas || !Object.keys(mapa).length) {
+        if (Object.keys(APP.memoGeoAlerta || {}).length) {
+            APP.memoGeoAlerta = {};
+            writeSession(SS.geoAlerta, APP.memoGeoAlerta);
+        }
+        geoAlertaPodaVivo(lista);
+        return;
+    }
+    const memo = {};
+    for (let i = 0; i < lista.length; i++) {
+        const u = lista[i];
+        const info = parseUnitName(u);
+        if (!info.clave || (clavesVigiladas && clavesVigiladas[info.clave])) continue;
+        const st = unitState(u);
+        if (st.lat == null || st.lon == null) continue;
+        const prev = (APP.memoGeoAlerta || {})[info.clave];
+        const R = { geoAlerta: (prev && prev.g) || null };
+        try {
+            geoAlertaSuaviza(info, st);
+            reglaGeoAlerta(u, info, st, R);
+            memo[info.clave] = { g: R.geoAlerta };
+        } catch (e) {
+            if (APP.unlocked) console.warn('[Rondo] geoAlerta', info.clave, e && e.message);
+        }
+    }
+    APP.memoGeoAlerta = memo;
+    writeSession(SS.geoAlerta, memo);
+    geoAlertaPodaVivo(lista);
+}
+// Quit del estado vivo las unidades que ya no vienen de la plataforma.
+function geoAlertaPodaVivo(unidades) {
+    const vivo = APP.geoAlertaVivo;
+    if (!vivo || !Object.keys(vivo).length) return;
+    const hay = {};
+    for (const u of (unidades || [])) {
+        const info = parseUnitName(u);
+        if (info.clave) hay[info.clave] = 1;
+    }
+    for (const k of Object.keys(vivo)) {
+        if (!hay[k]) delete vivo[k];
+    }
+}
+// Al cambiar el menu de una geocerca (o el interruptor general) los
+// episodios anteriores ya no significan nada: se limpian para que la alerta
+// no salte con estado viejo.
+function geoAlertaReinicia() {
+    APP.memoGeoAlerta = {};
+    writeSession(SS.geoAlerta, APP.memoGeoAlerta);
+    // La vista en vivo NO se borra: se recalcula entera en el siguiente
+    // refresco, y dejarla evita que la franja parpadee a "0" justo despues
+    // de guardar el menu. Los episodios de reloj si empiezan de cero.
+    const memo = APP.memo || {};
+    let cambio = false;
+    for (const k of Object.keys(memo)) {
+        if (memo[k] && memo[k].geoAlerta) { delete memo[k].geoAlerta; cambio = true; }
+    }
+    if (cambio) writeSession(SS.memo, memo);
+}
+
+// Guarda el menu de UNA geocerca en la configuracion y reinicia los
+// episodios de esa geocerca (no de las demas). Si queda alguna activa, el
+// interruptor general se enciende solo.
+function geoAlertaGuardaZona(nombre, cambios) {
+    if (!geoAlertaKeyOk(nombre)) return;
+    if (!APP.config.geoAlertas || typeof APP.config.geoAlertas !== 'object') {
+        APP.config.geoAlertas = Object.assign({}, DEFAULTS.geoAlertas);
+    }
+    if (!APP.config.geoAlertas.porZona || typeof APP.config.geoAlertas.porZona !== 'object') {
+        APP.config.geoAlertas.porZona = {};
+    }
+    const mapa = APP.config.geoAlertas.porZona;
+    const previo = Object.prototype.hasOwnProperty.call(mapa, nombre) ? geoAlertaLimpia(mapa[nombre]) : geoAlertaDef();
+    const cfg = geoAlertaLimpia(Object.assign({}, previo, cambios || {}));
+    if (cfg.on) {
+        if (Object.keys(mapa).length >= GEO_ALERTA_MAX_ZONAS && !Object.prototype.hasOwnProperty.call(mapa, nombre)) {
+            adviceWarn('Limite alcanzado', 'Se pueden vigilar hasta ' + GEO_ALERTA_MAX_ZONAS + ' geocercas.');
+            return;
+        }
+        mapa[nombre] = cfg;
+        if (!(APP.config.reglas && APP.config.reglas.geoAlerta)) APP.config.reglas.geoAlerta = true;
+    } else {
+        delete mapa[nombre];
+    }
+    writeJSON(LS.cfg, APP.config);
+    geoAlertaReinicia();
+    if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
+}
+// Accion en cascada para la franja resumen: activar o desactivar todas.
+function geoAlertaTodas(activar) {
+    const zonas = (APP.zonas || []).map((z) => z && (z.n || ('Zona ' + z.id))).filter(Boolean);
+    if (!APP.config.geoAlertas || typeof APP.config.geoAlertas !== 'object') {
+        APP.config.geoAlertas = Object.assign({}, DEFAULTS.geoAlertas);
+    }
+    const mapa = {};
+    if (activar) {
+        const previo = geoAlertaPorZona();
+        for (let i = 0; i < zonas.length && i < GEO_ALERTA_MAX_ZONAS; i++) {
+            const nom = zonas[i];
+            const c = Object.prototype.hasOwnProperty.call(previo, nom) ? previo[nom] : geoAlertaDef();
+            c.on = true;
+            mapa[nom] = c;
+        }
+        APP.config.reglas.geoAlerta = true;
+    }
+    APP.config.geoAlertas.porZona = mapa;
+    writeJSON(LS.cfg, APP.config);
+    geoAlertaReinicia();
+    if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
+    adviceOk(activar ? 'Alertas activadas' : 'Alertas desactivadas',
+        (activar ? mapa.length : 0) + ' geocerca(s)');
+}
+
+/* ====================== ALERTA DE GEOCERCAS: UI ====================== */
+function geoAlertaChip(act, attr, valor, txt, cls) {
+    return '<button type="button" class="rondo-ga-chip' + (act ? ' activo' : '') + (cls ? ' ' + cls : '') +
+        '" ' + attr + ' data-v="' + esc(valor) + '">' + esc(txt) + '</button>';
+}
+// Etiqueta corta de una geocerca vigilada: "PATIO · alta · parada".
+function geoAlertaEtiqueta(nombre, cfg) {
+    const d0 = GEO_ALERTA_DISPAROS[cfg.disparo] || GEO_ALERTA_DISPAROS.paso;
+    const sev = (GEO_ALERTA_SEVS.find((s) => s.k === cfg.severidad) || { txt: '' }).txt;
+    return { txt: nombre, sub: (cfg.alcance === 'todas' ? 'flota' : 'vigiladas') + ' \u00b7 ' + sev.toLowerCase() + ' \u00b7 ' + d0.corto, sev: cfg.severidad };
+}
+// Franja compacta de la pestana: cuantas geocercas vigila Rondo, cuales y
+// dos acciones en cascada. El detalle de cada una vive en su campana.
+function paintGeoAlertas() {
+    const box = byId('rondo-geo-ga-resumen');
+    if (!box) return;
+    const mapa = geoAlertaPorZona();
+    const zonas = APP.zonas || [];
+    const n = Object.keys(mapa).length;
+    const enAlerta = Object.keys(APP.geoAlertaVivo || {}).filter((k) => APP.geoAlertaVivo[k].cumple).length;
+    const master = !!(APP.config.reglas && APP.config.reglas.geoAlerta);
+    const chips = Object.keys(mapa).sort((a, b) => a.localeCompare(b, 'es')).map((k) => {
+        const et = geoAlertaEtiqueta(k, mapa[k]);
+        const vivos = Object.keys(APP.geoAlertaVivo || {}).filter((c) =>
+            (APP.geoAlertaVivo[c].zonas || []).indexOf(k) >= 0);
+        return '<button type="button" class="rondo-ga-pill sev-' + et.sev + (vivos.length ? ' avisa' : '') +
+            '" data-ga="cfg" data-zona="' + esc(k) + '" title="' + esc(et.sub) + '">' +
+            '<i></i><span class="nm">' + esc(et.txt) + '</span><em>' + esc(et.sub) + '</em>' +
+            (vivos.length ? '<b>' + vivos.length + '</b>' : '') + '</button>';
+    }).join('');
+    const html = '<div class="rondo-ga-res' + (master && n ? ' on' : '') + '">' +
+        '<span class="rondo-ga-resico rondo-usym">' + UIS.alertas + '</span>' +
+        '<div class="rondo-ga-restxt"><b>' + (n ? n + ' de ' + zonas.length + ' geocercas vigiladas' : 'Ninguna geocerca vigilada') + '</b>' +
+        '<span>' + (master ? (enAlerta ? enAlerta + ' unidad(es) cumpliendo ahora' : 'sin avisos activos ahora') : 'interruptor general apagado (Ajustes &gt; Reglas)') + '</span></div>' +
+        (chips ? '<div class="rondo-ga-pills">' + chips + '</div>' : '') +
+        '<span class="rondo-ga-resacc">' +
+        '<button type="button" class="mini" data-ga="todas" title="Vigilar todas las geocercas con los ajustes por defecto">' +
+        '<span class="rondo-usym">' + UIS.check + '</span> Todas</button>' +
+        '<button type="button" class="mini" data-ga="ninguna" title="Dejar de vigilar todas las geocercas">' +
+        '<span class="rondo-usym">' + UIS.clear + '</span> Ninguna</button>' +
+        '</span></div>';
+    setHtml(box, html);
+    const kpi = byId('rondo-geo-kpi-alerta');
+    if (kpi) kpi.textContent = enAlerta;
+}
+// Vista previa del aviso tal y como saldria en la pestana Avisos, para que
+// el operador elija el disparador viendo el texto y no solo la etiqueta.
+function geoAlertaPreview(p, nombre) {
+    const ev = (p.disparo === 'motor') ? 'motor' : (p.disparo === 'detenida' ? 'detenida' : 'paso');
+    const mins = (ev === 'motor') ? p.motorMin : p.minMin;
+    const t = geoAlertaTextoEvento(ev, nombre, '105', mins, p);
+    return '<div class="rondo-ga-dprev"><b>As\u00ed se ver\u00e1 el aviso</b>' +
+        '<div class="rondo-ga-dpv sev-' + p.severidad + '">' +
+        '<span class="pv-t">' + esc(t.titulo) + '</span>' +
+        '<span class="pv-d">' + esc(t.detalle) + '</span>' +
+        '</div></div>';
+}
+// Menu de la alerta de UNA geocerca. Toda la edicion vive en una copia
+// (pend) y solo se guarda al pulsar Aceptar: cancelar no toca nada.
+function abrirGeoAlerta(nombre) {
+    const z = (APP.zonas || []).find((x) => (x.n || ('Zona ' + x.id)) === nombre);
+    const cfg0 = geoAlertaCfgZona(nombre) || geoAlertaDef();
+    const pend = geoAlertaLimpia(cfg0);
+    const dentro = geoAlertaUnidadesPorZona()[nombre] || [];
+    const titulo = nombre;
+    // Cabecera: nombre, situacion actual y el interruptor de esta geocerca.
+    const cab = (p) => {
+        const d0 = GEO_ALERTA_DISPAROS[p.disparo];
+        return '<div class="rondo-ga-dhead sev-' + p.severidad + '">' +
+            '<span class="rondo-ga-dico rondo-usym">' + UIS.alertas + '</span>' +
+            '<div class="rondo-ga-dht"><b>' + esc(titulo) + '</b>' +
+            '<span>' + (dentro.length ? dentro.length + ' unidad(es) dentro ahora' + (dentro.length ? ' \u00b7 ' + esc(dentro.slice(0, 4).join(' \u00b7 ')) : '') : 'sin unidades dentro ahora') + '</span></div>' +
+            '<button type="button" class="rondo-ga-sw' + (p.on ? ' on' : '') + '" data-gz="on" title="Vigilar esta geocerca">' +
+            '<span class="knob"></span><span class="lb">' + (p.on ? 'Vigilada' : 'Sin vigilar') + '</span></button>' +
+            '</div>';
+    };
+    const fila = (etiqueta, controles, extra) => '<div class="rondo-ga-drow"><span class="rondo-ga-dlb">' + etiqueta + '</span>' +
+        '<div class="rondo-ga-chips">' + controles + '</div>' + (extra || '') + '</div>';
+    const cuerpo = (p) => cab(p) +
+        '<div class="rondo-ga-dbody' + (p.on ? '' : ' off') + '">' +
+        fila('Unidades',
+            geoAlertaChip(p.alcance === 'vigiladas', 'data-gz="alcance"', 'vigiladas', 'Solo vigiladas') +
+            geoAlertaChip(p.alcance === 'todas', 'data-gz="alcance"', 'todas', 'Toda la flota', 'ancho')) +
+        fila('Gravedad', GEO_ALERTA_SEVS.map((s) =>
+            geoAlertaChip(p.severidad === s.k, 'data-gz="sev"', s.k, s.txt, 'sev-' + s.k)).join('')) +
+        fila('Dispara cuando', Object.keys(GEO_ALERTA_DISPAROS).map((k) =>
+            geoAlertaChip(p.disparo === k, 'data-gz="disparo"', k, GEO_ALERTA_DISPAROS[k].txt, 'ancho')).join('')) +
+        fila('Tiempos',
+            '<label class="rondo-ga-dnum">Parada (min)<input type="number" min="1" max="240" data-gz-num="minMin" value="' + p.minMin + '"></label>' +
+            '<label class="rondo-ga-dnum">Motor (min)<input type="number" min="1" max="720" data-gz-num="motorMin" value="' + p.motorMin + '"></label>' +
+            '<label class="rondo-ga-dnum">Confirmar (s)<input type="number" min="0" max="600" data-gz-num="estableSeg" value="' + p.estableSeg + '"></label>' +
+            '<label class="rondo-ga-dnum">Cooldown (s)<input type="number" min="0" max="86400" data-gz-num="cooldownS" value="' + p.cooldownS + '"></label>',
+            '<p class="rondo-ga-dhint">' + esc(GEO_ALERTA_DISPAROS[p.disparo].ayuda) + '</p>') +
+        geoAlertaPreview(p, titulo) +
+        '</div>';
+    abrirDialogo({
+        icon: UIS.alertas,
+        titulo: 'Alerta de geocerca',
+        ancho: 440,
+        okText: 'Guardar',
+        html: '<div class="rondo-ga-d" id="rondo-ga-dlg">' + cuerpo(pend) + '</div>',
+        onOpen: (el) => {
+            const box = el.querySelector('#rondo-ga-dlg');
+            if (!box) return;
+            const pinta = () => {
+                const n = el.querySelector('[data-gz-num="minMin"]');
+                const mo = el.querySelector('[data-gz-num="motorMin"]');
+                const es = el.querySelector('[data-gz-num="estableSeg"]');
+                const cd = el.querySelector('[data-gz-num="cooldownS"]');
+                if (n) pend.minMin = n.value;
+                if (mo) pend.motorMin = mo.value;
+                if (es) pend.estableSeg = es.value;
+                if (cd) pend.cooldownS = cd.value;
+                setHtml(box, cuerpo(geoAlertaLimpia(pend)));
+            };
+            box.addEventListener('click', (ev) => {
+                const b = ev.target.closest && ev.target.closest('[data-gz]');
+                if (!b || !box.contains(b)) return;
+                const q = b.dataset.gz;
+                if (q === 'on') pend.on = !pend.on;
+                else if (q === 'alcance') pend.alcance = b.dataset.v;
+                else if (q === 'sev') pend.severidad = b.dataset.v;
+                else if (q === 'disparo') pend.disparo = b.dataset.v;
+                else return;
+                pinta();
+            });
+            box.addEventListener('change', (ev) => {
+                const t = ev.target;
+                if (!t || !t.dataset || !t.dataset.gzNum) return;
+                pinta();
+            });
+        },
+        onOk: () => {
+            const limpio = geoAlertaLimpia(pend);
+            geoAlertaGuardaZona(titulo, limpio);
+            if (limpio.on) adviceOk('Alerta guardada', titulo + ' \u00b7 ' + limpio.disparo);
+            else adviceOk('Alerta quitada', titulo);
+        }
+    });
+}
+// Delegacion de eventos de la franja resumen (los chips abren el menu de su
+// geocerca). Vive aqui para que todo lo de la alerta quede en un fragmento.
+function bindGeoAlerta() {
+    const box = byId('rondo-geo-ga-resumen');
+    if (!box) return;
+    box.addEventListener('click', (ev) => {
+        const b = ev.target.closest && ev.target.closest('[data-ga]');
+        if (!b || !box.contains(b)) return;
+        if (b.dataset.ga === 'cfg') { abrirGeoAlerta(b.dataset.zona); return; }
+        if (b.dataset.ga === 'todas') { geoAlertaTodas(true); return; }
+        if (b.dataset.ga === 'ninguna') { geoAlertaTodas(false); return; }
+    });
+}
+// Unidades dentro de cada geocerca vigilada (alimenta el menu y las
+// tarjetas). Se calcula una vez por pintado: son pocas zonas.
+function geoAlertaUnidadesPorZona(mapa) {
+    const m = mapa || geoAlertaPorZona();
+    const dentro = {};
+    if (!Object.keys(m).length) return dentro;
+    // Si alguna geocerca pide toda la flota, el conteo tambien es de toda.
+    const todaFlota = Object.keys(m).some((k) => m[k].alcance === 'todas');
+    for (const u of (APP.unidades || [])) {
+        if (!todaFlota && !shouldWatch(u)) continue;
+        const st = unitState(u);
+        if (!st.online || st.lat == null) continue;
+        const info = parseUnitName(u);
+        const eco = info.eco || info.clave;
+        if (!eco) continue;
+        for (const z of (APP.zonas || [])) {
+            const nom = z && (z.n || ('Zona ' + z.id));
+            if (!Object.prototype.hasOwnProperty.call(m, nom)) continue;
+            if (geoAlertaDentro(z, st.lat, st.lon, GEO_ALERTA_MARGEN_M)) {
+                (dentro[nom] || (dentro[nom] = [])).push(eco);
+            }
+        }
+    }
+    return dentro;
+}/* ====================== GEOCERCAS DE LA APP: NUCLEO ======================
+ * Geocercas que viven SOLO en Rondo: no estan en la plataforma (ni en Wialon
+ * ni en AE-Track), se dibujan a mano sobre un mapa de OpenStreetMap y se
+ * guardan en la sesion del navegador. Se pueden exportar e importar para
+ * moverlas entre equipos o para no dibujarlas otra vez.
+ *
+ * Viven en APP.zonasLocales y se anaden a APP.zonas junto a las nativas, de
+ * forma que funcionan igual que las demas: cuentan en los KPIs, aparecen en
+ * la lista y en las paradas, zonaAt las detecta, la alerta de geocercas les
+ * aplica su propio menu y el informe y la IA las ven. Se distinguen por el
+ * campo _app y por su id con prefijo, nunca por _rid (que es lo que hace
+ * que la plataforma las busque).
+ *
+ * El nucleo es puro (no toca DOM ni red) para poder probarlo aislado en
+ * tests/geocerca-local.test.js.
+ */
+const GEOLOC_MAX_PUNTOS = 250;      // por geocerca
+const GEOLOC_MAX_ZONAS = 80;        // geocercas de la app por navegador
+const GEOLOC_MIN_RADIO = 10;        // m
+const GEOLOC_MAX_RADIO = 50000;     // m
+const GEOLOC_NOMBRE_MAX = 60;
+const GEOLOC_VERSION = 1;
+// Geocercas dibujadas a la vez en el mapa (por capa): con muchas, el SVG se
+// saturaria y el navegador se arrastra. La leyenda avisa cuando se recorta.
+const GEOLOC_MAX_PREVIEW = 140;
+
+// Convierte una lista de puntos (lat/lon) al formato de la plataforma:
+// {x: lon, y: lat}. Descarta lo que no sea coordenada valida.
+function glocPts(entrada) {
+    const out = [];
+    const arr = Array.isArray(entrada) ? entrada : [];
+    for (let i = 0; i < arr.length && out.length < GEOLOC_MAX_PUNTOS; i++) {
+        const a = arr[i];
+        if (!a || typeof a !== 'object') continue;
+        // {x,y} (formato de la plataforma), {lat,lon} (formato de Rondo) o
+        // [lon, lat] (arrays sueltos, como los de get_zone_data).
+        const y = (a.y != null) ? +a.y : (a.lat != null ? +a.lat : (Array.isArray(a) ? +a[1] : NaN));
+        const x = (a.x != null) ? +a.x : (a.lon != null ? +a.lon : (Array.isArray(a) ? +a[0] : NaN));
+        if (!isFinite(x) || !isFinite(y)) continue;
+        if (y < -85.05 || y > 85.05 || x < -180 || x > 180) continue;
+        out.push({ x: x, y: y });
+    }
+    return out;
+}
+// Lista de {lat, lon} (la que consume el mini-mapa y el guardado).
+function glocLatLon(pts) {
+    const out = [];
+    for (let i = 0; i < (pts || []).length; i++) {
+        const p = pts[i];
+        if (!p) continue;
+        out.push({ lat: +p.y, lon: +p.x });
+    }
+    return out;
+}
+function glocCentro(pts) {
+    let sx = 0, sy = 0, n = 0;
+    for (const p of (pts || [])) {
+        if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+        sx += p.x; sy += p.y; n++;
+    }
+    return n ? { x: sx / n, y: sy / n, lat: sy / n, lon: sx / n } : null;
+}
+// Bounding box completo: para circulos abarca tambien el radio (si solo
+// cubriera el centro, inZone descartaria fuera por el bbox y las alertas y el
+// indice espacial no la verian).
+function glocBBox(pts, centro, radioM) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const p of (pts || [])) {
+        if (!p || !isFinite(p.x) || !isFinite(p.y)) continue;
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    }
+    if (!isFinite(minX)) return null;
+    let cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+    if (radioM > 0 && centro) {
+        const dl = radioM / (111320 * Math.cos(centro.y * Math.PI / 180) || 111320);
+        const da = radioM / 110540;
+        minX = Math.min(minX, centro.x - dl); maxX = Math.max(maxX, centro.x + dl);
+        minY = Math.min(minY, centro.y - da); maxY = Math.max(maxY, centro.y + da);
+        cx = centro.x; cy = centro.y;
+    }
+    return { min_x: minX, min_y: minY, max_x: maxX, max_y: maxY, cen_x: cx, cen_y: cy };
+}
+function glocId() {
+    return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+function glocLimpiaNom(n) {
+    return String(n == null ? '' : n).replace(/[\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, GEOLOC_NOMBRE_MAX);
+}
+// Normaliza un objeto suelto (de storage, de un import o del editor) a una
+// geocerca de la app valida, o null si no se puede usar. Tolera formatos
+// distintos: puntos como {x,y}, como {lat,lon} o como [lat,lon].
+function glocNormaliza(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const nombre = glocLimpiaNom(raw.n || raw.nombre || raw.name);
+    if (!nombre) return null;
+    let t = (raw.t != null) ? +raw.t : (raw.tipo === 'circulo' || raw.type === 'Point' ? 3 : 2);
+    if (t !== 1 && t !== 2 && t !== 3) t = 2;
+    let pts = [];
+    // Un par plano [lat, lon] es un centro, no una lista de puntos: se
+    // detecta antes de pasar por glocPts (que lo leeria como x/y invertidos).
+    const plano = raw.puntos;
+    if (Array.isArray(plano) && plano.length === 2 && typeof plano[0] !== 'object' &&
+        isFinite(+plano[0]) && isFinite(+plano[1]) && Math.abs(+plano[0]) <= 90) {
+        pts = [{ x: +plano[1], y: +plano[0] }];
+    } else {
+        pts = glocPts(raw.p || raw.puntos || raw.coords);
+    }
+    let w = (raw.w != null) ? +raw.w : ((raw.radio != null) ? +raw.radio : 0);
+    if (!isFinite(w)) w = 0;
+    if (t === 3) {
+        w = clamp(w, GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO);
+        if (!pts.length) return null;
+    } else {
+        w = (w > 0) ? clamp(w, GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO) : 0;
+        if (pts.length < (t === 1 ? 2 : 3)) return null;
+    }
+    const cen = (t === 3) ? { x: pts[0].x, y: pts[0].y } : glocCentro(pts);
+    const b = glocBBox(pts, cen, (t === 3) ? w : 0);
+    if (!b) return null;
+    return {
+        id: String(raw.id || glocId()),
+        n: nombre,
+        t: t,
+        p: pts,
+        // El ancho importa tambien en las lineas: inZone las trata como un
+        // corredor de ese ancho, asi que sin el no contendrian nada.
+        w: (t === 1) ? w : ((t === 3) ? w : 0),
+        b: b,
+        app: 1,
+        ts: Number(raw.ts) || Date.now()
+    };
+}
+// Nombre libre: si ya existe una geocerca con ese nombre (de la app o de la
+// plataforma) se anade un sufijo. Los nombres son la clave con la que se
+// direccionan tarjetas, alertas y paradas: no pueden repetirse.
+function glocNombreLibre(nombre, nativos, propio) {
+    // "__proto__", "constructor" y "prototype" se usan como clave en el mapa
+    // de alertas por geocerca: un nombre asi se renombra antes de guardar.
+    const crudo = glocLimpiaNom(nombre);
+    const base = (!crudo || crudo === '__proto__' || crudo === 'constructor' || crudo === 'prototype')
+        ? 'Geocerca' : crudo;
+    const usados = {};
+    for (const z of (nativos || [])) {
+        const n = z && glocLimpiaNom(z.n);
+        if (n) usados[n.toLowerCase()] = 1;
+    }
+    for (const z of (propio || [])) {
+        const n = z && glocLimpiaNom(z.n);
+        if (n) usados[n.toLowerCase()] = 1;
+    }
+    let out = base, i = 2;
+    while (usados[out.toLowerCase()]) out = base + ' ' + i++;
+    return out;
+}
+// ── Exportacion / importacion ────────────────────────────────────────────
+// Formato propio: compacto y suficiente para volver a dibujarlas.
+function glocExportaJSON(lista) {
+    const feats = (lista || []).map((z) => {
+        // Puntos como {lat, lon}: legible y sin confusion con el [lon, lat]
+        // de GeoJSON.
+        const o = { n: z.n, t: z.t, p: z.p.map((p) => ({ lat: p.y, lon: p.x })), ts: z.ts || 0 };
+        if (z.t === 3) o.w = z.w;
+        return o;
+    });
+    return JSON.stringify({ tipo: 'rondo-geocercas', version: GEOLOC_VERSION, geocercas: feats }, null, 1);
+}
+// GeoJSON estandar: se abre en cualquier visor y se puede editar fuera.
+function glocExportaGeoJSON(lista) {
+    const feats = (lista || []).map((z) => ({
+        type: 'Feature',
+        properties: { nombre: z.n, origen: 'rondo-app', tipo: (z.t === 3 ? 'circulo' : (z.t === 1 ? 'linea' : 'poligono')), radio_m: (z.t === 3 ? z.w : null), ts: z.ts || 0 },
+        geometry: (function () {
+            if (z.t === 3) {
+                const c = glocCentro(z.p);
+                return { type: 'Point', coordinates: [c ? c.x : 0, c ? c.y : 0] };
+            }
+            const ring = z.p.map((p) => [p.x, p.y]);
+            if (ring.length) ring.push([ring[0][0], ring[0][1]]);
+            return { type: (z.t === 1 ? 'LineString' : 'Polygon'), coordinates: (z.t === 1 ? z.p.map((p) => [p.x, p.y]) : [ring]) };
+        })()
+    }));
+    return JSON.stringify({ type: 'FeatureCollection', features: feats }, null, 1);
+}
+// Parsea texto importado (formato propio, array suelto o GeoJSON).
+// Devuelve {lista, ignoradas, error}.
+function glocParsea(txt) {
+    const out = { lista: [], ignoradas: 0, error: '' };
+    let data = null;
+    try {
+        const t = String(txt == null ? '' : txt).trim();
+        if (!t) { out.error = 'El archivo esta vacio'; return out; }
+        data = JSON.parse(t);
+    } catch (e) {
+        out.error = 'No es JSON valido';
+        return out;
+    }
+    let items = [];
+    if (Array.isArray(data)) items = data;
+    else if (data && Array.isArray(data.geocercas)) items = data.geocercas;
+    else if (data && data.type === 'FeatureCollection' && Array.isArray(data.features)) items = data.features;
+    else if (data && data.geometry) items = [data];
+    // Geometria suelta (copiada de un visor de mapas).
+    else if (data && (data.type === 'Polygon' || data.type === 'MultiPolygon' ||
+        data.type === 'LineString' || data.type === 'Point')) {
+        items = [{ type: 'Feature', geometry: data, properties: {} }];
+    } else { out.error = 'El archivo no contiene geocercas'; return out; }
+    for (const it of items) {
+        if (!it) { out.ignoradas++; continue; }
+        if (it.type === 'Feature' && it.geometry) {
+            const pr = it.properties || {};
+            const g = it.geometry;
+            let z = null;
+            if (g.type === 'Polygon' && Array.isArray(g.coordinates) && g.coordinates[0]) {
+                z = glocNormaliza({ nombre: pr.nombre || pr.n, t: 2, p: g.coordinates[0].map((c) => ({ x: +c[0], y: +c[1] })) });
+            } else if (g.type === 'MultiPolygon' && Array.isArray(g.coordinates) && g.coordinates.length) {
+                // MultiPolygon: cada elemento es un poligono (array de anillos).
+                // Se toma el anillo exterior y se queda el mas grande.
+                let mejor = null;
+                for (const pol of g.coordinates) {
+                    const anillo = (Array.isArray(pol) && Array.isArray(pol[0]) && Array.isArray(pol[0][0])) ? pol[0] : pol;
+                    if (Array.isArray(anillo) && (!mejor || anillo.length > mejor.length)) mejor = anillo;
+                }
+                z = glocNormaliza({ nombre: pr.nombre || pr.n, t: 2, p: (mejor || []).map((c) => ({ x: +c[0], y: +c[1] })) });
+            } else if (g.type === 'LineString' && Array.isArray(g.coordinates)) {
+                z = glocNormaliza({ nombre: pr.nombre || pr.n, t: 1, p: g.coordinates.map((c) => ({ x: +c[0], y: +c[1] })) });
+            } else if (g.type === 'Point' && Array.isArray(g.coordinates)) {
+                z = glocNormaliza({
+                    nombre: pr.nombre || pr.n, t: 3, p: [{ x: +g.coordinates[0], y: +g.coordinates[1] }],
+                    w: (pr.radio_m != null) ? +pr.radio_m : 100
+                });
+            }
+            if (z) out.lista.push(z); else out.ignoradas++;
+            continue;
+        }
+        const z = glocNormaliza(it);
+        if (z) out.lista.push(z); else out.ignoradas++;
+    }
+    if (!out.lista.length && !out.error) out.error = 'Ninguna geocerca utilizable';
+    return out;
+}
+
+/* ====================== GEOCERCAS DE LA APP: ALMACEN ====================== */
+// Lista de geocercas de la app ya validadas (filtra lo que se haya
+// quedado roto en el storage sin romper la pestana).
+function glocLista() {
+    const crudo = Array.isArray(APP.zonasLocales) ? APP.zonasLocales : [];
+    const out = [];
+    for (const z of crudo) {
+        const n = glocNormaliza(z);
+        if (n) out.push(n);
+    }
+    return out;
+}
+// Aplica la lista al almacenamiento y la fusiona con las nativas en
+// APP.zonas. IMPORTANTE: APP.zonas se REASIGNA (nunca se muta) porque el
+// indice espacial se invalida comparando la identidad del array.
+function glocSincroniza(lista) {
+    const validas = [];
+    for (const z of (lista || [])) {
+        const n = glocNormaliza(z);
+        if (n) validas.push(n);
+    }
+    APP.zonasLocales = validas;
+    const nativas = (APP.zonas || []).filter((z) => z && !z.app);
+    APP.zonas = nativas.concat(validas);
+    APP.zonasIndex = null;
+    try {
+        APP.zonasPorNombre = new Map(APP.zonas.map((z) => [z.n || '', z]));
+    } catch (_) { APP.zonasPorNombre = new Map(); }
+    return APP.zonasLocales;
+}
+// Guarda en la sesion y, si el operador lo pidio, tambien en localStorage
+// para que sobrevivan a cerrar el navegador.
+function glocPersiste() {
+    const lista = APP.zonasLocales || [];
+    writeSession(SS.geolocal, JSON.stringify(lista));
+    // La copia persistente solo existe si el operador lo pidio; si lo quita,
+    // se borra la que hubiera (misma forma en ambos casos: un array).
+    if (APP.config && APP.config.geolocalRecordar) writeJSON(LS.geolocal, lista);
+    else writeJSON(LS.geolocal, []);
+}
+function glocGuarda(z, lista) {
+    const nueva = glocNormaliza(z);
+    if (!nueva) return null;
+    const base = lista || glocLista();
+    const i = base.findIndex((x) => x.id === nueva.id);
+    const salida = base.slice();
+    if (i >= 0) salida[i] = nueva;
+    else {
+        if (salida.length >= GEOLOC_MAX_ZONAS) {
+            adviceWarn('Limite alcanzado', 'Se pueden guardar hasta ' + GEOLOC_MAX_ZONAS + ' geocercas de la app.');
+            return null;
+        }
+        salida.push(nueva);
+    }
+    glocSincroniza(salida);
+    glocPersiste();
+    return nueva;
+}
+function glocBorra(id, lista) {
+    const base = lista || glocLista();
+    const salida = base.filter((x) => x.id !== id);
+    if (salida.length === base.length) return false;
+    glocSincroniza(salida);
+    glocPersiste();
+    return true;
+}
+// Importa (reemplaza o anade) las geocercas de un texto.
+function glocImporta(txt, modo, sel) {
+    const r = glocParsea(txt);
+    if (r.error && !r.lista.length) return r;
+    // sel: indices a importar (null = todas). Permite importar una sola de un
+    // archivo que trae varias.
+    const items = (Array.isArray(sel) && sel.length) ? sel.map((i) => r.lista[i]).filter(Boolean) : r.lista;
+    let lista = (modo === 'anadir') ? glocLista() : [];
+    let nuevas = 0;
+    const nativas = (APP.zonas || []).filter((x) => !glocEsApp(x));
+    for (const z of items) {
+        const libre = glocNombreLibre(z.n, nativas, lista.concat(APP.zonasLocales || []));
+        const copia = Object.assign({}, z, { n: libre, id: glocId() });
+        if (lista.length >= GEOLOC_MAX_ZONAS) break;
+        lista.push(copia);
+        nuevas++;
+    }
+    glocSincroniza(lista);
+    glocPersiste();
+    r.lista = APP.zonasLocales;
+    r.nuevas = nuevas;
+    return r;
+}
+// Marca las geocercas de la app para poder distinguirlas en la UI.
+function glocEsApp(z) {
+    return !!(z && (z.app === 1 || z._app === true));
+}
+// De donde sale cada geocerca. Se usa en la tarjeta, la lista del editor, la
+// leyenda del mapa y las exportaciones, para que nunca se confundan.
+//   plat -> de la plataforma (Wialon / AE-Track)
+//   app  -> creada en Rondo (guardada en la sesion o en el navegador)
+function glocOrigen(z, cfg) {
+    if (!glocEsApp(z)) {
+        return { id: 'plat', txt: 'Plataforma', corto: 'PLAT', largo: 'De la plataforma (Wialon / AE-Track)', guardado: false };
+    }
+    const c = (cfg && typeof cfg.geolocalRecordar === 'boolean') ? cfg.geolocalRecordar
+        : !!(APP.config && APP.config.geolocalRecordar);
+    return {
+        id: 'app', txt: 'App', corto: 'APP',
+        largo: c ? 'Creada en Rondo \u00b7 guardada en este navegador'
+            : 'Creada en Rondo \u00b7 solo en esta sesi\u00f3n (se pierde al recargar)',
+        guardado: c
+    };
+}
+// ── Medidas (area, perimetro, longitud) ─────────────────────────────────
+// Perimetro/longitud en metros con la aproximacion local (misma que usa el
+// resto del script): suficiente para mostrarlo al operador.
+function glocPerimM(pts, cerrado) {
+    const p = pts || [];
+    let d = 0;
+    for (let i = 0; i < p.length - 1; i++) d += _geoDistM(p[i].y, p[i].x, p[i + 1].y, p[i + 1].x);
+    if (cerrado && p.length > 2) d += _geoDistM(p[p.length - 1].y, p[p.length - 1].x, p[0].y, p[0].x);
+    return d;
+}
+function glocM2(z) {
+    if (!z) return 0;
+    if (z.t === 3) return Math.PI * z.w * z.w;
+    if (z.t === 1) return 0;
+    return zonaAreaM2(z);
+}
+function glocTextoTam(z) {
+    const m2 = glocM2(z);
+    if (z && z.t === 1) return fmtArea((glocPerimM(z.p, false) || 0) / 1000) + ' de trazo';
+    if (m2 >= 1e6) return fmtArea(m2 / 1e6);
+    return Math.round(m2) + ' m2';
+}
+
+// Pasa de pixel del contenedor a coordenada (inversa de rxMMPt). Es la
+// unica pieza que el mini-mapa no tenia: sin ella no se puede dibujar.
+function glocPxALatLon(inst, px, py) {
+    const z = clamp(inst ? inst.z : 16, 2, 19);
+    const n = Math.pow(2, z) * 256;
+    const ox = (inst ? inst.ox : 0) + px, oy = (inst ? inst.oy : 0) + py;
+    const lon = ox / n * 360 - 180;
+    // OJO: el y normalizado de rxMMLatY es (0.5 - k/4PI), es decir YA es la
+    // coordenada normalizada; hay que deshacerlo con atan(sinh(PI*(1-2y))),
+    // que es la inversa exacta de esa formula. Restarle 0.5 aqui desplaza
+    // cualquier punto hacia un polo.
+    const lat = Math.atan(Math.sinh(Math.PI * (1 - 2 * (oy / n)))) * 180 / Math.PI;
+    return { lat: clamp(lat, -85.05112878, 85.05112878), lon: clamp(lon, -180, 180) };
+}
+/* ====================== GEOCERCAS DE LA APP: MAPA ====================== */
+// Estado del editor (borrador en curso + geocerca en edicion).
+let _gloc = null;
+function glocEstado() {
+    if (!_gloc) {
+        _gloc = {
+            id: null, nombre: '', modo: 'poligono', pts: [], radio: 100, ancho: 100,
+            mapa: null, capa: null, capaCtx: null, capaPlat: null, editando: false
+        };
+    }
+    return _gloc;
+}
+// Capa propia encima del mini-mapa: dibuja el borrador (no vive en
+// inst.lineas porque rxMMDibujar reescribe esas capas en cada pan/zoom).
+// Chapa sobre el mapa: modo activo, cuanto lleva y como se dibuja. Se
+// actualiza en cada render para no tener que releer el DOM.
+function glocPintarHud() {
+    const el = byId('gg-hud');
+    if (!el) return;
+    const e = glocEstado();
+    const ico = (e.modo === 'circulo' ? 'zone' : (e.modo === 'linea' ? 'route' : 'map'));
+    const c = glocCifras();
+    const html = '<span class="gg-hud-m"><span class="rondo-usym">' + UIS[ico] + '</span>' +
+        esc(glocModoTxt(e.modo)) + ' \u00b7 ' + esc(c.puntos) + '</span>' +
+        '<span class="gg-hud-h">' + esc(glocPista(e.modo)) + '</span>';
+    setHtml(el, html);
+}
+function glocPintarBorrador() {
+    const e = glocEstado();
+    if (!e.mapa || !e.capa) return;
+    const inst = e.mapa;
+    const pt = (lat, lon) => {
+        const q = rxMMPt(inst, lat, lon);
+        return q[0].toFixed(1) + ',' + q[1].toFixed(1);
+    };
+    let h = '';
+    if (e.pts.length) {
+        const p = e.pts.map((q) => pt(q.lat, q.lon));
+        if (e.modo === 'circulo' && e.pts.length >= 1) {
+            const c = e.pts[0];
+            if (e.radioListo) {
+                const rM = glocRadioDesde(e, c);
+                const a = 32;
+                const pol = [];
+                for (let i = 0; i <= a; i++) {
+                    const ang = (i / a) * Math.PI * 2;
+                    const dl = (rM / 111320) * Math.cos(ang) / (Math.cos(c.lat * Math.PI / 180) || 1);
+                    const da = (rM / 110540) * Math.sin(ang);
+                    pol.push(pt(c.lat + da, c.lon + dl));
+                }
+                h += '<polygon points="' + pol.join(' ') + '" fill="rgba(249,168,37,.22)" stroke="#f9a817" stroke-width="2"/>';
+            }
+            h += '<circle cx="' + pt(c.lat, c.lon).split(',')[0] + '" cy="' + pt(c.lat, c.lon).split(',')[1] + '" r="4" fill="#f9a817" stroke="#fff" stroke-width="1.5"><title>Centro</title></circle>';
+        } else {
+            if (p.length > 1) {
+                h += '<polyline points="' + p.join(' ') + '" fill="none" stroke="#f9a817" stroke-width="2.5" stroke-linejoin="round" stroke-dasharray="' +
+                    (e.modo === 'linea' ? '0' : '6 4') + '"/>';
+                if (e.modo === 'poligono' && e.pts.length >= 3) {
+                    h += '<polygon points="' + p.concat([p[0]]).join(' ') + '" fill="rgba(249,168,37,.18)" stroke="none"/>';
+                }
+            }
+            for (let i = 0; i < e.pts.length; i++) {
+                h += '<circle cx="' + p[i].split(',')[0] + '" cy="' + p[i].split(',')[1] + '" r="4" fill="#f9a817" stroke="#fff" stroke-width="1.5"><title>Punto ' + (i + 1) + '</title></circle>';
+            }
+        }
+    }
+    // Circulo en curso: une el centro con el cursor para intuir el radio.
+    if (e.modo === 'circulo' && e.pts.length === 1 && e.cursor) {
+        const c = e.pts[0];
+        h += '<line x1="' + pt(c.lat, c.lon).split(',')[0] + '" y1="' + pt(c.lat, c.lon).split(',')[1] +
+            '" x2="' + pt(e.cursor.lat, e.cursor.lon).split(',')[0] + '" y2="' + pt(e.cursor.lat, e.cursor.lon).split(',')[1] +
+            '" stroke="#f9a817" stroke-width="1.5" stroke-dasharray="4 3"/>';
+    }
+    e.capa.innerHTML = h;
+}
+// Radio del circulo en metros a partir del centro y del punto de radio.
+function glocRadioDesde(e, centro) {
+    const ref = e.radioPunto || e.cursor;
+    if (!centro || !ref) return e.radio;
+    return clamp(_geoDistM(centro.lat, centro.lon, ref.lat, ref.lon), GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO);
+}
+// Anillo de una geocerca en coordenadas de pantalla (funciona con las tres
+// formas: circulo, poligono y linea). Es la pieza que usan las tres capas.
+function glocAnillo(inst, z, segmentos) {
+    const pts = (z && z._pts) || _zonaPuntos(z) || z.p;
+    if (!Array.isArray(pts) || !pts.length) return '';
+    const px = (a) => {
+        const r = rxMMPt(inst, (a && a.y != null) ? a.y : a[1], (a && a.x != null) ? a.x : a[0]);
+        return r[0].toFixed(1) + ',' + r[1].toFixed(1);
+    };
+    if (z.t === 3) {
+        const cen = glocCentro(z.p) || (pts.length ? { x: +pts[0].x, y: +pts[0].y } : null);
+        const radio = _zonaRadio(z);
+        if (!cen || !(radio > 0)) return '';
+        const n = clamp(segmentos || 30, 10, 60);
+        const out = [];
+        for (let i = 0; i <= n; i++) {
+            const ang = (i / n) * Math.PI * 2;
+            const dl = (radio / 111320) * Math.cos(ang) / (Math.cos(cen.y * Math.PI / 180) || 1);
+            const da = (radio / 110540) * Math.sin(ang);
+            out.push(px({ x: cen.x + dl, y: cen.y + da }));
+        }
+        return out.join(' ');
+    }
+    const p = pts.map(px);
+    if (p.length < 2) return '';
+    return (z.t === 1) ? p.join(' ') : p.concat([p[0]]).join(' ');
+}
+// Previsualizacion: lo que ya existe se ve en el mapa mientras se dibuja.
+// Tres capas y un filtro (todas / solo mias / solo la plataforma) para no
+// saturar el mapa cuando la instalacion tiene muchas geocercas.
+function glocVista() {
+    return (APP.geoPreview === 'app' || APP.geoPreview === 'plat') ? APP.geoPreview : 'todas';
+}
+// Capa 1: geocercas de la app (las que puedes editar/eliminar aqui).
+function glocPintarContexto() {
+    const e = glocEstado();
+    if (!e.mapa || !e.capaCtx) return;
+    const inst = e.mapa;
+    if (glocVista() === 'plat') { e.capaCtx.innerHTML = ''; return; }
+    let h = '';
+    let n = 0;
+    for (const z of glocLista()) {
+        if (z.id === e.id) continue;
+        if (n >= GEOLOC_MAX_PREVIEW) break;
+        const anillo = glocAnillo(inst, z, 26);
+        if (!anillo) continue;
+        n++;
+        const fill = (z.t === 3) ? 'rgba(125,133,149,.16)' : 'rgba(125,133,149,.13)';
+        const tag = '<title>' + esc(z.n) + ' \u00b7 de la app</title>';
+        h += (z.t === 1)
+            ? '<polyline points="' + anillo + '" fill="none" stroke="#7d8595" stroke-width="2" stroke-dasharray="6 4" opacity=".85">' + tag + '</polyline>'
+            : '<polygon points="' + anillo + '" fill="' + fill + '" stroke="#7d8595" stroke-width="1.5" stroke-dasharray="5 4">' + tag + '</polygon>';
+    }
+    e.capaCtx.innerHTML = h;
+}
+// Capa 2: geocercas de la plataforma, para dibujar sin pisarlas.
+function glocPintarPlataforma() {
+    const e = glocEstado();
+    if (!e.mapa || !e.capaPlat) return;
+    const inst = e.mapa;
+    if (glocVista() === 'app') { e.capaPlat.innerHTML = ''; return; }
+    let h = '';
+    let n = 0;
+    for (const z of (APP.zonas || [])) {
+        if (!z || glocEsApp(z)) continue;
+        if (n >= GEOLOC_MAX_PREVIEW) break;
+        const anillo = glocAnillo(inst, z, 20);
+        if (!anillo) continue;
+        n++;
+        const tag = '<title>' + esc(z.n || ('Zona ' + z.id)) + ' \u00b7 de la plataforma</title>';
+        h += (z.t === 1)
+            ? '<polyline points="' + anillo + '" fill="none" stroke="#5c7a99" stroke-width="1.5" stroke-dasharray="3 4" opacity=".7">' + tag + '</polyline>'
+            : '<polygon points="' + anillo + '" fill="rgba(92,122,153,.12)" stroke="#5c7a99" stroke-width="1" stroke-dasharray="3 4" opacity=".8">' + tag + '</polygon>';
+    }
+    e.capaPlat.innerHTML = h;
+}
+// Leyenda del mapa: que color es cada cosa y cuantas hay de cada origen.
+function glocLeyendaHTML() {
+    const todas = APP.zonas || [];
+    const propias = todas.filter((z) => glocEsApp(z)).length;
+    const plat = todas.length - propias;
+    const v = glocVista();
+    const chip = (val, txt, n, act) => '<button type="button" class="gg-ley-b' + (act ? ' activo' : '') + '" data-gg="preview" data-v="' + val + '" title="Ver ' + txt.toLowerCase() + ' en el mapa">' +
+        '<i class="sw-' + val + '"></i>' + esc(txt) + ' <b>' + n + '</b></button>';
+    return '<div class="gg-ley">' + chip('todas', 'Todas', propias + plat, v === 'todas') +
+        chip('app', 'App', propias, v === 'app') +
+        chip('plat', 'Plataforma', plat, v === 'plat') +
+        '<i class="gg-ley-draft">borrador</i></div>';
+}
+
+/* ====================== GEOCERCAS DE LA APP: UI ====================== */
+// Ventana de edicion: mapa a la izquierda, paneles a la derecha. El shell
+// se crea una vez; los paneles se repintan en .gg-lados (asi los listeners
+// delegados sobreviven a cada render).
+function glocModalEl() {
+    let el = byId('rondo-geocerca-modal');
+    if (el) return el;
+    el = makeEl('div', { id: 'rondo-geocerca-modal' });
+    el.innerHTML =
+        '<div class="gg-card">' +
+        '<div class="gg-head"><span class="rondo-usym">' + UIS.zone + '</span> <b>Geocercas de la app</b>' +
+        '<span class="gg-headsub">dibujadas en Rondo, fuera de la plataforma</span>' +
+        '<span style="flex:1"></span>' +
+        '<button class="gg-x" id="gg-x" title="Cerrar"><span class="rondo-usym">' + UIS.close + '</span></button></div>' +
+        // Las dos capas SVG son propias: rxMiniMapa redibuja las suyas en cada
+        // pan/zoom y se llevaria por delante el borrador si fuera dentro.
+        '<div class="gg-cuerpo">' +
+        '<div class="rondo-gg-mapa" id="rondo-gg-mapa">' +
+        '<svg class="rondo-gg-plat" xmlns="http://www.w3.org/2000/svg"></svg>' +
+        '<svg class="rondo-gg-ctx" xmlns="http://www.w3.org/2000/svg"></svg>' +
+        '<svg class="rondo-gg-capa" xmlns="http://www.w3.org/2000/svg"></svg>' +
+        '<div class="gg-hud" id="gg-hud"></div>' +
+        '<div class="gg-leyenda" id="gg-leyenda"></div>' +
+        '<div class="rondo-gg-atrib">\u00a9 OpenStreetMap</div>' +
+        '</div>' +
+        '<div class="gg-lados"></div>' +
+        '</div>' +
+        '<div class="gg-foot"><span class="gg-pie">Se guardan en esta pestana; marca <b>Recordar en este navegador</b> para que sobrevivan. ' +
+        'Forman parte de las geocercas de Rondo: cuentan en los KPIs, sirven como parada y admiten alerta propia.</span>' +
+        '<button id="gg-cerrar-modal">Cerrar</button>' +
+        '<button class="primary" id="gg-guardar"><span class="rondo-usym">' + UIS.check + '</span> Guardar geocerca</button>' +
+        '</div>' +
+        '</div>';
+    document.body.appendChild(el);
+    el.addEventListener('pointerdown', (ev) => { if (ev.target === el) cerrarGeocercaApp(); });
+    const x = byId('gg-x');
+    if (x) x.addEventListener('click', () => cerrarGeocercaApp());
+    const cm = byId('gg-cerrar-modal');
+    if (cm) cm.addEventListener('click', () => cerrarGeocercaApp());
+    const gd = byId('gg-guardar');
+    if (gd) gd.addEventListener('click', () => glocGuardarBorrador());
+    glocBind();
+    return el;
+}
+function cerrarGeocercaApp() {
+    const el = byId('rondo-geocerca-modal');
+    if (el) el.classList.remove('abierto');
+    const e = glocEstado();
+    e.mapa = null; e.capa = null; e.capaCtx = null;
+}
+function abrirGeocercaApp(editar) {
+    const e = glocEstado();
+    const lista = glocLista();
+    e.id = null; e.nombre = ''; e.pts = []; e.radioListo = false; e.radioPunto = null; e.cursor = null;
+    e.editando = false;
+    if (editar) {
+        const z = typeof editar === 'string'
+            ? lista.find((x) => x.id === editar)
+            : lista.find((x) => (x.n || '') === editar);
+        if (z) {
+            e.id = z.id;
+            e.nombre = z.n;
+            e.modo = (z.t === 3 ? 'circulo' : (z.t === 1 ? 'linea' : 'poligono'));
+            e.pts = z.p.map((p) => ({ lat: p.y, lon: p.x }));
+            e.radio = z.w || 100;
+            e.ancho = z.w || 100;
+            e.radioListo = (z.t === 3);
+            e.radioPunto = (z.t === 3) ? { lat: z.p[0].y, lon: z.p[0].x } : null;
+            e.editando = true;
+        }
+    }
+    glocModalEl().classList.add('abierto');
+    glocRender();
+    // Centra el mapa en la geocerca (o en la flota si es nueva).
+    try {
+        e.mapa.medir();
+        const pts = e.pts.length ? glocLatLon(glocPuntosActuales())
+            : (APP.unidades || []).filter(shouldWatch).map((u) => { const st = unitState(u); return { lat: st.lat, lon: st.lon }; }).filter((p) => p.lat != null);
+        if (pts.length) { e.mapa.lineas = [{ pts: pts }]; e.mapa.encuadrar(); }
+        e.mapa.render();
+    } catch (_) { /* noop */ }
+    glocPintarBorrador();
+    glocPintarContexto();
+}
+// Estado del borrador como lo espera glocNormaliza.
+function glocBorrador() {
+    const e = glocEstado();
+    const o = { n: e.nombre, p: glocPuntosActuales(e) };
+    if (e.modo === 'circulo') { o.t = 3; o.w = glocRadioDesde(e, e.pts[0] || e.cursor); }
+    else if (e.modo === 'linea') { o.t = 1; o.w = e.ancho; }
+    else o.t = 2;
+    return o;
+}
+function glocPuntosActuales(e) {
+    const est = e || glocEstado();
+    if (est.modo === 'circulo') {
+        const c = est.pts[0];
+        if (!c) return [];
+        return [{ x: c.lon, y: c.lat }];
+    }
+    return est.pts.map((p) => ({ x: p.lon, y: p.lat }));
+}
+function glocPuntosActuales(e) {
+    const est = e || glocEstado();
+    if (est.modo === 'circulo') {
+        const c = est.pts[0];
+        return c ? [{ x: c.lon, y: c.lat }] : [];
+    }
+    return est.pts.map((p) => ({ x: p.lon, y: p.lat }));
+}
+// Resumen del borrador para el pie del editor.
+function glocResumen() {
+    const c = glocCifras();
+    if (!c.superficie) return c.puntos + ' \u00b7 completa la figura';
+    return c.puntos + ' \u00b7 ' + c.superficie + ' \u00b7 ' + c.perimetro;
+}
+// Cifras del borrador: alimentan la tira de estadisticos del panel lateral.
+function glocCifras() {
+    const e = glocEstado();
+    const z = glocNormaliza(glocBorrador());
+    const out = {
+        n: e.pts.length,
+        puntos: (e.modo === 'circulo')
+            ? (e.pts.length ? 'circulo' : 'sin centro')
+            : (e.pts.length + (e.pts.length === 1 ? ' punto' : ' puntos')),
+        superficie: '',
+        radio: '',
+        perimetro: '',
+        completo: !!z
+    };
+    if (!z) return out;
+    out.superficie = glocTextoTam(z);
+    out.radio = (z.t === 3) ? (Math.round(z.w) + ' m') : '';
+    out.perimetro = (z.t === 3)
+        ? (Math.round(2 * Math.PI * z.w) + ' m')
+        : (Math.round(glocPerimM(z.p, z.t === 2)) + ' m');
+    return out;
+}
+function glocListaHTML() {
+    const v = APP.geoListaVista || 'app';
+    const todas = glocLista();
+    const lista = todas.filter((z) => (v === 'plat') ? !glocEsApp(z) : (v === 'todas' ? true : glocEsApp(z)));
+    if (v === 'plat') {
+        return '<div class="gg-vacio"><span class="rondo-usym">' + UIS.map + '</span>' +
+            '<b>Las de la plataforma no se editan aqui</b>' +
+            '<span>Se dibujan en AE-Track o Wialon (icono azul en el mapa). Aqui solo se crean y modifican las de Rondo.</span></div>';
+    }
+    if (!lista.length) {
+        return '<div class="gg-vacio"><span class="rondo-usym">' + UIS.zone + '</span>' +
+            '<b>Aun no hay geocercas</b>' +
+            '<span>Dibuja un marco, circulo o linea en el mapa y pulsa <b>Guardar geocerca</b>.</span></div>';
+    }
+    return lista.map((z) => {
+        const alertas = geoAlertaCfgZona(z.n);
+        const forma = (z.t === 3 ? 'C\u00edrculo' : (z.t === 1 ? 'L\u00ednea' : 'Marco'));
+        const ico = (z.t === 3 ? 'zone' : (z.t === 1 ? 'route' : 'map'));
+        const org = glocOrigen(z);
+        return '<div class="gg-item" data-id="' + esc(z.id) + '"' +
+            (alertas ? ' data-alerta="1" title="Tiene alerta de geocerca activa"' : '') + '>' +
+            '<span class="gg-ptag"><span class="rondo-usym">' + UIS[ico] + '</span></span>' +
+            '<div class="gg-in"><b>' + esc(z.n) +
+            '<i class="gg-origen o-' + org.id + '" title="' + esc(org.largo) + '">' + org.corto + '</i>' +
+            (org.id === 'app' && org.guardado ? '<i class="gg-lock" title="Se recuerda al cerrar el navegador"><span class="rondo-usym">' + UIS.check + '</span></i>' : '') +
+            '</b>' +
+            '<span>' + forma + ' \u00b7 ' + glocTextoTam(z) + '</span></div>' +
+            (alertas ? '<i class="gg-tag-alerta" title="Alerta activa">ALERTA</i>' : '') +
+            '<span class="gg-acc">' +
+            '<button class="mini gg-ed" title="Editar en el mapa"><span class="rondo-usym">' + UIS.watch + '</span></button>' +
+            '<button class="mini gg-cp" title="Copiar nombre y centro"><span class="rondo-usym">' + UIS.copy + '</span></button>' +
+            '<button class="mini gg-al' + (alertas ? ' on' : '') + '" title="' + (alertas ? 'Ajustar su alerta' : 'Vigilar esta geocerca') + '"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
+            '<button class="mini gg-del" title="Eliminar"><span class="rondo-usym">' + UIS.close + '</span></button>' +
+            '</span></div>';
+    }).join('');
+}
+function glocRender() {
+    const el = byId('rondo-geocerca-modal');
+    if (!el || !el.classList.contains('abierto')) return;
+    const e = glocEstado();
+    if (!e.mapa) {
+        const cont = byId('rondo-gg-mapa');
+        if (cont) {
+            e.mapa = rxMiniMapa(cont, { lineas: [], marcas: [] });
+            e.capaPlat = cont.querySelector('.rondo-gg-plat');
+            e.capaCtx = cont.querySelector('.rondo-gg-ctx');
+            e.capa = cont.querySelector('.rondo-gg-capa');
+            glocBindMapa(cont);
+        }
+    }
+    const cuerpo = el.querySelector('.gg-lados');
+    if (cuerpo) {
+        setHtml(cuerpo,
+            // ── Panel 1: la figura que se esta trazando ──────────────────
+            '<div class="gg-lado">' +
+            '<h4><span class="rondo-usym">' + UIS.watch + '</span>' +
+            (e.editando ? 'Editando geocerca' : 'Nueva geocerca') +
+            (e.id ? '<i class="gg-modo-tag">' + esc(glocModoTxt(e.modo)) + '</i>' : '') + '</h4>' +
+            '<label class="gg-lab">Nombre' +
+            '<input type="text" id="gg-nombre" maxlength="' + GEOLOC_NOMBRE_MAX + '" value="' + esc(e.nombre) + '" placeholder="Patio del cliente"></label>' +
+            '<div class="gg-modos" role="group" aria-label="Tipo de figura">' +
+            glocModoChip(e, 'poligono', 'Marco', 'map') +
+            glocModoChip(e, 'circulo', 'C\u00edrculo', 'zone') +
+            glocModoChip(e, 'linea', 'L\u00ednea', 'route') +
+            '</div>' +
+            '<div class="gg-stats" id="gg-res">' + glocStatsHTML() + '</div>' +
+            '<label class="gg-lab">Centro (latitud, longitud)<span class="gg-two">' +
+            '<input type="text" id="gg-lat" inputmode="decimal" placeholder="19.432600" value="' + (e.pts.length ? e.pts[0].lat.toFixed(6) : '') + '">' +
+            '<input type="text" id="gg-lon" inputmode="decimal" placeholder="-99.133200" value="' + (e.pts.length ? e.pts[0].lon.toFixed(6) : '') + '">' +
+            '<button type="button" class="mini gg-ir" id="gg-ir" title="Centrar el mapa en esas coordenadas">Ir</button>' +
+            '</span></label>' +
+            (e.modo === 'circulo'
+                ? '<label class="gg-lab">Radio<span class="gg-unit"><input type="number" id="gg-radio" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.radio) + '"><i>m</i></span></label>'
+                : (e.modo === 'linea' ? '<label class="gg-lab">Ancho del trazo<span class="gg-unit"><input type="number" id="gg-ancho" min="' + GEOLOC_MIN_RADIO + '" max="' + GEOLOC_MAX_RADIO + '" value="' + Math.round(e.ancho) + '"><i>m</i></span></label>' : '')) +
+            '<div class="gg-acciones">' +
+            '<button type="button" class="mini" id="gg-undo" title="Quitar el ultimo punto"><span class="rondo-usym">' + UIS.menos + '</span> Deshacer</button>' +
+            '<button type="button" class="mini" id="gg-limpiar" title="Empezar de cero"><span class="rondo-usym">' + UIS.clear + '</span> Limpiar</button>' +
+            (e.modo === 'circulo' ? '' : '<button type="button" class="mini" id="gg-cerrar" title="Cerrar la figura (o doble clic en el mapa)">Cerrar figura</button>') +
+            '</div>' +
+            '<p class="gg-pista"><span class="rondo-usym">' + UIS.info + '</span>' + esc(glocPista(e.modo)) + '</p>' +
+            '</div>' +
+            // ── Panel 2: las geocercas de la app ─────────────────────────
+            '<div class="gg-lado gg-lado-lista">' +
+            '<h4><span class="rondo-usym">' + UIS.map + '</span>Geocercas' +
+            '<i class="gg-count">' + glocLista().length + '</i></h4>' +
+            '<div class="gg-filtro">' +
+            glocFiltroChip('app', 'M\u00edas (app)', glocLista().length) +
+            glocFiltroChip('plat', 'Plataforma', (APP.zonas || []).filter((x) => !glocEsApp(x)).length) +
+            glocFiltroChip('todas', 'Todas', (APP.zonas || []).length) +
+            '</div>' +
+            '<div class="gg-lista">' + glocListaHTML() + '</div>' +
+            '<div class="gg-sec">Importar / exportar</div>' +
+            '<div class="gg-io">' +
+            '<button type="button" class="mini" id="gg-exporta" title="Descargar un .json con tus geocercas"><span class="rondo-usym">' + UIS.export + '</span> Exportar</button>' +
+            '<button type="button" class="mini" id="gg-exporta-geo" title="Descargar GeoJSON (abrible en cualquier visor)"><span class="rondo-usym">' + UIS.map + '</span> GeoJSON</button>' +
+            '<button type="button" class="mini" id="gg-importa" title="Importar un .json o .geojson"><span class="rondo-usym">' + UIS.upload + '</span> Importar</button>' +
+            '<button type="button" class="mini" id="gg-copiar" title="Copiar el JSON al portapapeles"><span class="rondo-usym">' + UIS.copy + '</span> Copiar</button>' +
+            '<input type="file" id="gg-file" accept=".json,.geojson,.txt" hidden>' +
+            '</div>' +
+            '<label class="gg-check"><input type="checkbox" id="gg-recordar"' + (APP.config && APP.config.geolocalRecordar ? ' checked' : '') + '> ' +
+            '<span><b>Recordar en este navegador</b><i>Sin esto se pierden al recargar la pagina</i></span></label>' +
+            '</div>');
+    }
+    glocPintarBorrador();
+    glocPintarContexto();
+    glocPintarPlataforma();
+    glocPintarHud();
+    const ley = byId('gg-leyenda');
+    if (ley) setHtml(ley, glocLeyendaHTML());
+}
+function glocModoTxt(modo) {
+    return (modo === 'circulo') ? 'C\u00edrculo' : (modo === 'linea' ? 'L\u00ednea' : 'Marco');
+}
+function glocModoTxtPlano(modo) {
+    return (modo === 'circulo') ? 'circulo' : (modo === 'linea' ? 'linea' : 'marco');
+}
+function glocFiltroChip(val, txt, n) {
+    const v = APP.geoListaVista || 'app';
+    return '<button type="button" class="gg-fchip' + (v === val ? ' activo' : '') + '" data-gg="lista" data-v="' + val + '" title="Mostrar ' + txt.toLowerCase() + '">' +
+        esc(txt) + '<b>' + n + '</b></button>';
+}
+function glocModoChip(e, modo, txt, icono) {
+    return '<button type="button" class="gg-chip' + (e.modo === modo ? ' activo' : '') + '" data-gg="modo" data-v="' + modo + '" title="Trazar un ' + glocModoTxtPlano(modo) + '">' +
+        '<span class="rondo-usym">' + UIS[icono] + '</span>' + esc(txt) + '</button>';
+}
+// Tira de cifras del borrador: puntos, superficie y perimetro.
+function glocStatsHTML() {
+    const c = glocCifras();
+    const celda = (lb, val, ok) => '<div class="gg-stat' + (ok ? ' ok' : '') + '"><b>' + esc(val) + '</b><span>' + lb + '</span></div>';
+    const circ = (c.puntos.indexOf('circulo') >= 0);
+    return celda('Puntos', c.puntos, c.n > 0) +
+        celda(circ ? 'Radio' : 'Superficie', (circ ? (c.radio || '\u2014') : (c.superficie || '\u2014')), c.completo) +
+        celda(circ ? 'Circunferencia' : 'Per\u00edmetro', c.perimetro || '\u2014', c.completo);
+}
+function glocPista(modo) {
+    if (modo === 'circulo') return 'Clic para poner el centro y otro clic para el radio (o escribe el radio).';
+    if (modo === 'linea') return 'Clic para cada punto del trazo; doble clic o Cerrar figura para terminar.';
+    return 'Clic para cada esquina del marco; doble clic o Cerrar figura para cerrarlo.';
+}
+// Interaccion con el mapa: clic para vertices, arrastre para mover, rueda
+// para acercar. El mini-mapa ya gestiona el arrastre y la rueda; aqui solo
+// se distingue un clic de un arrastre (mismo umbral de 4 px que el editor de
+// paradas) y se pinta la capa propia.
+function glocBindMapa(cont) {
+    if (!cont || cont._ggBound) return;
+    cont._ggBound = true;
+    let x0 = 0, y0 = 0, movido = false;
+    cont.addEventListener('pointerdown', (ev) => {
+        if (ev.button !== 0) return;
+        x0 = ev.clientX; y0 = ev.clientY; movido = false;
+    });
+    cont.addEventListener('pointermove', (ev) => {
+        if (Math.abs(ev.clientX - x0) > 4 || Math.abs(ev.clientY - y0) > 4) movido = true;
+        const e = glocEstado();
+        if (!e.mapa || !movido) return;
+        // Radio del circulo en vivo mientras se arrastra.
+        if (e.modo === 'circulo' && e.pts.length === 1) {
+            const c = e.pts[0];
+            const r = cont.getBoundingClientRect();
+            e.cursor = glocPxALatLon(e.mapa, ev.clientX - r.left, ev.clientY - r.top);
+            e.radio = glocRadioDesde(e, c);
+            glocPintarBorrador();
+            const res = byId('gg-res');
+            if (res) res.textContent = glocResumen();
+        }
+    });
+    cont.addEventListener('pointerup', (ev) => {
+        if (movido || ev.button !== 0) return;
+        // La leyenda y la chapa viven sobre el mapa: un clic ahi NO debe
+        // anadir un punto a la figura.
+        if (ev.target.closest && ev.target.closest('.gg-leyenda,.gg-hud')) return;
+        const e = glocEstado();
+        const r = cont.getBoundingClientRect();
+        const p = glocPxALatLon(e.mapa, ev.clientX - r.left, ev.clientY - r.top);
+        if (e.modo === 'circulo') {
+            if (!e.pts.length) { e.pts = [p]; e.radioPunto = null; e.radioListo = false; }
+            else { e.radioPunto = p; e.radio = glocRadioDesde(e, e.pts[0]); e.radioListo = true; }
+        } else {
+            if (e.pts.length >= GEOLOC_MAX_PUNTOS) {
+                adviceWarn('Demasiados puntos', 'El maximo por geocerca es ' + GEOLOC_MAX_PUNTOS + '.');
+                return;
+            }
+            e.pts.push(p);
+        }
+        glocRender();
+    });
+    cont.addEventListener('dblclick', (ev) => {
+        if (ev.target.closest && ev.target.closest('.gg-leyenda,.gg-hud')) return;
+        ev.preventDefault();
+        const e = glocEstado();
+        if (e.modo === 'linea' || e.modo === 'poligono') e.pts.pop();
+        glocRender();
+    });
+    // Al arrastrar/zoomear el mini-mapa hay que repintar nuestras capas.
+    cont.addEventListener('wheel', () => {
+        setTimeout(() => { glocPintarBorrador(); glocPintarContexto(); }, 0);
+    }, { passive: true });
+}
+function glocGuardarBorrador() {
+    const e = glocEstado();
+    if (!e.nombre.trim()) {
+        adviceWarn('Falta el nombre', 'Ponle un nombre a la geocerca antes de guardar.');
+        const n = byId('gg-nombre');
+        if (n && n.focus) n.focus();
+        return;
+    }
+    const b = glocBorrador();
+    const lista = glocLista();
+    const libre = glocNombreLibre(b.n, (APP.zonas || []).filter((x) => !x.app), lista.filter((z) => z.id !== e.id));
+    const z = glocNormaliza(Object.assign({}, b, {
+        n: libre, id: e.id || glocId()
+    }));
+    if (!z) {
+        adviceWarn('Figura incompleta',
+            e.modo === 'circulo' ? 'Marca el centro y el radio del circulo.'
+                : (e.modo === 'linea' ? 'Une al menos 2 puntos.' : 'Un marco necesita al menos 3 puntos.'));
+        return;
+    }
+    glocGuarda(z);
+    e.id = z.id;
+    e.nombre = z.n;
+    e.editando = true;
+    e.radio = z.w || e.radio;
+    adviceOk(e.editando ? 'Geocerca guardada' : 'Geocerca creada', z.n + ' \u00b7 ' + glocTextoTam(z));
+    glocRender();
+    if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
+}
+function glocBorradorVacio() {
+    const e = glocEstado();
+    e.pts = []; e.radioListo = false; e.radioPunto = null; e.cursor = null;
+    e.nombre = ''; e.editando = false; e.id = null;
+    glocRender();
+}
+// Eventos del modal (delegados: el HTML se regenera en cada render).
+function glocBind() {
+    const el = byId('rondo-geocerca-modal');
+    if (!el || el._ggEvents) return;
+    el._ggEvents = true;
+    const cuerpo = el.querySelector('.gg-cuerpo');
+    if (!cuerpo) return;
+    cuerpo.addEventListener('click', (ev) => {
+        const t = ev.target;
+        const e = glocEstado();
+        const lp = t.closest && t.closest('[data-gg="preview"]');
+        if (lp) {
+            APP.geoPreview = (lp.dataset.v === 'app' || lp.dataset.v === 'plat') ? lp.dataset.v : 'todas';
+            glocPintarContexto();
+            glocPintarPlataforma();
+            const ley = byId('gg-leyenda');
+            if (ley) setHtml(ley, glocLeyendaHTML());
+            return;
+        }
+        const lf = t.closest && t.closest('[data-gg="lista"]');
+        if (lf) {
+            APP.geoListaVista = lf.dataset.v || 'app';
+            glocRender();
+            return;
+        }
+        const chip = t.closest && t.closest('[data-gg="modo"]');
+        if (chip) {
+            const m = chip.dataset.v;
+            e.modo = m;
+            if (m === 'linea' && !e.ancho) e.ancho = 100;
+            glocRender();
+            return;
+        }
+        const fila = t.closest && t.closest('.gg-item');
+        if (fila) {
+            const id = fila.dataset.id;
+            if (t.closest('.gg-ed')) { abrirGeocercaApp(id); return; }
+            if (t.closest('.gg-cp')) {
+                const z = glocLista().find((x) => x.id === id);
+                const c = z ? glocCentro(z.p) : null;
+                if (z) copiarAlPortapapeles(z.n + (c ? '\n' + c.y.toFixed(6) + ',' + c.x.toFixed(6) : ''), 'Geocerca copiada', z.n);
+                return;
+            }
+            if (t.closest('.gg-al')) {
+                const z = glocLista().find((x) => x.id === id);
+                if (z) abrirGeoAlerta(z.n);
+                return;
+            }
+            if (t.closest('.gg-del')) {
+                const z = glocLista().find((x) => x.id === id);
+                rondoConfirm('Eliminar geocerca', 'Se quitara "' + (z ? z.n : '') + '" de la lista de la app. Las demas no se tocan.', () => {
+                    if (glocBorra(id)) {
+                        if (e.id === id) glocBorradorVacio();
+                        adviceOk('Geocerca eliminada', z ? z.n : '');
+                        glocRender();
+                        if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
+                    }
+                }, { peligro: true, okText: 'Eliminar' });
+                return;
+            }
+        }
+        const b = t.closest && t.closest('button');
+        if (!b) return;
+        const id = b.id;
+        if (id === 'gg-ir') { glocIrACoordenadas(); return; }
+        if (id === 'gg-undo') {
+            e.pts.pop();
+            if (!e.pts.length) { e.radioListo = false; e.radioPunto = null; }
+            glocRender();
+            return;
+        }
+        if (id === 'gg-limpiar') { glocBorradorVacio(); return; }
+        if (id === 'gg-cerrar') { glocRender(); return; }
+        if (id === 'gg-exporta') { glocExportar(false); return; }
+        if (id === 'gg-exporta-geo') { glocExportar(true); return; }
+        if (id === 'gg-importa') {
+            const f = byId('gg-file');
+            if (f) f.click();
+            return;
+        }
+        if (id === 'gg-copiar') {
+            const lista = glocLista();
+            if (!lista.length) { adviceWarn('Nada que copiar', 'Primero crea una geocerca.'); return; }
+            copiarAlPortapapeles(glocExportaJSON(lista), 'Geocercas copiadas', lista.length + ' geocerca(s)');
+            return;
+        }
+    });
+    cuerpo.addEventListener('input', (ev) => {
+        const e = glocEstado();
+        const t = ev.target;
+        if (!t || !t.id) return;
+        if (t.id === 'gg-nombre') { e.nombre = t.value; return; }
+        if (t.id === 'gg-radio') {
+            const n = Number(t.value);
+            e.radio = clamp(isFinite(n) ? n : 100, GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO);
+            e.radioPunto = null;
+            e.radioListo = !!e.pts.length;
+            glocPintarBorrador();
+            const res = byId('gg-res');
+            if (res) setHtml(res, glocStatsHTML());
+            return;
+        }
+        if (t.id === 'gg-ancho') {
+            const n = Number(t.value);
+            e.ancho = clamp(isFinite(n) ? n : 100, GEOLOC_MIN_RADIO, GEOLOC_MAX_RADIO);
+            const res = byId('gg-res');
+            if (res) setHtml(res, glocStatsHTML());
+        }
+    });
+    cuerpo.addEventListener('change', (ev) => {
+        const t = ev.target;
+        if (!t || !t.id) return;
+        if (t.id === 'gg-recordar') {
+            APP.config.geolocalRecordar = !!t.checked;
+            writeJSON(LS.cfg, APP.config);
+            glocPersiste();
+            adviceOk(APP.config.geolocalRecordar ? 'Se guardaran en este navegador' : 'Solo en esta pestana',
+                APP.config.geolocalRecordar ? 'Se recuperan al volver a abrir Rondo.' : 'Se pierden al cerrar la pestana: exporta si las quieres guardar.');
+        }
+        if (t.id === 'gg-file' && t.files && t.files[0]) glocImportarArchivo(t.files[0]);
+    });
+}
+function glocIrACoordenadas() {
+    const e = glocEstado();
+    const lat = parseFloat(String(byId('gg-lat') ? byId('gg-lat').value : '').replace(',', '.'));
+    const lon = parseFloat(String(byId('gg-lon') ? byId('gg-lon').value : '').replace(',', '.'));
+    if (!isFinite(lat) || !isFinite(lon) || Math.abs(lat) > 85 || Math.abs(lon) > 180) {
+        adviceWarn('Coordenadas invalidas', 'Usa decimales, por ejemplo 19.4326 y -99.1332.');
+        return;
+    }
+    e.pts = [{ lat: lat, lon: lon }];
+    e.radioListo = false;
+    e.radioPunto = null;
+    try {
+        e.mapa.medir();
+        e.mapa.z = 17;
+        e.mapa.ox = rxMMLonX(lon, e.mapa.z) - e.mapa.W / 2;
+        e.mapa.oy = rxMMLatY(lat, e.mapa.z) - e.mapa.H / 2;
+        e.mapa.render();
+    } catch (_) { /* noop */ }
+    glocRender();
+}
+function glocExportar(geojson) {
+    const lista = glocLista();
+    if (!lista.length) { adviceWarn('Nada que exportar', 'Primero crea una geocerca en la app.'); return; }
+    const nombre = 'rondo_geocercas_app_' + new Date().toISOString().slice(0, 10);
+    descargarJSON(
+        geojson ? JSON.parse(glocExportaGeoJSON(lista)) : JSON.parse(glocExportaJSON(lista)),
+        nombre + (geojson ? '.geojson' : '.json'),
+        geojson ? 'application/geo+json;charset=utf-8;' : 'application/json;charset=utf-8;'
+    );
+    adviceOk('Geocercas exportadas', lista.length + ' geocerca(s)');
+}
+// Importar desde un archivo (o desde un texto pegado): primero se lee y se
+// pasa por el dialogo de seleccion, para poder importar una sola o varias.
+function glocImportarArchivo(file) {
+    if (!file) return;
+    const alTerminar = (txt) => glocAbrirImport(txt);
+    try {
+        file.text().then(alTerminar).catch(() => adviceWarn('No se pudo leer', file.name || 'el archivo'));
+    } catch (_) {
+        // Navegadores antiguos sin file.text(): FileReader.
+        const fr = new FileReader();
+        fr.onload = () => alTerminar(String(fr.result || ''));
+        fr.onerror = () => adviceWarn('No se pudo leer', file.name || 'el archivo');
+        fr.readAsText(file);
+    }
+}
+// Dialogo de importacion: lista con casilla por geocerca, aviso de nombres
+// que ya existen y botones para marcar todas o ninguna.
+function glocAbrirImport(txt) {
+    const r = glocParsea(txt);
+    if (!r.lista.length) {
+        adviceWarn('No se pudo importar', r.error || 'El archivo no trae geocercas utilizables');
+        return;
+    }
+    const marcadas = r.lista.map((_, i) => i);
+    const nativas = (APP.zonas || []).filter((x) => !glocEsApp(x));
+    const mias = glocLista();
+    // Nombre que tendra cada una si se importa (sufijo si choca).
+    const nombres = r.lista.map((z, i) => ({
+        i: i, z: z,
+        libre: glocNombreLibre(z.n, nativas, mias.concat(r.lista.slice(0, i))),
+        igual: (nativas.some((x) => glocLimpiaNom(x.n).toLowerCase() === z.n.toLowerCase()) ||
+            mias.some((x) => glocLimpiaNom(x.n).toLowerCase() === z.n.toLowerCase()))
+    }));
+    const cuerpo = (sel) => {
+        const html = nombres.map((it) => {
+            const forma = (it.z.t === 3 ? 'C\u00edrculo ' + Math.round(it.z.w) + ' m' : (it.z.t === 1 ? 'L\u00ednea' : 'Marco'));
+            return '<label class="gg-imp' + (sel.indexOf(it.i) >= 0 ? ' sel' : '') + '">' +
+                '<input type="checkbox" data-gg-imp="' + it.i + '"' + (sel.indexOf(it.i) >= 0 ? ' checked' : '') + '>' +
+                '<span class="nm">' + esc(it.libre) + (it.igual ? '<i class="gg-imp-dup" title="Ya existe una con ese nombre: se guardara con otro">' + UIS.info + '</i>' : '') + '</span>' +
+                '<em>' + forma + ' \u00b7 ' + glocTextoTam(it.z) + '</em></label>';
+        }).join('');
+        return '<p class="gg-imp-t">' + (r.lista.length === 1
+            ? 'El archivo trae <b>1 geocerca</b>. Se importara en Rondo (no va a la plataforma).'
+            : 'El archivo trae <b>' + r.lista.length + ' geocercas</b>. Elige cuales importar.') +
+            (r.ignoradas ? ' <span class="gg-imp-av">' + r.ignoradas + ' se descartaron por no ser validas.</span>' : '') +
+            '</p><div class="gg-imp-l">' + html + '</div>' +
+            '<div class="gg-imp-a"><button type="button" class="mini" data-gg-imp-a="todas">Todas</button>' +
+            '<button type="button" class="mini" data-gg-imp-a="ninguna">Ninguna</button>' +
+            '<span>' + (sel.length === r.lista.length ? 'Todas marcadas' : sel.length + ' de ' + r.lista.length) + '</span></div>';
+    };
+    abrirDialogo({
+        icon: UIS.upload,
+        titulo: 'Importar geocercas',
+        ancho: 440,
+        okText: 'Importar',
+        html: '<div class="gg-impd" id="gg-impd">' + cuerpo(marcadas) + '</div>',
+        onOpen: (el) => {
+            const box = el.querySelector('#gg-impd');
+            if (!box) return;
+            const pinta = () => setHtml(box, cuerpo(marcadas));
+            box.addEventListener('change', (ev) => {
+                const t = ev.target;
+                if (!t || !t.dataset || t.dataset.ggImp == null) return;
+                const i = +t.dataset.ggImp;
+                const k = marcadas.indexOf(i);
+                if (t.checked && k < 0) marcadas.push(i);
+                else if (!t.checked && k >= 0) marcadas.splice(k, 1);
+                marcadas.sort((a, b) => a - b);
+                pinta();
+            });
+            box.addEventListener('click', (ev) => {
+                const b = ev.target.closest && ev.target.closest('[data-gg-imp-a]');
+                if (!b || !box.contains(b)) return;
+                marcadas.length = 0;
+                if (b.dataset.ggImpA === 'todas') for (let i = 0; i < r.lista.length; i++) marcadas.push(i);
+                pinta();
+            });
+        },
+        onOk: () => {
+            if (!marcadas.length) { adviceWarn('Nada que importar', 'Marca al menos una geocerca.'); return; }
+            const res = glocImporta(txt, 'anadir', marcadas);
+            adviceOk('Geocercas importadas', (res.nuevas || 0) + ' anadida(s) a las de la app');
+            APP.geoListaVista = 'app';
+            glocRender();
+            if (APP.tab === 'zonas') { paintGeoAlertas(); paintGeocercas(); }
+        }
+    });
+}/* ====================== INFORME POR GEOCERCA: NUCLEO ======================
+ * Reportes por geocerca, en la misma linea que el reporte general y el del
+ * Replay: aqui se responde "¿quien cruzo esta geocerca?" y "¿quien se paro
+ * aqui?". Tres fuentes, porque no todas estan disponibles siempre:
+ *
+ *   bitacora - los avisos de la sesion (reglas geocerca, geocercaDetenido
+ *              y geoAlerta). Siempre disponible, con hora exacta.
+ *   viajes   - los viajes ya analizados por unidad (APP.viajes): paradas
+ *              con duracion y cruces deducidos de la traza.
+ *   replay   - el recorrido cargado en la pestana Replay: eventos con hora
+ *              y paradas con motor y lugar.
+ *
+ * El nucleo de este fragmento es puro (solo arrays que le pasamos) para
+ * poder probarlo aislado en tests/informe-geocerca.test.js.
+ */
+const RX_GEO_FUENTES = Object.freeze(['historial', 'rastreo', 'bitacora', 'viajes', 'replay']);
+// Limites del escaneo del historial de la plataforma (una peticion por
+// unidad, como hace el Replay). Con flotas enormes se acota para que el
+// informe no tarde una eternidad.
+const RX_GEO_HIST_MAX_U = 150;
+const RX_GEO_HIST_MSGS = 3000;
+// Peticiones simultaneas al escanear el historial. En serie, 150 unidades
+// tardan una eternidad; con un pool de 6 va varias veces mas rapido sin
+// castigar al servidor de la plataforma.
+const RX_GEO_HIST_CONC = 6;
+// Minutos quieto para que una parada de la traza cuente. Es menor que el
+// umbral del Replay porque aqui la traza se toma en vivo, con puntos cada
+// pocos segundos: esperar 15 min seria exigir demasiado.
+const RX_GEO_PARADA_MIN = 2;
+const RX_GEO_RANGOS = Object.freeze(['hoy', '24h', '7d', '15d', '30d', 'todo']);
+const RX_GEO_TIPOS = Object.freeze({
+    entra: 'Entrada',
+    sale: 'Salida',
+    detenida: 'Parada',
+    motor: 'Parada con motor apagado',
+    parada: 'Parada',
+    dentro: 'Dentro ahora'
+});
+// ── Bitacora: un aviso -> evento con geocerca, tipo y minutos ───────────
+// Si el aviso no trae el campo zona (los anteriores a esta version) se lo
+// saca del texto, que era el unico sitio donde estaba.
+function rxGeoInfZonaTexto(txt, prefijo) {
+    const t = String(txt == null ? '' : txt);
+    if (!t) return '';
+    let resto = '';
+    if (prefijo) {
+        const i = t.toLowerCase().indexOf(String(prefijo).toLowerCase());
+        if (i < 0) return '';
+        resto = t.slice(i + String(prefijo).length);
+    } else resto = t;
+    const partes = resto.split(' \u00b7 ').map((x) => x.trim()).filter(Boolean);
+    if (!partes.length) return '';
+    // Con prefijo ("entro a X") la zona es lo que sigue; sin prefijo el
+    // titulo es "TITULO \u00b7 zona \u00b7 eco", o sea el penultimo trocito.
+    if (prefijo) return partes[0] || '';
+    return (partes.length >= 2) ? (partes[partes.length - 2] || '') : '';
+}
+// Ultimo recurso: buscar la geocerca con una expresion, tolerando textos
+// que no sean exactamente los de las reglas (avisos viejos o editados).
+function rxGeoInfZonaRegex(txt, re) {
+    const m = String(txt == null ? '' : txt).match(re);
+    return m ? String(m[1]).trim() : '';
+}
+function rxGeoInfMinutos(txt) {
+    const m = String(txt == null ? '' : txt).match(/(\d+)\s*min/i);
+    return m ? +m[1] : 0;
+}
+function rxGeoInfEvento(a) {
+    if (!a || !a.ts) return null;
+    const regla = String(a.regla || '');
+    const titulo = String(a.titulo || '');
+    const detalle = String(a.detalle || '');
+    let zona = String(a.zona || '');
+    let tipo = '';
+    if (regla === 'geocerca') {
+        tipo = (/salio de/i.test(detalle) || /^SALIO/.test(titulo)) ? 'sale' : 'entra';
+        if (!zona) zona = rxGeoInfZonaTexto(detalle, tipo === 'sale' ? 'salio de ' : 'entro a ');
+        if (!zona) zona = rxGeoInfZonaRegex(detalle, /(?:entra|entro|entró|sale|salió)\s+a\s+([^·]+)/i);
+    } else if (regla === 'geocercaDetenido') {
+        tipo = 'detenida';
+        if (!zona) zona = rxGeoInfZonaTexto(detalle, 'se encuentra detenida en la geocerca ');
+        if (!zona) zona = rxGeoInfZonaRegex(detalle, /geocerca\s+([^·]+)/i);
+    } else if (regla === 'geoAlerta') {
+        tipo = /MOTOR APAGADO/i.test(titulo) ? 'motor' : (/DETENIDA/i.test(titulo) ? 'detenida' : 'entra');
+        if (!zona) zona = rxGeoInfZonaTexto(titulo, '');
+    } else {
+        return null;
+    }
+    if (!zona) return null;
+    return {
+        zona: zona, tipo: tipo, eco: a.eco || '', clave: a.clave || '',
+        ts: a.ts, sev: a.sev || 'bajo', lat: a.lat, lon: a.lon,
+        titulo: titulo, detalle: detalle,
+        min: rxGeoInfMinutos(detalle), fuente: 'bitacora'
+    };
+}
+// Una parada de un viaje o del replay -> evento. La duracion viene en
+// segundos (replay) o en minutos (APP.viajes.durMin).
+function rxGeoInfParada(p, zona, eco, fuente) {
+    if (!p || p.lat == null || p.lon == null) return null;
+    const seg = (p.dur != null) ? +p.dur : ((p.durMin != null) ? (+p.durMin) * 60 : 0);
+    return {
+        zona: zona, tipo: (p.motor === 'off') ? 'motor' : 'detenida',
+        eco: eco || '', ts: (+p.t || +p.desde || 0),
+        lat: p.lat, lon: p.lon, min: Math.round(seg / 60),
+        motor: p.motor || '', motorFuente: p.motorFuente || '',
+        lugar: p.lugar || '', titulo: 'Parada', detalle: '',
+        fuente: fuente || 'viajes'
+    };
+}
+// Filtra por geocerca (vacia = todas) y por rango de fechas. El rango son
+// dos marcas: inicio (desdeMs) y fin (hastaMs, inclusive).
+function rxGeoInfFiltra(eventos, zona, desdeMs, hastaMs) {
+    const out = [];
+    for (const e of (eventos || [])) {
+        if (!e) continue;
+        if (zona && e.zona !== zona) continue;
+        if (desdeMs && e.ts && e.ts < desdeMs) continue;
+        if (hastaMs && e.ts && e.ts > hastaMs) continue;
+        out.push(e);
+    }
+    return out;
+}
+// Una fecha del selector (yyyy-mm-dd) a milisegundos. Con `fin` cubre el
+// dia entero (23:59:59.999), para que "hasta el dia X" incluya ese dia.
+function rxGeoInfFechaMs(s, fin) {
+    if (!s) return 0;
+    const d = new Date(String(s) + 'T00:00:00');
+    if (!isFinite(d.getTime())) return 0;
+    if (fin) d.setHours(23, 59, 59, 999);
+    return d.getTime();
+}
+function rxGeoInfFechaTxt(ms) {
+    if (!ms) return '';
+    const d = new Date(ms);
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return dd + '/' + mm + '/' + d.getFullYear();
+}
+// Milisegundos de inicio del rango elegido ('hoy' = desde las 00:00).
+function rxGeoInfDesde(rango, ahora) {
+    const n = ahora || Date.now();
+    if (rango === 'hoy') { const d = new Date(n); d.setHours(0, 0, 0, 0); return d.getTime(); }
+    if (rango === '24h') return n - 24 * 3600 * 1000;
+    if (rango === '7d') return n - 7 * 24 * 3600 * 1000;
+    if (rango === '15d') return n - 15 * 24 * 3600 * 1000;
+    if (rango === '30d') return n - 30 * 24 * 3600 * 1000;
+    return 0;
+}
+// Agrega los eventos por unidad. modo 'cruces' ordena por cruces,
+// 'paradas' por paradas y minutos.
+function rxGeoInfAgrupa(eventos, modo) {
+    const porParadas = (modo === 'paradas');
+    const por = {};
+    for (const e of (eventos || [])) {
+        const clave = e.eco || e.clave || '(sin eco)';
+        let f = por[clave];
+        if (!f) {
+            f = por[clave] = {
+                eco: clave, cruces: 0, entradas: 0, salidas: 0, paradas: 0, dentro: 0,
+                min: 0, minMotor: 0, motor: 0, primero: 0, ultimo: 0,
+                lugares: {}, zonas: {}
+            };
+        }
+        if (e.tipo === 'entra' || e.tipo === 'sale') {
+            f.cruces++;
+            if (e.tipo === 'entra') f.entradas++; else f.salidas++;
+        } else if (e.tipo === 'dentro') {
+            f.dentro++;
+        } else {
+            f.paradas++;
+            f.min += (+e.min || 0);
+            if (e.tipo === 'motor' || e.motor === 'off') { f.motor++; f.minMotor += (+e.min || 0); }
+        }
+        if (e.zona) f.zonas[e.zona] = (f.zonas[e.zona] || 0) + 1;
+        if (e.lugar) f.lugares[e.lugar] = (f.lugares[e.lugar] || 0) + 1;
+        if (e.ts) {
+            if (!f.primero || e.ts < f.primero) f.primero = e.ts;
+            if (e.ts > f.ultimo) f.ultimo = e.ts;
+        }
+    }
+    const filas = Object.keys(por).map((k) => por[k]);
+    filas.sort((a, b) => (porParadas
+        ? ((b.paradas - a.paradas) || (b.min - a.min))
+        : ((b.cruces - a.cruces) || (b.min - a.min))) || a.eco.localeCompare(b.eco, 'es'));
+    const total = {
+        unidades: filas.length,
+        cruces: filas.reduce((s, f) => s + f.cruces, 0),
+        entradas: filas.reduce((s, f) => s + f.entradas, 0),
+        salidas: filas.reduce((s, f) => s + f.salidas, 0),
+        paradas: filas.reduce((s, f) => s + f.paradas, 0),
+        dentro: filas.reduce((s, f) => s + f.dentro, 0),
+        min: filas.reduce((s, f) => s + f.min, 0),
+        motor: filas.reduce((s, f) => s + f.motor, 0),
+        primera: filas.reduce((m, f) => ((f.primero && (!m || f.primero < m)) ? f.primero : m), 0),
+        ultima: filas.reduce((m, f) => (f.ultimo > m ? f.ultimo : m), 0)
+    };
+    return { filas: filas, total: total };
+}
+// Resumen por geocerca: ordena el selector del dialogo y da la segunda
+// tabla del PDF ("cuanto se cruzo cada geocerca").
+function rxGeoInfPorZona(eventos, orden) {
+    const por = {};
+    for (const e of (eventos || [])) {
+        const z = e.zona || '(sin geocerca)';
+        let f = por[z];
+        if (!f) f = por[z] = { zona: z, cruces: 0, paradas: 0, min: 0, unidades: {}, eventos: 0 };
+        f.eventos++;
+        if (e.tipo === 'entra' || e.tipo === 'sale') f.cruces++;
+        else { f.paradas++; f.min += (+e.min || 0); }
+        if (e.eco) f.unidades[e.eco] = 1;
+    }
+    let filas = Object.keys(por).map((k) => por[k]);
+    if (Array.isArray(orden) && orden.length) {
+        const pos = {};
+        orden.forEach((z, i) => { pos[z] = i; });
+        filas.sort((a, b) => ((pos[a.zona] == null ? 1e6 : pos[a.zona]) - (pos[b.zona] == null ? 1e6 : pos[b.zona])) || (b.cruces - a.cruces));
+    } else {
+        filas.sort((a, b) => (b.cruces - a.cruces) || (b.paradas - a.paradas) || a.zona.localeCompare(b.zona, 'es'));
+    }
+    for (const f of filas) f.nUnidades = Object.keys(f.unidades).length;
+    return filas;
+}
+// Version plana de una fila (un solo sitio para CSV, Markdown y PDF).
+function rxGeoInfCeldas(f) {
+    const zonas = Object.keys(f.zonas || {});
+    const lugares = Object.keys(f.lugares || {});
+    return {
+        eco: f.eco, cruces: f.cruces, entradas: f.entradas, salidas: f.salidas,
+        paradas: f.paradas, dentro: f.dentro, min: f.min, motor: f.motor, minMotor: f.minMotor,
+        primero: f.primero, ultimo: f.ultimo,
+        zonas: zonas.join(' | '),
+        lugares: lugares.slice(0, 4).join(' | ')
+    };
+}
+// Transiciones fuera->dentro sobre una lista de puntos [lon, lat, tsMs].
+// Es el detector de cruces que usan tanto la traza de un viaje
+// ([[lon, lat]]) como los mensajes del replay ([lon, lat, t * 1000]): el
+// unico formato comun entre las dos fuentes.
+function rxGeoInfCruces(puntos, dentroDe, base) {
+    const o = base || {};
+    const out = [];
+    let previa = '';
+    for (let i = 0; i < (puntos || []).length; i++) {
+        const q = puntos[i];
+        if (!q || q.length < 2) continue;
+        const ahora = dentroDe(+q[1], +q[0]) || '';
+        if (ahora === previa) continue;
+        const crudo = (q.length > 2) ? +q[2] : 0;
+        out.push({
+            zona: ahora || previa,
+            tipo: ahora ? 'entra' : 'sale',
+            eco: o.eco || '',
+            // El tercer valor del punto es la marca en MILISEGUNDOS (el
+            // que ya usan el historial y los avisos).
+            ts: (q.length > 2 && crudo) ? crudo : 0,
+            sev: 'bajo', lat: +q[1], lon: +q[0],
+            titulo: ahora ? ('Entra a ' + ahora) : ('Sale de ' + previa),
+            detalle: '', min: 0, fuente: o.fuente || ''
+        });
+        previa = ahora;
+    }
+    return out;
+}
+
+function rxGeoInfCabeceras(modo) {
+    return (modo === 'paradas')
+        ? ['Eco', 'Paradas', 'Min quieto', 'Min motor apagado', 'Paradas con motor', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima']
+        : ['Eco', 'Cruces', 'Entradas', 'Salidas', 'Paradas', 'Min quieto', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima'];
+}
+// Celdas ya en HTML (para la tabla del PDF y la vista previa).
+function rxGeoInfCeldasHTML(c, modo) {
+    const t = (ms) => (ms ? esc(rxFechaHora(ms)) : '-');
+    const dn = (c.dentro ? 'Si' : '-');
+    if (modo === 'paradas') {
+        return [esc(c.eco), String(c.paradas), String(c.min), String(c.minMotor),
+            String(c.motor), dn, esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
+    }
+    return [esc(c.eco), String(c.cruces), String(c.entradas), String(c.salidas),
+        String(c.paradas), String(c.min), dn, esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
+}
+// Filas planas (sin HTML) para CSV y Markdown.
+function rxGeoInfCeldasPlanas(c, modo) {
+    const t = (ms) => (ms ? rxFechaHora(ms) : '-');
+    const dn = (c.dentro ? 'Si' : '-');
+    if (modo === 'paradas') {
+        return [c.eco, String(c.paradas), String(c.min), String(c.minMotor),
+            String(c.motor), dn, (c.zonas || '-'), t(c.primero), t(c.ultimo)];
+    }
+    return [c.eco, String(c.cruces), String(c.entradas), String(c.salidas),
+        String(c.paradas), String(c.min), dn, (c.zonas || '-'), t(c.primero), t(c.ultimo)];
+}
+/* ====================== INFORME POR GEOCERCA: FUENTES ====================== */
+// Estado de la consulta (fuente, periodo, geocerca, modo y alcance del
+// rastreo). Vive aqui, con los lectores, porque el alcance tambien cambia
+// lo que devuelve el rastreo.
+const RX_GEO = {
+    fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '',
+    desde: '', hasta: '', busca: '',
+    // Resultados: se calculan al pulsar "Generar reporte" (y al abrir, si la
+    // fuente no consulta la plataforma). Cualquier cambio los deja pendientes.
+    listo: false,
+    // 'todas' (toda la flota con traza) o 'sel' (solo la lista vigilada).
+    unidades: 'todas'
+};
+function rxGeoInfNombre(z) {
+    return (z && (z.n || z.nombre)) || (z ? ('Zona ' + z.id) : '');
+}
+// Pertenencia con margen de borde: los puntos de una traza simplificada
+// pueden caer justo en el limite de la geocerca.
+function rxGeoInfEnZona(lat, lon, z) {
+    if (!z || lat == null || lon == null) return false;
+    try {
+        if (typeof geoAlertaDentro === 'function') return geoAlertaDentro(z, lat, lon, 40);
+        return !!inZone(lat, lon, z);
+    } catch (_) { return false; }
+}
+// La geocerca elegida, con la geometria ya normalizada (si venia como
+// texto JSON se parsea UNA vez, no en cada punto como hace inZone). Se
+// memoiza para no volver a buscarla en cada llamada.
+let _rxGeoZonaSel = { nombre: '\u0000', z: null };
+function rxGeoInfZonaSel() {
+    const nombre = RX_GEO.zona || '';
+    if (_rxGeoZonaSel.nombre === nombre) return _rxGeoZonaSel.z;
+    let z = null;
+    if (nombre) {
+        z = (APP.zonas || []).find((x) => rxGeoInfNombre(x) === nombre) || null;
+        if (z) {
+            // Copia con los puntos ya en array: evita un JSON.parse por
+            // cada punto consultado.
+            let p = z.p;
+            if (typeof p === 'string') { try { p = JSON.parse(p); } catch (_) { p = null; } }
+            z = Object.assign({}, z, { p: Array.isArray(p) ? p : null });
+        }
+    }
+    _rxGeoZonaSel = { nombre: nombre, z: z };
+    return z;
+}
+// Nombre de la geocerca que contiene el punto. Es el punto caliente del
+// informe: se llama una vez por cada punto de cada traza.
+//
+// Truco de rendimiento: si el operador eligio UNA geocerca (el caso normal)
+// solo se prueba esa (O(1)); si pide todas, se usa el indice espacial de
+// Rondo (zoneAt, celdas de ~2 km) en vez de recorrer las 1765 geocercas en
+// cada punto. Solo si no hubiera indice se cae al recorrido lineal.
+function rxGeoInfZonaDe(lat, lon) {
+    if (lat == null || lon == null) return '';
+    if (RX_GEO.zona) {
+        const z = rxGeoInfZonaSel();
+        return (z && rxGeoInfEnZona(lat, lon, z)) ? rxGeoInfNombre(z) : '';
+    }
+    try {
+        if (typeof zoneAt === 'function' && APP.config && APP.config.loadZones) return zoneAt(lat, lon) || '';
+    } catch (_) { /* noop */ }
+    for (const z of (APP.zonas || [])) {
+        if (rxGeoInfEnZona(lat, lon, z)) return rxGeoInfNombre(z);
+    }
+    return '';
+}
+// Eventos desde la bitacora de avisos de la sesion.
+function rxGeoInfDeBitacora() {
+    const out = [];
+    for (const a of (APP.historial || [])) {
+        const e = rxGeoInfEvento(a);
+        if (e) out.push(e);
+    }
+    return out;
+}
+// Rastreo: recorre la traza que Rondo ya viene guardando de cada unidad
+// (una muestra cada vez que se mueve >=20 m, hasta trazadoMax) y saca los
+// cruces y las paradas dentro de las geocercas. Es la fuente que mira a
+// TODAS las unidades, hayan avisado o no. Ademas anade quien esta dentro
+// ahora mismo, con la posicion del ultimo reporte.
+function rxGeoInfSoloSel() {
+    return RX_GEO.unidades === 'sel';
+}
+function rxGeoInfEnSeleccion(clave, info) {
+    if (!rxGeoInfSoloSel()) return true;
+    const sel = APP.seleccion;
+    if (!sel || !sel.size) return false;
+    try {
+        if (sel.has(clave)) return true;
+        if (info && (sel.has(info.eco) || sel.has(info.placa) || sel.has(String(info.id)))) return true;
+    } catch (_) { /* noop */ }
+    return false;
+}
+function rxGeoInfDeRastreo() {
+    const out = [];
+    const minSeg = Math.max(30, RX_GEO_PARADA_MIN * 60);
+    // 1) Trazas: cruces y paradas de cada unidad vigilada.
+    const trazas = APP.trazas || {};
+    for (const k of Object.keys(trazas)) {
+        const arr = trazas[k] || [];
+        if (arr.length < 2) continue;
+        if (!rxGeoInfEnSeleccion(k, null)) continue;
+        const pts = arr.map((p) => [p.lon, p.lat, (p.t || 0) * 1000]);
+        out.push.apply(out, rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: k, fuente: 'rastreo' }));
+        // Paradas: muestras consecutivas dentro y casi quietas. La duracion
+        // es la de la propia traza (hasta la ultima muestra quieta).
+        let desde = 0, ultimo = 0, zona = '';
+        const cerrar = () => {
+            if (!desde || !zona) { desde = 0; ultimo = 0; zona = ''; return; }
+            const seg = (ultimo - desde) / 1000;
+            if (seg >= minSeg) {
+                out.push({
+                    zona: zona, tipo: 'detenida', eco: k, ts: desde,
+                    lat: null, lon: null, min: Math.round(seg / 60),
+                    motor: '', motorFuente: '', lugar: '',
+                    titulo: 'Parada', detalle: '', fuente: 'rastreo'
+                });
+            }
+            desde = 0; ultimo = 0; zona = '';
+        };
+        for (let i = 0; i < arr.length; i++) {
+            const p = arr[i];
+            const nom = (p.lat == null) ? '' : rxGeoInfZonaDe(p.lat, p.lon);
+            const quieta = nom && (p.v == null || +p.v <= 3);
+            if (quieta) {
+                if (!desde || nom !== zona) { cerrar(); desde = p.t * 1000; zona = nom; }
+                ultimo = p.t * 1000;
+            } else cerrar();
+        }
+        cerrar();
+    }
+    // 2) Quien esta dentro de una geocerca AHORA (toda la flota que reporta).
+    const ahora = Date.now();
+    for (const u of (APP.unidades || [])) {
+        let info = null, st = null;
+        try { info = parseUnitName(u); st = unitState(u); } catch (_) { continue; }
+        if (!info || st.lat == null) continue;
+        const clave = info.eco || info.placa || String(info.id);
+        if (!rxGeoInfEnSeleccion(clave, info)) continue;
+        const zona = rxGeoInfZonaDe(st.lat, st.lon);
+        if (!zona) continue;
+        out.push({
+            zona: zona, tipo: 'dentro', eco: info.eco || clave, ts: ahora,
+            lat: st.lat, lon: st.lon, min: 0, motor: '', motorFuente: '', lugar: '',
+            vel: Math.round(st.vel || 0), online: !!st.online,
+            titulo: 'Dentro ahora', detalle: (st.online ? '' : 'sin senal reciente'), fuente: 'rastreo'
+        });
+    }
+    return out;
+}
+// Eventos desde los viajes analizados (APP.viajes).
+function rxGeoInfDeViajes() {
+    const out = [];
+    for (const eco of Object.keys(APP.viajes || {})) {
+        const v = APP.viajes[eco] || {};
+        for (const p of (v.paradas || [])) {
+            if (p.lat == null || p.lon == null) continue;
+            const zona = p.zona || rxGeoInfZonaDe(p.lat, p.lon);
+            if (!zona) continue;
+            const ev = rxGeoInfParada(p, zona, eco, 'viajes');
+            if (ev) out.push(ev);
+        }
+        if (v.traza && v.traza.length > 1) {
+            out.push.apply(out, rxGeoInfCruces(v.traza, rxGeoInfZonaDe, { eco: eco, fuente: 'viajes' }));
+        }
+    }
+    return out;
+}
+// Deteccion de cruces y paradas sobre los mensajes CRUDOS de la plataforma
+// (formato { t (s), pos:{x,y,s} }), el mismo que devuelve load_interval y el
+// que usa el Replay. Es pura para poder probarla sin red.
+function rxGeoInfDeMensajes(msgs, eco, fuente) {
+    const arr = [];
+    for (const m of (msgs || [])) {
+        if (!m || !m.pos || !isFinite(+m.pos.y) || !isFinite(+m.pos.x)) continue;
+        const t = Number(m.t) || 0;
+        if (!t) continue;
+        arr.push({ t: t, lat: +m.pos.y, lon: +m.pos.x, s: Number(m.pos.s) || 0 });
+    }
+    if (!arr.length) return [];
+    arr.sort((a, b) => a.t - b.t);
+    const pts = arr.map((p) => [p.lon, p.lat, p.t * 1000]);
+    const out = rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: eco, fuente: fuente || 'historial' });
+    // Paradas: tramos con la unidad casi quieta dentro de una geocerca.
+    const minSeg = Math.max(30, RX_GEO_PARADA_MIN * 60);
+    let desde = 0, ultimo = 0, zona = '';
+    const cerrar = () => {
+        if (desde && zona) {
+            const seg = (ultimo - desde) / 1000;
+            if (seg >= minSeg) {
+                out.push({
+                    zona: zona, tipo: 'detenida', eco: eco, ts: desde,
+                    lat: null, lon: null, min: Math.round(seg / 60),
+                    motor: '', motorFuente: '', lugar: '',
+                    titulo: 'Parada', detalle: '', fuente: fuente || 'historial'
+                });
+            }
+        }
+        desde = 0; ultimo = 0; zona = '';
+    };
+    for (const p of arr) {
+        const nom = rxGeoInfZonaDe(p.lat, p.lon);
+        const quieta = nom && p.s <= 3;
+        if (quieta) {
+            if (!desde || nom !== zona) { cerrar(); desde = p.t * 1000; zona = nom; }
+            ultimo = p.t * 1000;
+        } else cerrar();
+    }
+    cerrar();
+    return out;
+}
+// Eventos del recorrido cargado en la pestana Replay.
+function rxGeoInfDeReplay() {
+    const r = (typeof RX_REPLAY !== 'undefined') ? RX_REPLAY : null;
+    if (!r || !r.msgs || !r.msgs.length) return [];
+    const eco = r.eco || (r.info ? r.info.eco : '');
+    const pts = r.msgs.map((m) => [m.lon, m.lat, (m.t || 0) * 1000]);
+    const out = rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: eco, fuente: 'replay' });
+    for (const p of (r.paradas || [])) {
+        const zona = p.zona || rxGeoInfZonaDe(p.lat, p.lon);
+        if (!zona) continue;
+        const ev = rxGeoInfParada(p, zona, eco, 'replay');
+        if (!ev) continue;
+        ev.ts = (+p.t || 0) * 1000;
+        ev.lugar = p.lugar || '';
+        out.push(ev);
+    }
+    return out;
+}
+// ── Fuente historial: una peticion por unidad, como el Replay ──────────
+// Resultado del ultimo escaneo (clave -> eventos). El dialogo lo rellena de
+// forma asincrona y `rxGeoInfDeHistorial` (sync) lo lee para el resto del
+// informe.
+let _rxGeoHist = { key: '', t: 0, eventos: [], truncado: false, unidades: 0 };
+function rxGeoInfHistKey() {
+    return (RX_GEO.zona || '*') + '|' + (RX_GEO.desde || RX_GEO.rango) + '|' + (RX_GEO.hasta || '') + '|' + (RX_GEO.unidades || 'todas');
+}
+function rxGeoInfDeHistorial() {
+    if (_rxGeoHist.key !== rxGeoInfHistKey()) return [];
+    return _rxGeoHist.eventos;
+}
+// Rango en segundos (el que espera load_interval). Sin rango explicito se
+// toman las ultimas 24 h; "Todo" se acota a 7 dias para no barrer años.
+function rxGeoInfRangoS() {
+    const ahora = Math.floor(Date.now() / 1000);
+    let d = RX_GEO.desde ? Math.floor(rxGeoInfFechaMs(RX_GEO.desde, false) / 1000) : Math.floor(rxGeoInfDesde(RX_GEO.rango) / 1000);
+    let h = RX_GEO.hasta ? Math.floor(rxGeoInfFechaMs(RX_GEO.hasta, true) / 1000) : ahora;
+    if (!d) d = ahora - 7 * 24 * 3600;
+    if (!h || h > ahora) h = ahora;
+    return { desde: d, hasta: h };
+}
+// Escanea el historial de la flota. `onProg(hechas, total, eco)` actualiza la
+// barra; `token` permite cancelar (al cerrar el dialogo o cambiar opciones).
+async function rxGeoInfEscanear(onProg, token) {
+    const cfg = { desde: RX_GEO.desde, hasta: RX_GEO.hasta, rango: RX_GEO.rango, zona: RX_GEO.zona, unidades: RX_GEO.unidades };
+    const key = rxGeoInfHistKey();
+    const ya = (_rxGeoHist.key === key && (Date.now() - _rxGeoHist.t) < 120000);
+    if (ya) return _rxGeoHist;
+    const rango = rxGeoInfRangoS();
+    const lista = [];
+    const sel = APP.seleccion;
+    for (const u of (APP.unidades || [])) {
+        let info = null;
+        try { info = parseUnitName(u); } catch (_) { continue; }
+        if (!info || u.id == null) continue;
+        const clave = info.eco || info.placa || String(info.id);
+        if (RX_GEO.unidades === 'sel' && !(sel && (sel.has(clave) || sel.has(info.eco)))) continue;
+        lista.push({ u: u, info: info, clave: clave, t: (() => { try { return unitState(u).t || 0; } catch (_) { return 0; } })() });
+        if (lista.length >= RX_GEO_HIST_MAX_U) break;
+    }
+    // Ordena por interes: las de la lista vigilada primero y, dentro de
+    // cada grupo, las que reportaron mas reciente. Asi los resultados
+    // utiles salen en los primeros segundos aunque el barrido siga.
+    lista.sort((a, b) => {
+        const wa = (sel && sel.has(a.clave)) ? 0 : 1;
+        const wb = (sel && sel.has(b.clave)) ? 0 : 1;
+        if (wa !== wb) return wa - wb;
+        return (b.t || 0) - (a.t || 0);
+    });
+    const encontrados = [];
+    const total = lista.length;
+    let hechas = 0, idx = 0;
+    // Pool de peticiones en paralelo: cada obrero toma la siguiente unidad
+    // libre hasta agotarlas. Es la diferencia entre minutos y segundos.
+    const obreros = Math.max(1, Math.min(RX_GEO_HIST_CONC, total || 1));
+    const obrero = async () => {
+        while (idx < total) {
+            if (token && token.cancelado) return;
+            const it = lista[idx++];
+            try {
+                const r = await remoteCall('messages/load_interval', {
+                    itemId: it.u.id, timeFrom: rango.desde, timeTo: rango.hasta,
+                    flags: 1, flagsMask: 1, loadCount: RX_GEO_HIST_MSGS
+                });
+                const evs = rxGeoInfDeMensajes((r && r.messages) || [], it.info.eco || it.clave, 'historial');
+                for (const e of evs) encontrados.push(e);
+            } catch (_) { /* unidad sin historial o sin permiso: se salta */ }
+            hechas++;
+            // La barra muestra el avance y cuantos eventos van saliendo.
+            if (onProg) onProg(hechas, total, it.info.eco || it.clave, encontrados.length);
+            // Cede el hilo para que la interfaz y el mapa se refresquen.
+            await rxGeoInfYield();
+        }
+    };
+    const tareas = [];
+    for (let k = 0; k < obreros; k++) tareas.push(obrero());
+    await Promise.all(tareas);
+    if (token && token.cancelado) return { eventos: [], truncado: false, unidades: 0, cancelado: true };
+    _rxGeoHist = {
+        key: key, t: Date.now(), eventos: encontrados,
+        truncado: lista.length >= RX_GEO_HIST_MAX_U, unidades: total
+    };
+    return _rxGeoHist;
+}
+// Fuente elegida -> lista de eventos. Con cache corta, porque el dialogo
+// la pide en cada repintado y el recorrido puede tener miles de mensajes.
+let _rxGeoCache = { t: 0, datos: {} };
+// Limpia la cache de eventos (util al abrir el informe y en las pruebas,
+// que cambian los datos a mano entre comprobaciones).
+function rxGeoInfCacheReset() {
+    _rxGeoCache = { t: 0, datos: {} };
+}
+function rxGeoInfEventos(fuente, forzar) {
+    const f = (RX_GEO_FUENTES.indexOf(fuente) >= 0) ? fuente : 'bitacora';
+    const t = Date.now();
+    // El rastreo depende ademas del alcance (todas / seleccionadas): se
+    // guarda con esa clave para no mezclar los dos resultados.
+    // El historial no se cachea aqui (ya guarda su propio resultado); el
+    // rastreo depende del alcance, asi que va con la clave.
+    const key = f + ((f === 'rastreo') ? ':' + (RX_GEO.unidades || 'todas') : '')
+        + ((f === 'historial') ? ':' + rxGeoInfHistKey() : '');
+    if (!forzar && _rxGeoCache.datos[key] && (t - _rxGeoCache.t) < 8000) return _rxGeoCache.datos[key];
+    let out = [];
+    try {
+        if (f === 'historial') out = rxGeoInfDeHistorial();
+        else if (f === 'rastreo') out = rxGeoInfDeRastreo();
+        else if (f === 'replay') out = rxGeoInfDeReplay();
+        else if (f === 'viajes') out = rxGeoInfDeViajes();
+        else out = rxGeoInfDeBitacora();
+    } catch (e) { out = []; }
+    _rxGeoCache = { t: t, datos: Object.assign({}, _rxGeoCache.datos, (function () { const o = {}; o[key] = out; return o; })()) };
+    return out;
+}
+// Que fuentes tienen datos ahora mismo (para el selector del dialogo).
+// Que fuentes tienen datos. Se apoya en la cache (8 s) para no recorrer
+// trazas y bitacora en cada repintado del dialogo; `forzar` se usa al abrir
+// y cuando cambian los datos de verdad.
+function rxGeoInfFuentesDisponibles(forzar) {
+    const out = [];
+    for (const f of RX_GEO_FUENTES) {
+        const n = rxGeoInfEventos(f, !!forzar).length;
+        // El historial de la plataforma se ofrece aunque aun no se haya
+        // escaneado (0 eventos): es el que detecta CUALQUIER unidad.
+        if (f === 'historial') {
+            if ((APP.unidades || []).length && (APP.zonas || []).length) out.push({ k: f, n: n });
+            continue;
+        }
+        if (n) out.push({ k: f, n: n });
+    }
+    return out;
+}
+
+function rxGeoInfZonas() {
+    return (APP.zonas || []).map(rxGeoInfNombre).filter(Boolean);
+}
+// Reune lo que se va a pintar: eventos filtrados + agregados.
+function rxGeoInfReune() {
+    const todos = rxGeoInfEventos(RX_GEO.fuente);
+    // Un rango de dias escrito a mano manda sobre los atajos.
+    const desde = RX_GEO.desde ? rxGeoInfFechaMs(RX_GEO.desde, false) : rxGeoInfDesde(RX_GEO.rango);
+    const hasta = RX_GEO.hasta ? rxGeoInfFechaMs(RX_GEO.hasta, true) : 0;
+    const zona = RX_GEO.zona || '';
+    const ev = rxGeoInfFiltra(todos, zona, desde, hasta);
+    const rangoTxt = (desde || hasta)
+        ? ((desde ? rxGeoInfFechaTxt(desde) : 'inicio') + ' – ' + (hasta ? rxGeoInfFechaTxt(hasta) : 'hoy'))
+        : '';
+    return {
+        fuente: RX_GEO.fuente, rango: RX_GEO.rango, modo: RX_GEO.modo, zona: zona,
+        desde: desde, hasta: hasta, rangoTxt: rangoTxt,
+        eventos: ev, disponibles: todos.length,
+        unidades: rxGeoInfAgrupa(ev, RX_GEO.modo),
+        zonas: rxGeoInfPorZona(ev, zona ? null : rxGeoInfZonas())
+    };
+}
+// Deja respirar a la interfaz entre pasos: sin esto la barra de progreso no
+// llegaria a pintarse.
+function rxGeoInfYield() {
+    return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } });
+}
+/* ====================== INFORME POR GEOCERCA: UI ====================== */
+// Opciones del selector de geocerca, con buscador. Devuelve tambien cuantas
+// coinciden, para el contador del campo.
+function rxGeoInfSelect() {
+    const zonas = rxGeoInfZonas();
+    const q = norm(RX_GEO.busca || '');
+    const conDatos = rxGeoInfPorZona(rxGeoInfEventos(RX_GEO.fuente), null);
+    const num = {};
+    for (const f of conDatos) num[f.zona] = f.cruces + f.paradas;
+    const lista = q ? zonas.filter((z) => norm(z).indexOf(q) >= 0) : zonas;
+    const opts = '<option value="">Todas las geocercas</option>' + lista.map((z) => {
+        const n = num[z] || 0;
+        return '<option value="' + esc(z) + '"' + (RX_GEO.zona === z ? ' selected' : '') + '>' + esc(z) +
+            (n ? ' \u00b7 ' + n + ' evento(s)' : ' \u00b7 sin datos') + '</option>';
+    }).join('');
+    return { html: opts, n: lista.length, total: zonas.length };
+}
+function rxGeoInfFilas(d) {
+    return d.unidades.filas.map(rxGeoInfCeldas);
+}
+function rxGeoInfResumen(d) {
+    const t = d.unidades.total;
+    const fuenteTxt = (d.fuente === 'historial') ? 'Historial de la plataforma'
+        : (d.fuente === 'rastreo') ? 'Rastreo de unidades'
+        : (d.fuente === 'bitacora') ? 'Avisos de la sesion'
+            : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay');
+    const rangoTxt = d.rangoTxt || (d.rango === 'hoy' ? 'hoy'
+        : (d.rango === '24h' ? 'ultimas 24 h'
+            : (d.rango === '7d' ? 'ultimos 7 dias'
+                : (d.rango === '15d' ? 'ultimos 15 dias'
+                    : (d.rango === '30d' ? 'ultimos 30 dias' : 'todo el historico')))));
+    return fuenteTxt + ' \u00b7 ' + rangoTxt + (d.zona ? (' \u00b7 geocerca ' + d.zona) : '') +
+        ': ' + t.unidades + ' unidad(es), ' + t.cruces + ' cruce(s) y ' + t.paradas +
+        ' parada(s) con ' + t.min + ' min quieto' + (t.motor ? (' (' + t.motor + ' con motor apagado)') : '') + '.';
+}
+// Documento imprimible (PDF). Reutiliza el maquetado del informe general.
+// Anillo de una geocerca en {lat,lon}, para pintarla en el mini-mapa del
+// PDF (circulos, poligonos y lineas). Vacio si no hay geometria utilizable.
+function rxGeoInfAnillo(z) {
+    if (!z) return [];
+    const radio = (typeof _zonaRadio === 'function') ? _zonaRadio(z) : (+z.w || 0);
+    if (z.t === 3) {
+        const c = centroDeZona(z);
+        if (!c || !(radio > 0)) return [];
+        const out = [];
+        const mx = 111320 * Math.cos(c.lat * Math.PI / 180) || 111320;
+        for (let i = 0; i <= 36; i++) {
+            const a = (i / 36) * Math.PI * 2;
+            out.push({ lat: c.lat + (radio / 110540) * Math.sin(a), lon: c.lon + (radio / mx) * Math.cos(a) });
+        }
+        return out;
+    }
+    const pts = (typeof _zonaPuntos === 'function') ? _zonaPuntos(z) : (z.p || []);
+    const out = [];
+    for (const p of (pts || [])) {
+        if (!p) continue;
+        const la = (p.y != null) ? +p.y : (Array.isArray(p) ? +p[1] : NaN);
+        const lo = (p.x != null) ? +p.x : (Array.isArray(p) ? +p[0] : NaN);
+        if (isFinite(la) && isFinite(lo)) out.push({ lat: la, lon: lo });
+    }
+    if (out.length >= 3) out.push(out[0]);
+    return out;
+}
+// Documento imprimible (PDF). Sigue el mismo maquetado que el reporte del
+// recorrido: portada, KPIs, mapa con leyenda, secciones numeradas y tablas.
+function rxGeoInfHTML(d) {
+    const z = d.zona ? (APP.zonas || []).find((x) => rxGeoInfNombre(x) === d.zona) : null;
+    const cab = rxGeoInfCabeceras(d.modo);
+    const filas = d.unidades.filas.slice(0, 300).map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo));
+    const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
+    const coords = (la, lo) => (la == null || lo == null)
+        ? '<span class="muted">-</span>'
+        : '<span class="mono">' + esc(rxCoord(la, lo, 5)) + '</span>';
+    const tot = d.unidades.total;
+    const org = z && (typeof glocOrigen === 'function') ? glocOrigen(z) : null;
+    // Ficha de la geocerca (dos columnas, como el resto del informe).
+    let ficha = '';
+    if (z) {
+        const cen = centroDeZona(z) || {};
+        let area = '-';
+        try { const a = zonaAreaM2(z); if (a > 0) area = (a / 1e6).toFixed(3) + ' km2'; } catch (_) { /* noop */ }
+        ficha = '<div class="grid2"><div>' +
+            rxInfTabla(['Geocerca', 'Detalle'], [
+                ['<b>' + esc(rxGeoInfNombre(z)) + '</b>', esc(z.t === 3 ? 'Circulo' : (z.t === 1 ? 'Linea' : 'Poligono'))],
+                [esc(org ? org.corto : 'PLAT'), esc(org ? org.largo : 'Geocerca de la plataforma')]
+            ]) + '</div><div>' +
+            rxInfTabla(['Dato', 'Valor'], [
+                ['Superficie', esc(area)],
+                ['Centro', (cen.lat == null ? '<span class="muted">-</span>' : coords(cen.lat, cen.lon))],
+                ['Eventos', String(d.eventos.length)]
+            ]) + '</div></div>';
+    }
+    // Mapa: la geocerca (o las que tienen datos) y las unidades que
+    // estuvieron o estan dentro. Es el mismo mini-mapa que usa el Replay.
+    const zonasMapa = z ? [z]
+        : (APP.zonas || []).filter((zz) => d.zonas.some((f) => f.zona === rxGeoInfNombre(zz))).slice(0, 8);
+    const lineas = [];
+    for (const zz of zonasMapa) {
+        const an = rxGeoInfAnillo(zz);
+        if (an.length > 2) lineas.push({ pts: an, color: '#1565c0', width: 3, opacity: 0.9, glow: true });
+    }
+    const marcas = [];
+    for (const e of d.eventos) {
+        if (marcas.length >= 80) break;
+        if (e.lat == null || e.lon == null) continue;
+        if (e.tipo === 'dentro') {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#2e7d32', radio: 6, txt: e.eco + ' · dentro ahora' });
+        } else if (e.tipo === 'motor') {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#b71c1c', radio: 5, txt: e.eco + ' · parado con motor apagado' });
+        } else if (e.tipo === 'detenida') {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#e65100', radio: 5, txt: e.eco + ' · parada' });
+        } else {
+            marcas.push({ lat: e.lat, lon: e.lon, color: '#1565c0', radio: 4, txt: e.eco + ' · ' + (RX_GEO_TIPOS[e.tipo] || e.tipo) });
+        }
+    }
+    const mapa = (lineas.length || marcas.length) ? rxMiniMapaHTML({ lineas: lineas, marcas: marcas }, 680, 300) : '';
+    const leyenda = '<div class="mapa-leyenda">' +
+        '<span><i style="background:#1565c0"></i>Geocerca' + (zonasMapa.length > 1 ? 's' : '') + '</span>' +
+        '<span><i style="background:#2e7d32"></i>Dentro ahora</span>' +
+        '<span><i style="background:#e65100"></i>Parada</span>' +
+        '<span><i style="background:#b71c1c"></i>Motor apagado</span>' +
+        '<span class="muted">Mapa: OpenStreetMap</span></div>';
+    // Tablas.
+    const filasZona = d.zonas.map((f) => [
+        '<b>' + esc(f.zona) + '</b>', String(f.cruces), String(f.paradas), String(f.min),
+        String(f.nUnidades), esc(Object.keys(f.unidades).slice(0, 10).join(', ') + (f.nUnidades > 10 ? '...' : ''))
+    ]);
+    const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
+    const filasDentro = dentro.map((e) => [
+        '<b>' + esc(e.eco) + '</b>', esc(e.zona),
+        (e.vel == null ? '-' : (e.vel + ' km/h')),
+        (e.online === false ? '<span class="bad">sin senal</span>' : '<span class="ok">en linea</span>'),
+        coords(e.lat, e.lon)
+    ]);
+    const detalle = d.eventos.slice(0, 200).map((e) => [
+        esc(rxFechaHora(e.ts, true)),
+        '<span class="pill">' + esc(RX_GEO_TIPOS[e.tipo] || e.tipo) + '</span>',
+        esc(e.zona), esc(e.eco || '-'), esc(e.detalle || e.titulo || '-'), coords(e.lat, e.lon)
+    ]);
+    // Secciones numeradas, como en el reporte del recorrido.
+    const secciones = [];
+    let num = 0;
+    const add = (titulo, contenido) => { num++; secciones.push('<h2 class="seccion">' + esc(num + '. ' + titulo) + '</h2>' + contenido); };
+    if (mapa) add('Mapa', mapa + leyenda);
+    if (ficha) add('Geocerca' + (z ? ': ' + rxGeoInfNombre(z) : ''), ficha);
+    if (filasDentro.length) add('Dentro ahora (' + filasDentro.length + ')',
+        rxInfTabla(['Eco', 'Geocerca', 'Velocidad', 'Estado', 'Coordenadas'], filasDentro));
+    add((d.modo === 'paradas' ? 'Paradas por unidad' : 'Cruces por unidad') + ' (' + d.unidades.filas.length + ')',
+        rxInfTabla(cab, filas));
+    add('Resumen por geocerca (' + filasZona.length + ')',
+        rxInfTabla(['Geocerca', 'Cruces', 'Paradas', 'Min quieto', 'Unidades', 'Ecos'], filasZona));
+    add('Detalle de eventos (' + Math.min(200, d.eventos.length) + ' de ' + d.eventos.length + ')',
+        (d.eventos.length > 200 ? '<div class="callout">Se listan los 200 primeros eventos del filtro; el CSV lleva todos.</div>' : '') +
+        rxInfTabla(['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Detalle', 'Coordenadas'], detalle));
+    const fuenteTxt = (d.fuente === 'historial') ? 'Historial de la plataforma'
+        : (d.fuente === 'rastreo') ? 'Rastreo de unidades'
+            : (d.fuente === 'bitacora' ? 'Avisos de la sesion'
+                : (d.fuente === 'viajes' ? 'Viajes analizados' : 'Recorrido cargado en Replay'));
+    const meta = (z ? 'Geocerca <b>' + esc(rxGeoInfNombre(z)) + '</b><br>' : 'Todas las geocercas<br>') +
+        esc((d.rangoTxt || 'Periodo completo') + ' · ' + (rxGeoInfSoloSel() ? 'unidades seleccionadas' : 'toda la flota')) +
+        '<br>Datos: ' + esc(fuenteTxt) + '<br>Documento de solo lectura';
+    return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' +
+        'Geocerca ' + esc(z ? rxGeoInfNombre(z) : 'todas') + '</title>' +
+        '<style>' + rxInfEstilo() + '</style></head><body>' +
+        rxInfCabecera('Rondo', 'Informe por geocerca', meta) +
+        '<div class="kpis">' +
+        kpi(tot.unidades, 'Unidades') + kpi(tot.cruces, 'Cruces') + kpi(tot.entradas, 'Entradas') +
+        kpi(tot.salidas, 'Salidas') + kpi(tot.paradas, 'Paradas') +
+        kpi(tot.min + ' min', 'Quieto') + kpi(tot.motor, 'Con motor apagado') +
+        (tot.dentro ? kpi(tot.dentro, 'Dentro ahora') : '') +
+        '</div>' +
+        '<p class="resumen">' + esc(rxGeoInfResumen(d)) + '</p>' +
+        secciones.join('') +
+        rxInfPie() + '</body></html>';
+}
+// Mapa del dialogo: la geocerca marcada y las unidades encontradas. Usa el
+// mismo mini-mapa interactivo (pan/zoom) y el mismo anillo que el PDF.
+function rxGeoInfPintaMapa(d) {
+    const cont = byId('rgi-mapa');
+    if (!cont) return;
+    const z = RX_GEO.zona ? rxGeoInfZonaSel() : null;
+    const zonasMapa = z ? [z]
+        : (APP.zonas || []).filter((zz) => d.zonas.some((f) => f.zona === rxGeoInfNombre(zz))).slice(0, 8);
+    const lineas = [];
+    for (const zz of zonasMapa) {
+        const an = rxGeoInfAnillo(zz);
+        if (an.length > 2) lineas.push({ pts: an, color: '#1565c0', width: 3, opacity: 0.9, glow: true });
+    }
+    const marcas = [];
+    for (const e of d.eventos) {
+        if (marcas.length >= 150) break;
+        if (e.lat == null || e.lon == null) continue;
+        const col = (e.tipo === 'dentro') ? '#2e7d32'
+            : (e.tipo === 'motor' ? '#b71c1c' : (e.tipo === 'detenida' ? '#e65100' : '#1565c0'));
+        marcas.push({ lat: e.lat, lon: e.lon, color: col, radio: (e.tipo === 'dentro' ? 6 : 4), txt: e.eco + ' \u00b7 ' + (RX_GEO_TIPOS[e.tipo] || e.tipo) });
+    }
+    if (!lineas.length && !marcas.length) {
+        if (RX_GEO._mapa) { try { RX_GEO._mapa.destruir(); } catch (_) { /* noop */ } RX_GEO._mapa = null; }
+        cont.innerHTML = '<div class="rgi-mapa-vacio">Sin geometria ni unidades con este filtro.</div>';
+        return;
+    }
+    try {
+        if (!RX_GEO._mapa) RX_GEO._mapa = rxMiniMapa(cont, { lineas: lineas, marcas: marcas });
+        else { RX_GEO._mapa.lineas = lineas; RX_GEO._mapa.marcas = marcas; }
+        RX_GEO._mapa.encuadrar();
+    } catch (e) {
+        if (APP.unlocked) console.warn('[Rondo] mapa informe', e && e.message);
+    }
+}
+function rxGeoInfNombreArchivo(d, ext) {
+    const geo = d.zona ? (d.zona.replace(/[^\w\-]+/g, '_').slice(0, 30) + '_') : '';
+    return 'rondo_geocerca_' + geo + (d.modo === 'paradas' ? 'paradas_' : 'cruces_') +
+        new Date().toISOString().slice(0, 10) + ext;
+}
+// Dialogo: que informe, de que geocerca, de que periodo, con que datos, un
+// mapa con la geocerca y las unidades, y las tres salidas.
+function abrirInformeGeocerca(origen) {
+    // Desde la pestana Replay el rango arranca en las fechas del recorrido
+    // cargado, que es lo que el operador esta mirando en ese momento.
+    if (origen === 'replay') {
+        const r = (typeof RX_REPLAY !== 'undefined') ? RX_REPLAY : null;
+        if (r && r.fecha) {
+            RX_GEO.desde = String(r.fecha);
+            RX_GEO.hasta = (r.fecha2 && r.fecha2 !== r.fecha) ? String(r.fecha2) : '';
+            RX_GEO.rango = '';
+        }
+    }
+    rxGeoInfCacheReset();
+    const hay = rxGeoInfFuentesDisponibles();
+    if (!hay.length) {
+        adviceWarn('Sin datos de geocercas',
+            'Activa la regla Geocercas en Ajustes, analiza un viaje o carga un recorrido en Replay para poder informar.');
+        return;
+    }
+    if (!RX_GEO._fuenteTocada) {
+        // Si hay geocerca elegida y flota, el historial de la plataforma es
+        // el que responde de verdad "quien anduvo por aqui". Sin geocerca
+        // (mirar todas) se prefiere una fuente local, que es instantanea.
+        if (RX_GEO.zona && hay.some((h) => h.k === 'historial')) {
+            RX_GEO.fuente = 'historial';
+        } else if (!hay.some((h) => h.k === RX_GEO.fuente)) {
+            const local = hay.find((h) => h.k !== 'historial');
+            RX_GEO.fuente = (local || hay[hay.length - 1]).k;
+        }
+    } else if (!hay.some((h) => h.k === RX_GEO.fuente)) {
+        RX_GEO.fuente = hay[0].k;
+    }
+    // El contenedor del mapa se rehace con el dialogo: se olvida la instancia
+    // anterior para no medir un nodo ya desconectado.
+    RX_GEO._mapa = null;
+    // El escaneo del historial es cancelable: al cerrar el dialogo se aborta.
+    if (RX_GEO._token) RX_GEO._token.cancelado = true;
+    RX_GEO._token = { cancelado: false };
+    const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
+    const cuerpo = (d, fuentes, selZ, generarPend) => {
+        const chip = (act, attr, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
+            '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + esc(txt) + '</button>';
+        const tot = d.unidades.total;
+        // Hero: que geocerca se informa, de donde viene y que datos tiene.
+        const z = RX_GEO.zona ? rxGeoInfZonaSel() : null;
+        const org = z ? glocOrigen(z) : null;
+        let ficha = 'Todas las geocercas';
+        if (z) {
+            let area = '';
+            try { const a = zonaAreaM2(z); if (a > 0) area = (a / 1e6).toFixed(2) + ' km2'; } catch (_) { /* noop */ }
+            ficha = (z.t === 3 ? 'C\u00edrculo' : (z.t === 1 ? 'L\u00ednea' : 'Pol\u00edgono')) +
+                (area ? ' \u00b7 ' + area : '') + ' \u00b7 ' + (org ? org.largo : 'de la plataforma');
+        }
+        const hero = '<div class="rgi-hero' + (org ? ' o-' + org.id : '') + '">' +
+            '<span class="rgi-heroico rondo-usym">' + UIS.zone + '</span>' +
+            '<div class="rgi-herot"><b>' + esc(RX_GEO.zona || 'Todas las geocercas') + '</b>' +
+            '<span>' + esc(ficha) + '</span></div>' +
+            (org ? '<i class="rgi-ori o-' + org.id + '">' + esc(org.corto) + '</i>' : '') +
+            '</div>';
+        const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
+        const chipsDentro = dentro.length
+            ? '<div class="rgi-dentro"><span class="rgi-dl">Dentro ahora</span>' + dentro.slice(0, 14).map((e) =>
+                '<span class="rgi-dchip" title="' + esc(e.zona) + (e.vel != null ? ' \u00b7 ' + e.vel + ' km/h' : '') + '">' +
+                '<span class="rondo-usym">' + UIS.pin + '</span>' + esc(e.eco) + '</span>').join('') +
+                (dentro.length > 14 ? '<span class="rgi-dmore">+' + (dentro.length - 14) + '</span>' : '') + '</div>'
+            : '';
+        // Acciones de descarga, con PDF como accion principal.
+        const acciones = '<div class="rgi-generar">' +
+            '<button type="button" class="rgi-btn gen' + (generarPend ? ' pulsa' : '') + '" id="rgi-generar">' +
+            '<span class="rondo-usym">' + (generarPend ? UIS.refresh : UIS.check) + '</span>' +
+            '<b>' + (generarPend ? 'Generar reporte' : 'Actualizar reporte') + '</b>' +
+            '<i>' + (generarPend ? 'pulsa para consultar y calcular' : 'vuelve a consultar los datos') + '</i></button>' +
+            '<span class="rgi-gen-hint">' + esc((RX_GEO.fuente === 'historial')
+                ? 'La fuente Plataforma consulta el historial de toda la flota: se lanza con el boton.'
+                : 'Los cambios de opciones no recargan solos: pulsa el boton para actualizar el informe.') + '</span>' +
+            '</div>' +
+            '<div class="rgi-io">' +
+            '<button type="button" class="rgi-btn primary" id="rgi-pdf" title="Reporte imprimible (Guardar como PDF)">' +
+            '<span class="rondo-usym">' + UIS.export + '</span><b>PDF</b><i>reporte listo para imprimir</i></button>' +
+            '<button type="button" class="rgi-btn" id="rgi-csv" title="Detalle evento a evento">' +
+            '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>evento a evento</i></button>' +
+            '<button type="button" class="rgi-btn" id="rgi-md" title="Informe en texto">' +
+            '<span class="rondo-usym">' + UIS.copy + '</span><b>Markdown</b><i>texto para pegar</i></button>' +
+            '</div>';
+        return '<div class="rgi">' +
+            hero +
+            '<div class="rgi-cfg">' +
+            '<div class="rgi-row"><span class="rgi-lb">Informe</span><div class="rgi-chips">' +
+            chip(RX_GEO.modo === 'cruces', 'data-rgi="modo"', 'cruces', 'Cruces por unidad', 'Quien entro y salio de cada geocerca') +
+            chip(RX_GEO.modo === 'paradas', 'data-rgi="modo"', 'paradas', 'Paradas dentro', 'Quien se quedo quieto dentro y cuanto tiempo') +
+            '</div></div>' +
+            '<div class="rgi-row rgi-row-geo"><span class="rgi-lb">Geocerca</span>' +
+            '<span class="rgi-busca">' +
+            '<span class="rondo-usym">' + UIS.filter + '</span>' +
+            '<input type="text" id="rgi-buscar" class="filtro" placeholder="Buscar geocerca\u2026" value="' + esc(RX_GEO.busca || '') + '">' +
+            '<i id="rgi-busca-n">' + selZ.n + '/' + selZ.total + '</i>' +
+            '</span></div>' +
+            '<div class="rgi-row"><span class="rgi-lb"></span>' +
+            '<select id="rgi-zona" class="filtro">' + selZ.html + '</select></div>' +
+            '<div class="rgi-row"><span class="rgi-lb">Unidades</span><div class="rgi-chips">' +
+            chip(RX_GEO.unidades !== 'sel', 'data-rgi="unidades"', 'todas', 'Toda la flota') +
+            chip(RX_GEO.unidades === 'sel', 'data-rgi="unidades"', 'sel', 'Solo las seleccionadas') +
+            '</div></div>' +
+            '<div class="rgi-row"><span class="rgi-lb">Periodo</span><div class="rgi-chips">' +
+            chip(RX_GEO.rango === 'hoy' && !RX_GEO.desde, 'data-rgi="rango"', 'hoy', 'Hoy') +
+            chip(RX_GEO.rango === '24h' && !RX_GEO.desde, 'data-rgi="rango"', '24h', '24 h') +
+            chip(RX_GEO.rango === '7d' && !RX_GEO.desde, 'data-rgi="rango"', '7d', '7 d\u00edas') +
+            chip(RX_GEO.rango === '15d' && !RX_GEO.desde, 'data-rgi="rango"', '15d', '15 d\u00edas') +
+            chip(RX_GEO.rango === '30d' && !RX_GEO.desde, 'data-rgi="rango"', '30d', '30 d\u00edas') +
+            chip(RX_GEO.rango === 'todo' && !RX_GEO.desde, 'data-rgi="rango"', 'todo', 'Todo') +
+            '</div></div>' +
+            '<div class="rgi-row"><span class="rgi-lb">D\u00edas</span>' +
+            '<span class="rgi-rango">' +
+            '<input type="date" id="rgi-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_GEO.desde) + '">' +
+            '<span class="sep">\u2192</span>' +
+            '<input type="date" id="rgi-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_GEO.hasta) + '">' +
+            (RX_GEO.desde || RX_GEO.hasta ? '<button type="button" class="mini" data-rgi="rango" data-v="hoy">Quitar</button>' : '') +
+            '</span></div>' +
+            '<div class="rgi-row"><span class="rgi-lb">Datos</span><div class="rgi-chips">' +
+            fuentes.map((f) => chip(RX_GEO.fuente === f.k, 'data-rgi="fuente"', f.k,
+                ETIQUETA[f.k] + ' \u00b7 ' + f.n, ETIQUETA[f.k])).join('') +
+            '</div></div>' +
+            '</div>' +
+            '<div class="rgi-kpis">' +
+            '<div class="rgi-kpi' + (tot.unidades ? ' ok' : '') + '"><b>' + tot.unidades + '</b><span>Unidades</span></div>' +
+            '<div class="rgi-kpi"><b>' + tot.cruces + '</b><span>Cruces</span></div>' +
+            '<div class="rgi-kpi"><b>' + tot.entradas + '</b><span>Entradas</span></div>' +
+            '<div class="rgi-kpi"><b>' + tot.paradas + '</b><span>Paradas</span></div>' +
+            '<div class="rgi-kpi"><b>' + tot.min + '</b><span>Min quieto</span></div>' +
+            '<div class="rgi-kpi"><b>' + tot.motor + '</b><span>Motor apagado</span></div>' +
+            (tot.dentro ? '<div class="rgi-kpi vivo"><b>' + tot.dentro + '</b><span>Dentro ahora</span></div>' : '') +
+            '</div>' +
+            chipsDentro +
+            '<p class="rgi-res">' + esc(rxGeoInfResumen(d)) + '</p>' +
+            ((!d.eventos.length && (APP.unidades || []).length && RX_GEO.fuente !== 'historial')
+                ? '<div class="rgi-aviso">No hay eventos en esta fuente. ' +
+                  'Para rastrear <b>toda la flota</b> en el rango elegido, usa el historial de la plataforma.' +
+                  '<button type="button" class="mini" data-rgi="fuente" data-v="historial">' +
+                  '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar en la plataforma</button></div>'
+                : '') +
+            '<div class="rgi-prev">' + (d.unidades.filas.length
+                ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
+                    .map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo))) +
+                (d.unidades.filas.length > 12 ? '<p class="rgi-more">y ' + (d.unidades.filas.length - 12) + ' unidad(es) m\u00e1s en el PDF y el CSV.</p>' : '')
+                : '<p class="rgi-more">Sin unidades con este filtro.</p>') + '</div>' +
+            acciones +
+            '</div>';
+    };
+    abrirDialogo({
+        icon: UIS.zone,
+        titulo: 'Informe por geocerca',
+        ancho: 720,
+        okText: 'Cerrar',
+        // Un solo boton abajo: las salidas viven en la barra de acciones.
+        cancel: false,
+        html: '<div class="rgi-tool">' +
+            '<div class="rgi-mapa" id="rgi-mapa"><div class="rgi-mapa-vacio">Elige una geocerca para verla en el mapa</div></div>' +
+            '<div class="rgi-carga" id="rgi-carga" style="display:none">' +
+            '<span id="rgi-carga-t">Calculando\u2026</span>' +
+            '<span class="rgi-barra"><i id="rgi-barra"></i></span>' +
+            '</div>' +
+            '<div id="rgi-box"></div>' +
+            '</div>',
+        onOpen: (el) => {
+            const box = el.querySelector('#rgi-box');
+            if (!box) return;
+            const carga = el.querySelector('#rgi-carga');
+            const barra = el.querySelector('#rgi-barra');
+            const cargaT = el.querySelector('#rgi-carga-t');
+            const setProg = (p, t) => {
+                if (barra) barra.style.width = p + '%';
+                if (cargaT && t) cargaT.textContent = t;
+                if (carga) carga.style.display = 'flex';
+            };
+            // Pintado asincrono por pasos: la barra se ve de verdad y la
+            // interfaz respira entre el calculo y el dibujo.
+            // Version del token para descartar resultados de un pintado viejo
+            // (el operador puede cambiar de opcion varias veces seguidas).
+            let pintaN = 0;
+            // Pintar los controles y (si toca) calcular. `generar` decide si
+            // hay que consultar la plataforma; cambiar opciones solo repinta
+            // y deja los resultados viejos marcados como pendientes.
+            const pinta = async (generar) => {
+                const mio = ++pintaN;
+                if (generar) {
+                    setProg(6, 'Reuniendo datos\u2026');
+                    await rxGeoInfYield();
+                    if (RX_GEO.fuente === 'historial') {
+                        RX_GEO._token = { cancelado: false };
+                        try {
+                            await rxGeoInfEscanear((hechas, total, eco, hallados) => {
+                                setProg(6 + Math.round((hechas / Math.max(1, total)) * 80),
+                                    'Consultando ' + hechas + '/' + total +
+                                    (eco ? ' \u00b7 ' + eco : '') +
+                                    (hallados ? ' \u00b7 ' + hallados + ' evento(s)' : ''));
+                            }, RX_GEO._token);
+                        } catch (_) { /* noop */ }
+                        if (mio !== pintaN) return;
+                    }
+                    RX_GEO.listo = true;
+                }
+                const d = rxGeoInfReune();
+                setProg(92, 'Dibujando\u2026');
+                await rxGeoInfYield();
+                if (mio !== pintaN) return;
+                const selZ = rxGeoInfSelect();
+                const fuentes = rxGeoInfFuentesDisponibles();
+                setHtml(box, cuerpo(d, fuentes, selZ, !RX_GEO.listo));
+                rxGeoInfPintaMapa(d);
+                if (carga) carga.style.display = 'none';
+            };
+            box.addEventListener('click', (ev) => {
+                const btn = ev.target.closest && ev.target.closest('button');
+                // Salidas y "Generar reporte": el cuerpo se repinta en cada
+                // cambio, asi que los botones se atienden por delegacion (el
+                // contenedor #rgi-box no se reemplaza).
+                if (btn && box.contains(btn)) {
+                    if (btn.id === 'rgi-generar') { pinta(true); return; }
+                    if (btn.id === 'rgi-pdf') {
+                        rxImprimirHTML(rxGeoInfHTML(rxGeoInfReune()));
+                        advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
+                        return;
+                    }
+                    if (btn.id === 'rgi-csv') { rxGeoInfCSV(rxGeoInfReune()); return; }
+                    if (btn.id === 'rgi-md') { rxGeoInfMD(rxGeoInfReune()); return; }
+                }
+                const b = ev.target.closest && ev.target.closest('[data-rgi]');
+                if (!b || !box.contains(b)) return;
+                if (b.dataset.rgi === 'rango') {
+                    // Un atajo de periodo borra el rango escrito a mano.
+                    RX_GEO.rango = b.dataset.v;
+                    RX_GEO.desde = '';
+                    RX_GEO.hasta = '';
+                } else {
+                    RX_GEO[b.dataset.rgi] = b.dataset.v;
+                    if (b.dataset.rgi === 'fuente') RX_GEO._fuenteTocada = true;
+                }
+                // Cambiar opciones NO recarga: los resultados quedan viejos
+                // y el boton "Generar reporte" pasa a estar resaltado.
+                RX_GEO.listo = false;
+                pinta(false);
+            });
+            box.addEventListener('input', (ev) => {
+                const t = ev.target;
+                if (!t || t.id !== 'rgi-buscar') return;
+                RX_GEO.busca = t.value || '';
+                // Se repinta solo el selector y el contador: asi el campo de
+                // busqueda no pierde el foco mientras se escribe.
+                const sel = byId('rgi-zona');
+                const info = rxGeoInfSelect();
+                if (sel) sel.innerHTML = info.html;
+                const n = byId('rgi-busca-n');
+                if (n) n.textContent = info.n + '/' + info.total;
+            });
+            box.addEventListener('change', (ev) => {
+                const t = ev.target;
+                if (!t || !t.id) return;
+                if (t.id === 'rgi-buscar') return;
+                if (t.id === 'rgi-zona') {
+                    RX_GEO.zona = t.value || '';
+                    _rxGeoZonaSel = { nombre: '\u0000', z: null };
+                    RX_GEO.listo = false;
+                    pinta(false);
+                    return;
+                }
+                if (t.id === 'rgi-desde' || t.id === 'rgi-hasta') {
+                    RX_GEO.desde = t.value || '';
+                    RX_GEO.hasta = (byId('rgi-hasta') ? byId('rgi-hasta').value : '') || '';
+                    // Si el operador se equivoca de orden, se corrige solo.
+                    if (RX_GEO.desde && RX_GEO.hasta && RX_GEO.desde > RX_GEO.hasta) {
+                        const tmp = RX_GEO.desde;
+                        RX_GEO.desde = RX_GEO.hasta;
+                        RX_GEO.hasta = tmp;
+                    }
+                    RX_GEO.listo = false;
+                    pinta(false);
+                }
+            });
+            // Los botones se atienden por delegacion en #rgi-box (arriba):
+            // al repintarse el cuerpo, enlazarlos aqui no serviria.
+            // Al abrir se calcula solo si la fuente no consulta la plataforma
+            // (las fuentes locales son instantaneas). Con "Plataforma" se
+            // espera al boton para no barrer la flota sin querer.
+            pinta(RX_GEO.fuente !== 'historial');
+        },
+        onOk: () => { /* las salidas se eligen en la barra de acciones */ }
+    });
+}
+function rxGeoInfCSV(d) {
+    const cabU = rxGeoInfCabeceras(d.modo);
+    const filasU = d.unidades.filas.map((c) => rxGeoInfCeldasPlanas(rxGeoInfCeldas(c), d.modo));
+    const cabE = ['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Minutos', 'Detalle', 'Lat', 'Lon', 'Fuente'];
+    const filasE = d.eventos.map((e) => [
+        rxFechaHora(e.ts), (RX_GEO_TIPOS[e.tipo] || e.tipo), e.zona, (e.eco || ''),
+        String(e.min || 0), (e.detalle || e.titulo || ''),
+        (e.lat == null ? '' : String(e.lat)), (e.lon == null ? '' : String(e.lon)), (e.fuente || '')
+    ]);
+    const txt = [cabU].concat(filasU).concat([cabE]).concat(filasE)
+        .map((f) => f.map(rxCsvCelda).join(',')).join('\n');
+    const a = makeEl('a', { href: URL.createObjectURL(new Blob(['\uFEFF' + txt], { type: 'text/csv;charset=utf-8;' })) });
+    a.download = rxGeoInfNombreArchivo(d, '.csv');
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+    adviceOk('Informe exportado', filasE.length + ' evento(s) y ' + filasU.length + ' unidad(es)');
+}
+function rxGeoInfMD(d) {
+    const cab = rxGeoInfCabeceras(d.modo);
+    const L = ['# Informe por geocerca - ' + (d.zona || 'todas las geocercas'), '',
+        '- Generado: ' + rxFechaHora(Date.now(), true),
+        '- Datos: ' + rxGeoInfResumen(d), '',
+        '## ' + (d.modo === 'paradas' ? 'Paradas por unidad' : 'Cruces por unidad'), '',
+        '| ' + cab.join(' | ') + ' |',
+        '| ' + cab.map(() => '---').join(' | ') + ' |'];
+    for (const f of d.unidades.filas) {
+        L.push('| ' + rxGeoInfCeldasPlanas(rxGeoInfCeldas(f), d.modo)
+            .map((x) => String(x).replace(/\|/g, '/')).join(' | ') + ' |');
+    }
+    L.push('', '## Geocercas', '', '| Geocerca | Cruces | Paradas | Min quieto | Unidades |', '| --- | --- | --- | --- | --- |');
+    for (const f of d.zonas) L.push('| ' + [f.zona, f.cruces, f.paradas, f.min, f.nUnidades].join(' | ') + ' |');
+    L.push('', '## Eventos (' + d.eventos.length + ')', '',
+        '| Fecha y hora | Evento | Geocerca | Eco | Minutos | Detalle |', '| --- | --- | --- | --- | --- | --- |');
+    for (const e of d.eventos.slice(0, 300)) {
+        L.push('| ' + [rxFechaHora(e.ts), (RX_GEO_TIPOS[e.tipo] || e.tipo), e.zona, (e.eco || '-'),
+            (e.min || 0), (e.detalle || e.titulo || '-').replace(/\|/g, '/')].join(' | ') + ' |');
+    }
+    if (d.eventos.length > 300) L.push('', '_Se muestran los 300 primeros eventos._');
+    if (typeof rxReplayDescargar === 'function') rxReplayDescargar(rxGeoInfNombreArchivo(d, '.md'), L.join('\n'), 'text/markdown;charset=utf-8;');
+    else adviceWarn('No se pudo exportar', 'descarga no disponible');
+    adviceOk('Informe exportado', d.eventos.length + ' evento(s)');
+}

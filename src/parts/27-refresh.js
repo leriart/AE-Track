@@ -7,6 +7,10 @@
             APP.unidades = unidades;
             if (APP.config.loadZones && APP.zonas.length === 0) {
                 try { APP.zonas = await fetchZones(); } catch (_) { APP.zonas = []; }
+                // v6.13: las geocercas dibujadas en Rondo se anaden DESPUES
+                // de consultar la plataforma (si se metieran antes, APP.zonas
+                // dejaria de estar vacia y las nativas no se cargarian).
+                try { glocSincroniza(); } catch (e) { if (APP.unlocked) console.warn('[Rondo] gloc', e && e.message); }
             }
             APP.consultaRestante = 40;
             // Presupuesto de geocodificacion inversa por refresco: los avisos
@@ -43,6 +47,10 @@
             }
             APP.memo = nuevas;
             writeSession(SS.memo, APP.memo);
+            // v6.12: la alerta de geocercas puede vigilar TODA la flota. El
+            // bucle anterior solo recorre las unidades vigiladas, asi que
+            // las demas se evaluan aqui solo para esa regla.
+            geoAlertaFlota(unidades, nuevas);
 
             APP.kpi.online = APP.kpi.online.concat(onNow).slice(-180);
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);

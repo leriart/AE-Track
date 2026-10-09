@@ -92,6 +92,9 @@
             '<button id="rondo-carga-btn" class="rondo-tool" data-tabs="unidades" title="Carga rapida: pega la lista de clientes del embarque y asigna la ruta a una unidad"><span class="rondo-usym">' + UIS.watch + '</span> Carga rapida</button>' +
             '<button id="rondo-csv" class="rondo-tool" data-tabs="unidades" title="Exportar unidades a CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
             '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
+            // v6.15: informe por geocerca (cruces y paradas dentro). Elige la
+            // geocerca, el periodo y los datos; sale en PDF, CSV o Markdown.
+            '<button id="rondo-informe-geo" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas,zonas" title="Informe por geocerca: cruces y unidades paradas dentro de una geocerca"><span class="rondo-usym">' + UIS.zone + '</span></button>' +
             '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
@@ -304,6 +307,9 @@
              '<button class="mini" id="rondo-replay-pdf" title="Generar un PDF del recorrido con las opciones elegidas"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
              '<button class="mini" id="rondo-replay-geo" title="Exportar el recorrido del dia a GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
              '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
+             // v6.15: el informe por geocerca tambien desde aqui; al abrirlo
+             // toma las fechas del recorrido que se esta viendo.
+             '<button class="mini" id="rondo-replay-informe-geo" title="Informe de una geocerca: cruces y unidades paradas dentro, en un rango de dias"><span class="rondo-usym">' + UIS.zone + '</span> Informe geocerca</button>' +
              '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
@@ -338,7 +344,11 @@
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-ocupadas">0</b><span>Con unidades</span></div>' +
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-base">0</b><span>Base</span></div>' +
             '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-carga">0</b><span>Carga</span></div>' +
+            '<div class="rondo-geo-kpi"><b id="rondo-geo-kpi-alerta">0</b><span>En alerta</span></div>' +
             '</div>' +
+            // v6.12: franja de la alerta de geocercas (resumen de las
+            // geocercas vigiladas). El detalle de cada una esta en su campana.
+            '<div id="rondo-geo-ga-resumen"></div>' +
             '<div class="rondo-geo-filters">' +
             '<input id="rondo-geo-buscar" class="filtro" placeholder="Buscar geocerca o unidad\u2026">' +
             '<select id="rondo-geo-orden" class="filtro" title="Ordenar">' +
@@ -351,7 +361,9 @@
             '<option value="base">Base</option>' +
             '<option value="carga">Carga</option>' +
             '<option value="ocupadas">Con unidades</option>' +
+            '<option value="app">De la app</option>' +
             '</select>' +
+            '<button class="mini" id="rondo-geo-nueva" title="Dibujar una geocerca nueva en Rondo (fuera de la plataforma)"><span class="rondo-usym">' + UIS.zone + '</span> Nueva</button>' +
             '<button class="mini" id="rondo-geo-csv" title="Descargar CSV"><span class="rondo-usym">' + UIS.csv + '</span> CSV</button>' +
             '<button class="mini" id="rondo-geo-geo" title="Descargar GeoJSON"><span class="rondo-usym">' + UIS.export + '</span> GeoJSON</button>' +
             '</div>' +
@@ -532,6 +544,7 @@
             checkRow('c-r-geo-det', 'Detenida en geocerca') +
             numRow('c-geo-det-min', 'Min detenido para alertar (min)') +
             numRow('c-geo-estable', 'Confirmar cambio de geocerca (s)') +
+            checkRow('c-r-geo-alerta', 'Alerta de geocercas (interruptor general)') +
             checkRow('c-r-des', 'Destino') +
             checkRow('c-r-dis', 'Desconexión') +
             checkRow('c-r-vel', 'Velocidad') +
@@ -541,6 +554,8 @@
             checkRow('c-r-riesgo', 'Perdi\u00f3 se\u00f1al en zona de riesgo') +
             checkRow('c-r-riesgo-pre', 'Aproximaci\u00f3n a zona de riesgo (predictiva)') +
             '</div>' +
+            '<p style="font-size:11px;color:var(--rondo-fg-dim);margin:0 0 6px">Este es el interruptor general. Cada geocerca se vigila por separado (a quien, ' +
+            'gravedad y si dispara al pasar, al detenerse o al detenerse con el motor apagado) desde la <b>campana</b> de su tarjeta en <b>Zonas &gt; Geocercas</b>.</p>' +
             '<h4>Zonas de riesgo</h4>' +
             '<label>URL del CSV / JSON <span style="color:var(--rondo-fg-dim);font-size:11px">(opcional; se consulta en cada arranque; el repo no incluye datos)</span>' +
             '<input type="text" id="c-riesgo-url" style="width:100%;margin-top:4px" placeholder="pega la URL aqu\u00ed (https://...)">' +

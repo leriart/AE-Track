@@ -146,6 +146,31 @@
         // avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila
         // en el borde de una geocerca.
         geocercaEstableSeg: 15,
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). Cada
+        // geocerca lleva SU PROPIA alerta, editable desde la campana de su
+        // tarjeta: a quien vigila, con que gravedad y si dispara al pasar,
+        // al detenerse o al detenerse con el motor apagado.
+        // porZona: nombre de la geocerca -> ajustes; reglas.geoAlerta es el
+        // interruptor maestro de todas ellas.
+        geoAlertas: Object.freeze({
+            // nombre de la geocerca -> { on, alcance, severidad, disparo,
+            // minMin, motorMin, estableSeg, cooldownS }
+            porZona: Object.freeze({}),
+            // 'vigiladas' (solo la lista vigilada) | 'todas'
+            alcance: 'vigiladas',
+            // 'bajo' | 'medio' | 'alto' | 'critico'
+            severidad: 'medio',
+            // 'paso' (solo pasar) | 'detenida' | 'motor' (parada + motor apagado)
+            disparo: 'paso',
+            // minutos parada dentro para el disparador 'detenida'
+            minMin: 2,
+            // minutos sin reportar posicion = motor apagado (estimado)
+            motorMin: 15,
+            // histeresis: segundos dentro antes de dar la entrada
+            estableSeg: 20,
+            // 0 = usar el cooldown global de alertas
+            cooldownS: 0
+        }),
         // v5.15: tolerancia de desvio por municipio. Mientras la unidad siga
         // DENTRO de un municipio por el que pasa su ruta (o una de sus
         // paradas), el desvio no se marca hasta desvioMunicipioM metros.
@@ -153,6 +178,10 @@
         desvioMunicipioM: 3000,
         // v5.15: radio (m) para considerar "llego" a cada parada del plan.
         paradaLlegadaM: 150,
+        // v6.13: las geocercas dibujadas en Rondo viven en la sesion. Con
+        // esto a true se guardan tambien en localStorage y sobreviven a
+        // cerrar el navegador (si no, se pierden al recargar).
+        geolocalRecordar: false,
         // v5.14.7: checkbox del chat IA. false = solo vigiladas (default,
         // mas enfocado), true = toda la flota que reporta en la plataforma.
         chatTodaFlota: false,
@@ -183,7 +212,11 @@
             // lleva >= X min detenida DENTRO de una geocerca (no fuera,
             // no en movimiento), avisa con el texto literal pedido:
             // "La unidad X se encuentra detenida en la geocerca Y".
-            geocercaDetenido: true
+            geocercaDetenido: true,
+            // v6.12: alerta de geocercas (seleccion de geocercas + gravedad
+            // + disparador). Se configura en la pestana Zonas > Geocercas;
+            // aqui solo el interruptor, igual que las demas reglas.
+            geoAlerta: false
         })
     });
 

@@ -935,6 +935,9 @@
         if (csv) csv.addEventListener('click', () => rxReplayExportarParadasCSV());
         const pdf = byId('rondo-replay-pdf');
         if (pdf) pdf.addEventListener('click', () => exportReplayPDF());
+        // v6.15: informe por geocerca (abre con las fechas de este recorrido).
+        const informeGeo = byId('rondo-replay-informe-geo');
+        if (informeGeo) informeGeo.addEventListener('click', () => abrirInformeGeocerca('replay'));
         // Rangos rapidos.
         document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((b) => {
             b.addEventListener('click', () => {

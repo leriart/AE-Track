@@ -80,6 +80,9 @@
         const out = Object.assign({}, base, over);
         if (base.reglas) out.reglas = Object.assign({}, base.reglas, (over && over.reglas) || {});
         if (base.horario) out.horario = Object.assign({}, base.horario, (over && over.horario) || {});
+        // v6.12: geoAlertas tambien es un grupo de opciones: si el cfg guardado
+        // trae solo algunas claves, las que faltan deben venir de DEFAULTS.
+        if (base.geoAlertas) out.geoAlertas = Object.assign({}, base.geoAlertas, (over && over.geoAlertas) || {});
         return out;
     }
 

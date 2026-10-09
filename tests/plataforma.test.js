@@ -118,6 +118,54 @@ ok('reestilizado: mapea superficies y texto de la paleta',
     /const RX_PAGINA_SUPERFICIES = \{/.test(src) && /const RX_PAGINA_TEXTOS = \{/.test(src));
 ok('reestilizado: paleta segun tema claro/oscuro',
     /const claro = APP\.config\.theme === 'claro'/.test(src) && /const P = claro \? \{/.test(src));
+
+// v6.19.3: mapeo completo del skin. Cada variable cae en su categoria; en
+// particular los paneles del cromo que antes no se pintaban y el texto sobre
+// acento (blanco), que antes se confundia con el propio acento.
+ok('reestilizado: mapea paneles, acordeon y dialogos del skin',
+    /'panel-top-background': 'soft'/.test(src) && /'panel-left-background': 'soft'/.test(src) &&
+    /'panel-bottom-background': 'soft'/.test(src) && /'help-window-background': 'soft'/.test(src) &&
+    /'wizard-dialog-background': 'soft'/.test(src) && /'accordion-normal-background': 'soft'/.test(src));
+ok('reestilizado: texto sobre acento en blanco',
+    /const RX_PAGINA_SOBRE_ACENTO = \[/.test(src) && /'horizontal-bar-item-active-color'/.test(src));
+ok('reestilizado: solo el shorthand lleva "1px solid"',
+    /const RX_PAGINA_BORDES = \['list-table-tab_button-active-border'\]/.test(src) &&
+    /'execute-button-border-color', 'monitoring-login-primary-button-border-color'/.test(src));
+
+// Prueba funcional: se evalua la funcion con un DOM simulado y se revisan las
+// declaraciones emitidas (asi el bug de los bordes no puede volver).
+const bloqueCSS = src.slice(src.indexOf('function aclarar('), src.indexOf('function applyTheme()'));
+function generarEstilo(cfg, acentoPlat) {
+    const code = 'const APP = { config: Object.assign({ acento: "#850D22", theme: "oscuro", ' +
+        'estiloPagina: true, density: "normal" }, ' + JSON.stringify(cfg || {}) + '), noMolestar: null };\n' +
+        'let _el = null;\n' +
+        'const document = { getElementById: () => _el, ' +
+        'createElement: () => ({ id: "", parentNode: null, textContent: "" }), ' +
+        'head: { appendChild: (e) => { _el = e; } }, documentElement: { appendChild: (e) => { _el = e; } } };\n' +
+        'const window = { matchMedia: () => ({ matches: false }) };\n' +
+        'const rxPlatAcento = () => ' + JSON.stringify(acentoPlat || '#B30B27') + ';\n' +
+        bloqueCSS + '\nreturn rxAplicarEstiloPagina(), (_el ? _el.textContent : "");';
+    try { return new Function(code)(); } catch (e) { return 'ERR:' + e.message; }
+}
+const cssOsc = generarEstilo({});
+ok('reestilizado real: emite paneles superior/izquierdo/inferior',
+    /--panel-top-background:.+ !important;/.test(cssOsc) &&
+    /--panel-left-background:.+ !important;/.test(cssOsc) &&
+    /--panel-bottom-background:.+ !important;/.test(cssOsc), cssOsc.slice(0, 80));
+ok('reestilizado real: texto sobre acento en blanco',
+    /--horizontal-bar-item-active-color:#ffffff !important;/.test(cssOsc) &&
+    /--execute-button-color:#ffffff !important;/.test(cssOsc));
+ok('reestilizado real: borde de color sin "1px solid"',
+    /--execute-button-border-color:#B30B27 !important;/.test(cssOsc) &&
+    !/--execute-button-border-color:1px/.test(cssOsc));
+ok('reestilizado real: el shorthand si lleva "1px solid"',
+    /--list-table-tab_button-active-border:1px solid #B30B27 !important;/.test(cssOsc));
+ok('reestilizado real: usa el acento de la plataforma',
+    generarEstilo({}, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
+ok('reestilizado real: apagado no emite hoja', generarEstilo({ estiloPagina: false }) === '');
+ok('reestilizado real: tema claro usa superficies claras',
+    /--panel-top-background:#ffffff !important;/.test(generarEstilo({ theme: 'claro' })));
+
 ok('detecta la pantalla de login',
     /function rxEnLogin\(/.test(src) && /getElementById\('login_body'\)/.test(src) &&
     /getElementById\('monitoring_body'\)/.test(src));

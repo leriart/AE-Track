@@ -871,15 +871,16 @@ PANEL (barra lateral a pantalla completa, lado y ancho configurables):
 - Unidades: tarjetas por unidad con estado, placa, velocidad, ultimo reporte, zona y ruta. Clic para abrir su ventana; clic derecho para mas opciones (planear ruta, geocerca, odometro, limite de velocidad, silenciar). Barra "Ordenar".
 - Avisos: historial de alertas filtrable por severidad (criticas/altas/medias/bajas). Boton IA por aviso, boton "Analizar lote" (resumen + ranking) y "Avisos CSV".
 - Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad. En el editor multipunto la ventana se mueve (arrastra el encabezado) y se redimensiona (esquina inferior derecha); las sugerencias se recorren con flechas arriba/abajo y Enter; las paradas se reordenan arrastrando el asa. La ruta se puede ver en un mini-mapa propio con tiles de OpenStreetMap.
-- Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:).
+- Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:). Con el boton Nueva se dibujan geocercas propias en un mapa (no estan en la plataforma, se marcan APP y se importan/exportan). Cada geocerca tiene ademas su propia alerta (campana en su tarjeta): a quien vigila (solo la lista vigilada o toda la flota), la gravedad y que lo dispara (solo paso / se detuvo / motor apagado).
 - Caravana: unidades cerca de una unidad lider (distancia firmada, sentido contrario, no vigiladas).
 - Replay: reproduce el recorrido de una unidad en un dia o rango de horas, con buscador de unidades, mini-mapa (tiles de OpenStreetMap), perfil de velocidad, resumen, lista de paradas (hora, duracion y lugar resuelto con OpenStreetMap: comercio, direccion o municipio) y eventos (geocercas, excesos, desvios). Exporta el recorrido a GeoJSON, las paradas a CSV y un reporte PDF del recorrido. Solo lectura.
+- Informe por geocerca: boton de pin junto al Reporte PDF y tambien desde Reproducir recorrido (donde ya toma las fechas del recorrido). Elige si quieres cruces por unidad o paradas dentro, la geocerca, el rango de dias, si mira toda la flota o solo las seleccionadas, y los datos (rastreo de las trazas, avisos de la sesion, viajes analizados o el recorrido cargado en Replay); sale en PDF, CSV o Markdown con el detalle evento a evento.
 - Reporte PDF: desde la barra de herramientas se genera un reporte operativo completo (resumen, KPIs, unidades, avisos del dia, rutas, sin senal, geocercas y zonas de riesgo) paginado en A4 y listo para guardar como PDF.
 - Chat IA: consultas libres a la IA (solo si la IA esta habilitada con API key). La IA ve el estado de la flota.
 - Riesgo: se ve dentro de Zonas (segmentado).
 
 REGLAS DE ALERTA (se activan y ajustan en Ajustes > Reglas):
-Sin senal (5 min), Reconecto, GPS perdido en marcha (15 min), Detenido (30 min, fuera de bases), Zona no prevista (20 min), Geocercas (entra/sale, inmediato), Destino (progreso >=95% o <400 m), Desconexion (25 min), Velocidad (110 km/h), Desvio de ruta (250 m durante 5 min), Giro en U (130 grados durante 3 min), Retorno/viaje cancelado (25% o 400 m), Perdio senal en zona de riesgo (critico), Aproximacion a zona de riesgo (predictiva, opcional), Detenida en geocerca (opcional).
+Sin senal (5 min), Reconecto, GPS perdido en marcha (15 min), Detenido (30 min, fuera de bases), Zona no prevista (20 min), Geocercas (entra/sale, inmediato), Destino (progreso >=95% o <400 m), Desconexion (25 min), Velocidad (110 km/h), Desvio de ruta (250 m durante 5 min), Giro en U (130 grados durante 3 min), Retorno/viaje cancelado (25% o 400 m), Perdio senal en zona de riesgo (critico), Aproximacion a zona de riesgo (predictiva, opcional), Detenida en geocerca (opcional), Alerta de geocercas (por geocerca: gravedad + disparador paso/detenida/motor apagado, en Zonas > Geocercas).
 Cooldown por unidad+regla (45 min por defecto). Se puede limitar a un horario. Las zonas tipo base (patio, cedis, taller) no generan "detenido".
 
 AJUSTES (engranaje del panel):
@@ -1841,6 +1842,11 @@ ta.value = '';
             titulo: alert.titulo, detalle: alert.detalle || '',
             eco: alert.eco || '', clave: alert.clave, ts: ahora,
             lat: aLat, lon: aLon,
+            // v6.15: geocerca del aviso. Sin esto el reporte por geocerca
+            // tendria que sacarla del texto; con el campo la agregacion es
+            // exacta (y los avisos antiguos, sin campo, se siguen leyendo
+            // del texto en el reporte).
+            zona: alert.zona || '',
             // Se guarda la CLAVE del icono (no el SVG) para no inflar el
             // sessionStorage. Se resuelve al pintar con UIS[...].
             icono: alert.icono || alert.sev || 'info'

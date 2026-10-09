@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '6.6.0-dev.27';
+    const VER = '6.19.2';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -581,7 +581,10 @@
         riesgo: 'rondo.api.riesgo',
         // v5.15: municipios de OpenStreetMap (poligonos/bbox) para la
         // tolerancia de desvio y como parada tipo "municipio".
-        municipios: 'rondo.api.municipios'
+        municipios: 'rondo.api.municipios',
+        // v6.13: copia persistente de las geocercas creadas en Rondo. Solo
+        // se escribe si el operador marca "Recordar en este navegador".
+        geolocal: 'rondo.api.geolocal'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
@@ -604,7 +607,13 @@
         // v6.0.11: ultima pestana del panel usada (para retomarla al recargar).
         tab: 'rondo.api.s.tab',
         // v6.0.11: ultima seccion de Ajustes abierta (General, Reglas, IA...).
-        cfgTab: 'rondo.api.s.cfgTab'
+        cfgTab: 'rondo.api.s.cfgTab',
+        // v6.12: estado de la alerta de geocercas de las unidades que NO son
+        // vigiladas (flota completa). Las vigiladas lo llevan en su memo
+        // normal, dentro de R.geoAlerta.
+        geoAlerta: 'rondo.api.s.geoalerta',
+        // v6.13: geocercas dibujadas en Rondo (fuera de la plataforma).
+        geolocal: 'rondo.api.s.geolocal'
     });
 
     /* ============================ VALORES POR DEFECTO ============================ */
@@ -755,6 +764,31 @@
         // avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila
         // en el borde de una geocerca.
         geocercaEstableSeg: 15,
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). Cada
+        // geocerca lleva SU PROPIA alerta, editable desde la campana de su
+        // tarjeta: a quien vigila, con que gravedad y si dispara al pasar,
+        // al detenerse o al detenerse con el motor apagado.
+        // porZona: nombre de la geocerca -> ajustes; reglas.geoAlerta es el
+        // interruptor maestro de todas ellas.
+        geoAlertas: Object.freeze({
+            // nombre de la geocerca -> { on, alcance, severidad, disparo,
+            // minMin, motorMin, estableSeg, cooldownS }
+            porZona: Object.freeze({}),
+            // 'vigiladas' (solo la lista vigilada) | 'todas'
+            alcance: 'vigiladas',
+            // 'bajo' | 'medio' | 'alto' | 'critico'
+            severidad: 'medio',
+            // 'paso' (solo pasar) | 'detenida' | 'motor' (parada + motor apagado)
+            disparo: 'paso',
+            // minutos parada dentro para el disparador 'detenida'
+            minMin: 2,
+            // minutos sin reportar posicion = motor apagado (estimado)
+            motorMin: 15,
+            // histeresis: segundos dentro antes de dar la entrada
+            estableSeg: 20,
+            // 0 = usar el cooldown global de alertas
+            cooldownS: 0
+        }),
         // v5.15: tolerancia de desvio por municipio. Mientras la unidad siga
         // DENTRO de un municipio por el que pasa su ruta (o una de sus
         // paradas), el desvio no se marca hasta desvioMunicipioM metros.
@@ -762,6 +796,10 @@
         desvioMunicipioM: 3000,
         // v5.15: radio (m) para considerar "llego" a cada parada del plan.
         paradaLlegadaM: 150,
+        // v6.13: las geocercas dibujadas en Rondo viven en la sesion. Con
+        // esto a true se guardan tambien en localStorage y sobreviven a
+        // cerrar el navegador (si no, se pierden al recargar).
+        geolocalRecordar: false,
         // v5.14.7: checkbox del chat IA. false = solo vigiladas (default,
         // mas enfocado), true = toda la flota que reporta en la plataforma.
         chatTodaFlota: false,
@@ -792,7 +830,11 @@
             // lleva >= X min detenida DENTRO de una geocerca (no fuera,
             // no en movimiento), avisa con el texto literal pedido:
             // "La unidad X se encuentra detenida en la geocerca Y".
-            geocercaDetenido: true
+            geocercaDetenido: true,
+            // v6.12: alerta de geocercas (seleccion de geocercas + gravedad
+            // + disparador). Se configura en la pestana Zonas > Geocercas;
+            // aqui solo el interruptor, igual que las demas reglas.
+            geoAlerta: false
         })
     });
 
@@ -878,6 +920,9 @@
         const out = Object.assign({}, base, over);
         if (base.reglas) out.reglas = Object.assign({}, base.reglas, (over && over.reglas) || {});
         if (base.horario) out.horario = Object.assign({}, base.horario, (over && over.horario) || {});
+        // v6.12: geoAlertas tambien es un grupo de opciones: si el cfg guardado
+        // trae solo algunas claves, las que faltan deben venir de DEFAULTS.
+        if (base.geoAlertas) out.geoAlertas = Object.assign({}, base.geoAlertas, (over && over.geoAlertas) || {});
         return out;
     }
 
@@ -1005,7 +1050,23 @@
         // v5.15: filtros/orden de las geocercas (pestana Zonas > Geocercas).
         geoFiltro: '',
         geoOrden: 'nombre',
-        geoRol: 'todas'
+        geoRol: 'todas',
+        // v6.12: "Alerta de geocercas" (pestana Zonas > Geocercas). Cada
+        // geocerca se configura por separado desde la campana de su tarjeta.
+        // Estado por unidad (clave -> zona + minutos) de quien esta dentro de
+        // una geocerca vigilada. Solo memoria: se recalcula cada refresco.
+        geoAlertaVivo: {},
+        // Episodios (histeresis) de las unidades NO vigiladas cuando el
+        // alcance es "toda la flota"; las vigiladas van en APP.memo.
+        memoGeoAlerta: readSessionObject(SS.geoAlerta, {}, null),
+        // v6.13: geocercas creadas en Rondo (fuera de la plataforma). Se
+        // leen del storage pero NO se meten en APP.zonas todavia: se fusionan
+        // al terminar de cargar las de la plataforma, para que el refresco
+        // siga pudiendo consultar la API si APP.zonas esta vacia.
+        zonasLocales: readArray(SS.geolocal, []),
+        // v6.14: que se previsualiza en el mapa del editor de geocercas:
+        // 'todas' | 'app' | 'plat' (solo la plataforma).
+        geoPreview: 'todas'
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);

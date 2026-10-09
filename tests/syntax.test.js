@@ -96,5 +96,31 @@ if (defaultsBlock) {
     if (pendiente === 0) ok('DEFAULTS: no se detectaron comas faltantes', true);
 }
 
+// 7. El CSS se arma por concatenacion de cientos de trozos. Dos errores
+// tipicos lo rompen entero (el navegador descarta todo lo que venga despues
+// del fallo, asi que la interfaz se ve sin estilos sin dar ningun aviso):
+//   - un '+' suelto en su propia linea convierte el trozo siguiente en NaN;
+//   - una llave sin cerrar desbalancea la hoja.
+const iCss = src.indexOf('const css =');
+const jCss = src.indexOf('const style = makeEl');
+if (iCss >= 0 && jCss > iCss) {
+    let css = '';
+    try {
+        const expr = src.slice(iCss + 'const css ='.length, jCss).trim().replace(/;\s*$/, '');
+        css = new Function('return (' + expr + ')')();
+    } catch (e) { css = ''; }
+    ok('CSS: se construye sin NaN ni undefined',
+        css.length > 10000 && !/\bNaN\b/.test(css) && css.indexOf('undefined') < 0,
+        'longitud=' + css.length);
+    let depth = 0;
+    let minimo = 0;
+    for (let i = 0; i < css.length; i++) {
+        const c = css[i];
+        if (c === '{') depth++;
+        else if (c === '}') { depth--; if (depth < minimo) minimo = depth; }
+    }
+    ok('CSS: llaves balanceadas', depth === 0 && minimo === 0, 'balance=' + depth + ' minimo=' + minimo);
+}
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

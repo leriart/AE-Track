@@ -6,7 +6,7 @@ Referencia generada automaticamente desde `DEFAULTS`
 usa `APP.config`, asi que puedes consultarla desde la consola del navegador
 (`APP.config.pollMs`).
 
-Total: **103 claves**.
+Total: **105 claves**.
 
 | Clave | Tipo | Valor por defecto | Descripcion |
 | --- | --- | --- | --- |
@@ -107,9 +107,11 @@ Total: **103 claves**.
 | `riesgoPredictCooldownS` | number | `300` | segundos entre alertas repetidas por misma unidad+zona |
 | `geocercaDetenidoMin` | number | `5` | minutos detenido dentro de geocerca para alertar |
 | `geocercaEstableSeg` | number | `15` | v6.0.2: segundos que debe sostenerse un cambio de geocerca antes de avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila en el borde de una geocerca. |
+| `geoAlertas` | object | `{ porZona: Object.freeze({}), alcance: 'vigiladas', severidad: 'medio', disparo: 'paso', minMin: 2, motorMin: 1… }` | al detenerse o al detenerse con el motor apagado. porZona: nombre de la geocerca -> ajustes; reglas.geoAlerta es el interruptor maestro de todas ellas. |
 | `desvioMunicipio` | boolean | `true` | v5.15: tolerancia de desvio por municipio. Mientras la unidad siga DENTRO de un municipio por el que pasa su ruta (o una de sus paradas), el desvio no se marca hasta desvioMunicipioM metros. |
 | `desvioMunicipioM` | number | `3000` |  |
 | `paradaLlegadaM` | number | `150` | v5.15: radio (m) para considerar "llego" a cada parada del plan. |
+| `geolocalRecordar` | boolean | `false` | v6.13: las geocercas dibujadas en Rondo viven en la sesion. Con esto a true se guardan tambien en localStorage y sobreviven a cerrar el navegador (si no, se pierden al recargar). |
 | `chatTodaFlota` | boolean | `false` | v5.14.7: checkbox del chat IA. false = solo vigiladas (default, mas enfocado), true = toda la flota que reporta en la plataforma. |
 | `horario` | object | `{ on: true, desde: '06:00', hasta: '23:00' }` |  |
 | `reglas` | object | `{ offline: true, gpsPerdido: true, detenido: true, zona: true, geocerca: true, destino: false, desconexion: tru… }` |  |

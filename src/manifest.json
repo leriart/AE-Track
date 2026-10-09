@@ -207,6 +207,18 @@
     {
       "file": "51-diagnostico.js",
       "chunk": "ui"
+    },
+    {
+      "file": "52-alerta-de-geocercas.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "53-geocercas-de-la-app.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "54-informe-geocerca.js",
+      "chunk": "ui"
     }
   ]
 }

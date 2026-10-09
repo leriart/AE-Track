@@ -872,15 +872,16 @@ PANEL (barra lateral a pantalla completa, lado y ancho configurables):
 - Unidades: tarjetas por unidad con estado, placa, velocidad, ultimo reporte, zona y ruta. Clic para abrir su ventana; clic derecho para mas opciones (planear ruta, geocerca, odometro, limite de velocidad, silenciar). Barra "Ordenar".
 - Avisos: historial de alertas filtrable por severidad (criticas/altas/medias/bajas). Boton IA por aviso, boton "Analizar lote" (resumen + ranking) y "Avisos CSV".
 - Rutas: seguimiento de rutas planificadas (progreso, distancia al trazado, ETA). Se planea con clic derecho sobre una unidad. En el editor multipunto la ventana se mueve (arrastra el encabezado) y se redimensiona (esquina inferior derecha); las sugerencias se recorren con flechas arriba/abajo y Enter; las paradas se reordenan arrastrando el asa. La ruta se puede ver en un mini-mapa propio con tiles de OpenStreetMap.
-- Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:).
+- Zonas: dos vistas: Geocercas de la plataforma (unidades dentro) y Zonas de riesgo. Aqui se cargan las zonas de riesgo (URL/archivo/data:). Con el boton Nueva se dibujan geocercas propias en un mapa (no estan en la plataforma, se marcan APP y se importan/exportan). Cada geocerca tiene ademas su propia alerta (campana en su tarjeta): a quien vigila (solo la lista vigilada o toda la flota), la gravedad y que lo dispara (solo paso / se detuvo / motor apagado).
 - Caravana: unidades cerca de una unidad lider (distancia firmada, sentido contrario, no vigiladas).
 - Replay: reproduce el recorrido de una unidad en un dia o rango de horas, con buscador de unidades, mini-mapa (tiles de OpenStreetMap), perfil de velocidad, resumen, lista de paradas (hora, duracion y lugar resuelto con OpenStreetMap: comercio, direccion o municipio) y eventos (geocercas, excesos, desvios). Exporta el recorrido a GeoJSON, las paradas a CSV y un reporte PDF del recorrido. Solo lectura.
+- Informe por geocerca: boton de pin junto al Reporte PDF y tambien desde Reproducir recorrido (donde ya toma las fechas del recorrido). Elige si quieres cruces por unidad o paradas dentro, la geocerca, el rango de dias, si mira toda la flota o solo las seleccionadas, y los datos (rastreo de las trazas, avisos de la sesion, viajes analizados o el recorrido cargado en Replay); sale en PDF, CSV o Markdown con el detalle evento a evento.
 - Reporte PDF: desde la barra de herramientas se genera un reporte operativo completo (resumen, KPIs, unidades, avisos del dia, rutas, sin senal, geocercas y zonas de riesgo) paginado en A4 y listo para guardar como PDF.
 - Chat IA: consultas libres a la IA (solo si la IA esta habilitada con API key). La IA ve el estado de la flota.
 - Riesgo: se ve dentro de Zonas (segmentado).
 
 REGLAS DE ALERTA (se activan y ajustan en Ajustes > Reglas):
-Sin senal (5 min), Reconecto, GPS perdido en marcha (15 min), Detenido (30 min, fuera de bases), Zona no prevista (20 min), Geocercas (entra/sale, inmediato), Destino (progreso >=95% o <400 m), Desconexion (25 min), Velocidad (110 km/h), Desvio de ruta (250 m durante 5 min), Giro en U (130 grados durante 3 min), Retorno/viaje cancelado (25% o 400 m), Perdio senal en zona de riesgo (critico), Aproximacion a zona de riesgo (predictiva, opcional), Detenida en geocerca (opcional).
+Sin senal (5 min), Reconecto, GPS perdido en marcha (15 min), Detenido (30 min, fuera de bases), Zona no prevista (20 min), Geocercas (entra/sale, inmediato), Destino (progreso >=95% o <400 m), Desconexion (25 min), Velocidad (110 km/h), Desvio de ruta (250 m durante 5 min), Giro en U (130 grados durante 3 min), Retorno/viaje cancelado (25% o 400 m), Perdio senal en zona de riesgo (critico), Aproximacion a zona de riesgo (predictiva, opcional), Detenida en geocerca (opcional), Alerta de geocercas (por geocerca: gravedad + disparador paso/detenida/motor apagado, en Zonas > Geocercas).
 Cooldown por unidad+regla (45 min por defecto). Se puede limitar a un horario. Las zonas tipo base (patio, cedis, taller) no generan "detenido".
 
 AJUSTES (engranaje del panel):
@@ -1842,6 +1843,11 @@ ta.value = '';
             titulo: alert.titulo, detalle: alert.detalle || '',
             eco: alert.eco || '', clave: alert.clave, ts: ahora,
             lat: aLat, lon: aLon,
+            // v6.15: geocerca del aviso. Sin esto el reporte por geocerca
+            // tendria que sacarla del texto; con el campo la agregacion es
+            // exacta (y los avisos antiguos, sin campo, se siguen leyendo
+            // del texto en el reporte).
+            zona: alert.zona || '',
             // Se guarda la CLAVE del icono (no el SVG) para no inflar el
             // sessionStorage. Se resuelve al pintar con UIS[...].
             icono: alert.icono || alert.sev || 'info'
@@ -3135,13 +3141,13 @@ ta.value = '';
         R.zonaPend = null;
         if (actual) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: actual,
                 titulo: 'ENTRO \u00b7 ' + etq,
                 detalle: 'entro a ' + actual + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
         } else if (previo) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: previo,
                 titulo: 'SALIO \u00b7 ' + etq,
                 detalle: 'salio de ' + previo + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
@@ -3170,7 +3176,7 @@ ta.value = '';
         if (R.geoDetenidoAlerta) return;
         R.geoDetenidoAlerta = true;
         pushAlert({
-            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco,
+            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco, zona: R.zona,
             titulo: 'DETENIDA EN GEOCERCA \u00b7 ' + etq,
             detalle: 'La unidad ' + etq + ' se encuentra detenida en la geocerca ' + R.zona +
                 ' \u00b7 hace ' + Math.round(m) + ' min',
@@ -3474,6 +3480,11 @@ ta.value = '';
             //   este episodio; rearma cuando sale o se mueve.
             geoDetenidoDesde: prev ? prev.geoDetenidoDesde : null,
             geoDetenidoAlerta: prev ? !!prev.geoDetenidoAlerta : false,
+            // v6.12: alerta de geocercas (pestana Zonas > Geocercas).
+            // Episodios por geocerca vigilada: dentro confirmado, minutos
+            // de parada y si el motor ya esta apagado. Los reinicia
+            // geoAlertaReinicia cuando el operador cambia la seleccion.
+            geoAlerta: (prev && prev.geoAlerta && typeof prev.geoAlerta === 'object') ? prev.geoAlerta : null,
             // v5.15: seguimiento de paradas del plan multipunto.
             llegadas: (prev && Array.isArray(prev.llegadas)) ? prev.llegadas : null,
             paradaActual: prev ? (prev.paradaActual || 0) : 0,
@@ -3506,6 +3517,10 @@ ta.value = '';
             // "La unidad X se encuentra detenida en la geocerca Y").
             // Una sola vez por episodio.
             reglaGeocercaDetenido(st, R, info, etq);
+            // v6.12: alerta dirigida por geocerca. Solo mira las geocercas
+            // que el operador selecciono en Zonas > Geocercas y avisa segun
+            // el disparador elegido (paso / detenida / motor apagado).
+            reglaGeoAlerta(u, info, st, R);
             await reglaDestino(st, R, info, etq);
             await reglaDesconexion(st, R, info, etq);
             await reglaRiesgoSinSenal(st, prev, R, info, etq);
@@ -3534,6 +3549,10 @@ ta.value = '';
             APP.unidades = unidades;
             if (APP.config.loadZones && APP.zonas.length === 0) {
                 try { APP.zonas = await fetchZones(); } catch (_) { APP.zonas = []; }
+                // v6.13: las geocercas dibujadas en Rondo se anaden DESPUES
+                // de consultar la plataforma (si se metieran antes, APP.zonas
+                // dejaria de estar vacia y las nativas no se cargarian).
+                try { glocSincroniza(); } catch (e) { if (APP.unlocked) console.warn('[Rondo] gloc', e && e.message); }
             }
             APP.consultaRestante = 40;
             // Presupuesto de geocodificacion inversa por refresco: los avisos
@@ -3570,6 +3589,10 @@ ta.value = '';
             }
             APP.memo = nuevas;
             writeSession(SS.memo, APP.memo);
+            // v6.12: la alerta de geocercas puede vigilar TODA la flota. El
+            // bucle anterior solo recorre las unidades vigiladas, asi que
+            // las demas se evaluan aqui solo para esa regla.
+            geoAlertaFlota(unidades, nuevas);
 
             APP.kpi.online = APP.kpi.online.concat(onNow).slice(-180);
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);
@@ -3615,7 +3638,7 @@ ta.value = '';
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
     function esUIPropia(el) {
         try {
-            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog,#rondo-plan-modal,#rondo-carga-modal'));
+            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog,#rondo-plan-modal,#rondo-carga-modal,#rondo-geocerca-modal'));
         } catch (_) { return false; }
     }
     function findSearchInput() {
@@ -4876,30 +4899,50 @@ ta.value = '';
     //   - Se amplia el mapeo: acento, hover, bordes, superficies y texto,
     //     tomando la paleta segun el tema activo (oscuro/claro) para que la
     //     pagina quede coherente con el panel.
+    //
+    // v6.19.3: se completa el mapeo del skin (p. ej. skytracking3). Antes
+    //   solo se pintaban las pestañas y los botones; quedaban sin tocar los
+    //   paneles (superior/izquierdo/inferior), las barras horizontales, el
+    //   acordeon, los dialogos de ayuda/asistente y el login. Ademas cada
+    //   variable cae ahora en la categoria que le corresponde por SU
+    //   significado (fondo de acento, hover, texto sobre acento, superficie,
+    //   texto o borde) en vez de asumir acento para todo. Esto corrige de
+    //   paso un bug: `execute-button-border-color` y los bordes del login
+    //   son colores sueltos, no el shorthand `1px solid`, y antes se
+    //   pintaban como "1px solid <color>" (invalido).
+    // Fondos que toman el acento tal cual.
     const RX_PAGINA_VARS = [
-        'horizontal-bar-item-active-background', 'horizontal-bar-item-hover-background',
-        'tabs-item-text-color', 'tabs-selected-item-text-color', 'tabs-item-hover-text-color',
-        'tabs-selected-item-line-color', 'tab-color-active',
-        'button-color', 'button-hover-color',
-        'execute-button-background', 'execute-button-hover-background', 'execute-button-hover-border-color',
-        'accordion-active-background',
-        'list-table-tab_button-active-background', 'list-table-tab_button-color', 'list-table-tab_button-hover-color',
+        'horizontal-bar-item-active-background',
+        'tabs-item-text-color', 'tabs-selected-item-text-color', 'tabs-selected-item-line-color',
+        'button-color',
+        'execute-button-background', 'accordion-active-background',
+        'list-table-tab_button-active-background', 'list-table-tab_button-color',
         'wizard-dialog-header-background', 'help-window-header-background',
-        'monitoring-login-primary-button-color', 'monitoring-login-primary-button-hover-color',
-        'monitoring-login-secondary-button-color', 'monitoring-login-forgot-pwd-color',
-        'monitoring-login-forgot-pwd-hover-color'
+        'monitoring-login-primary-button-color', 'monitoring-login-secondary-button-color',
+        'monitoring-login-forgot-pwd-color',
+        'execute-button-border-color', 'monitoring-login-primary-button-border-color',
+        'monitoring-login-secondary-button-border-color'
     ];
-    // Variables de hover: acento oscurecido.
+    // Variantes de hover/activo: acento oscurecido.
     const RX_PAGINA_HOVER = [
-        'horizontal-bar-item-hover-background', 'tabs-item-hover-text-color',
-        'button-hover-color', 'execute-button-hover-background', 'execute-button-hover-border-color',
-        'list-table-tab_button-hover-color', 'monitoring-login-primary-button-hover-color',
+        'horizontal-bar-item-hover-background', 'tabs-item-hover-text-color', 'tab-color-active',
+        'button-hover-color',
+        'execute-button-hover-background', 'execute-button-hover-border-color',
+        'list-table-tab_button-hover-color',
+        'monitoring-login-primary-button-hover-color', 'monitoring-login-primary-button-hover-border-color',
+        'monitoring-login-secondary-button-hover-color', 'monitoring-login-secondary-button-hover-border-color',
         'monitoring-login-forgot-pwd-hover-color'
     ];
-    // Las variables que representan un borde necesitan "1px solid <color>".
-    const RX_PAGINA_BORDES = ['execute-button-border-color', 'list-table-tab_button-active-border',
-        'monitoring-login-primary-button-border-color', 'monitoring-login-primary-button-hover-border-color',
-        'monitoring-login-secondary-button-border-color'];
+    // Texto sobre un fondo de acento (barra activa, botones, acordeon).
+    const RX_PAGINA_SOBRE_ACENTO = [
+        'horizontal-bar-item-active-color', 'horizontal-bar-item-hover-color',
+        'execute-button-color', 'execute-button-hover-color',
+        'accordion-active-color', 'list-table-tab_button-active-color'
+    ];
+    // Unicas variables que no llevan caja propia.
+    const RX_PAGINA_TRANSPARENTES = ['horizontal-bar-item-background'];
+    // La unica variable que espera el shorthand completo "1px solid <color>".
+    const RX_PAGINA_BORDES = ['list-table-tab_button-active-border'];
     // Superficies: variable del skin -> clave de la paleta de Rondo.
     const RX_PAGINA_SUPERFICIES = {
         'background': 'bg', 'background-content': 'bg', 'background-body': 'bg', 'background-app': 'bg',
@@ -4908,13 +4951,20 @@ ta.value = '';
         'background-modal': 'soft', 'background-menu': 'soft', 'background-dropdown': 'soft',
         'background-input': 'bg', 'background-tooltip': 'strong',
         'background-item-hover': 'strong', 'background-table-header': 'strong',
-        'background-table-row': 'soft', 'background-table-row-hover': 'strong'
+        'background-table-row': 'soft', 'background-table-row-hover': 'strong',
+        'panel-top-background': 'soft', 'panel-left-background': 'soft', 'panel-left-sub-background': 'bg',
+        'panel-bottom-background': 'soft',
+        'help-window-background': 'soft', 'wizard-dialog-background': 'soft',
+        'accordion-normal-background': 'soft', 'accordion-hover-background': 'strong',
+        'monitoring-login-form-bg-color': 'soft'
     };
     // Texto: variable del skin -> clave de la paleta de Rondo.
     const RX_PAGINA_TEXTOS = {
         'text-color': 'fg', 'text-color-primary': 'fg', 'text-color-strong': 'fg',
         'text-color-secondary': 'dim', 'text-color-dim': 'dim', 'text-color-muted': 'mute',
-        'text-color-disabled': 'mute', 'input-text-color': 'fg', 'input-placeholder-color': 'mute'
+        'text-color-disabled': 'mute', 'input-text-color': 'fg', 'input-placeholder-color': 'mute',
+        'panel-bottom-color': 'fg', 'horizontal-bar-item-color': 'fg',
+        'accordion-normal-color': 'fg', 'accordion-hover-color': 'fg'
     };
     // Bordes genericos.
     const RX_PAGINA_BORDES_GEN = {
@@ -4942,11 +4992,11 @@ ta.value = '';
             border: '#3a4252'
         };
         const decl = [];
-        RX_PAGINA_VARS.forEach((v) => {
-            if (RX_PAGINA_BORDES.indexOf(v) >= 0) decl.push('  --' + v + ':1px solid ' + acc + ' !important;');
-            else if (RX_PAGINA_HOVER.indexOf(v) >= 0) decl.push('  --' + v + ':' + accD + ' !important;');
-            else decl.push('  --' + v + ':' + acc + ' !important;');
-        });
+        RX_PAGINA_VARS.forEach((v) => decl.push('  --' + v + ':' + acc + ' !important;'));
+        RX_PAGINA_HOVER.forEach((v) => decl.push('  --' + v + ':' + accD + ' !important;'));
+        RX_PAGINA_SOBRE_ACENTO.forEach((v) => decl.push('  --' + v + ':#ffffff !important;'));
+        RX_PAGINA_TRANSPARENTES.forEach((v) => decl.push('  --' + v + ':transparent !important;'));
+        RX_PAGINA_BORDES.forEach((v) => decl.push('  --' + v + ':1px solid ' + acc + ' !important;'));
         Object.keys(RX_PAGINA_SUPERFICIES).forEach((v) => {
             decl.push('  --' + v + ':' + P[RX_PAGINA_SUPERFICIES[v]] + ' !important;');
         });

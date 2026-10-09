@@ -65,6 +65,20 @@
             },
             zonas: (APP.zonas || []).length,
             zonasDiag: APP.zonasDiag || null,
+            // v6.12: estado de la alerta dirigida por geocerca (util para
+            // saber por que no avisa: geocercas elegidas, alcance, etc).
+            geoAlerta: (function () {
+                try {
+                    const mapa = geoAlertaPorZona();
+                    const nom = Object.keys(mapa);
+                    return {
+                        activa: !!(APP.config.reglas && APP.config.reglas.geoAlerta),
+                        geocercas: nom.length,
+                        flotas: nom.filter((k) => mapa[k].alcance === 'todas').length,
+                        dentro: Object.keys(APP.geoAlertaVivo || {}).length
+                    };
+                } catch (_) { return null; }
+            })(),
             unidades: (APP.unidades || []).length,
             historial: (APP.historial || []).length,
             ia: {
@@ -101,6 +115,12 @@
         L.push('IA hoy: ' + (d.ia.hoy.llamadas || 0) + (d.ia.limite ? '/' + d.ia.limite : '') +
             ' (errores ' + (d.ia.hoy.errores || 0) + ') \u00b7 TTL cache ' + Math.round((+d.ia.cacheTTL || 0) / 60) + ' min');
         L.push('Reglas: ' + (d.stats.erroresReglas || 0) + ' error(es) \u00b7 A* tope: ' + (d.stats.astarCap || 0));
+        if (d.geoAlerta) {
+            const g = d.geoAlerta;
+            L.push('Alerta de geocercas: ' + (g.activa ? 'activa' : 'apagada') +
+                ' \u00b7 ' + g.geocercas + ' geocerca(s) \u00b7 ' + g.flotas + ' en toda la flota' +
+                ' \u00b7 ' + g.dentro + ' dentro ahora');
+        }
         L.push('Fallos de escritura: local ' + d.fallos.json + ' \u00b7 sesion ' + d.fallos.session);
         if (d.zonasDiag) {
             try { L.push('Geocercas: ' + JSON.stringify(d.zonasDiag).slice(0, 300)); } catch (_) { /* noop */ }

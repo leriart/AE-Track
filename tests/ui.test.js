@@ -519,6 +519,262 @@ ok('evaluateUnit llama reglaGeocercaDetenido', /reglaGeocerca\(st, prev, R, info
 ok('reglaGeocercaDetenido usa severity bajo', /regla: 'geocercaDetenido', sev: 'bajo'/.test(src));
 ok('reglaGeocercaDetenido respeta geocercaDetenidoMin >= 1', /Math\.max\(1, \+APP\.config\.geocercaDetenidoMin/.test(src));
 
+// v6.12: "Alerta de geocercas" (seleccion + alcance + gravedad + disparador).
+ok('default reglas.geoAlerta apagado', /geoAlerta:\s*false/.test(src));
+ok('default geoAlertas con los 3 disparadores', /disparo: 'paso'/.test(src) && /minMin: 2/.test(src) && /motorMin: 15/.test(src));
+ok('fragmento con el nucleo de la alerta', src.includes('/* ====================== ALERTA DE GEOCERCAS: NUCLEO'));
+ok('fragmento con la UI de la alerta', src.includes('/* ====================== ALERTA DE GEOCERCAS: UI'));
+ok('catalogo con los 3 disparadores',
+    /GEO_ALERTA_DISPAROS = Object\.freeze\(\{[\s\S]{0,400}motor:/.test(src) &&
+    /paso: \{ txt: 'Solo pas/.test(src) && /detenida: \{ txt: 'Se detuvo'/.test(src));
+ok('catalogo de etiquetas para el reloj en vivo',
+    /GEO_ALERTA_ETIQUETAS = Object\.freeze\(\{[\s\S]{0,120}MOTOR/.test(src));
+ok('la maquina de estados es por geocerca', /function geoAlertaEvalua\(e, o\)/.test(src) &&
+    /const cfg = geoAlertaLimpia\(o\.cfg\)/.test(src));
+ok('franja resumen de la alerta en la pestana Zonas', /id="rondo-geo-ga-resumen"/.test(src));
+ok('KPI "En alerta" en las geocercas', /id="rondo-geo-kpi-alerta"/.test(src));
+// v6.12: cada geocerca con su propio menu (dialogo propio).
+ok('menu de alerta por geocerca', /function abrirGeoAlerta\(nombre\)/.test(src));
+ok('el menu edita una copia y guarda al aceptar', /const pend = geoAlertaLimpia\(cfg0\)/.test(src) &&
+    /onOk: \(\) => \{[\s\S]{0,200}geoAlertaGuardaZona\(titulo, limpio\)/.test(src));
+ok('menu: selector de unidades vigiladas / toda la flota',
+    /data-gz="alcance"', 'vigiladas'/.test(src) && /data-gz="alcance"', 'todas'/.test(src));
+ok('menu: selector de gravedad con 4 niveles',
+    /data-gz="sev"', s\.k/.test(src) && /\{ k: 'critico', txt:/.test(src) && /\{ k: 'bajo', txt:/.test(src));
+ok('menu: selector de disparador con motor',
+    /data-gz="disparo"', k, GEO_ALERTA_DISPAROS\[k\]\.txt/.test(src) && /motor: \{ txt: 'Motor apagado'/.test(src));
+ok('menu: los 4 parametros numericos',
+    /data-gz-num="minMin"/.test(src) && /data-gz-num="motorMin"/.test(src) &&
+    /data-gz-num="estableSeg"/.test(src) && /data-gz-num="cooldownS"/.test(src));
+ok('menu: vista previa del aviso', /function geoAlertaPreview\(/.test(src) && /As\\u00ed se ver\\u00e1 el aviso/.test(src));
+ok('menu: interruptor propio de la geocerca', /data-gz="on"/.test(src));
+ok('franja: pills con zona y gravedad', /data-ga="cfg" data-zona="/.test(src) && /rondo-ga-pill sev-/.test(src));
+ok('franja: acciones en cascada', /data-ga="todas"/.test(src) && /data-ga="ninguna"/.test(src));
+ok('campana en la tarjeta de geocerca', /class="mini rondo-geo-ga/.test(src));
+ok('tarjeta: badge con la gravedad y el disparador', /class="rondo-geo-gabadge sev-/.test(src) &&
+    /GEO_ALERTA_ETIQUETAS\[gac\.disparo\]/.test(src));
+ok('tarjeta: la tarjeta vigilada se marca por gravedad', /alerta-sel sev-/.test(src));
+ok('la campana abre el menu de ESA geocerca',
+    /classList\.contains\('rondo-geo-ga'\)\) \{ abrirGeoAlerta\(nombre\); return; \}/.test(src));
+ok('config por geocerca en un mapa por nombre', /porZona: Object\.freeze\(\{\}\)/.test(src));
+ok('guardar una geocerca enciende el interruptor general',
+    /APP\.config\.reglas\.geoAlerta = true/.test(src));
+ok('toggle c-r-geo-alerta existe', /checkRow\('c-r-geo-alerta'/.test(src));
+ok('precarga UI de c-r-geo-alerta', /cRGeoAl\.checked = !!APP\.config\.reglas\.geoAlerta/.test(src));
+ok('save handler recoge reglas.geoAlerta', /cf\.reglas\.geoAlerta = !!rGeoAlEl\.checked/.test(src));
+ok('R inicializa geoAlerta', /geoAlerta: \(prev && prev\.geoAlerta && typeof prev\.geoAlerta === 'object'\)/.test(src));
+ok('evaluateUnit llama reglaGeoAlerta', /reglaGeocercaDetenido\(st, R, info, etq\);[\s\S]{0,600}reglaGeoAlerta\(u, info, st, R\)/.test(src));
+ok('la alerta avisa con la regla y la gravedad de ESA geocerca',
+    /regla: 'geoAlerta', sev: cfg\.severidad/.test(src));
+ok('la regla itera las geocercas vigiladas', /const zonas = geoAlertaZonasDe\(mapa\)/.test(src));
+ok('cada geocerca guarda su propio estado', /nuevo\[nom\] = res\.e/.test(src));
+ok('la flota se recorre si alguna geocerca pide toda la flota',
+    /Object\.keys\(mapa\)\.some\(\(k\) => mapa\[k\]\.alcance === 'todas'\)/.test(src));
+ok('refresh recorre la flota para la alerta', /geoAlertaFlota\(unidades, nuevas\)/.test(src));
+ok('estado de la flota en sessionStorage', /geoAlerta: 'rondo\.api\.s\.geoalerta'/.test(src));
+ok('deepMerge fusiona geoAlertas', /if \(base\.geoAlertas\)/.test(src));
+ok('estado vivo en vivo para la UI', /geoAlertaVivo: \{\}/.test(src));
+ok('paintGeocercas repinta la alerta', /function paintGeocercas\(\) \{\s*paintGeoAlertas\(\);/.test(src));
+ok('bindings delegan los eventos de la alerta', /bindGeoAlerta\(\);/.test(src));
+ok('manual lista la alerta de geocercas', /Alerta de geocercas \|/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+// v6.13: geocercas creadas en Rondo (fuera de la plataforma).
+ok('fragmento con el nucleo de las geocercas de la app', src.includes('/* ====================== GEOCERCAS DE LA APP: NUCLEO'));
+ok('fragmento con el mapa de dibujo', src.includes('/* ====================== GEOCERCAS DE LA APP: MAPA'));
+ok('fragmento con la UI de las geocercas de la app', src.includes('/* ====================== GEOCERCAS DE LA APP: UI'));
+ok('boton "Nueva" geocerca en la barra', /id="rondo-geo-nueva"/.test(src));
+ok('el boton abre el editor con mapa', /geoNueva\.addEventListener\('click', \(\) => abrirGeocercaApp\(\)\)/.test(src));
+ok('la tarjeta de la app tiene boton de editar', /class="mini rondo-geo-edit"/.test(src));
+ok('la tarjeta de la app se marca con APP', /class="rondo-geo-app"/.test(src) && /\.rondo-geo-card \.rondo-geo-app\{/.test(src));
+ok('filtro por origen de la geocerca', /<option value="app">De la app<\/option>/.test(src) &&
+    /rol === 'app'\) lista = lista\.filter\(\(x\) => glocEsApp\(x\.z\)\)/.test(src));
+ok('la lista muestra nombre y tamano de cada geocerca',
+    /function glocListaHTML\(\)/.test(src) && /glocTextoTam\(z\)/.test(src));
+ok('modal con mapa y paneles', /\{ id: 'rondo-geocerca-modal' \}/.test(src) &&
+    /id="rondo-gg-mapa"/.test(src) && /class="gg-lados"/.test(src));
+ok('el mapa usa los tiles de OpenStreetMap', /rxMiniMapa\(cont, \{ lineas: \[\], marcas: \[\] \}\)/.test(src));
+ok('capas propias para dibujar encima del mapa', /rondo-gg-capa/.test(src) && /rondo-gg-ctx/.test(src));
+ok('inversa del mapa (px -> lat/lon)', /function glocPxALatLon\(/.test(src) &&
+    /Math\.atan\(Math\.sinh\(Math\.PI \* \(1 - 2 \* \(oy \/ n\)\)\)\)/.test(src));
+ok('modos de dibujo: marco, circulo y linea',
+    /glocModoChip\(e, 'poligono', 'Marco'/.test(src) && /glocModoChip\(e, 'circulo'/.test(src) && /glocModoChip\(e, 'linea'/.test(src));
+ok('entrada de coordenadas en el editor', /id="gg-lat"/.test(src) && /id="gg-lon"/.test(src));
+ok('exportar e importar', /id="gg-exporta"/.test(src) && /id="gg-importa"/.test(src) && /id="gg-file"/.test(src));
+ok('recordar en este navegador', /id="gg-recordar"/.test(src) && /geolocalRecordar/.test(src));
+ok('las geocercas de la app se guardan en la sesion',
+    /geolocal: 'rondo\.api\.s\.geolocal'/.test(src) && /geolocal: 'rondo\.api\.geolocal'/.test(src) &&
+    /readArray\(SS\.geolocal, \[\]\)/.test(src));
+ok('se fusionan con APP.zonas reasignando (indice espacial)', /APP\.zonas = nativas\.concat\(validas\)/.test(src) &&
+    /APP\.zonasIndex = null/.test(src));
+ok('no se pierden al recargar las de la plataforma', /glocSincroniza\(\);[\s\S]{0,40}paintGeocercas\(\)/.test(src));
+ok('refresh fusiona tras cargar la plataforma', /glocSincroniza\(\); \/\/ no/i.test(src) || /try \{ glocSincroniza\(\); \}/.test(src));
+ok('Escape cierra el editor de geocercas', /glocM\.classList\.contains\('abierto'\)\) \{ cerrarGeocercaApp\(\); return; \}/.test(src));
+ok('esUIPropia incluye el modal nuevo', /#rondo-geocerca-modal/.test(src));
+ok('el modal define sus propios estilos de boton (mini)',
+    /#rondo-geocerca-modal \.mini\{display:inline-flex/.test(src) &&
+    /#rondo-geocerca-modal \.mini:hover\{background:var\(--rondo-bg\)/.test(src));
+ok('el modal lleva chapa flotante sobre el mapa', /id="gg-hud"/.test(src) &&
+    /function glocPintarHud\(\)/.test(src) && /gg-hud-m/.test(src));
+ok('el modal respeta el tema claro en la chapa',
+    /body\[data-rondo-theme='claro'\] #rondo-geocerca-modal \.gg-hud-m/.test(src));
+ok('el modal tiene tira de cifras del borrador', /function glocStatsHTML\(\)/.test(src) && /class="gg-stat/.test(src));
+ok('el modal marca la lista con su icono de forma', /glocListaHTML\(\)/.test(src) &&
+    /gg-ptag"><span class="rondo-usym">' \+ UIS\[ico\]/.test(src));
+ok('el GeoJSON de geocercas marca el origen', /origen: org\.id === 'app' \? 'rondo-app' : 'plataforma'/.test(src));
+ok('el GeoJSON marca donde se guarda', /guardado: \(org\.id === 'app'\) \? \(org\.guardado \? 'navegador' : 'sesion'\) : null/.test(src));
+ok('el CSV de geocercas tiene columnas de origen y guardado',
+    /\['nombre', 'origen', 'guardado', 'rol', 'area_km2', 'lat', 'lon', 'unidades'\]/.test(src));
+// v6.14: previsualizacion en el mapa, import con seleccion y origen visible.
+ok('helper de origen de cada geocerca', /function glocOrigen\(z, cfg\)/.test(src) &&
+    /id: 'plat', txt: 'Plataforma'/.test(src) && /id: 'app', txt: 'App'/.test(src));
+ok('el mapa previsualiza las geocercas de la plataforma',
+    /function glocPintarPlataforma\(\)/.test(src) && /rondo-gg-plat/.test(src) &&
+    /De la plataforma/.test(src));
+ok('el mapa previsualiza las de la app', /function glocPintarContexto\(\)/.test(src) &&
+    /de la app/.test(src));
+ok('anillo compartido para las tres capas', /function glocAnillo\(inst, z, segmentos\)/.test(src) &&
+    /_zonaPuntos\(z\)/.test(src));
+ok('leyenda del mapa con filtro de origen', /function glocLeyendaHTML\(\)/.test(src) &&
+    /data-gg="preview"/.test(src) && /gg-ley-b/.test(src));
+ok('el filtro de previsualizacion cambia de capa',
+    /APP\.geoPreview = \(lp\.dataset\.v === 'app' \|\| lp\.dataset\.v === 'plat'\)/.test(src) &&
+    /glocPintarPlataforma\(\);/.test(src));
+ok('tope de geocercas dibujadas por capa', /const GEOLOC_MAX_PREVIEW = 140/.test(src));
+ok('la lista del editor filtra por origen', /function glocFiltroChip\(val, txt, n\)/.test(src) &&
+    /data-gg="lista"/.test(src) && /Las de la plataforma no se editan aqui/.test(src));
+ok('cada fila muestra su origen', /gg-origen o-' \+ org\.id/.test(src) && /org\.corto/.test(src));
+ok('marca las recordadas en el navegador', /class="gg-lock"/.test(src) && /Se recuerda al cerrar el navegador/.test(src));
+ok('importar con seleccion de geocercas', /function glocAbrirImport\(txt\)/.test(src) &&
+    /data-gg-imp="/.test(src) && /Elige cuales importar/.test(src));
+ok('importar una sola de un archivo con varias', /function glocImporta\(txt, modo, sel\)/.test(src) &&
+    /Array\.isArray\(sel\) && sel\.length/.test(src));
+ok('el dialogo de import avisa de nombres repetidos', /gg-imp-dup/.test(src) &&
+    /Ya existe una con ese nombre/.test(src));
+ok('el clic en la leyenda no anade puntos al mapa',
+    /ev\.target\.closest\('.gg-leyenda,.gg-hud'\)\) return/.test(src));
+ok('la lista muestra nombre y tamano de cada geocerca', /function glocListaHTML\(\)/.test(src) &&
+    /glocTextoTam\(z\)/.test(src));
+ok('RONDO_DOC menciona las geocercas de la app', /Geocercas de la app/.test(src));
+ok('manual lista las geocercas de la app', /Geocercas de la app/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
+// v6.15: informe por geocerca (cruces y paradas dentro).
+ok('boton de informe por geocerca en la barra', /id="rondo-informe-geo"/.test(src) &&
+    /Informe por geocerca: cruces/.test(src));
+ok('el boton abre el dialogo del informe', /informeGeo\.addEventListener\('click', abrirInformeGeocerca\)/.test(src));
+ok('dialogo: informe de cruces o de paradas',
+    /'data-rgi="modo"', 'cruces', 'Cruces por unidad'/.test(src) &&
+    /'data-rgi="modo"', 'paradas', 'Paradas dentro'/.test(src) &&
+    /'data-rgi="rango"', 'hoy'/.test(src));
+ok('dialogo: rango de dias con dos fechas',
+    /id="rgi-desde"/.test(src) && /id="rgi-hasta"/.test(src) && /class="rgi-rango"/.test(src));
+ok('dialogo: atajos de periodo en dias',
+    /'data-rgi="rango"', '15d', '15 d\\u00edas'/.test(src) && /'data-rgi="rango"', '30d', '30 d\\u00edas'/.test(src));
+ok('rango escrito manda sobre el atajo', /RX_GEO\.desde \? rxGeoInfFechaMs\(RX_GEO\.desde, false\) : rxGeoInfDesde\(RX_GEO\.rango\)/.test(src) &&
+    /RX_GEO\.hasta \? rxGeoInfFechaMs\(RX_GEO\.hasta, true\) : 0/.test(src));
+ok('al elegir un atajo se borra el rango escrito',
+    /RX_GEO\.desde = '';\s*\n\s*RX_GEO\.hasta = '';/.test(src));
+ok('el filtro de fechas incluye el dia final', /if \(hastaMs && e\.ts && e\.ts > hastaMs\) continue;/.test(src));
+ok('corige el rango si desde es posterior a hasta', /RX_GEO\.desde > RX_GEO\.hasta/.test(src));
+ok('boton de informe en la pestana Replay', /id="rondo-replay-informe-geo"/.test(src) &&
+    /Informe geocerca<\/button>/.test(src));
+ok('desde Replay el informe toma las fechas del recorrido',
+    /informeGeo\.addEventListener\('click', \(\) => abrirInformeGeocerca\('replay'\)\)/.test(src) &&
+    /RX_GEO\.desde = String\(r\.fecha\)/.test(src));
+ok('dialogo: selector de geocerca', /id="rgi-zona"/.test(src) && /Todas las geocercas/.test(src));
+ok('dialogo: tres fuentes de datos', /data-rgi="fuente"/.test(src) &&
+    /bitacora: 'Avisos'/.test(src) && /viajes: 'Viajes analizados'/.test(src));
+ok('dialogo: cabecera con la geocerca, su ficha y su origen',
+    /class="rgi-hero/.test(src) && /rgi-herot/.test(src) && /rgi-ori o-/.test(src));
+ok('dialogo: mapa con la geocerca y las unidades', /id="rgi-mapa"/.test(src) &&
+    /function rxGeoInfPintaMapa\(d\)/.test(src) && /rxMiniMapa\(cont, \{ lineas: lineas, marcas: marcas \}\)/.test(src));
+ok('dialogo: barra de progreso', /id="rgi-carga"/.test(src) && /id="rgi-barra"/.test(src) &&
+    /function rxGeoInfYield\(\)/.test(src) && /setProg\(6,/.test(src));
+ok('dialogo: barra de acciones con PDF principal', /class="rgi-btn primary" id="rgi-pdf"/.test(src) &&
+    /class="rgi-btn" id="rgi-csv"/.test(src) && /class="rgi-btn" id="rgi-md"/.test(src));
+ok('dialogo: un solo boton de cierre', /cancel: false,\s*\n\s*html: '<div class="rgi-tool">/.test(src));
+ok('informe: busca por la geocerca elegida (O(1) por punto)', /function rxGeoInfZonaSel\(\)/.test(src) &&
+    /const z = rxGeoInfZonaSel\(\);\s*\n\s*return \(z && rxGeoInfEnZona/.test(src));
+ok('informe: usa el indice espacial cuando no hay geocerca elegida',
+    /typeof zoneAt === 'function' && APP\.config && APP\.config\.loadZones\) return zoneAt\(lat, lon\)/.test(src));
+ok('informe: la cache se puede reiniciar', /function rxGeoInfCacheReset\(\)/.test(src));
+ok('dialogo: buscador de geocercas', /id="rgi-buscar"/.test(src) && /function rxGeoInfSelect\(\)/.test(src) &&
+    /rgi-busca-n/.test(src) && /Buscar geocerca/.test(src));
+ok('dialogo: el buscador no pierde el foco al escribir',
+    /if \(!t \|\| t\.id !== 'rgi-buscar'\) return;/.test(src) &&
+    /sel\.innerHTML = info\.html/.test(src));
+ok('dialogo: chips de quienes estan dentro ahora', /class="rgi-dentro"/.test(src) && /rgi-dchip/.test(src));
+ok('informe: el PDF se maqueta como el del recorrido (secciones numeradas y mapa)',
+    /'<h2 class="seccion">' \+ esc\(num/.test(src) && /function rxGeoInfAnillo\(z\)/.test(src) &&
+    /rxMiniMapaHTML\(\{ lineas: lineas, marcas: marcas \}, 680, 300\)/.test(src) &&
+    /class="mapa-leyenda"/.test(src));
+ok('informe: portada con el mismo patron que el recorrido',
+    /rxInfCabecera\('Rondo', 'Informe por geocerca', meta\)/.test(src) &&
+    /Documento de solo lectura/.test(src));
+ok('dialogo: vista previa y salidas PDF/CSV/Markdown',
+    /class="rgi-prev"/.test(src) && /id="rgi-pdf"/.test(src) && /id="rgi-csv"/.test(src) && /id="rgi-md"/.test(src));
+ok('informe: el PDF se imprime con el maquetado del informe general',
+    /rxImprimirHTML\(rxGeoInfHTML\(rxGeoInfReune\(\)\)\)/.test(src) &&
+    /rxInfEstilo\(\)/.test(src) && /rxInfCabecera\(/.test(src) && /rxInfPie\(\)/.test(src));
+ok('informe: el CSV sale evento a evento', /rxCsvCelda/.test(src) &&
+    /'Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Minutos', 'Detalle', 'Lat', 'Lon', 'Fuente'/.test(src));
+ok('informe: el markdown con tablas', /rxReplayDescargar\(rxGeoInfNombreArchivo\(d, '\.md'\)/.test(src));
+ok('informe: el nombre del archivo lleva geocerca, modo y fecha',
+    /function rxGeoInfNombreArchivo\(d, ext\)/.test(src) &&
+    /\? 'paradas_' : 'cruces_'/.test(src) && /rondo_geocerca_/.test(src));
+ok('informe: lee los cuatro origenes de datos', /function rxGeoInfDeBitacora\(/.test(src) &&
+    /function rxGeoInfDeViajes\(/.test(src) && /function rxGeoInfDeReplay\(/.test(src) &&
+    /function rxGeoInfDeRastreo\(/.test(src));
+ok('rastreo: recorre las trazas de todas las unidades',
+    /for \(const k of Object\.keys\(trazas\)\)/.test(src) && /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: k, fuente: 'rastreo' \}\)/.test(src));
+ok('rastreo: paradas de la traza con umbral propio',
+    /const RX_GEO_PARADA_MIN = 2/.test(src) && /const minSeg = Math\.max\(30, RX_GEO_PARADA_MIN \* 60\)/.test(src));
+ok('rastreo: quien esta dentro ahora',
+    /tipo: 'dentro', eco: info\.eco \|\| clave/.test(src) && /Dentro ahora/.test(src));
+ok('rastreo: alcance todas / seleccionadas',
+    /function rxGeoInfSoloSel\(\)/.test(src) && /function rxGeoInfEnSeleccion\(clave, info\)/.test(src) &&
+    /data-rgi="unidades"', 'todas'/.test(src) && /data-rgi="unidades"', 'sel'/.test(src));
+ok('rastreo: la cache separa todas de seleccionadas',
+    /const key = f \+ \(\(f === 'rastreo'\) \? ':' \+ \(RX_GEO\.unidades \|\| 'todas'\) : ''\)/.test(src));
+ok('historial: escaneo con una peticion por unidad, cancelable y con tope',
+    /function rxGeoInfEscanear\(onProg, token\)/.test(src) &&
+    /messages\/load_interval/.test(src) && /RX_GEO_HIST_MAX_U/.test(src) &&
+    /token\.cancelado/.test(src));
+ok('historial: deteccion sobre mensajes crudos (pura)',
+    /function rxGeoInfDeMensajes\(msgs, eco, fuente\)/.test(src) &&
+    /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: eco, fuente: fuente \|\| 'historial' \}\)/.test(src));
+ok('historial: es la fuente por defecto con geocerca y flota',
+    /if \(RX_GEO\.zona && hay\.some\(\(h\) => h\.k === 'historial'\)\) \{\s*\n\s*RX_GEO\.fuente = 'historial';/.test(src));
+ok('sin geocerca se prefiere una fuente local (instantanea)',
+    /const local = hay\.find\(\(h\) => h\.k !== 'historial'\)/.test(src));
+ok('historial: el dialogo lo escanea con la barra por unidad',
+    /if \(RX_GEO\.fuente === 'historial'\)/.test(src) && /'Consultando ' \+ hechas/.test(src));
+ok('dialogo: boton "Generar reporte" (no recarga en cada cambio)',
+    /id="rgi-generar"/.test(src) && /Generar reporte/.test(src) &&
+    /RX_GEO\.listo = false;\s*\n\s*pinta\(false\);/.test(src));
+ok('dialogo: al abrir no barre la flota (espera al boton con Plataforma)',
+    /pinta\(RX_GEO\.fuente !== 'historial'\)/.test(src));
+ok('historial: peticiones en paralelo con pool',
+    /const RX_GEO_HIST_CONC = 6/.test(src) && /const obrero = async \(\) =>/.test(src) &&
+    /await Promise\.all\(tareas\)/.test(src));
+ok('historial: prioriza vigiladas y reporte reciente',
+    /lista\.sort\(\(a, b\) => \{/.test(src) && /return \(b\.t \|\| 0\) - \(a\.t \|\| 0\)/.test(src));
+ok('dialogo: aviso para buscar en la plataforma si no hay eventos',
+    /class="rgi-aviso"/.test(src) && /Buscar en la plataforma/.test(src));
+ok('informe: el PDF lista a los que estan dentro ahora',
+    /'Dentro ahora \(' \+ filasDentro\.length/.test(src) && /filasDentro/.test(src));
+ok('informe: la tabla marca "dentro ahora"', /const dn = \(c\.dentro \? 'Si' : '-'\)/.test(src));
+ok('informe: agrega cruces y paradas por unidad', /function rxGeoInfAgrupa\(eventos, modo\)/.test(src) &&
+    /entradas: filas\.reduce/.test(src) && /min: filas\.reduce/.test(src));
+ok('informe: resumen por geocerca para la segunda tabla',
+    /function rxGeoInfPorZona\(eventos, orden\)/.test(src));
+ok('informe: sin datos avisa en vez de abrir en vacio',
+    /adviceWarn\('Sin datos de geocercas'/.test(src));
+ok('avisos: la bitacora guarda la geocerca del aviso',
+    /zona: alert\.zona \|\| ''/.test(src));
+ok('reglas: pasan su geocerca al aviso',
+    /eco: info\.eco, zona: actual/.test(src) && /eco: info\.eco, zona: previo/.test(src) &&
+    /eco: info\.eco, zona: R\.zona/.test(src) && /eco: info\.eco, zona: nom/.test(src));
+ok('RONDO_DOC menciona la alerta por geocerca', /Alerta de geocercas \(por geocerca/.test(src) &&
+    /Cada geocerca tiene ademas su propia alerta/.test(src));
+
 // v5.14.6: fix de los dos botones Cerrar + nueva tab Chat IA.
 ok('abrirDialogo auto-hide cancel si mismo texto que OK', /cancelText !== okText/.test(src));
 ok('abrirDialogo conserva cancel si cancel === false', /opts\.cancel !== false && cancelText !== okText/.test(src));
@@ -595,7 +851,9 @@ ok('limpiarChat usa renderChatLog', /limpiarChat[\s\S]{0,300}renderChatLog\(\)/.
 
 // v5.14.8: manual como contexto de la IA + contexto de flota enriquecido.
 ok('RONDO_DOC existe como String.raw', /const RONDO_DOC = String\.raw/.test(src));
-ok('RONDO_DOC describe el panel y las tabs', /RONDO_DOC[\s\S]{0,4000}Dashboard[\s\S]{0,2000}Unidades[\s\S]{0,2000}Chat IA/.test(src));
+// La ventana es amplia a proposito: la guia crece con cada feature nueva y
+// el objetivo es que no se rompa porañadir un bullet.
+ok('RONDO_DOC describe el panel y las tabs', /RONDO_DOC[\s\S]{0,4000}Dashboard[\s\S]{0,2600}Unidades[\s\S]{0,2600}Chat IA/.test(src));
 ok('RONDO_DOC lista reglas', /Sin senal \(5 min\)[\s\S]{0,2000}Detenida en geocerca/.test(src));
 ok('RONDO_DOC lista ajustes', /AJUSTES \(engranaje[\s\S]{0,2000}IA: habilitar/.test(src));
 // El rango de atajos debe coincidir con las pestañas reales (43-teclas.js),

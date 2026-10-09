@@ -144,12 +144,21 @@ En la parte superior del panel:
   medias, bajas). Cada aviso indica la regla que lo genero y la hora.
 - **Rutas**: seguimiento de las rutas planificadas: progreso, distancia al
   trazado, ETA y acciones para recalcular, exportar o eliminar.
-- **Zonas**: fusiona las **geocercas de la plataforma** y las **zonas de
-  riesgo**. En el lado de **Geocercas** hay KPIs (total, con unidades, base,
+- **Zonas**: fusiona las **geocercas de la plataforma**, las **dibujadas en
+  Rondo** y las **zonas de riesgo**. En el lado de **Geocercas** hay KPIs (total, con unidades, base,
   carga), buscador, orden (nombre/unidades/area), filtro por rol, area y centro
   por zona, boton **Recargar** y exportacion a **CSV / GeoJSON**; desde cada
   tarjeta puedes **usar la geocerca como parada** de una unidad o copiar su
-  nombre y centro. El lado de **Riesgo** mantiene la dona con la distribucion
+  nombre y centro. El boton **Nueva** abre un editor con mapa para **dibujar
+  una geocerca dentro de Rondo** (no esta en la plataforma, se marca APP y se
+  guarda en la sesion; se puede importar/exportar). Debajo de los KPIs esta la
+  franja **Alerta de geocercas**: cada geocerca se vigila por separado desde la **campana** de
+  su tarjeta (a quien, gravedad y si dispara al pasar, al detenerse o al
+  detenerse con el motor apagado), con su barra lateral, su pastilla de
+  disparador y una pastilla de resumen con acciones en cascada. Ver
+  [Alerta de geocercas](#alerta-de-geocercas) y las dibujadas en Rondo en
+  [Geocercas de la app](#geocercas-de-la-app). El lado de **Riesgo**
+  mantiene la dona con la distribucion
   por nivel, el histograma de scores, KPIs clicables Total/Alto/Medio/Bajo,
   busqueda libre, chips de nivel, 6 criterios de orden, vista agrupada o plana,
   drag-and-drop de CSV/JSON y exportacion a CSV / GeoJSON / portapapeles. Ver
@@ -280,6 +289,7 @@ Cada regla se activa o desactiva y tiene sus umbrales en Ajustes. Por defecto:
 | Perdio senal en zona de riesgo | Transicion online -> offline y ultima posicion valida cae dentro de una zona de riesgo cargada | depende de los parametros de la zona (radio y score) |
 | Aproximacion a zona de riesgo | Una unidad en movimiento se acerca a una zona de alto score | score >= 4, buffer 500 m (apagada por defecto) |
 | Detenida en geocerca | Lleva parada dentro de una geocerca | 5 min (una sola vez por episodio) |
+| Alerta de geocercas | Pasa, se detiene o apaga el motor dentro de una geocerca vigilada | por geocerca, desde su campana (pestana Zonas > Geocercas) |
 
 Notas:
 
@@ -402,6 +412,259 @@ La unidad <eco> se encuentra detenida en la geocerca <nombre> · hace N min
 
 Se rearma cuando la unidad se mueve o sale de la geocerca. Ajusta el
 minimo en Ajustes > Reglas > "Min detenido para alertar (min)".
+
+### Geocercas de la app
+
+Geocercas que **no estan en la plataforma**: las dibujas tu en Rondo sobre un
+mapa de OpenStreetMap, con coordenadas escritas o a mano. Funcionan como las
+de la plataforma (cuentan en los KPIs, se pueden usar como parada, admiten su
+propia alerta, salen en el informe y la IA las ve), pero se guardan en **esta
+pestana** y se distinguen con la etiqueta **APP** en la tarjeta.
+
+Para abrir el editor: boton **Nueva** en la barra de geocercas (o el lapiz de
+una tarjeta marcada APP para editarla).
+
+#### Como se dibuja
+
+- **Marco** (poligono): clic en cada esquina; doble clic (o **Cerrar figura**)
+  para cerrarlo. Minimo 3 puntos.
+- **Círculo**: un clic pone el centro y otro el radio (tambien puedes escribir
+  el radio en metros). Al mover el raton se ve el circulo en vivo.
+- **Línea** (corredor): clic en cada punto del trazo, doble clic para
+  terminar. El ancho en metros se escribe a mano.
+
+En los tres modos el mapa se mueve arrastrando y se acerca con la rueda. Se
+puede **escribir el centro** (lat, lon) y pulsar **Ir** para saltar ahi, lo
+que es practico si copias las coordenadas de un WhatsApp o de otro sistema.
+
+El panel lateral indica en todo momento cuantos puntos lleva la figura, su
+superficie y su perimetro (en el circulo, el radio y la circunferencia). Sobre
+el mapa hay una chapa con el modo activo y como se dibuja. **Guardar
+geocerca** pide el nombre (si choca con otra geocerca le anade "2"), lo deja
+creado y lo pinta en el mapa y en la tarjeta.
+
+#### Previsualizacion en el mapa
+
+Mientras dibujas, el mapa muestra las geocercas que ya existen, cada una con
+su color segun de donde venga:
+
+| En el mapa | De donde es |
+| --- | --- |
+| Trazo ambar relleno | La figura que estas trazando (borrador) |
+| Gris discontinuo | Geocercas creadas en Rondo (las tuyas) |
+| Azul discontinuo | Geocercas de la plataforma (Wialon / AE-Track) |
+
+Abajo a la izquierda hay una **leyenda** con el numero de cada tipo y tres
+botones para filtrar: **Todas**, **App** o **Plataforma**. Sirve para no
+tapar el mapa si la instalacion tiene muchas geocercas (se dibujan como
+mucho 140 de cada tipo; el resto queda fuera sin que nada falle).
+
+En la lista del editor hay otro selector, **Mias (app) / Plataforma /
+Todas**, con el numero de cada grupo. Al elegir *Plataforma* se explica que
+esos no se editan aqui: se crean en AE-Track o Wialon.
+
+#### Donde se guardan
+
+Por defecto solo en la **sesion** de esa pestana: al recargar se pierden. Marca
+**Recordar en este navegador** para que se guarden tambien en el navegador y
+sobrevivan a cerrarlo (en Ajustes > General se ve el interruptor y en el
+editor se puede cambiar en cualquier momento).
+
+#### Importar y exportar
+
+- **Exportar**: descarga un `.json` de Rondo (formato propio, con los puntos)
+  o un **GeoJSON** abrible en cualquier visor de mapas.
+- **Copiar**: pone el mismo JSON en el portapapeles para pegarlo en un chat.
+- **Importar**: acepta el JSON de Rondo, un GeoJSON (`Polygon`, `MultiPolygon`,
+  `LineString`, `Point` con radio en `radio_m`) o un array de geocercas.
+
+Al importar se abre una ventana con **una casilla por geocerca**: puedes
+traer **una sola** de un archivo que trae diez, o marcarlas todas con el
+boton *Todas*. Cada fila dice de que tipo es, cuanto mide y si **ya existe una
+con ese nombre** (se guardara con otro); los nombres que ya existan se
+renombran solos y cada importacion genera ids nuevos, asi que **importar dos
+veces el mismo archivo no pisa nada**. Si el archivo trae algo inservible, se
+avisa de cuantas se descartaron.
+
+#### De donde viene cada geocerca
+
+El origen se muestra siempre, para que una geocerca dibujada en Rondo no se
+confunda con una de la plataforma:
+
+| Etiqueta | Significado |
+| --- | --- |
+| **APP** (ambar) | Creada en Rondo. Con el tick verde al lado significa que ademas se recuerda al cerrar el navegador |
+| **PLAT** (azul) | Geocerca de la plataforma (Wialon / AE-Track), solo lectura desde Rondo |
+
+Aparece en la tarjeta de la lista de geocercas, en cada fila del editor, en
+la leyenda del mapa y en las exportaciones: el **CSV** suma las columnas
+`origen` y `guardado` (`navegador` o `sesion`) y el **GeoJSON** los campos
+`origen` y `guardado`.
+
+### Informe por geocerca
+
+Aparte del reporte general y del de cada unidad (Replay), hay un **informe
+por geocerca** que responde dos preguntas: *¿quien cruzo esta geocerca?* y
+*¿quien se paro aqui?*. Se abre desde dos sitios:
+
+- el boton **Informe geocerca** de la pestana **Reproducir recorrido** (a la
+  derecha de *Paradas CSV*), que al abrirse toma **las fechas del recorrido
+  que estas viendo**; y
+- el boton de pin de la barra, junto al de Reporte PDF.
+
+Sale en **PDF**, **CSV** o **Markdown**.
+
+#### Que eliges
+
+| Opcion | Valores |
+| --- | --- |
+| Informe de | **Cruces por unidad** / **Paradas dentro** |
+| Geocerca | Cualquiera de las cargadas (las de la plataforma y las de Rondo), o *Todas las geocercas*. Tiene **buscador** y muestra cuantos eventos tiene cada una |
+| Periodo | Hoy / 24 h / 7 dias / 15 dias / 30 dias / Todo |
+| Rango de dias | Dos fechas (desde – hasta), ambas incluidas |
+| Unidades | **Toda la flota** (todas las que Rondo rastrea) o **solo las seleccionadas** (la lista vigilada) |
+| Datos | De donde salen los eventos (ver abajo) |
+| **Generar reporte** | Los cambios de opciones **no recargan solos**: el informe se calcula al pulsar el boton (y se recalcula solo al abrir, salvo con la fuente *Plataforma*) |
+
+El **rango de dias** escrito a mano manda sobre los atajos: si eliges un
+periodo corto se borra el rango, y si inviertes las fechas (desde posterior a
+hasta) se corrigen solas. El resumen siempre dice el periodo exacto
+("08/10/2026 – hoy").
+
+La ventana incluye un **mapa** con la geocerca marcada y las unidades
+encontradas (verde = dentro ahora, naranja = parada, rojo = motor apagado),
+una **barra de progreso** mientras reune y agrupa los datos, seis KPIs
+(unidades, cruces, entradas, paradas, minutos quietos, paradas con motor
+apagado) y una **vista previa** de las primeras 12 unidades. Abajo, la barra
+de descarga: **PDF** (reporte listo para imprimir), **CSV** (evento a evento)
+y **Markdown**.
+
+Para que sea agil con muchas geocercas, el informe solo comprueba la
+geocerca elegida en cada punto (y usa el indice espacial de Rondo cuando
+pides *Todas*), en vez de recorrer toda la lista punto por punto. El
+historial de la plataforma se pide en paralelo y solo cuando pulsas
+**Generar reporte**.
+
+Sobre el alcance de los datos: la fuente **Rastreo** trabaja con la traza de
+la sesion (un punto cada vez que la unidad avanza 20 m, con un maximo por
+unidad), asi que es la que mejor responde a "quien anduvo por aqui" sin
+depender de que las reglas hayan avisado. La fuente **Avisos** solo guarda lo
+ocurrido en esta pestana (hasta 300 avisos), asi que un rango de muchos dias
+saldra vacio salvo que uses el rastreo, tengas viajes analizados o cargues un
+recorrido.
+
+Con **Unidades** eliges si el informe mira **toda la flota** que Rondo rastrea
+o solo **las seleccionadas** (la lista vigilada).
+
+#### De donde salen los datos
+
+| Fuente | Que trae | Cuando hay datos |
+| --- | --- | --- |
+| **Plataforma** (por defecto al elegir geocerca) | Consulta el **historial de toda la flota** en la plataforma (el mismo endpoint que Reproducir recorrido) y saca quien entro, quien salio y quien se paro dentro, aunque no estuviera vigilada ni hubiera avisado. Las peticiones van **en paralelo** (6 a la vez), priorizando las unidades vigiladas y las que reportaron mas reciente, y la barra muestra el avance y cuantos eventos van saliendo | Siempre que la flota reporte en el rango elegido |
+| **Rastreo** | Recorre la traza que Rondo ya guarda de cada unidad y saca **todas** las entradas, salidas y paradas dentro de la geocerca, haya avisado o no. Ademas lista quien esta **dentro ahora** | En cuanto hay unidades rastreando (traza activa), sin depender de reglas |
+| **Avisos** | Entradas y salidas (regla *Geocercas*), paradas dentro (regla *Detenida en geocerca*) y las de tu alerta de geocercas, con **hora exacta** | Siempre que haya avisos con geocerca en esta sesion |
+| **Viajes analizados** | Paradas con duracion y cruces deducidos de la traza | Tras analizar el viaje de esa unidad |
+| **Recorrido cargado** | Eventos con hora y paradas con motor y lugar | Con un recorrido cargado en la pestana Replay |
+
+El selector solo muestra las fuentes que tienen datos y pone cuantas lleva
+cada una. Si no hay ninguna, avisa de que actives la regla *Geocercas*,
+analices un viaje o cargues un recorrido.
+
+#### Que contiene
+
+- **Mapa**: la geocerca dibujada sobre OpenStreetMap con las unidades que
+  estuvieron o estan dentro (verde = dentro ahora, naranja = parada, rojo =
+  motor apagado) y su leyenda. Si eliges *Todas las geocercas*, entran las
+  que tienen datos.
+- **Ficha de la geocerca**: tipo, origen, superficie y centro.
+- **Dentro de la geocerca ahora**: con el rastreo, la lista de unidades que
+  estan dentro en este momento, con su velocidad, si reportan y sus
+  coordenadas.
+- **Geocerca**: nombre, tipo, origen (plataforma o creada en Rondo),
+  superficie y centro.
+- **Unidades**: cruces, entradas, salidas, paradas, minutos quieto y, en modo
+  paradas, minutos con el motor apagado; mas la primera y la ultima vez.
+- **Geocercas**: cuantos cruces y paradas lleva cada una y cuantos cambios
+  vio (o cuantas unidades distintas).
+- **Detalle de eventos**: hora, tipo, geocerca, unidad, detalle y
+  coordenadas (el PDF muestra 200; el CSV los lleva todos).
+
+#### Detalle por unidad
+
+El CSV trae **dos tablas**: la de unidades y la de **eventos uno a uno**
+(fecha, evento, geocerca, unidad, minutos, detalle, lat, lon y fuente). Es la
+que se analiza para saber quien entro, cuanto tiempo se quedo y con el motor
+apagado o no.
+
+Nota: el conteo se apoya en el campo `zona` de cada aviso, asi que es exacto.
+Los avisos anteriores a esta version lo sacan del texto del mensaje.
+
+### Alerta de geocercas
+
+Vigilancia **dirigida y por geocerca**: cada geocerca de la plataforma
+tiene **su propia alerta**, con su campana en la tarjeta. En lugar de una
+configuracion global aplicada a un grupo, eliges geocerca por geocerca a
+quien vigilar, con que gravedad y que debe pasar dentro para avisar.
+
+Apagada por defecto (interruptor general en *Ajustes > Reglas*), y sin
+geocercas marcadas no ocurre nada aunque el interruptor este encendido.
+
+#### Como configurarla
+
+Pulsa la **campana** de cualquier tarjeta de la lista de geocercas (pestana
+**Zonas > Geocercas**). Se abre un menu con:
+
+| Opcion | Valores | Que hace |
+| --- | --- | --- |
+| Interruptor | Sin vigilar / Vigilada | Enciende o apaga la alerta de **esta** geocerca |
+| Unidades | Solo vigiladas / Toda la flota | A quien se le aplica |
+| Gravedad | Baja, Media, Alta, Critica | Severidad del aviso (color, voz, pitido y filtro de la pestana Avisos) |
+| Dispara cuando | Solo paso / Se detuvo / Motor apagado | Que hecho dentro de la geocerca dispara el aviso |
+| Parada (min) | 1 a 240 | Minutos quieta dentro para *Se detuvo* |
+| Motor (min) | 1 a 720 | Minutos quieta sin reportar posicion para *Motor apagado* |
+| Confirmar (s) | 0 a 600 | Histeresis: segundos que debe sostenerse la entrada |
+| Cooldown (s) | 0 a 86400 | Espera entre avisos de la misma unidad en esa geocerca (0 = la global) |
+
+El menu edita en memoria: cambios y **Guardar** aplican, **Cancelar** no toca
+nada. Abajo aparece la **vista previa** del aviso tal y como saldria en la
+pestana Avisos, para elegir el disparador viendo el texto y no la etiqueta.
+
+#### Indicadores en la pestana
+
+- **Franja resumen** (bajo los KPIs): cuantas geocercas de las cargadas
+  estan vigiladas, si hay unidades cumpliendo ahora, una **pastilla por
+  geocerca** (punto de color = gravedad, texto = ambito, gravedad y
+  disparador, contador = unidades dentro que cumplen) y dos acciones en
+  cascada: **Todas** (vigilar todas con los ajustes por defecto) y
+  **Ninguna**. Cada pastilla abre el menu de su geocerca.
+- **KPI En alerta**: unidades que cumplen ahora mismo alguna de las
+  geocercas vigiladas.
+- **Tarjeta**: barra lateral del color de la gravedad y pastilla
+  `DENTRO` / `PARADA` / `MOTOR` con el disparador elegido.
+
+#### Como funciona
+
+- **Solo paso**: avisa una vez cuando la unidad entra y se mantiene dentro
+  el tiempo de *Confirmar*. Para dar la salida se exige estar fuera con un
+  margen de 40 m, asi el borde no genera parpadeo.
+- **Se detuvo**: avisa una sola vez cuando la unidad lleva *Parada* minutos
+  quieta dentro. Si se mueve o sale, se rearma.
+- **Motor apagado**: avisa cuando la unidad lleva ese tiempo quieta sin
+  reportar posicion dentro. Si la unidad publica un sensor de motor o
+  ignicion como campo personalizado se usa ese dato; si no, Rondo lo estima
+  por el corte de reporte (dejo de emitir), igual que hace el Replay, y el
+  aviso lo indica como *motor apagado estimado*.
+- Sin senal no se confirma entrada ni parada (la posicion puede ser vieja);
+  el disparador de motor si trabaja con la posicion congelada.
+- Al activar la alerta no dispara avisos retroactivos: si la unidad ya
+  estaba dentro, Rondo toma esa situacion como punto de partida.
+- Cada geocerca avisa **una vez por episodio**. El aviso sale con la regla
+  `geoAlerta` y se puede silenciar por unidad como cualquier otro.
+
+El estado en vivo se muestra en la franja y se recalcula en cada refresco.
+Si eliges *Toda la flota* en alguna geocerca, Rondo recorre tambien las
+unidades que no vigilas (solo para esta regla: no les afecta el resto de
+alertas, el odometro ni las trazas).
 
 ## Chat con la IA
 

@@ -1001,13 +1001,13 @@
         R.zonaPend = null;
         if (actual) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: actual,
                 titulo: 'ENTRO \u00b7 ' + etq,
                 detalle: 'entro a ' + actual + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
         } else if (previo) {
             pushAlert({
-                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco,
+                regla: 'geocerca', sev: 'bajo', clave: info.clave, eco: info.eco, zona: previo,
                 titulo: 'SALIO \u00b7 ' + etq,
                 detalle: 'salio de ' + previo + ' \u00b7 ' + Math.round(st.vel) + ' km/h'
             });
@@ -1036,7 +1036,7 @@
         if (R.geoDetenidoAlerta) return;
         R.geoDetenidoAlerta = true;
         pushAlert({
-            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco,
+            regla: 'geocercaDetenido', sev: 'bajo', clave: info.clave, eco: info.eco, zona: R.zona,
             titulo: 'DETENIDA EN GEOCERCA \u00b7 ' + etq,
             detalle: 'La unidad ' + etq + ' se encuentra detenida en la geocerca ' + R.zona +
                 ' \u00b7 hace ' + Math.round(m) + ' min',
@@ -1340,6 +1340,11 @@
             //   este episodio; rearma cuando sale o se mueve.
             geoDetenidoDesde: prev ? prev.geoDetenidoDesde : null,
             geoDetenidoAlerta: prev ? !!prev.geoDetenidoAlerta : false,
+            // v6.12: alerta de geocercas (pestana Zonas > Geocercas).
+            // Episodios por geocerca vigilada: dentro confirmado, minutos
+            // de parada y si el motor ya esta apagado. Los reinicia
+            // geoAlertaReinicia cuando el operador cambia la seleccion.
+            geoAlerta: (prev && prev.geoAlerta && typeof prev.geoAlerta === 'object') ? prev.geoAlerta : null,
             // v5.15: seguimiento de paradas del plan multipunto.
             llegadas: (prev && Array.isArray(prev.llegadas)) ? prev.llegadas : null,
             paradaActual: prev ? (prev.paradaActual || 0) : 0,
@@ -1372,6 +1377,10 @@
             // "La unidad X se encuentra detenida en la geocerca Y").
             // Una sola vez por episodio.
             reglaGeocercaDetenido(st, R, info, etq);
+            // v6.12: alerta dirigida por geocerca. Solo mira las geocercas
+            // que el operador selecciono en Zonas > Geocercas y avisa segun
+            // el disparador elegido (paso / detenida / motor apagado).
+            reglaGeoAlerta(u, info, st, R);
             await reglaDestino(st, R, info, etq);
             await reglaDesconexion(st, R, info, etq);
             await reglaRiesgoSinSenal(st, prev, R, info, etq);

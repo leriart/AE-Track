@@ -243,7 +243,6 @@
             "#rondo-panel .rondo-ia-head.ia-on .rondo-ia-badge::after{content:'';position:absolute;left:2.5px;top:0.5px;width:3px;height:5px;border:solid #fff;border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}\n" +
             "#rondo-panel .tabs{display:flex;gap:3px;background:var(--rondo-bg-soft);padding:5px 6px;border-bottom:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:9px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
-            +
             "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
             "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
@@ -622,7 +621,6 @@
             "#rondo-panel .rondo-riesgo-filters-row .mini .rondo-usym{font-size:13px}\n" +
             "#rondo-panel .rondo-riesgo-grupo-head .rondo-usym{font-size:14px;margin-right:2px}\n" +
             "#rondo-panel .rondo-riesgo-card .rb-actions button .rondo-usym{font-size:13px}\n" +
-            +
             "#rondo-panel .rondo-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
             "#rondo-panel .rondo-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
             "#rondo-panel .rondo-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 6px rgba(var(--rondo-accent-rgb),.3)}\n" +
@@ -761,8 +759,6 @@
             "#rondo-panel .tab:hover .rondo-usym{opacity:1}\n" +
             "#rondo-panel .tab.activo .rondo-usym{opacity:1;transform:scale(1.08)}\n" +
             "#rondo-panel .tab .contador{font-size:9.5px;padding:1px 5px;margin-left:0}\n" +
-            +
-            +
             "#rondo-panel .kpi{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:3px}\n" +
             "#rondo-panel .kpi .etq{font-size:10px;color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.5px}\n" +
             "#rondo-panel .kpi .valor{font:600 18px/1 var(--rondo-font);color:var(--rondo-fg)}\n" +
@@ -1038,7 +1034,6 @@
             "#rondo-body td.ruta .ruta-bar{margin-top:3px;height:4px;background:var(--rondo-bg-alt);border-radius:3px;overflow:hidden;min-width:96px}\n" +
             "#rondo-body td.ruta .ruta-bar-fill{height:100%;background:var(--rondo-accent-2);transition:width .3s ease}\n" +
             "#rondo-body td.ruta .ruta-meta{margin-top:2px;font:500 10px monospace;color:var(--rondo-fg-dim);white-space:nowrap}\n" +
-            +
             /* ── Responsive ── */
             "@media (max-width:720px){\n" +
             "  #rondo-panel{min-width:0;max-width:96vw}\n" +
@@ -1219,7 +1214,352 @@
             "#rondo-panel .rondo-geo-role{font-size:9.5px;padding:1px 6px;border-radius:8px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.3px;flex:0 0 auto}\n" +
             "#rondo-panel .rondo-geo-card.rol-base .rondo-geo-role{color:var(--rondo-ok-fg);border-color:rgba(67,160,71,.5)}\n" +
             "#rondo-panel .rondo-geo-card.rol-carga .rondo-geo-role{color:var(--rondo-accent-2);border-color:rgba(var(--rondo-accent-rgb),.5)}\n" +
-            "#rondo-panel .rondo-geo-card .rondo-geo-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n";
+            "#rondo-panel .rondo-geo-card .rondo-geo-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n" +
+            // ── v6.12: alerta de geocercas (pestana Zonas > Geocercas) ─────
+            // Tarjeta: barra lateral y badge con gravedad + disparador.
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga{color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-bajo{color:var(--rondo-fg-dim);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-medio{color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-color:transparent}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-alto{color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-color:transparent}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-ga.on.sev-critico{color:var(--rondo-bad-fg);background:var(--rondo-bad-bg);border-color:transparent}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel{border-color:var(--rondo-border)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-bajo{box-shadow:inset 3px 0 0 var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-medio{box-shadow:inset 3px 0 0 var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-alto{box-shadow:inset 3px 0 0 var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-geo-card.alerta-sel.sev-critico{box-shadow:inset 3px 0 0 var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge{display:inline-flex;align-items:center;gap:4px;flex:0 1 auto;min-width:0;max-width:82px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:700 8.5px var(--rondo-font);letter-spacing:.4px;padding:2px 7px;border-radius:8px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge i{width:6px;height:6px;border-radius:50%;background:currentColor;flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-bajo{color:var(--rondo-fg-dim)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-medio,#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-alto{color:var(--rondo-warn-fg);border-color:rgba(249,168,37,.45);background:var(--rondo-warn-bg)}\n" +
+            "#rondo-panel .rondo-geo-card .rondo-geo-gabadge.sev-critico{color:var(--rondo-bad-fg);border-color:transparent;background:var(--rondo-bad-bg)}\n" +
+            "#rondo-panel .rondo-geo-kpi:last-child b{color:var(--rondo-warn-fg)}\n" +
+            // Franja resumen (una sola linea, sin desbordes).
+            "#rondo-panel #rondo-geo-ga-resumen:empty{display:none}\n" +
+            "#rondo-panel .rondo-ga-res{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);min-width:0}\n" +
+            "#rondo-panel .rondo-ga-res.on{border-color:rgba(249,168,37,.5)}\n" +
+            "#rondo-panel .rondo-ga-resico{font-size:15px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-ga-res.on .rondo-ga-resico{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-ga-restxt{flex:0 1 auto;min-width:0;display:flex;flex-direction:column;gap:0}\n" +
+            "#rondo-panel .rondo-ga-restxt b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-ga-restxt span{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-panel .rondo-ga-pills{display:flex;gap:4px;flex-wrap:wrap;flex:1 1 190px;min-width:0;max-height:52px;overflow-y:auto}\n" +
+            "#rondo-panel .rondo-ga-pill{display:inline-flex;align-items:center;gap:5px;max-width:100%;min-width:0;padding:2px 8px;border-radius:999px;cursor:pointer;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);font:600 10px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-panel .rondo-ga-pill:hover{border-color:var(--rondo-border);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill i{width:6px;height:6px;border-radius:50%;background:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-panel .rondo-ga-pill .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ga-pill em{font:500 9px var(--rondo-font);font-style:normal;opacity:.7;white-space:nowrap}\n" +
+            "#rondo-panel .rondo-ga-pill b{font:700 9px var(--rondo-font);padding:0 5px;border-radius:7px;background:var(--rondo-warn-bg);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill.sev-bajo i{background:var(--rondo-fg-mute)}\n" +
+            "#rondo-panel .rondo-ga-pill.sev-medio i,#rondo-panel .rondo-ga-pill.sev-alto i{background:var(--rondo-warn-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill.sev-critico i{background:var(--rondo-bad-fg)}\n" +
+            "#rondo-panel .rondo-ga-pill.avisa{border-color:var(--rondo-warn-fg);color:var(--rondo-fg)}\n" +
+            "#rondo-panel .rondo-ga-resacc{display:inline-flex;gap:4px;flex:0 0 auto;margin-left:auto}\n" +
+            // Menu de la alerta de una geocerca (dentro del dialogo propio).
+            "#rondo-dialog .rondo-ga-d{display:flex;flex-direction:column;gap:9px;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dhead{display:flex;align-items:center;gap:8px;padding:7px 9px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:3px solid var(--rondo-fg-mute);min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-bajo{border-left-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-medio,#rondo-dialog .rondo-ga-dhead.sev-alto{border-left-color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-critico{border-left-color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dico{font-size:16px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-medio .rondo-ga-dico,#rondo-dialog .rondo-ga-dhead.sev-alto .rondo-ga-dico{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dhead.sev-critico .rondo-ga-dico{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dht{flex:1;min-width:0;display:flex;flex-direction:column;gap:0}\n" +
+            "#rondo-dialog .rondo-ga-dht b{font:600 12px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rondo-ga-dht span{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rondo-ga-dbody{display:flex;flex-direction:column;gap:8px;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dbody.off{opacity:.5;pointer-events:none}\n" +
+            "#rondo-dialog .rondo-ga-drow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dlb{flex:0 0 82px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-chip{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:3px 10px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);text-align:left;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rondo-ga-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-border)}\n" +
+            "#rondo-dialog .rondo-ga-chip.ancho{white-space:normal}\n" +
+            "#rondo-dialog .rondo-ga-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 1px 6px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            "#rondo-dialog .rondo-ga-chip.sev-bajo.activo{background:var(--rondo-bg-strong);color:var(--rondo-fg);border-color:var(--rondo-border);box-shadow:none}\n" +
+            "#rondo-dialog .rondo-ga-chip.sev-critico.activo{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent;box-shadow:none}\n" +
+            "#rondo-dialog .rondo-ga-dnum{display:inline-flex;align-items:center;gap:5px;font:600 9.5px var(--rondo-font);color:var(--rondo-fg-dim);text-transform:uppercase;letter-spacing:.3px}\n" +
+            "#rondo-dialog .rondo-ga-dnum input{width:62px;padding:3px 6px;font:600 11px var(--rondo-font)}\n" +
+            "#rondo-dialog .rondo-ga-dhint{flex:1;min-width:170px;margin:0;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-dprev{display:flex;flex-direction:column;gap:3px;padding:7px 9px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dprev > b{font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rondo-ga-dpv{display:flex;flex-direction:column;gap:2px;padding-left:9px;border-left:2px solid var(--rondo-fg-mute);min-width:0}\n" +
+            "#rondo-dialog .rondo-ga-dpv.sev-medio,#rondo-dialog .rondo-ga-dpv.sev-alto{border-left-color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dpv.sev-critico{border-left-color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dialog .rondo-ga-dpv .pv-t{font:600 10.5px var(--rondo-font);color:var(--rondo-fg);overflow-wrap:anywhere}\n" +
+            "#rondo-dialog .rondo-ga-dpv .pv-d{font:500 10px var(--rondo-font);color:var(--rondo-fg-dim);overflow-wrap:anywhere}\n" +
+            // Interruptor del menu (mismo lenguaje visual que el resto).
+            "#rondo-dialog .rondo-ga-sw{display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:3px 9px 3px 4px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10px var(--rondo-font);white-space:nowrap}\n" +
+            "#rondo-dialog .rondo-ga-sw .knob{width:20px;height:11px;border-radius:999px;background:var(--rondo-fg-mute);position:relative;flex:0 0 auto;transition:background .18s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rondo-ga-sw .knob::after{content:'';position:absolute;top:1.5px;left:1.5px;width:8px;height:8px;border-radius:50%;background:var(--rondo-bg);transition:transform .18s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rondo-ga-sw.on{color:var(--rondo-warn-fg);border-color:rgba(249,168,37,.5)}\n" +
+            "#rondo-dialog .rondo-ga-sw.on .knob{background:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rondo-ga-sw.on .knob::after{transform:translateX(9px)}\n" +
+            // Tarjetas estrechas: la alerta no come el ancho de la lista.
+            "@media (max-width:420px){#rondo-panel .rondo-geo-card .rondo-geo-gabadge{display:none}#rondo-panel .rondo-ga-resacc{margin-left:0}}\n" +
+            // Escala de interfaz (Ajustes > Visual): el menu respeta el tamaño.
+            "#rondo-dialog .rondo-ga-dhead b,#rondo-dialog .rondo-ga-dht b{font-size:calc(12px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-dht span{font-size:calc(10px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-dlb,#rondo-dialog .rondo-ga-dnum,#rondo-dialog .rondo-ga-dprev > b{font-size:calc(9.5px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-chip,#rondo-dialog .rondo-ga-dhint,#rondo-dialog .rondo-ga-dpv .pv-t{font-size:calc(10.5px * var(--rondo-esc))}\n" +
+            "#rondo-dialog .rondo-ga-dpv .pv-d,#rondo-dialog .rondo-ga-sw{font-size:calc(10px * var(--rondo-esc))}\n" +
+            // ── v6.13: geocercas de la app (mapa de dibujo + paneles) ─────
+            // Mismo lenguaje que el editor de paradas (.rpm-*): tarjeta con
+            // cabecera, cuerpo y pie; botones planos, chips redondeados y
+            // acento en la accion principal.
+            "#rondo-geocerca-modal{position:fixed;inset:0;z-index:2147483646;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:14px}\n" +
+            "#rondo-geocerca-modal.abierto{display:flex}\n" +
+            "#rondo-geocerca-modal .gg-card{position:relative;width:min(1240px,97vw);height:min(92vh,780px);display:flex;flex-direction:column;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:0 24px 70px rgba(0,0,0,.5);overflow:hidden;font:400 13px var(--rondo-font);min-width:0}\n" +
+            // Cabecera
+            "#rondo-geocerca-modal .gg-head{display:flex;align-items:center;gap:9px;padding:11px 13px;background:var(--rondo-bg-soft);border-bottom:1px solid var(--rondo-border-soft);font-weight:700;flex:0 0 auto;flex-wrap:wrap;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-head .rondo-usym{color:var(--rondo-accent-2);font-size:18px;flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-head b{font-size:14px;letter-spacing:.2px}\n" +
+            "#rondo-geocerca-modal .gg-headsub{font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);font-weight:500;padding-left:9px;border-left:1px solid var(--rondo-border);white-space:nowrap}\n" +
+            "#rondo-geocerca-modal .gg-x{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);cursor:pointer;color:var(--rondo-fg-dim);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-x:hover{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent}\n" +
+            // Cuerpo: mapa a la izquierda, paneles a la derecha.
+            "#rondo-geocerca-modal .gg-cuerpo{flex:1;min-height:0;display:flex;gap:11px;padding:11px 13px;min-width:0}\n" +
+            "#rondo-geocerca-modal .rondo-gg-mapa{position:relative;flex:1;min-width:0;overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border);border-radius:var(--rondo-radius);box-shadow:inset 0 0 0 1px rgba(0,0,0,.18);touch-action:none}\n" +
+            "#rondo-geocerca-modal .rondo-gg-mapa .rondo-mm{cursor:crosshair;border:0;border-radius:0}\n" +
+            // Las dos capas SVG van por encima de los tiles del mini-mapa.
+            "#rondo-geocerca-modal .rondo-gg-ctx,#rondo-geocerca-modal .rondo-gg-capa{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}\n" +
+            "#rondo-geocerca-modal .rondo-gg-ctx{z-index:2}\n" +
+            "#rondo-geocerca-modal .rondo-gg-capa{z-index:3}\n" +
+            "#rondo-geocerca-modal .rondo-gg-atrib{position:absolute;right:5px;bottom:4px;font-size:9px;color:#222;background:rgba(255,255,255,.75);padding:1px 4px;border-radius:4px;pointer-events:none;z-index:4}\n" +
+            // Chapa flotante sobre el mapa: modo actual + como se dibuja.
+            "#rondo-geocerca-modal .gg-hud{position:absolute;left:9px;top:9px;z-index:4;display:flex;flex-direction:column;gap:5px;align-items:flex-start;max-width:min(72%,320px);pointer-events:none}\n" +
+            "#rondo-geocerca-modal .gg-hud-m{display:inline-flex;align-items:center;gap:6px;background:rgba(20,24,34,.82);color:#fff;border:1px solid rgba(255,255,255,.14);border-radius:999px;padding:3px 10px;font:600 10.5px var(--rondo-font);backdrop-filter:blur(2px)}\n" +
+            "#rondo-geocerca-modal .gg-hud-m .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-hud-h{background:rgba(20,24,34,.72);color:#e6e9f0;border-radius:8px;padding:3px 8px;font:500 10px var(--rondo-font);line-height:1.35}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-m,body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-hud-h{background:rgba(255,255,255,.9);color:#1d2433;border-color:rgba(0,0,0,.1)}\n" +
+            "#rondo-geocerca-modal .rondo-gg-plat{z-index:1}\n" +
+            // Leyenda del mapa: que color es cada origen y cuantas hay.
+            "#rondo-geocerca-modal .gg-leyenda{position:absolute;left:9px;bottom:9px;z-index:4;display:flex;align-items:center;gap:4px;flex-wrap:wrap;max-width:calc(100% - 18px);pointer-events:none}\n" +
+            "#rondo-geocerca-modal .gg-ley-b{display:inline-flex;align-items:center;gap:5px;pointer-events:auto;cursor:pointer;background:rgba(20,24,34,.8);color:#e6e9f0;border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:2px 8px;font:600 9.5px var(--rondo-font);backdrop-filter:blur(2px);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b:hover{border-color:rgba(255,255,255,.3);color:#fff}\n" +
+            "#rondo-geocerca-modal .gg-ley-b.activo{background:var(--rondo-warn-fg);color:#2a1d00;border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-ley-b b{font-weight:800}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i{width:9px;height:9px;border-radius:3px;flex:0 0 auto;border:1.5px dashed rgba(255,255,255,.5);background:rgba(255,255,255,.12)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b.activo i{border-color:rgba(0,0,0,.45);background:rgba(0,0,0,.12)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i.sw-app{border-color:#7d8595;background:rgba(125,133,149,.28)}\n" +
+            "#rondo-geocerca-modal .gg-ley-b i.sw-plat{border-color:#5c7a99;background:rgba(92,122,153,.28)}\n" +
+            "#rondo-geocerca-modal .gg-ley-draft{pointer-events:none;display:inline-flex;align-items:center;gap:5px;background:rgba(20,24,34,.8);color:#ffe082;border:1px solid rgba(249,168,37,.5);border-radius:999px;padding:2px 8px;font:600 9.5px var(--rondo-font);text-transform:none;letter-spacing:0}\n" +
+            "#rondo-geocerca-modal .gg-ley-draft::before{content:'';width:9px;height:9px;border-radius:3px;background:rgba(249,168,37,.35);border:1.5px solid #f9a817}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b{background:rgba(255,255,255,.9);color:#1d2433;border-color:rgba(0,0,0,.12)}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b.activo{background:var(--rondo-warn-fg);color:#3a2b00}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-b i{border-color:rgba(0,0,0,.3);background:rgba(0,0,0,.08)}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-ley-draft{background:rgba(255,255,255,.9);color:#8d6b00}\n" +
+            // Paneles laterales
+            "#rondo-geocerca-modal .gg-lados{flex:0 0 296px;min-width:0;display:flex;flex-direction:column;gap:10px;overflow-y:auto;padding-right:2px}\n" +
+            "#rondo-geocerca-modal .gg-lado{background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lado h4{margin:0;font:700 10px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);display:flex;align-items:center;gap:6px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .rondo-usym{font-size:13px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .gg-count{margin-left:auto;font:700 9.5px var(--rondo-font);background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:1px 7px;color:var(--rondo-fg-dim);font-style:normal}\n" +
+            "#rondo-geocerca-modal .gg-lado h4 .gg-modo-tag{margin-left:auto;font:700 8.5px var(--rondo-font);font-style:normal;letter-spacing:.4px;background:var(--rondo-accent-grad);color:#fff;border-radius:7px;padding:1px 7px}\n" +
+            "#rondo-geocerca-modal .gg-sec{font:700 9px var(--rondo-font);text-transform:uppercase;letter-spacing:.5px;color:var(--rondo-fg-mute);padding-top:2px;border-top:1px solid var(--rondo-border-soft)}\n" +
+            // Campos
+            "#rondo-geocerca-modal .gg-lab{display:flex;flex-direction:column;gap:3px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute);min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-lab input{width:100%;min-width:0;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font:500 12px var(--rondo-font);text-transform:none;letter-spacing:0;transition:border-color .15s,box-shadow .15s}\n" +
+            "#rondo-geocerca-modal .gg-lab input:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            "#rondo-geocerca-modal .gg-two{display:flex;gap:5px;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-two input{flex:1;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-ir{flex:0 0 auto;align-self:stretch}\n" +
+            "#rondo-geocerca-modal .gg-unit{position:relative;display:block}\n" +
+            "#rondo-geocerca-modal .gg-unit input{padding-right:26px}\n" +
+            "#rondo-geocerca-modal .gg-unit i{position:absolute;right:8px;top:50%;transform:translateY(-50%);font:700 9.5px var(--rondo-font);font-style:normal;letter-spacing:.3px;color:var(--rondo-fg-mute);pointer-events:none}\n" +
+            // Chips de modo
+            "#rondo-geocerca-modal .gg-modos{display:flex;gap:4px}\n" +
+            "#rondo-geocerca-modal .gg-chip{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:5px 7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 11px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-chip .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-geocerca-modal .gg-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.32)}\n" +
+            // Tira de cifras
+            "#rondo-geocerca-modal .gg-stats{display:flex;gap:5px}\n" +
+            "#rondo-geocerca-modal .gg-stat{flex:1;min-width:0;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:5px 6px;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-geocerca-modal .gg-stat.ok{border-color:rgba(67,160,71,.42);background:var(--rondo-ok-bg)}\n" +
+            "#rondo-geocerca-modal .gg-stat b{font:700 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-stat.ok b{color:var(--rondo-ok-fg)}\n" +
+            "#rondo-geocerca-modal .gg-stat span{font:700 8.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute)}\n" +
+            // Botones: el modal vive fuera de #rondo-panel, asi que los .mini
+            // de la app no le alcanzan: se redefinen aqui con su mismo estilo.
+            "#rondo-geocerca-modal .mini{display:inline-flex;align-items:center;justify-content:center;gap:4px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);color:var(--rondo-fg-dim);border-radius:var(--rondo-radius-sm);cursor:pointer;padding:4px 9px;font:600 11px var(--rondo-font);white-space:nowrap;transition:background .15s,color .15s,transform .1s,border-color .15s}\n" +
+            "#rondo-geocerca-modal .mini:hover{background:var(--rondo-bg);color:var(--rondo-fg);border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-geocerca-modal .mini:active{transform:translateY(0)}\n" +
+            "#rondo-geocerca-modal .gg-acciones{display:flex;gap:5px;flex-wrap:wrap}\n" +
+            "#rondo-geocerca-modal .gg-acciones .mini{flex:1;min-width:88px}\n" +
+            "#rondo-geocerca-modal .gg-pista{margin:0;display:flex;gap:6px;align-items:flex-start;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:5px 7px}\n" +
+            "#rondo-geocerca-modal .gg-pista .rondo-usym{font-size:12px;flex:0 0 auto;margin-top:1px}\n" +
+            // Dialogo de importacion (seleccion de geocercas)
+            "#rondo-dialog .gg-imp-t{margin:0;font-size:12px;color:var(--rondo-fg-dim);line-height:1.5}\n" +
+            "#rondo-dialog .gg-imp-t b{color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .gg-imp-av{color:var(--rondo-warn-fg);font-size:11px}\n" +
+            "#rondo-dialog .gg-imp-l{display:flex;flex-direction:column;gap:4px;max-height:min(44vh,320px);overflow-y:auto}\n" +
+            "#rondo-dialog .gg-imp{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);cursor:pointer;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .gg-imp:hover{border-color:var(--rondo-border);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .gg-imp.sel{border-color:var(--rondo-accent-2);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .gg-imp input{margin:0;flex:0 0 auto}\n" +
+            "#rondo-dialog .gg-imp .nm{flex:1;min-width:0;display:flex;align-items:center;gap:5px;font:600 12px var(--rondo-font);color:var(--rondo-fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-dialog .gg-imp .nm .rondo-usym{font-size:12px;color:var(--rondo-warn-fg);flex:0 0 auto}\n" +
+            "#rondo-dialog .gg-imp em{flex:0 0 auto;font:500 10px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute);white-space:nowrap}\n" +
+            "#rondo-dialog .gg-imp-a{display:flex;align-items:center;gap:6px}\n" +
+            "#rondo-dialog .gg-imp-a .mini{padding:3px 9px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .gg-imp-a .mini:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .gg-imp-a span{margin-left:auto;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            // Selector de origen de la lista
+            "#rondo-geocerca-modal .gg-filtro{display:flex;gap:4px}\n" +
+            "#rondo-geocerca-modal .gg-fchip{flex:1;min-width:0;display:inline-flex;align-items:center;justify-content:center;gap:5px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:3px 6px;cursor:pointer;color:var(--rondo-fg-dim);font:600 9.5px var(--rondo-font);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-fchip b{font-weight:800;opacity:.75}\n" +
+            "#rondo-geocerca-modal .gg-fchip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-geocerca-modal .gg-fchip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-fchip.activo b{opacity:.9}\n" +
+            // Etiqueta de origen en cada fila
+            "#rondo-geocerca-modal .gg-origen{display:inline-block;vertical-align:1px;margin-left:6px;font:700 7.5px var(--rondo-font);font-style:normal;letter-spacing:.5px;padding:1px 4px;border-radius:5px;background:var(--rondo-bg-strong);color:var(--rondo-fg-mute);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-geocerca-modal .gg-origen.o-app{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-origen.o-plat{background:rgba(92,122,153,.22);color:#a8c6e0;border-color:transparent}\n" +
+            "body[data-rondo-theme='claro'] #rondo-geocerca-modal .gg-origen.o-plat{background:#e4edf5;color:#33607f}\n" +
+            "#rondo-geocerca-modal .gg-lock{display:inline-flex;vertical-align:-2px;margin-left:4px;color:var(--rondo-ok-fg)}\n" +
+            "#rondo-geocerca-modal .gg-lock .rondo-usym{font-size:10px}\n" +
+            // Lista de geocercas
+            "#rondo-geocerca-modal .gg-lista{display:flex;flex-direction:column;gap:4px;max-height:236px;overflow-y:auto}\n" +
+            "#rondo-geocerca-modal .gg-item{display:flex;align-items:center;gap:7px;padding:6px 7px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;min-width:0;transition:border-color .15s,background .15s}\n" +
+            "#rondo-geocerca-modal .gg-item:hover{border-color:var(--rondo-border);background:var(--rondo-bg-strong)}\n" +
+            "#rondo-geocerca-modal .gg-ptag{flex:0 0 auto;width:22px;height:22px;border-radius:7px;display:inline-flex;align-items:center;justify-content:center;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);color:var(--rondo-accent-2)}\n" +
+            "#rondo-geocerca-modal .gg-ptag .rondo-usym{font-size:13px}\n" +
+            "#rondo-geocerca-modal .gg-in{flex:1;min-width:0;display:flex;flex-direction:column}\n" +
+            "#rondo-geocerca-modal .gg-in b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-in span{font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-geocerca-modal .gg-tag-alerta{flex:0 0 auto;font:700 8px var(--rondo-font);font-style:normal;letter-spacing:.4px;color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-radius:7px;padding:2px 5px}\n" +
+            "#rondo-geocerca-modal .gg-acc{display:inline-flex;gap:3px;flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-acc .mini{padding:3px 5px}\n" +
+            "#rondo-geocerca-modal .gg-acc .mini .rondo-usym{font-size:12px}\n" +
+            "#rondo-geocerca-modal .gg-acc .gg-al.on{color:var(--rondo-warn-fg);background:var(--rondo-warn-bg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-acc .gg-del:hover{background:var(--rondo-bad-bg);color:var(--rondo-bad-fg);border-color:transparent}\n" +
+            "#rondo-geocerca-modal .gg-vacio{display:flex;flex-direction:column;align-items:center;gap:3px;padding:12px 8px;text-align:center;border:1px dashed var(--rondo-border-soft);border-radius:8px}\n" +
+            "#rondo-geocerca-modal .gg-vacio .rondo-usym{font-size:20px;color:var(--rondo-fg-mute);opacity:.7}\n" +
+            "#rondo-geocerca-modal .gg-vacio b{font:600 11.5px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-geocerca-modal .gg-vacio span{font:500 10px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            // Importar / exportar
+            "#rondo-geocerca-modal .gg-io{display:grid;grid-template-columns:1fr 1fr;gap:5px}\n" +
+            "#rondo-geocerca-modal .gg-io .mini{width:100%}\n" +
+            "#rondo-geocerca-modal .gg-check{display:flex;align-items:flex-start;gap:7px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-dim);cursor:pointer;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px 8px;transition:border-color .15s}\n" +
+            "#rondo-geocerca-modal .gg-check:hover{border-color:var(--rondo-border)}\n" +
+            "#rondo-geocerca-modal .gg-check input{margin:1px 0 0}\n" +
+            "#rondo-geocerca-modal .gg-check span{display:flex;flex-direction:column;min-width:0}\n" +
+            "#rondo-geocerca-modal .gg-check b{font:600 11px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-geocerca-modal .gg-check i{font:500 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            // Pie
+            "#rondo-geocerca-modal .gg-foot{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:10px 13px;border-top:1px solid var(--rondo-border-soft);background:var(--rondo-bg-soft);flex:0 0 auto}\n" +
+            "#rondo-geocerca-modal .gg-foot .gg-pie{flex:1;min-width:200px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            "#rondo-geocerca-modal .gg-foot button{display:inline-flex;align-items:center;gap:5px;padding:7px 15px;border-radius:8px;border:1px solid var(--rondo-border);background:var(--rondo-bg);color:var(--rondo-fg);cursor:pointer;font:600 12px var(--rondo-font);transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-geocerca-modal .gg-foot button:hover{border-color:var(--rondo-fg-mute);transform:translateY(-1px)}\n" +
+            "#rondo-geocerca-modal .gg-foot button.primary{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 10px rgba(var(--rondo-accent-rgb),.32)}\n" +
+            "#rondo-geocerca-modal .gg-foot button.primary:hover{box-shadow:0 4px 16px rgba(var(--rondo-accent-rgb),.44)}\n" +
+            // Barra de scroll discreta, como en el resto del panel.
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar{width:8px}\n" +
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-thumb,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-thumb{background:var(--rondo-border);border-radius:4px}\n" +
+            "#rondo-geocerca-modal .gg-lados::-webkit-scrollbar-track,#rondo-geocerca-modal .gg-lista::-webkit-scrollbar-track{background:transparent}\n" +
+            // Pantallas estrechas: mapa arriba, paneles debajo.
+            "@media (max-width:900px){#rondo-geocerca-modal{padding:8px}#rondo-geocerca-modal .gg-cuerpo{flex-direction:column;gap:9px}#rondo-geocerca-modal .rondo-gg-mapa{flex:0 0 40vh}#rondo-geocerca-modal .gg-lados{flex:1;flex-basis:auto}}\n" +
+            "@media (max-width:900px){#rondo-geocerca-modal .gg-lados{display:grid;grid-template-columns:1fr 1fr;align-items:start}}\n" +
+            "@media (max-width:620px){#rondo-geocerca-modal .gg-lados{grid-template-columns:1fr}#rondo-geocerca-modal .gg-headsub{display:none}#rondo-geocerca-modal .gg-foot .gg-pie{display:none}}\n" +
+            // ── v6.15: informe por geocerca (dialogo) ──────────────────
+            // Mismo lenguaje que el resto de la app: tarjetas con borde
+            // suave, chips redondeados, KPIs y tablas legibles.
+            "#rondo-dialog .rgi{display:flex;flex-direction:column;gap:10px;min-width:0}\n" +
+            // Cabecera del informe: icono, geocerca y su origen.
+            "#rondo-dialog .rgi-hero{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:4px solid var(--rondo-accent-2);min-width:0}\n" +
+            "#rondo-dialog .rgi-hero.o-app{border-left-color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-heroico{font-size:19px;color:var(--rondo-accent-2);flex:0 0 auto}\n" +
+            "#rondo-dialog .rgi-hero.o-app .rgi-heroico{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-herot{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}\n" +
+            "#rondo-dialog .rgi-herot b{font:700 13px var(--rondo-font);color:var(--rondo-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rgi-herot span{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n" +
+            "#rondo-dialog .rgi-ori{flex:0 0 auto;font:700 8.5px var(--rondo-font);font-style:normal;letter-spacing:.4px;padding:2px 7px;border-radius:7px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-ori.o-app{background:var(--rondo-warn-bg);color:var(--rondo-warn-fg);border-color:transparent}\n" +
+            // Bloque de filtros.
+            "#rondo-dialog .rgi-cfg{display:flex;flex-direction:column;gap:7px;padding:9px 11px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);min-width:0}\n" +
+            "#rondo-dialog .rgi-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}\n" +
+            "#rondo-dialog .rgi-lb{flex:0 0 74px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rgi select{flex:1;min-width:180px;max-width:100%;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font:500 12px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi select:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            "#rondo-dialog .rgi-chip{background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:4px 11px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10.5px var(--rondo-font);white-space:nowrap;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-chip:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-chip.activo{background:var(--rondo-accent-grad);color:#fff;border-color:transparent;box-shadow:0 2px 8px rgba(var(--rondo-accent-rgb),.28)}\n" +
+            // Herramienta: mapa arriba, barra de progreso y caja de datos.
+            "#rondo-dialog .rgi-tool{display:flex;flex-direction:column;gap:9px;min-width:0}\n" +
+            "#rondo-dialog .rgi-mapa{position:relative;height:190px;border-radius:var(--rondo-radius-sm);overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-mapa .rondo-mm{border:0;border-radius:0}\n" +
+            "#rondo-dialog .rgi-mapa-vacio{display:flex;align-items:center;justify-content:center;height:100%;font:500 11px var(--rondo-font);color:var(--rondo-fg-mute);text-align:center;padding:10px}\n" +
+            "#rondo-dialog .rgi-carga{display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:8px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-carga > span:first-child{flex:0 0 auto;font:600 10.5px var(--rondo-font);color:var(--rondo-fg-dim);white-space:nowrap}\n" +
+            "#rondo-dialog .rgi-barra{flex:1;min-width:0;height:6px;border-radius:999px;background:var(--rondo-bg-strong);overflow:hidden;display:block}\n" +
+            "#rondo-dialog .rgi-barra i{display:block;height:100%;width:0;border-radius:999px;background:var(--rondo-accent-grad);transition:width .25s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-aviso{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 9px;border-radius:8px;background:var(--rondo-warn-bg);border:1px solid rgba(249,168,37,.35);font:500 10.5px var(--rondo-font);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-aviso .mini{margin-left:auto;padding:4px 10px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg);font:600 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-aviso .mini:hover{border-color:var(--rondo-fg-mute)}\n" +
+            // Boton "Generar reporte": la carga es a peticion, no en cada cambio.
+            "#rondo-dialog .rgi-generar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:8px 10px;border-radius:9px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen{flex:0 0 auto;flex-direction:row;align-items:center;gap:7px;padding:7px 13px;background:var(--rondo-bg-strong);border-color:var(--rondo-border)}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen b{font-size:12.5px}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen i{display:none}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen.pulsa{background:var(--rondo-accent-grad);border-color:transparent;color:#fff;box-shadow:0 2px 12px rgba(var(--rondo-accent-rgb),.42);animation:rgiPulsa 1.6s var(--rondo-easing) infinite}\n" +
+            "#rondo-dialog .rgi-generar .rgi-btn.gen.pulsa .rondo-usym{color:#fff}\n" +
+            "@keyframes rgiPulsa{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}\n" +
+            "#rondo-dialog .rgi-gen-hint{flex:1;min-width:0;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            // Barra de acciones de descarga.
+            "#rondo-dialog .rgi-io{display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:6px}\n" +
+            "#rondo-dialog .rgi-btn{display:flex;flex-direction:column;align-items:flex-start;gap:0;padding:7px 10px;border-radius:9px;border:1px solid var(--rondo-border);background:var(--rondo-bg-soft);color:var(--rondo-fg);cursor:pointer;text-align:left;min-width:0;transition:all .15s var(--rondo-easing)}\n" +
+            "#rondo-dialog .rgi-btn .rondo-usym{font-size:15px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-btn b{font:700 12px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-btn i{font:500 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}\n" +
+            "#rondo-dialog .rgi-btn:hover{border-color:var(--rondo-fg-mute);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
+            "#rondo-dialog .rgi-btn.primary{background:var(--rondo-accent-grad);border-color:transparent;box-shadow:0 2px 10px rgba(var(--rondo-accent-rgb),.3)}\n" +
+            "#rondo-dialog .rgi-btn.primary .rondo-usym,#rondo-dialog .rgi-btn.primary b{color:#fff}\n" +
+            "#rondo-dialog .rgi-btn.primary i{color:rgba(255,255,255,.75)}\n" +
+            // Buscador de geocerca dentro del dialogo.
+            "#rondo-dialog .rgi-busca{display:inline-flex;align-items:center;gap:6px;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rgi-busca .rondo-usym{font-size:13px;color:var(--rondo-fg-mute);flex:0 0 auto}\n" +
+            "#rondo-dialog .rgi-busca input{flex:1;min-width:120px}\n" +
+            "#rondo-dialog .rgi-busca i{flex:0 0 auto;font:700 9.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-row-geo{margin-bottom:-2px}\n" +
+            "#rondo-dialog .rgi-rango{display:inline-flex;align-items:center;gap:6px;flex-wrap:wrap;flex:1;min-width:0}\n" +
+            "#rondo-dialog .rgi-rango input[type=date]{flex:1;min-width:118px;max-width:168px;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 7px;font:500 11.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-rango .sep{font:700 11px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-rango .mini{padding:3px 8px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-rango .mini:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            // KPIs
+            "#rondo-dialog .rgi-kpis{display:flex;gap:5px;flex-wrap:wrap}\n" +
+            "#rondo-dialog .rgi-kpi{flex:1 1 68px;min-width:64px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:1px;text-align:center;border-top:2px solid var(--rondo-border)}\n" +
+            "#rondo-dialog .rgi-kpi.ok{border-top-color:var(--rondo-ok)}\n" +
+            "#rondo-dialog .rgi-kpi.vivo{border-top-color:var(--rondo-warn-fg);background:var(--rondo-warn-bg)}\n" +
+            "#rondo-dialog .rgi-kpi b{font:700 15px/1.1 var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-kpi.vivo b{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-kpi span{font:700 8.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute)}\n" +
+            // Fila de unidades dentro ahora.
+            "#rondo-dialog .rgi-dentro{display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:6px 9px;border-radius:8px;background:var(--rondo-ok-bg);border:1px solid rgba(67,160,71,.35)}\n" +
+            "#rondo-dialog .rgi-dl{font:700 9px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-ok-fg)}\n" +
+            "#rondo-dialog .rgi-dchip{display:inline-flex;align-items:center;gap:4px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:999px;padding:2px 8px;font:600 10px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-dchip .rondo-usym{font-size:11px;color:var(--rondo-ok)}\n" +
+            "#rondo-dialog .rgi-dmore{font:700 10px var(--rondo-font);color:var(--rondo-ok-fg)}\n" +
+            "#rondo-dialog .rgi-res{margin:0;font:500 11px var(--rondo-font);color:var(--rondo-fg-dim);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:3px solid var(--rondo-accent-2);border-radius:8px;padding:6px 9px;line-height:1.45}\n" +
+            // Vista previa (tabla del informe general, en oscuro).
+            "#rondo-dialog .rgi-prev{border:1px solid var(--rondo-border-soft);border-radius:8px;overflow:hidden;background:var(--rondo-bg-soft)}\n" +
+            "#rondo-dialog .rgi-prev table{width:100%;border-collapse:collapse;font:500 10.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-prev th{background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);font:700 8.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;text-align:left;padding:5px 7px;border-bottom:1px solid var(--rondo-border-soft);white-space:nowrap;position:sticky;top:0}\n" +
+            "#rondo-dialog .rgi-prev td{padding:4px 7px;border-bottom:1px solid var(--rondo-border-soft);color:var(--rondo-fg);white-space:nowrap}\n" +
+            "#rondo-dialog .rgi-prev tbody tr:last-child td{border-bottom:none}\n" +
+            "#rondo-dialog .rgi-prev tbody tr:nth-child(even){background:rgba(255,255,255,.025)}\n" +
+            "#rondo-dialog .rgi-prev tbody tr:hover{background:var(--rondo-bg-strong)}\n" +
+            "#rondo-dialog .rgi-prev{max-height:236px;overflow:auto}\n" +
+            "#rondo-dialog .rgi-more{margin:0;padding:6px 9px;font:500 10px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            // Salidas
+            "#rondo-dialog .rgi-io{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}\n" +
+            "#rondo-dialog .rgi-io .mini{width:100%;justify-content:center;padding:6px 8px}\n" +
+            "@media (max-width:460px){#rondo-dialog .rgi-io{grid-template-columns:1fr}#rondo-dialog .rgi-lb{flex-basis:100%}}\n" +
+            // Tarjeta de geocerca de la app: distintivo violeta/acento.
+            "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:#fff}\n" +
+            "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";
 
         const style = makeEl('style');
         style.textContent = css;
