@@ -229,7 +229,8 @@ ok('reestilizado: ventana de unidad y controles del mapa',
 ok('reestilizado: la ventana flotante (tippy ._messageBox_) queda opaca',
     /\.tippy-box,\[class\*="_messageBox_"\]/.test(src) &&
     /\[class\*="_sectionTitle_"\]/.test(src) &&
-    /\[class\*="_lastUpdate_"\]/.test(src));
+    /\[class\*="_lastUpdate_"\]/.test(src) &&
+    /\[class\*="_messageBox_"\] \*\{color:inherit;\}/.test(src));
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));

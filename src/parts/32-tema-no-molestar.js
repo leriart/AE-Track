@@ -391,6 +391,13 @@
             '[class*="_sectionTitle_"]{color:' + P.dim + ' !important;}',
             '[class*="_mainInfo_"],[class*="_addressName_"],[class*="_geoName_"]{color:' + P.fg + ' !important;}',
             '[class*="_lastUpdate_"]{color:' + P.dim + ' !important;}',
+            // Las etiquetas (VIN, Brand, "Sensor values:"...) usan la paleta
+            // --gray-* disenada para tema CLARO (--gray-900 = #172336), que en
+            // oscuro queda invisible. La paleta no se puede invertir porque el
+            // mismo gris se usa de fondo en otros sitios; en su lugar se fuerza
+            // que el texto herede el color de la ventana (sin !important, para
+            // no pisar los colores de estado inline rojo/verde).
+            '[class*="_messageBox_"] *{color:inherit;}',
             // .wui-tooltip NO define fondo propio en la plataforma (solo
             // box-shadow/color/padding), asi que se transparentaba y se veia
             // el mapa detras. Se fuerza opaco + los fondos claros que la
