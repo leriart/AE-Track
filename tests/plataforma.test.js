@@ -260,7 +260,8 @@ ok('color: blanco de texto -> #fff',
 ok('color: texto oscuro -> fg', M.valor(M.clave('#172336', 'color'), P, ACC, ACCD) === P.fg);
 ok('color: borde -> border', M.valor(M.clave('#e3e4e6', 'border-color'), P, ACC, ACCD) === P.border);
 ok('color: rojo del skin -> acento', M.clave('#b30b27', 'background-color') === 'accent');
-ok('color: azul antiguo -> acento', M.clave('rgb(51, 153, 255)', 'color') === 'accent');
+ok('color: azul antiguo -> acento (como texto, su variante legible; como fondo, el acento)',
+    M.clave('rgb(51, 153, 255)', 'color') === 'acctxt' && M.clave('rgb(51, 153, 255)', 'background-color') === 'accent');
 ok('color: verde de estado se respeta', M.clave('#4db251', 'background-color') === null);
 ok('color: transparente y custom props se ignoran',
     M.clave('rgba(0, 0, 0, 0)', 'background-color') === null &&
@@ -305,6 +306,70 @@ ok('color: las definiciones de variables se reescriben por el rol del nombre',
     /--tab-bg-color:var\(--rpg-/.test(decCustom));
 ok('color: una custom property sin token mapeado no se toca',
     M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+// ACENTO COMO TEXTO: el acento (#0d6e87) sobre una superficie oscura da ~2:1 y
+// dejaba "Cancel", "Restore properties" o la pestana activa casi invisibles.
+(function () {
+    const MA = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+        '\nreturn { texto: rxAcentoTexto, contr: rxContraste, tok: rxTokenClave, valor: rxColorValor, glob: rxPaginaToken, aclarar: aclarar };')();
+    const oscuro = { soft: '#272d3c', claro: false }, claroP = { soft: '#ffffff', claro: true };
+    const c1 = MA.texto('#0d6e87', oscuro), c2 = MA.texto('#0d6e87', claroP);
+    ok('acento como texto (oscuro): se aclara hasta >= 4.5:1 sobre la superficie',
+        MA.contr('#0d6e87', '#272d3c') < 3 && MA.contr(c1, '#272d3c') >= 4.5, c1);
+    ok('acento como texto (claro): se mantiene o se oscurece, siempre >= 4.5:1',
+        MA.contr(c2, '#ffffff') >= 4.5, c2);
+    ok('acento como texto: un acento que ya contrasta no se toca', MA.texto('#ffb952', oscuro) === '#ffb952');
+    ok('acento como texto: sin paleta o color no hex no rompe', MA.texto('rgb(1,2,3)', oscuro) === 'rgb(1,2,3)' && MA.texto('#0d6e87', {}) === '#0d6e87');
+    ok('acento: como TEXTO usa la variante legible; como FONDO/BORDE el acento puro',
+        MA.tok('button-color', 'texto') === 'acctxt' && MA.tok('button-color', 'fondo') === 'accent' &&
+        MA.tok('accent-color', 'fondo') === 'accent' && MA.tok('accent-color', 'borde') === 'accent' &&
+        MA.tok('accent-color', 'texto') === 'acctxt');
+    ok('acento: remap y emision global coinciden para acctxt y hovtxt',
+        MA.valor('acctxt', oscuro, '#0d6e87', '#0a5c72') === MA.glob('acctxt', oscuro, '#0d6e87', '#2b8ba6', '#0a5c72') &&
+        MA.valor('hovtxt', oscuro, '#0d6e87', '#0a5c72') === MA.glob('hovtxt', oscuro, '#0d6e87', '#2b8ba6', '#0a5c72'));
+})();
+// ORDEN DE HOJAS: a igual especificidad gana la ultima del documento. Las hojas
+// del remap deben quedar al final del <head> aunque la plataforma cargue un
+// modulo (con su propia hoja) despues de nuestra primera pasada.
+(function () {
+    const code = 'const hijos = [];\n' +
+        'const head = { children: hijos, appendChild: (e) => { const i = hijos.indexOf(e); if (i >= 0) hijos.splice(i, 1); hijos.push(e); return e; } };\n' +
+        'const document = { head: head, documentElement: head, getElementById: (id) => hijos.filter((e) => e.id === id)[0] || null };\n' +
+        'const window = { matchMedia: () => ({ matches: false }) };\n' + bloqueCSS +
+        '\nreturn { fin: rxMantenerAlFinal, head: head, ids: () => hijos.map((e) => e.id).join(",") };';
+    let H;
+    try { H = new Function(code)(); } catch (e) { H = null; }
+    ok('orden de hojas: el arnes compila', !!H);
+    if (!H) return;
+    H.head.appendChild({ id: 'plat' });
+    H.head.appendChild({ id: 'rondo-colores-pagina' });
+    H.head.appendChild({ id: 'rondo-tokens-pagina' });
+    ok('orden de hojas: ya al final => no se mueve (reinsertar reparsea la hoja)', H.fin() === false);
+    H.head.appendChild({ id: 'modulo-lazy' });
+    ok('orden de hojas: llega una hoja nueva => se reordena colores y tokens al final',
+        H.fin() === true && H.ids() === 'plat,modulo-lazy,rondo-colores-pagina,rondo-tokens-pagina');
+    ok('orden de hojas: sin hoja de colores no hace nada', (function () {
+        const H2 = new Function(code)(); H2.head.appendChild({ id: 'plat' }); return H2.fin() === false;
+    })());
+    ok('orden de hojas: se llama tras cada pasada y al detectar una hoja nueva',
+        /rxPintarTokens\(P, acc, accD\);\s*rxMantenerAlFinal\(\);/.test(src) &&
+        /if \(hayNueva\) \{ rxMantenerAlFinal\(\); rxProgramarColoresPagina\(\); \}/.test(src));
+    ok('dialogos: red de seguridad !important en el cuerpo del dialogo',
+        /\.wizard-dlg-content-target,\.help-window-content,\.vtabs \.tabs-containers\{background:' \+ P\.soft/.test(src));
+})();
+// @layer / @container: sus reglas tambien se remapean conservando la cabecera.
+(function () {
+    const ML = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+        '\nreturn { reglas: rxReglasRondo, vars: _rxVars };')();
+    const mk = (obj, sel) => { const k = Object.keys(obj); const st = { length: k.length, getPropertyValue: (p) => obj[p], getPropertyPriority: () => '' }; k.forEach((q, i) => { st[i] = q; }); return { selectorText: sel, style: st }; };
+    const Pl = { bg: '#1', soft: '#2', strong: '#3', fg: '#4', dim: '#5', mute: '#6', border: '#7' };
+    const capa = { type: 0, cssText: '@layer base { .a { background-color: #fff } }', cssRules: [mk({ 'background-color': '#ffffff' }, '.a')] };
+    const cont = { type: 0, cssText: '@container (min-width: 300px) { .b { color: #172336 } }', cssRules: [mk({ 'color': '#172336' }, '.b')] };
+    const kf = { type: 7, cssText: '@keyframes x { }', cssRules: [mk({ 'color': '#172336' }, '50%')] };
+    const out = ML.reglas([capa, cont, kf], Pl, '#000', '#000', '#000');
+    ok('@layer: se remapea dentro de su capa', /^@layer base\{\.a\{background-color:var\(--rpg-/.test(out));
+    ok('@container: se remapea conservando la condicion', /@container \(min-width: 300px\)\{\.b\{color:var\(--rpg-/.test(out));
+    ok('@keyframes: no se toca', out.indexOf('50%') < 0);
+})();
 // El remap (var(--rpg-*), rxColorValor) y la emision global (rxPaginaToken)
 // comparten el mapa de claves: deben dar SIEMPRE el mismo color. Si no, un
 // fondo "transparent" salia como el color de texto (botones blancos arriba).
