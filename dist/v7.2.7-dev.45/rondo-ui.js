@@ -249,8 +249,8 @@
             "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:9px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
             "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
-            "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg-dim);padding:1px 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
-            "#rondo-panel .tab.activo .contador{background:rgba(255,255,255,.25);color:#fff}\n" +
+            "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);padding:0 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
+            "#rondo-panel .tab.activo .contador{background:rgba(0,0,0,.3);color:#fff;border-color:transparent}\n" +
             "#rondo-panel .tools{display:flex;gap:6px;padding:7px 9px;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;align-items:center;background:var(--rondo-bg-soft)}\n" +
             "#rondo-panel .tools button{display:inline-flex;align-items:center;gap:4px;background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);border-radius:var(--rondo-radius-sm);padding:5px 9px;cursor:pointer;font-size:11px;font-weight:600;transition:background .15s,transform .1s,box-shadow .15s,border-color .15s}\n" +
             "#rondo-panel .tools button:hover{background:var(--rondo-bg);border-color:var(--rondo-fg-mute);transform:translateY(-1px);box-shadow:var(--rondo-shadow)}\n" +

@@ -5265,52 +5265,10 @@ ta.value = '';
                 ' !important;color:' + P.fg + ' !important;}',
             '[class*="_content-wrapper_"],[class*="_contentText_"],[class*="_contentWrapper_"],' +
                 '.tippy-content{background:transparent !important;color:' + P.fg + ' !important;}',
-            '[class*="_sectionTitle_"]{color:' + P.dim + ' !important;}',
-            '[class*="_mainInfo_"],[class*="_addressName_"],[class*="_geoName_"]{color:' + P.fg + ' !important;}',
-            '[class*="_lastUpdate_"]{color:' + P.dim + ' !important;}',
-            // Las etiquetas (VIN, Brand, "Sensor values:"...) usan la paleta
-            // --gray-* disenada para tema CLARO (--gray-900 = #172336), que en
-            // oscuro queda invisible. La paleta no se puede invertir porque el
-            // mismo gris se usa de fondo en otros sitios; en su lugar se fuerza
-            // que el texto herede el color de la ventana (sin !important, para
-            // no pisar los colores de estado inline rojo/verde).
-            '[class*="_messageBox_"] *{color:inherit;}',
-            // Refuerzo directo: cualquier elemento CON CLASE dentro de la
-            // ventana hereda el color (fg). Cubre bloques como el del conductor
-            // que no tienen color propio y heredan uno oscuro. Sin !important,
-            // para no pisar los colores de estado inline.
-            '[class*="_messageBox_"] [class]{color:inherit;}',
-            // El icono del conductor venia con un gris oscuro literal.
-            '.tooltip-driver > div.icon::before,[class*="_messageBox_"] .driver-icon::before{color:' + P.dim + ' !important;}',
-            // Algunas reglas pintan el glifo con -webkit-text-fill-color, que
-            // gana a 'color': el texto computa claro pero se ve oscuro. Se fija
-            // a currentColor (!important), que respeta el color del propio
-            // elemento (asi los estados inline rojo/verde siguen igual).
-            '[class*="_messageBox_"] *{-webkit-text-fill-color:currentColor !important;}',
-            // La plataforma limita el alto del contenido de la ventana a
-            // calc(100vh - 142px) (y 75vh). El bloque del conductor queda al
-            // final y se RECORTA. Se le da mas alto para que entre completo.
-            '[class*="_contentWrapper_"],[class*="_messageBox_"] .monitoringUnitHint{' +
-                'max-height:calc(100vh - 70px) !important;}',
-            // Los valores de umbral (sensor)* se pintan INLINE (rojo/verde)
-            // con colores para fondo claro y quedan apagados en oscuro. Se
-            // aclaran con brightness/saturate, que conserva el tono (no se
-            // puede tocar un color inline sin !important, y eso perderia el
-            // rojo vs verde).
-            '[class*="_messageBox_"] [class*="_value_"]{filter:brightness(1.8) saturate(1.2);}',
-            // Las barras de senal usan imagenes oscuras: se aclaran igual.
-            '[class*="_messageBox_"] [class*="_signal_"] img,[class*="_messageBox_"] [class*="_signal_"] svg{' +
-                'filter:brightness(1.8);}',
-            // Las celdas del perfil usan ._cell_*:not(.column) { color:
-            // var(--gray-900) }, especificidad (0,2,0), que gana al * anterior.
-            // Se sube a (0,3,0) repitiendo el selector, sin !important para no
-            // pisar los colores de estado inline (rojo/verde).
             // --gray-900 se usa tambien de fondo en 2 sitios: al volverse claro
             // hay que forzarlos oscuros.
             '.win-video-cams-wrapper{background:' + P.bg + ' !important;}',
             '[class*="_backdrop_"]{background:rgba(0,0,0,.5) !important;}',
-            '[class*="_messageBox_"] [class*="_cell_"][class*="_cell_"],' +
-                '[class*="_messageBox_"] [class*="_row_"] [class*="_cell_"]{color:' + P.fg + ';}',
             // .wui-tooltip NO define fondo propio en la plataforma (solo
             // box-shadow/color/padding), asi que se transparentaba y se veia
             // el mapa detras. Se fuerza opaco + los fondos claros que la
@@ -5594,7 +5552,6 @@ ta.value = '';
             if (el && el.parentNode) el.parentNode.removeChild(el);
         });
         if (_rxObs) { _rxObs.disconnect(); _rxObs = null; }
-        if (_rxVentObs) { _rxVentObs.disconnect(); _rxVentObs = null; }
         Object.keys(_rxVars).forEach((k) => delete _rxVars[k]);
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
@@ -5642,8 +5599,6 @@ ta.value = '';
         }
         rxPintarTokens(P, acc, accD);
         rxObservar();
-        rxObservarVentanas();
-        rxArreglarVentanas();
     }
     // Vigila hojas NUEVAS. Un <link rel=stylesheet> recien insertado tiene
     // .sheet = null hasta que termina de cargar: si no se espera su evento
@@ -5672,72 +5627,6 @@ ta.value = '';
     function rxEsperarHoja(link) {
         if (link.sheet) return;
         try { link.addEventListener('load', () => { try { rxProgramarColoresPagina(); } catch (_) { /* noop */ } }, { once: true }); } catch (_) { /* noop */ }
-    }
-    /* Arreglo de contraste en runtime para la ventana flotante. No se puede
-     * cubrir todo con selectores (colores inline, tokens, especificidad de
-     * :not, hashes de CSS-modules). Cuando aparece la ventana se mide el color
-     * real de cada texto: si es un gris/neutro OSCURO sobre un fondo OSCURO,
-     * se fuerza a legible. Se salta los colores de ESTADO (rojo/verde: saturacion
-     * alta), que deben conservarse. */
-    function rxContrasteVentana(raiz) {
-        const parse = (c) => {
-            const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
-            if (!m) return null;
-            const r = +m[1], g = +m[2], b = +m[3];
-            const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-            return { lum: (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255, sat: mx === 0 ? 0 : (mx - mn) / mx, a: m[4] === undefined ? 1 : +m[4] };
-        };
-        const fg = (getComputedStyle(document.documentElement).getPropertyValue('--rondo-fg') || '#e8ecf3').trim();
-        const bgDe = (el) => {
-            let p = el;
-            while (p) {
-                const c = parse(getComputedStyle(p).backgroundColor);
-                if (c && c.a > 0.5) return c.lum;
-                p = p.parentElement;
-            }
-            return 0.2;
-        };
-        let n = 0;
-        const nodos = raiz.querySelectorAll ? raiz.querySelectorAll('*') : [];
-        for (let i = 0; i < nodos.length; i++) {
-            const el = nodos[i];
-            if (el.children.length) continue;
-            if (!String(el.textContent || '').trim()) continue;
-            const cs = getComputedStyle(el);
-            if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-            const col = parse(cs.color);
-            if (!col || col.lum > 0.4 || col.sat > 0.4) continue; // claro o de estado
-            if (bgDe(el) > 0.5) continue; // fondo claro: el texto oscuro esta bien
-            el.style.setProperty('color', fg, 'important');
-            el.style.setProperty('-webkit-text-fill-color', fg, 'important');
-            n++;
-        }
-        return n;
-    }
-    // Vigila la aparicion de ventanas (tippy/messageBox) y les arregla el
-    // contraste. Un <link> de CSS no lo dispara.
-    let _rxVentObs = null;
-    let _rxVentTimer = 0;
-    function rxObservarVentanas() {
-        if (_rxVentObs || !window.MutationObserver || !document.body) return;
-        // Tippy suele crear UN tippy-box y solo cambiar su contenido, asi que
-        // no basta con mirar si el nodo añadido "es" la caja: cualquier cambio
-        // del DOM mientras exista la ventana vuelve a comprobar el contraste
-        // (debounced). rxContrasteVentana ignora lo oculto y los colores de
-        // estado, asi que es barato y seguro.
-        _rxVentObs = new MutationObserver(() => {
-            if (!document.querySelector('[class*="_messageBox_"],.tippy-box')) return;
-            clearTimeout(_rxVentTimer);
-            _rxVentTimer = setTimeout(rxArreglarVentanas, 150);
-        });
-        try { _rxVentObs.observe(document.body, { childList: true, subtree: true }); } catch (_) { _rxVentObs = null; }
-    }
-    function rxArreglarVentanas() {
-        const cajas = document.querySelectorAll('[class*="_messageBox_"],.tippy-box');
-        if (!cajas.length) return;
-        for (let i = 0; i < cajas.length; i++) {
-            try { rxContrasteVentana(cajas[i]); } catch (_) { /* noop */ }
-        }
     }
     // Logo "RONDO" en tipografia Ndot (matriz de puntos). Se dibuja como SVG
     // embebido para no depender de fuentes externas ni CDN: la plataforma lo
