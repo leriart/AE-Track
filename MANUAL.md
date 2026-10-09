@@ -1233,9 +1233,20 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   pagina. Tambien hay **Aplicar el estilo de Rondo a la pagina**
   (experimental: reescribe los colores de la plataforma con la paleta de Rondo
   apoyandose en sus propias variables CSS; cubre acento, superficies, texto y
-  bordes, y respeta el tema oscuro/claro. Al desactivarlo se restaura) y
+  bordes, y respeta el tema oscuro/claro. Al desactivarlo se restaura). Junto
+  a ella esta **Modo rendimiento de la pagina**, que baja el trabajo de
+  pintado del navegador sobre la plataforma (fuera los desenfoques, las
+  filas fuera de pantalla no se pintan, scrollbars y controles nativos con el
+  esquema del tema, transiciones cortas) y deja de consultar datos mientras la
+  pestana esta oculta, refrescando al volver; es reversible al apagarla. Y
   **Usar el idioma de la plataforma para la voz** (ajusta el idioma de la voz
   al del sitio).
+
+  Con el estilo activo, el logo de la plataforma se sustituye por **RONDO**
+  en tipografia Ndot (matriz de puntos, dibujada en SVG, sin fuentes
+  externas). El remap recorre el CSS accesible una sola vez y deja las reglas
+  apuntando a variables, asi que cambiar de tema o de acento es inmediato y no
+  vuelve a analysing el estilo.
 - **Ventanas**: lado y ancho de la barra lateral, ocultar al hacer clic
   fuera, confirmacion al cerrar todas las ventanas, verificacion automatica y
   tamano del panel.
@@ -1249,7 +1260,17 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
   **Detectar patrones** y **Borrar API key**. Ver
   [Chat con la IA](#chat-con-la-ia).
 - **Avanzado**: versiones y busqueda de actualizaciones, perfiles de
-  configuracion, limpiar bitacora y resets.
+  configuracion, limpiar bitacora y resets, y el **Diagnostico tecnico**
+  (identidad de la plataforma detectada, espacio usado en local/sesion y
+  estado del ciclo de actualizacion).
+
+> **Diagnostico: exportar estilos de la plataforma.** En Ajustes, pestana
+> Avanzado, seccion Diagnostico, el boton **Exportar estilos** barre *todo* el
+> CSS accesible —no solo el visible—: hojas del documento, shadow roots
+> anidados e iframes del mismo origen, y descarga un `.json` local con cada
+> color literal (y los selectores donde se usa), todas las variables del tema
+> y el inventario de hojas. No envia nada a ningun servidor. Sirve para
+> revisar de donde sale cada color de la plataforma.
 
 > **Ajustes, mas rapidos.** El campo **Buscar ajuste...** de la cabecera filtra
 > las opciones de todas las secciones a la vez y salta a la primera con

@@ -135,7 +135,7 @@ commitear, asi que la doc no se desfasa sola.
   node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
   node scripts/test-all.mjs
   ```
-  Las 22 suites (~1746 checks) deben quedar en verde. Si añades logica nueva,
+  Las 22 suites (~1747 checks) deben quedar en verde. Si añades logica nueva,
   añade o amplia una suite.
 - La version se calcula **automaticamente** al hacer push a `main` (workflow
   Release, segun commits convencionales). No cambies `@version` a mano: usa
@@ -194,7 +194,7 @@ node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
 node scripts/test-all.mjs
 ```
 
-- **22 suites, ~1746 checks**. Ninguna usa red ni navegador: las suites extraen
+- **22 suites, ~1747 checks**. Ninguna usa red ni navegador: las suites extraen
   funciones del bundle con stubs de DOM/localStorage.
 - `tests/_source.js` reconstruye `build/rondo.bundle.js` solo si `src/`,
   `VERSION` o `build.mjs` estan mas nuevos, y expone `src` a cada suite.
@@ -238,7 +238,7 @@ fragmento; la tabla siguiente es una guia rapida por dominio.
 | geo-rutas | 12–20 | geodesia, Douglas-Peucker, OSM/OSRM/A*, municipios, busqueda difusa, paradas, rutas, caravana, analisis de viaje |
 | notif-ia | 21–24 | nombre/estado de unidades, notificaciones, IA de razonamiento, dialogos |
 | engine | 25–32 | motor de reglas, zonas de riesgo, refresh, ventanas, lista vigilada, editor de paradas, verificacion, tema |
-| ui | 33–54 | CSS, build de UI, drag, paint, geocercas, caravana, export, actualizaciones, menu, teclas, eventos, bindings, init, mapa, replay, informe PDF, informe por geocerca, diagnostico, alerta de geocercas, geocercas de la app |
+| ui | 33–54 | CSS, build de UI, drag, paint, geocercas, caravana, export, actualizaciones, menu, teclas, eventos, bindings, init, mapa, replay, informe PDF, informe por geocerca, diagnostico (incluye el export de estilos), alerta de geocercas, geocercas de la app |
 
 ## Definicion de "mejora"
 
