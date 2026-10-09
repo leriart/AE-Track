@@ -75,9 +75,9 @@ ok('init llama a rxDiagBind', /try \{ rxDiagBind\(\); \} catch/.test(src));
 ok('writeJSON contabiliza fallos', /writeJSON\._fallos = \(writeJSON\._fallos \|\| 0\) \+ 1/.test(src));
 ok('writeSession contabiliza fallos', /writeSession\._fallos = \(writeSession\._fallos \|\| 0\) \+ 1/.test(src));
 
-ok('diagnostico: captura de ventana con fondo claro (boton + funcion)',
+ok('diagnostico: captura la ventana de unidad (boton + funcion)',
     /function rxCapturarVentana\(/.test(src) && /"rondo-diag-fondos"/.test(src) &&
-    /CAPTURADO: /.test(src) && /rxCapturarVentana\(25\)/.test(src));
+    /VENTANA: /.test(src) && /rxCapturarVentana\(25\)/.test(src));
 ok('diagnostico: el export detecta textos invisibles (color == fondo)',
     /const invisibles = \[\]/.test(src) && /resumen: \{[^}]*invisibles/.test(src) &&
     /invisibles: invisibles/.test(src) && /getComputedStyle\(p\)\.backgroundColor/.test(src));

@@ -9118,56 +9118,60 @@
     function rxCapturarVentana(segundos) {
         const limite = Date.now() + (segundos || 25) * 1000;
         const salida = byId('rondo-diag-out');
-        if (salida) salida.textContent = 'Esperando la ventana... mueve el raton sobre una unidad (tooltip).';
-        const parse = (c) => {
-            const m = String(c).match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?/);
-            return m ? { lum: (0.2126 * (+m[1]) + 0.7152 * (+m[2]) + 0.0722 * (+m[3])) / 255, a: m[4] === undefined ? 1 : +m[4] } : null;
-        };
-        const claro = (c) => { const p = parse(c); return p && p.a > 0.5 && p.lum > 0.85; };
+        if (salida) salida.textContent = 'Esperando la ventana... abre/muestra la unidad (tooltip) y dejalo abierto un momento.';
         const corto = (el) => el.tagName.toLowerCase() + (el.id ? '#' + el.id : '') +
-            (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).join('.') : '');
-        const reglas = [];
-        for (let i = 0; i < document.styleSheets.length; i++) {
-            const sh = document.styleSheets[i];
-            let rs; try { rs = sh.cssRules; } catch (_) { continue; }
-            const href = (sh.href || 'inline').split('/').pop();
-            const walk = (l) => {
-                for (let k = 0; k < l.length; k++) {
-                    const r = l[k];
-                    if (r.cssRules && (r.type === 4 || r.type === 12)) { walk(r.cssRules); continue; }
-                    if (!r.selectorText || !r.style) continue;
-                    const bg = r.style.getPropertyValue('background-color') || r.style.getPropertyValue('background');
-                    if (bg) reglas.push({ sel: r.selectorText, bg: bg, prio: r.style.getPropertyPriority('background-color') || r.style.getPropertyPriority('background'), href: href });
-                }
-            };
-            walk(rs);
-        }
+            (typeof el.className === 'string' && el.className.trim() ? '.' + el.className.trim().split(/\s+/).slice(0, 3).join('.') : '');
+        const SEL = '.wui2-message-box,[class*="_messageBox_"],[class*="_contentWrapper_"],' +
+            '[class*="_content-wrapper_"],[class*="_cell_"],[class*="_table_"],' +
+            '#tooltip,#tooltip2,.wui-tooltip,.x-unit-info,.mini-window-extra,.tippy-box,[class*="_hint_"]';
+        const fgBg = (el) => {
+            const cs = window.getComputedStyle(el);
+            let bg = 'transparent', p = el, n = 0;
+            while (p && n < 12) {
+                const c = getComputedStyle(p).backgroundColor;
+                if (c && !/rgba\(0, 0, 0, 0\)|transparent/.test(c)) { bg = c; break; }
+                p = p.parentElement; n++;
+            }
+            return { color: cs.color, fondo: bg };
+        };
         const timer = setInterval(() => {
-            if (Date.now() > limite) { clearInterval(timer); if (salida) salida.textContent = 'Timeout: no aparecio ninguna ventana con fondo claro.'; return; }
-            const todos = document.querySelectorAll('body *');
+            if (Date.now() > limite) { clearInterval(timer); if (salida) salida.textContent = 'Timeout: no aparecio ninguna ventana de unidad.'; return; }
+            let cands = [];
+            try { cands = document.querySelectorAll(SEL); } catch (_) { cands = []; }
             let mejor = null, area = 0;
-            for (let i = 0; i < todos.length; i++) {
-                const el = todos[i];
+            for (let i = 0; i < cands.length; i++) {
+                const el = cands[i];
                 const cs = window.getComputedStyle(el);
                 if (cs.display === 'none' || cs.visibility === 'hidden') continue;
-                if (!claro(cs.backgroundColor)) continue;
                 const r = el.getBoundingClientRect();
-                if (r.width < 60 || r.height < 40) continue;
+                if (r.width < 120 || r.height < 60) continue;
+                if (el.id && el.id.indexOf('rondo') === 0) continue;
                 const a = r.width * r.height;
                 if (a > area) { area = a; mejor = el; }
             }
             if (!mejor) return;
             clearInterval(timer);
-            const out = ['CAPTURADO: ' + corto(mejor) + '  ' + Math.round(area) + 'px'];
+            const out = ['VENTANA: ' + corto(mejor) + '  ' + Math.round(area) + 'px'];
             const ruta = [corto(mejor)];
             let p = mejor.parentElement, n = 0;
             while (p && n < 4) { ruta.push(corto(p)); p = p.parentElement; n++; }
             out.push('ruta: ' + ruta.join('  <  '));
-            for (let i = 0; i < reglas.length; i++) {
-                try { if (mejor.matches(reglas[i].sel)) out.push('regla: ' + reglas[i].sel + '{' + reglas[i].bg + (reglas[i].prio ? ' !important' : '') + '} @' + reglas[i].href); } catch (_) { /* noop */ }
-            }
             out.push('inline: ' + (mejor.style.cssText || '-'));
-            out.push('HTML: ' + String(mejor.outerHTML).slice(0, 3500));
+            // Reporte de color/fondo de cada texto interno (los campos en blanco
+            // salen aqui con color == fondo).
+            try {
+                const kids = mejor.querySelectorAll('*');
+                for (let i = 0; i < kids.length && out.length < 160; i++) {
+                    const k = kids[i];
+                    let t = '';
+                    for (let ch = k.firstChild; ch; ch = ch.nextSibling) if (ch.nodeType === 3) t += ch.nodeValue;
+                    t = t.trim();
+                    if (!t) continue;
+                    const c = fgBg(k);
+                    out.push('  ' + corto(k) + '  "' + t.slice(0, 30) + '"  color=' + c.color + ' fondo=' + c.fondo + '  inline="' + (k.getAttribute('style') || '') + '"');
+                }
+            } catch (_) { /* noop */ }
+            out.push('HTML: ' + String(mejor.outerHTML).slice(0, 6000));
             const txt = out.join('\n');
             if (salida) salida.textContent = txt;
             try {
@@ -9252,7 +9256,7 @@
             '<button class="accbtn" id="rondo-diag-ver"><span class="rondo-usym">' + UIS.info + '</span> Ver diagnostico</button>' +
             '<button class="accbtn" id="rondo-diag-copiar"><span class="rondo-usym">' + UIS.export + '</span> Copiar</button>' +
             '<button class="accbtn" id="rondo-diag-estilos" title="Descarga el JSON con TODOS los colores literales y variables del tema de la plataforma (documento, shadow roots e iframes)"><span class="rondo-usym">' + UIS.export + '</span> Exportar estilos</button>' +
-            '<button class="accbtn" id="rondo-diag-fondos" title="Espera 25 s y captura la primera ventana con fondo claro que aparezca (mueve el raton sobre una unidad para que salga el tooltip)"><span class="rondo-usym">' + UIS.info + '</span> Fondos claros</button>' +
+            '<button class="accbtn" id="rondo-diag-fondos" title="Durante 25 s espera a la ventana de unidad y copia su HTML + el color/fondo de cada texto (abre/muestra la unidad y dejalo abierto)"><span class="rondo-usym">' + UIS.info + '</span> Copiar ventana</button>' +
             '<button class="accbtn" id="rondo-diag-invisibles" title="Durante 30 s busca textos del mismo color que su fondo. Mueve el raton sobre las unidades para que salga el tooltip"><span class="rondo-usym">' + UIS.info + '</span> Textos invisibles</button>' +
             '</div>' +
             '<div id="rondo-diag-out" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px;white-space:pre-wrap;font-family:monospace;line-height:1.45"></div>';
