@@ -33,7 +33,7 @@
             '</div>' +
 '<header id="rondo-drag">' +
              '<span id="rondo-estado-barra" class="rondo-badge-estado"></span>' +
-             '<h3>' + esc(LANG.titlePanel) +
+             '<h3><span class="rondo-nlogo" title="' + esc(LANG.titlePanel) + '">' + rondoLogoSVG('currentColor') + '</span>' +
              // v5.14.2: chip de version en linea con el titulo. Color por
              // estado del check (verde=al dia, rojo=update, ambar=unknown,
              // azul=checking, gris=ahead). Click = fuerza check;

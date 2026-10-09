@@ -478,7 +478,7 @@ ok('aiPatronesUI dialog distingue 401/429/400/timeout', /401\|403/.test(src) && 
 ok('aiPatronesUI muestra respuesta cruda del modelo en details', /details[\s\S]{0,500}Respuesta cruda/.test(src));
 ok('aiPatronesUI try/catch con dialog de error interno', /\} catch \(e\) \{[\s\S]{0,1500}Error interno al detectar patrones/.test(src));
 ok('aiPatronesUI limpia setBusy en finally', /\} finally \{[\s\S]{0,100}setBusy\(btn, false\)/.test(src));
-ok('chip de version dentro del h3', /<h3>[^<]+<button type="button" id="rondo-version-chip"/.test(src));
+ok('chip de version dentro del h3', /<h3><span class="rondo-nlogo"[\s\S]*?id="rondo-version-chip"/.test(src));
 ok('chip CSS mas compacto (18px height)', /height:18px/.test(src));
 ok('chip CSS no es .rondo-iconbtn (estilo inline)', !/#rondo-panel\s+\.rondo-iconbtn[\s\S]{0,400}#rondo-version-chip/.test(src));
 
@@ -1190,6 +1190,8 @@ ok('Ajustes: guarda estiloPagina/idiomaPlataforma y ajusta la voz',
     /cf\.estiloPagina = !!\(cEstiloPag2 && cEstiloPag2\.checked\)/.test(src) &&
     /cf\.idiomaPlataforma = !!\(cIdiomaPlat2/.test(src) && /if \(vl\) cf\.voiceLang = vl;/.test(src));
 ok('Ajustes: el atajo Alt+1..8 esta al dia', /Atajos: <b>Alt\+1\.\.8<\/b>/.test(src));
+ok('cabecera: el titulo es el logo RONDO (Ndot)',
+    /class="rondo-nlogo"/.test(src) && /rondoLogoSVG\('currentColor'\)/.test(src));
 ok('diagnostico: incluye la identidad de la plataforma',
     /plataforma: \{/.test(src) && /Plataforma: ' \+ \(plat\.nombre/.test(src));
 

@@ -83,6 +83,9 @@
             "@keyframes rondoRailIn{from{opacity:0;transform:translateY(-50%) scale(.8)}to{opacity:1;transform:translateY(-50%) scale(1)}}\n" +
             "#rondo-panel header{display:flex;align-items:center;gap:4px;padding:8px 10px;background:linear-gradient(180deg,var(--rondo-bg-strong),var(--rondo-bg-soft));cursor:move;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;box-shadow:0 1px 0 rgba(255,255,255,.03)}\n" +
             "#rondo-panel header h3{margin:0 6px 0 2px;font-size:13px;flex:1;letter-spacing:.2px;font-weight:700;min-width:110px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}\n" +
+            // Logo RONDO en tipografia Ndot (SVG de puntos, ver rondoLogoSVG).
+            "#rondo-panel header .rondo-nlogo{display:inline-flex;align-items:center;color:var(--rondo-accent-2)}\n" +
+            "#rondo-panel header .rondo-nlogo svg{height:calc(15px * var(--rondo-esc));width:auto;display:block}\n" +
             // v5.14.2: chip de version en linea con el titulo. v5.14.1 lo
             // puso como boton aparte al final de la cabecera; el usuario
             // prefierio tenerlo pegado al 'Rondo'. Sigue siendo boton
