@@ -240,14 +240,15 @@ ok('reestilizado: la ventana flotante (tippy ._messageBox_) queda opaca',
 ok('reestilizado: arregla el contraste de la ventana en runtime',
     /function rxContrasteVentana\(/.test(src) && /function rxObservarVentanas\(/.test(src) &&
     /rxObservarVentanas\(\);/.test(src) && /col\.sat > 0\.4/.test(src));
-ok('reestilizado: el arreglo de contraste no toca los colores de estado',
-    /col\.lum > 0\.4 \|\| col\.sat > 0\.4/.test(src) && /bgDe\(el\) > 0\.5/.test(src));
+ok('reestilizado: el contraste de la ventana invierte el texto segun el fondo',
+    /col\.sat > 0\.4/.test(src) && /Math\.abs\(col\.lum - bgLum\) > 0\.35/.test(src) &&
+    /bgLum > 0\.5 \? '#1d2433' : fg/.test(src));
 ok('reestilizado: refuerzo directo de color en la ventana y observer de contenido',
     /\[class\*="_messageBox_"\] \[class\]\{color:inherit;\}/.test(src) &&
     /document\.querySelector\('\[class\*="_messageBox_"\],\.tippy-box'\)/.test(src));
-ok('reestilizado: la ventana da mas alto para que el conductor no se recorte',
-    /max-height:calc\(100vh - 70px\) !important/.test(src) &&
-    /\[class\*="_contentWrapper_"\]/.test(src));
+ok('reestilizado: la ventana se limita al alto visible (contenido alcanzable)',
+    /window\.innerHeight - top - 12/.test(src) &&
+    /caja\.style\.setProperty\('overflow-y', 'auto', 'important'\)/.test(src));
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
