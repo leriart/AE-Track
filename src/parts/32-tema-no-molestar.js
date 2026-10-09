@@ -211,6 +211,28 @@
         if (clave === 'accent-bg-hover') return acc2 + '33';
         return P[clave] || P.fg;
     }
+    // Lee la paleta activa de Rondo (--rondo-*) con respaldo literal, para que
+    // la pagina use EXACTAMENTE los mismos colores que el panel (y siga los
+    // cambios de tema sin duplicar valores a mano).
+    function rxPaginaPaleta(claro) {
+        let cs = null;
+        try { cs = getComputedStyle(document.body || document.documentElement); } catch (_) { cs = null; }
+        const g = (n, def) => {
+            const v = cs && (cs.getPropertyValue(n) || '').trim();
+            return v || def;
+        };
+        return claro ? {
+            bg: g('--rondo-bg', '#f5f7fa'), soft: g('--rondo-bg-soft', '#ffffff'),
+            strong: g('--rondo-bg-strong', '#eef2f7'), fg: g('--rondo-fg', '#1d2433'),
+            dim: g('--rondo-fg-dim', '#5b6577'), mute: g('--rondo-fg-mute', '#8993a3'),
+            border: g('--rondo-border', '#dfe4ec')
+        } : {
+            bg: g('--rondo-bg', '#1f2330'), soft: g('--rondo-bg-soft', '#272d3c'),
+            strong: g('--rondo-bg-strong', '#313849'), fg: g('--rondo-fg', '#e8ecf3'),
+            dim: g('--rondo-fg-dim', '#9aa4b5'), mute: g('--rondo-fg-mute', '#6f7888'),
+            border: g('--rondo-border', '#3a4252')
+        };
+    }
     function rxAplicarEstiloPagina() {
         const elPrev = document.getElementById('rondo-estilo-pagina');
         if (!(APP.config && APP.config.estiloPagina)) {
@@ -223,18 +245,12 @@
             ? rxPlatAcento() : (APP.config.acento || '#850D22');
         const acc2 = aclarar(acc, 0.28);
         const accD = oscurecer(acc, 0.14);
-        // Paleta de superficies/texto segun el tema efectivo.
+        // Paleta de superficies/texto segun el tema efectivo. Se leen los
+        // tokens --rondo-* reales (con respaldo literal) para que la pagina use
+        // EXACTAMENTE los mismos colores que el panel.
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
-        const P = claro ? {
-            bg: '#f5f7fa', soft: '#ffffff', strong: '#eef2f7',
-            fg: '#1d2433', dim: '#5b6577', mute: '#8993a3',
-            border: '#dfe4ec'
-        } : {
-            bg: '#1f2330', soft: '#272d3c', strong: '#313849',
-            fg: '#e8ecf3', dim: '#9aa4b5', mute: '#6f7888',
-            border: '#3a4252'
-        };
+        const P = rxPaginaPaleta(claro);
         const decl = [];
         Object.keys(RX_PAGINA_MAPA).forEach((v) => {
             decl.push('  --' + v + ':' + rxPaginaToken(RX_PAGINA_MAPA[v], P, acc, acc2, accD) + ' !important;');
@@ -289,6 +305,38 @@
         // que la plataforma declare en cualquiera de esos niveles.
         el.textContent = ':root,html,body{\n' + decl.join('\n') + '\n}\n' + comp + '\n';
     }
+    // v6.19.5: capa de rendimiento CSS. No toca JS ni red: reduce el trabajo de
+    // pintado/composicion del navegador sobre la plataforma, que es lo que
+    // produce el "trabado" al hacer scroll o animar. Es opt-in y reversible.
+    function rxAplicarRendimientoPagina() {
+        const elPrev = document.getElementById('rondo-rendimiento-pagina');
+        if (!(APP.config && APP.config.rendimientoPagina)) {
+            if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
+            return;
+        }
+        let el = elPrev;
+        if (!el) {
+            el = document.createElement('style');
+            el.id = 'rondo-rendimiento-pagina';
+            (document.head || document.documentElement).appendChild(el);
+        }
+        const reglas = [
+            // Los desenfoques (backdrop-filter) son de lo mas caro por frame.
+            '*{-webkit-backdrop-filter:none !important;backdrop-filter:none !important;}',
+            // El scroll suave va por el hilo principal: fuera.
+            'html{scroll-behavior:auto !important;}',
+            // Filas/cartas fuera de pantalla: no se calculan ni se pintan.
+            '.wui2-list_row,.wui-list_item,.ant-table-row,.ant-list-item,.ant-select-item,' +
+                '.ant-table-tbody>tr,.wui2-list_group-row{content-visibility:auto;contain-intrinsic-size:auto 38px;}',
+            // Cada fila se pinta aislada: un cambio dentro no refluye el resto.
+            '.wui2-list_row,.wui-list_item,.ant-table-row{contain:layout style paint;}',
+            // Transiciones cortas y solo de propiedades que no repintan.
+            '.wui-button,.wui-icon,.ant-btn,.wui2-button{transition:background-color .1s,color .1s,border-color .1s,opacity .1s !important;}',
+            // Respeta "reducir movimiento" del sistema.
+            '@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}'
+        ].join('\n');
+        el.textContent = reglas + '\n';
+    }
     function applyTheme() {
         const c = APP.config;
         const theme = (c.theme === 'auto')
@@ -316,6 +364,8 @@
         document.documentElement.style.setProperty('--rondo-esc', String(normalizarEscala(c.escalaUI)));
         // v6.0.14: aplica/quita el reestilizado de la pagina de la plataforma.
         try { rxAplicarEstiloPagina(); } catch (_) { /* noop */ }
+        // v6.19.5: aplica/quita la capa de rendimiento CSS.
+        try { rxAplicarRendimientoPagina(); } catch (_) { /* noop */ }
     }
     // Normaliza el factor de escala de UI a uno de los valores permitidos.
     const ESCALAS_UI = [1, 1.15, 1.3, 1.5];
