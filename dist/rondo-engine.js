@@ -5065,6 +5065,14 @@ ta.value = '';
     };
     // Unico token que espera el shorthand completo "1px solid <color>".
     const RX_PAGINA_BORDE_SHORTHAND = { 'list-table-tab_button-active-border': 'accent' };
+    // Redondeos: la plataforma usa 4px; Rondo es mas suave (8-12px). Como son
+    // tokens, cambiarlos redondea de golpe botones, inputs, tarjetas y dialogos.
+    const RX_PAGINA_RADIOS = {
+        'controls-border-radius': '8px', 'other-border-radius': '8px', 'modal-border-radius': '12px',
+        'button-border-radius': '8px', 'input-border-radius': '8px', 'tag-border-radius': '6px',
+        'panel-list-item-border-radius': '8px', 'panel-list-group-border-radius': '8px',
+        'tooltip-border-radius': '8px'
+    };
     // Resuelve una clave del mapa al color de la paleta activa.
     function rxPaginaToken(clave, P, acc, acc2, accD) {
         if (clave === 'accent') return acc;
@@ -5124,6 +5132,9 @@ ta.value = '';
             decl.push('  --' + v + ':1px solid ' +
                 rxPaginaToken(RX_PAGINA_BORDE_SHORTHAND[v], P, acc, acc2, accD) + ' !important;');
         });
+        Object.keys(RX_PAGINA_RADIOS).forEach((v) => {
+            decl.push('  --' + v + ':' + RX_PAGINA_RADIOS[v] + ' !important;');
+        });
         // v6.19.4: los componentes base de Wialon (wui-*) no siempre leen las
         // variables del skin, asi que se visten aparte para que no queden
         // islas con el tema original. Se limita a clases wui-* y a los
@@ -5158,7 +5169,21 @@ ta.value = '';
             '.ant-checkbox-checked .ant-checkbox-inner,.ant-radio-checked .ant-radio-inner{background:' + acc + ' !important;border-color:' + acc + ' !important;}',
             '.ant-switch{background:' + P.strong + ' !important;}',
             '.ant-switch-checked{background:' + acc + ' !important;}',
-            '.ant-tag{background:' + P.strong + ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}'
+            '.ant-tag{background:' + P.strong + ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
+            // Ventanas y tarjetas por vehiculo de Wialon: traen colores
+            // literales (rgb(255,255,255), #172336...), no leen el skin. Se
+            // visten a mano para que no queden islas claras en tema oscuro.
+            '#tooltip,#tooltip2,.mini-window-extra,.x-unit-info,.x-unit-tooltip,' +
+                '.x-monitoring-units-extra-info-row,.monitoring_units_state_gps_wrapper,' +
+                '.workspace-units-panel,.workspace-units-panel-main,.workspace-units-caption,' +
+                '.x-map-report-marker-info,.map-control-info,.control-with-info,' +
+                '.items-group-page-window,.notifications-list-dialog-window-container,' +
+                '.gdpr-wizard-dialog-window,.help-window{background:' + P.soft + ' !important;color:' + P.fg + ' !important;}',
+            '#tooltip .block-header,#tooltip2 .block-header,.x-unit-tooltip>.header,' +
+                '.x-monitoring-units-extra-info-row{border-color:' + P.border + ' !important;}',
+            '.pursuit-window .pursuit-top-container{background:' + P.strong + ' !important;color:' + P.fg + ' !important;}',
+            '.pursuit-window .panoram-disable-button{background:' + P.soft + ' !important;color:' + P.fg + ' !important;}',
+            '#tooltip a,#tooltip2 a,.x-unit-info a,.mini-window-extra a{color:' + acc + ' !important;}'
         ].join('\n');
         let el = elPrev;
         if (!el) {

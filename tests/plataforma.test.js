@@ -190,8 +190,15 @@ ok('reestilizado real: viste los componentes wui-* de Wialon',
     /\.wui-checkbox input:checked~\.wui-checkmark\{background:#B30B27 !important/.test(cssOsc));
 ok('reestilizado real: viste los componentes ant-* de Ant Design',
     /\.ant-btn-primary\{background:#B30B27 !important/.test(cssOsc) &&
-    /\.ant-input,\.ant-input-affix-wrapper/.test(cssOsc) &&
+    /\.ant-input,.ant-input-affix-wrapper/.test(cssOsc) &&
     /\.ant-modal-content/.test(cssOsc));
+ok('reestilizado real: viste las ventanas por vehiculo de Wialon',
+    /#tooltip,#tooltip2,\.mini-window-extra,\.x-unit-info/.test(cssOsc) &&
+    /\.pursuit-window \.pursuit-top-container/.test(cssOsc) &&
+    /\.workspace-units-panel/.test(cssOsc));
+ok('reestilizado real: redondeos estilo Rondo',
+    /--controls-border-radius:8px !important;/.test(cssOsc) &&
+    /--modal-border-radius:12px !important;/.test(cssOsc));
 ok('reestilizado real: hereda el acento de la plataforma en opt-in',
     generarEstilo({ temaPlataforma: true }, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
 ok('reestilizado real: por defecto usa el acento de Rondo',
