@@ -225,6 +225,9 @@ ok('reestilizado: ventana de unidad y controles del mapa',
 ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
     /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
     /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
+ok('reestilizado: cubre reportes, avisos y listas legacy del volcado',
+    /\.report-result-body-table,/.test(src) && /\.notify_dlg_table/.test(src) &&
+    /\.chart_tooltip/.test(src) && /html \.ol-viewport\{background:/.test(src));
 ok('reestilizado: inyecta tambien en shadow DOM (UI nueva)',
     /function rxSombrasPagina\(/.test(src) && /adoptedStyleSheets/.test(src) &&
     /rxSombrasPagina\(\)/.test(src));
