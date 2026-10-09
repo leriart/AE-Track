@@ -137,6 +137,127 @@
         } catch (_) { /* noop */ }
     }
 
+    /* ===== Exportador de estilos de la plataforma ======================
+     * Barre TODO el CSS accesible (documento, shadow roots anidados,
+     * iframes del mismo origen y adoptedStyleSheets), no solo lo visible,
+     * y lista cada color literal con los selectores donde se usa y todas
+     * las variables del tema. Sirve para mapear con precision en vez de
+     * adivinar. Solo lectura: no toca el estilo de la pagina.
+     *   - usa     selector { propiedad }
+     *   - vars    {"--token":"valor"}
+     * Descarga un .json local (Blob + <a>), sin enviar nada. */
+    function rxEstilosColector(cap) {
+        const CAP = cap || 30;
+        const colores = new Map();
+        const variables = new Map();
+        const hojas = [];
+        let nReglas = 0, nRoots = 0;
+        const LIT = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
+        const norm = (x) => String(x || '').trim().toLowerCase().replace(/\s+/g, ' ');
+        const add = (lit, sel, prop) => {
+            const k = norm(lit);
+            let e = colores.get(k);
+            if (!e) { e = { valor: k, n: 0, usos: [] }; colores.set(k, e); }
+            e.n++;
+            if (e.usos.length < CAP) {
+                const u = sel + ' {' + prop + '}';
+                if (e.usos.indexOf(u) < 0) e.usos.push(u);
+            }
+        };
+        const reglas = (rs, origen) => {
+            for (let i = 0; i < rs.length; i++) {
+                const r = rs[i];
+                if (r.cssRules && (r.type === 4 || r.type === 12)) {
+                    reglas(r.cssRules, origen + '@' + (r.conditionText || '') + ' ');
+                    continue;
+                }
+                if (!r.style) continue;
+                if (r.selectorText) nReglas++;
+                for (let k = 0; k < r.style.length; k++) {
+                    const prop = r.style[k];
+                    const val = r.style.getPropertyValue(prop);
+                    if (prop.indexOf('--') === 0) { if (!variables.has(prop)) variables.set(prop, norm(val)); continue; }
+                    if (!/color|background|border|outline|fill|stroke|shadow|filter/.test(prop)) continue;
+                    const m = val.match(LIT);
+                    if (m) for (let j = 0; j < m.length; j++) add(m[j], r.selectorText || ('@' + origen), prop);
+                }
+            }
+        };
+        const raiz = (root, origen) => {
+            nRoots++;
+            const etiq = origen + ' >shadow#' + nRoots;
+            const hs = [];
+            const ad = root.adoptedStyleSheets || [];
+            for (let i = 0; i < ad.length; i++) hs.push(ad[i]);
+            const st = root.querySelectorAll ? root.querySelectorAll('style') : [];
+            for (let i = 0; i < st.length; i++) if (st[i].sheet) hs.push(st[i].sheet);
+            for (let i = 0; i < hs.length; i++) {
+                try { reglas(hs[i].cssRules || [], etiq); } catch (_) { /* noop */ }
+            }
+            if (root.querySelectorAll) {
+                const todos = root.querySelectorAll('*');
+                for (let i = 0; i < todos.length; i++) if (todos[i].shadowRoot) raiz(todos[i].shadowRoot, etiq);
+            }
+        };
+        const doc = (d, origen, prof) => {
+            if (prof > 3) return;
+            const ss = d.styleSheets || [];
+            for (let i = 0; i < ss.length; i++) {
+                const sh = ss[i];
+                const nombre = sh.href ? String(sh.href).split('/').pop() : '(inline)';
+                try { reglas(sh.cssRules, origen); hojas.push({ origen: origen, href: sh.href || '(inline)', archivo: nombre, reglas: sh.cssRules.length }); }
+                catch (_) { hojas.push({ origen: origen, href: sh.href || '(cross-origin)', archivo: nombre, reglas: -1 }); }
+            }
+            const ad = d.adoptedStyleSheets || [];
+            for (let i = 0; i < ad.length; i++) { try { reglas(ad[i].cssRules, origen + ' adopted'); } catch (_) { /* noop */ } }
+            if (!d.querySelectorAll) return;
+            const todos = d.querySelectorAll('*');
+            for (let i = 0; i < todos.length; i++) if (todos[i].shadowRoot) raiz(todos[i].shadowRoot, origen);
+            const frames = d.querySelectorAll('iframe,frame');
+            for (let i = 0; i < frames.length; i++) {
+                try { const cd = frames[i].contentDocument; if (cd) doc(cd, origen + ' >iframe', prof + 1); } catch (_) { /* noop */ }
+            }
+        };
+        doc(document, 'document', 0);
+        const lista = [];
+        colores.forEach((v) => lista.push(v));
+        lista.sort((a, b) => b.n - a.n);
+        const vars = {};
+        variables.forEach((v, k) => { vars[k] = v; });
+        return {
+            version: 1,
+            generado: new Date().toISOString(),
+            url: (location ? location.href : ''),
+            resumen: { colores: lista.length, variables: variables.size, hojas: hojas.length, reglas: nReglas, shadowRoots: nRoots },
+            colores: lista,
+            variables: vars,
+            hojas: hojas
+        };
+    }
+    // Descarga el JSON de estilos (Blob + <a>, todo local).
+    function rxEstilosExportar() {
+        let datos;
+        try { datos = rxEstilosColector(30); }
+        catch (e) { adviceWarn('No se pudo recolectar', 'Revisa la consola.'); return; }
+        let txt;
+        try { txt = JSON.stringify(datos, null, 1); }
+        catch (_) { adviceWarn('No se pudo serializar', 'Intenta de nuevo.'); return; }
+        try {
+            const blob = new Blob([txt], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'rondo-estilos-plataforma.json';
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                try { URL.revokeObjectURL(url); } catch (_) { /* noop */ }
+                if (a.parentNode) a.parentNode.removeChild(a);
+            }, 500);
+            adviceOk('Estilos exportados', datos.resumen.colores + ' colores · ' + datos.resumen.variables +
+                ' variables · ' + datos.resumen.shadowRoots + ' shadow roots');
+        } catch (_) { adviceWarn('No se pudo descargar', 'Copia el texto manualmente.'); }
+    }
     // Inyecta el bloque en la seccion Avanzado de Ajustes (una sola vez) y
     // cablea sus botones. Se llama desde init().
     function rxDiagBind() {
@@ -148,11 +269,14 @@
             '<div class="rondo-acciones">' +
             '<button class="accbtn" id="rondo-diag-ver"><span class="rondo-usym">' + UIS.info + '</span> Ver diagnostico</button>' +
             '<button class="accbtn" id="rondo-diag-copiar"><span class="rondo-usym">' + UIS.export + '</span> Copiar</button>' +
+            '<button class="accbtn" id="rondo-diag-estilos" title="Descarga el JSON con TODOS los colores literales y variables del tema de la plataforma (documento, shadow roots e iframes)"><span class="rondo-usym">' + UIS.export + '</span> Exportar estilos</button>' +
             '</div>' +
             '<div id="rondo-diag-out" style="font-size:11.5px;color:var(--rondo-fg-dim);margin-top:6px;white-space:pre-wrap;font-family:monospace;line-height:1.45"></div>';
         pane.appendChild(box);
         const ver = box.querySelector('#rondo-diag-ver');
         if (ver) ver.addEventListener('click', rxDiagPintar);
+        const est = box.querySelector('#rondo-diag-estilos');
+        if (est) est.addEventListener('click', rxEstilosExportar);
         const cop = box.querySelector('#rondo-diag-copiar');
         if (cop) cop.addEventListener('click', () => {
             const txt = rxDiagTexto(rxDiagRecolectar());
