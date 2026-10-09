@@ -220,11 +220,14 @@ ok('logo RONDO: 85 puntos dentro del viewBox y sin NaN',
     })());
 ok('reestilizado: ventana de unidad y controles del mapa',
     /\.x-unit-info > \.unit-table-data th\{background:/.test(src) &&
-    /\.mapboxgl-ctrl-group\{background:transparent/.test(src) &&
+    /\.wui-button-icon-shadow\{background:/.test(src) &&
     /\.x-unit-info > \.unit-table-data \.td\{border-color:/.test(src));
+ok('reestilizado: el blanco de los botones viene de wui-button-icon-shadow',
+    /\.wui-button-icon-shadow\{background:' \+ P\.soft/.test(src) &&
+    /\.ol-maps-control,\.control-search,\.ol-bar-container/.test(src));
 ok('reestilizado: inyecta tambien en shadow DOM (UI nueva)',
     /function rxSombrasPagina\(/.test(src) && /adoptedStyleSheets/.test(src) &&
-    /rxSombrasPagina\(P, acc, accD\)/.test(src));
+    /rxSombrasPagina\(\)/.test(src));
 ok('logo RONDO: URI de datos lista para CSS', /^url\("data:image\/svg\+xml,/.test(M.uri('#850D22')));
 ok('color: blanco de fondo -> superficie', M.color('#ffffff', 'background-color', P, ACC, ACCD) === P.soft);
 ok('color: blanco de texto -> #fff', M.color('rgb(255, 255, 255)', 'color', P, ACC, ACCD) === '#ffffff');
@@ -242,10 +245,16 @@ function fakeStyle(obj) {
     keys.forEach((k, i) => { s[i] = k; });
     return s;
 }
-const dec = M.decl(fakeStyle({ 'background-color': '#ffffff', 'color': '#172336', 'border': '1px solid #e3e4e6' }), P, ACC, ACCD);
-ok('color: reescribe declaraciones por propiedad',
-    /background-color:#272d3c;/.test(dec) && /color:#e8ecf3;/.test(dec) &&
-    /border:1px solid #3a4252;/.test(dec));
+const dec = M.decl(fakeStyle({ 'background-color': '#ffffff', 'color': '#172336', 'border': '1px solid #e3e4e6' }));
+ok('color: reescribe a variables (no hornea colores)',
+    /background-color:var\(--rpg-/.test(dec) && /color:var\(--rpg-/.test(dec) &&
+    /border:1px solid var\(--rpg-/.test(dec));
+const dec2 = M.decl(fakeStyle({ 'background-color': '#ffffff' }));
+const idUno = (dec.match(/var\(--rpg-([\w]+)\)/) || [])[1];
+ok('color: el mismo literal+rol reutiliza la misma variable',
+    !!idUno && dec2.indexOf('var(--rpg-' + idUno + ')') >= 0);
+ok('color: un literal sin mapeo se deja intacto',
+    M.decl(fakeStyle({ 'box-shadow': '0 0 2px #123456' })) === '');
 ok('color: named colors basicos',
     M.color('white', 'background-color', P, ACC, ACCD) === P.soft &&
     M.color('black', 'color', P, ACC, ACCD) === P.fg);
@@ -298,6 +307,14 @@ ok('bajo nivel: preconnect a los origenes que usa la app',
     /dns-prefetch/.test(src) && /precargarOrigenes\(\);/.test(src));
 ok('remap: ignora las hojas propias y los enlaces que no son CSS',
     /n\.id\.indexOf\('rondo'\) === 0/.test(src) && /\/stylesheet\/i\.test\(n\.rel/.test(src));
+ok('remap: se dispara desde applyTheme (si no, nunca corria)',
+    /try \{ rxProgramarColoresPagina\(\); \}/.test(src));
+ok('remap: recorre el documento UNA sola vez y despues solo variables',
+    /if \(!_rxDocHecho\)/.test(src) && /rxHojaRondo\('rondo-tokens-pagina'\)/.test(src) &&
+    /function rxPintarTokens\(/.test(src));
+ok('remap: sin reescaneo periodico de todo el documento',
+    !/setInterval\([^)]*rxProgramarColoresPagina\(true\)/.test(src) &&
+    !/_rxColorSig/.test(src));
 
 ok('detecta la pantalla de login',
     /function rxEnLogin\(/.test(src) && /getElementById\('login_body'\)/.test(src) &&
