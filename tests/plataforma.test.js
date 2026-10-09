@@ -305,6 +305,23 @@ ok('color: las definiciones de variables se reescriben por el rol del nombre',
     /--tab-bg-color:var\(--rpg-/.test(decCustom));
 ok('color: una custom property sin token mapeado no se toca',
     M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+// CAUSA REAL de los campos "vacios" del hint de unidad (velocidad, km, horas
+// de motor, satelites, conductor): td::before{position:absolute;inset:0;
+// z-index:0;background:var(--accent-gray-bg-color)} es una CAPA sobre el texto.
+// El token original es ~4% opaco; mapearlo a un gris opaco tapaba el dato.
+const MV = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+    '\nreturn { decl: rxDeclaracionesRondo, vars: _rxVars, pal: rxPaginaToken };')();
+const dVelo = MV.decl(fakeStyle({ 'background-color': 'var(--accent-gray-bg-color)' }));
+const idVelo = (dVelo.match(/var\(--rpg-([\w]+)\)/) || [])[1];
+ok('capa ::before de las tablas del hint: se mapea a un VELO translucido (no opaco)',
+    MV.vars[idVelo] === 'veil');
+ok('velo oscuro y claro con alfa bajo (el texto de debajo se ve)',
+    /rgba\(255,255,255,\.06\)/.test(src) && /rgba\(23,35,54,\.05\)/.test(src) &&
+    MV.pal('veil', { veil: 'rgba(255,255,255,.06)', fg: '#fff' }, '#000', '#000', '#000') === 'rgba(255,255,255,.06)');
+ok('hover-bg-color (capa ::before de los botones) tambien es velo como fondo',
+    MV.vars[(MV.decl(fakeStyle({ 'background-color': 'var(--hover-bg-color)' })).match(/var\(--rpg-([\w]+)\)/) || [])[1]] === 'veil');
+ok('el contenido de la celda se eleva sobre su velo (z-index)',
+    /\[class\*="_table_"\] td:not\(:empty\)>\*\{position:relative;z-index:1;\}/.test(src));
 // Estilos INLINE (Wialon pinta los sensores con style="..."). Antes quedaban
 // como islas: fondo blanco con texto blanco.
 function elInline(obj) {
