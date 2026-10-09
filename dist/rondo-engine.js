@@ -5275,6 +5275,13 @@ ta.value = '';
             // que el texto herede el color de la ventana (sin !important, para
             // no pisar los colores de estado inline rojo/verde).
             '[class*="_messageBox_"] *{color:inherit;}',
+            // Refuerzo directo: cualquier elemento CON CLASE dentro de la
+            // ventana hereda el color (fg). Cubre bloques como el del conductor
+            // que no tienen color propio y heredan uno oscuro. Sin !important,
+            // para no pisar los colores de estado inline.
+            '[class*="_messageBox_"] [class]{color:inherit;}',
+            // El icono del conductor venia con un gris oscuro literal.
+            '.tooltip-driver > div.icon::before,[class*="_messageBox_"] .driver-icon::before{color:' + P.dim + ' !important;}',
             // Algunas reglas pintan el glifo con -webkit-text-fill-color, que
             // gana a 'color': el texto computa claro pero se ve oscuro. Se fija
             // a currentColor (!important), que respeta el color del propio
@@ -5708,25 +5715,21 @@ ta.value = '';
     let _rxVentTimer = 0;
     function rxObservarVentanas() {
         if (_rxVentObs || !window.MutationObserver || !document.body) return;
-        _rxVentObs = new MutationObserver((muts) => {
-            let hay = false;
-            for (let i = 0; i < muts.length; i++) {
-                const ns = muts[i].addedNodes;
-                for (let j = 0; j < ns.length; j++) {
-                    const el = ns[j];
-                    if (!el || el.nodeType !== 1) continue;
-                    const cl = typeof el.className === 'string' ? el.className : '';
-                    if (cl.indexOf('tippy-box') >= 0 || cl.indexOf('_messageBox_') >= 0 ||
-                        (el.querySelector && el.querySelector('[class*="_messageBox_"]'))) { hay = true; break; }
-                }
-                if (hay) break;
-            }
-            if (hay) { clearTimeout(_rxVentTimer); _rxVentTimer = setTimeout(rxArreglarVentanas, 120); }
+        // Tippy suele crear UN tippy-box y solo cambiar su contenido, asi que
+        // no basta con mirar si el nodo añadido "es" la caja: cualquier cambio
+        // del DOM mientras exista la ventana vuelve a comprobar el contraste
+        // (debounced). rxContrasteVentana ignora lo oculto y los colores de
+        // estado, asi que es barato y seguro.
+        _rxVentObs = new MutationObserver(() => {
+            if (!document.querySelector('[class*="_messageBox_"],.tippy-box')) return;
+            clearTimeout(_rxVentTimer);
+            _rxVentTimer = setTimeout(rxArreglarVentanas, 150);
         });
         try { _rxVentObs.observe(document.body, { childList: true, subtree: true }); } catch (_) { _rxVentObs = null; }
     }
     function rxArreglarVentanas() {
         const cajas = document.querySelectorAll('[class*="_messageBox_"],.tippy-box');
+        if (!cajas.length) return;
         for (let i = 0; i < cajas.length; i++) {
             try { rxContrasteVentana(cajas[i]); } catch (_) { /* noop */ }
         }
