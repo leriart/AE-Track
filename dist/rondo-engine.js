@@ -4933,7 +4933,7 @@ ta.value = '';
         'primary-color': 'fg', 'secondary-color': 'dim', 'color-text-secondary': 'dim',
         'color-text-disabled': 'mute',
         // --- base: superficies --- 'hover-bg-color': 'strong', 'editable-hover-bg-color': 'strong',
-        'accent-gray-bg-color': 'strong', 'available-components-bg-color': 'soft',
+        'accent-gray-bg-color': 'veil', 'available-components-bg-color': 'soft',
         'disabled-components-bg-color': 'strong', 'table-selected-item-bg-color': 'strong',
         'higlighted-normal': 'strong', 'higlighted-hover': 'strong', 'higlighted-active': 'strong',
         'bg-dark-surface': 'strong', 'hover-bg-dark-surface': 'strong', 'active-bg-dark-surface': 'strong',
@@ -5102,6 +5102,12 @@ ta.value = '';
     // Variables que Wialon usa a la vez como TEXTO y como FONDO. Mapearlas
     // globalmente rompe uno de los dos roles; se resuelven por PROPIEDAD en el
     // remap (texto -> color de texto, fondo -> color de fondo, borde -> borde).
+    // 'veil' = velo TRANSLUCIDO (no una superficie opaca). Wialon usa varios
+    // fondos con ~5% de opacidad (--accent-gray-bg-color #1723360A,
+    // --hover-bg-color #1723360F) como CAPA: p. ej. td::before{position:absolute;
+    // inset:0;z-index:0} en las tablas del hint de unidad (velocidad, km, horas
+    // de motor, satelites) y ::before de botones. Esa capa se pinta ENCIMA del
+    // texto no posicionado; con un gris opaco tapaba el dato (campos "vacios").
     const RX_PAGINA_MIXTOS = {
         // El skin define --white como blanco y lo usa de FONDO de botones,
         // pestanas, checkboxes, calendario y del cuadro de mensaje de unidad,
@@ -5119,7 +5125,7 @@ ta.value = '';
         'inline-background-suggestion': { texto: 'fg', fondo: 'strong' },
         'gray-50': { texto: 'on', fondo: 'soft' },
         'base-bg-color': { texto: 'fg', fondo: 'bg' },
-        'hover-bg-color': { texto: 'fg', fondo: 'strong' },
+        'hover-bg-color': { texto: 'fg', fondo: 'veil' },
         'borders-color': { texto: 'dim', fondo: 'border', borde: 'border' },
         'tooltip-bg-color': { texto: 'fg', fondo: 'strong' },
         'input-border-color': { texto: 'fg', fondo: 'border', borde: 'border' },
@@ -5187,12 +5193,12 @@ ta.value = '';
             bg: g('--rondo-bg', '#f5f7fa'), soft: g('--rondo-bg-soft', '#ffffff'),
             strong: g('--rondo-bg-strong', '#eef2f7'), fg: g('--rondo-fg', '#1d2433'),
             dim: g('--rondo-fg-dim', '#5b6577'), mute: g('--rondo-fg-mute', '#8993a3'),
-            border: g('--rondo-border', '#dfe4ec')
+            border: g('--rondo-border', '#dfe4ec'), veil: 'rgba(23,35,54,.05)'
         } : {
             bg: g('--rondo-bg', '#1f2330'), soft: g('--rondo-bg-soft', '#272d3c'),
             strong: g('--rondo-bg-strong', '#313849'), fg: g('--rondo-fg', '#e8ecf3'),
             dim: g('--rondo-fg-dim', '#9aa4b5'), mute: g('--rondo-fg-mute', '#6f7888'),
-            border: g('--rondo-border', '#3a4252')
+            border: g('--rondo-border', '#3a4252'), veil: 'rgba(255,255,255,.06)'
         };
     }
     function rxAplicarEstiloPagina() {
@@ -5302,6 +5308,9 @@ ta.value = '';
             // de motor, satelites): van en <td class="icon"><div>...</div>. Se
             // fuerzan legibles (el icono del td si queda en color de icono).
             '[class*="_table_10z2h_"] td>div:not([class]){color:' + P.fg + ' !important;}',
+            // Cinturon y tirantes: el contenido de la celda se eleva sobre su
+            // velo ::before (z-index:0), sea cual sea su opacidad.
+            '[class*="_table_"] td:not(:empty)>*{position:relative;z-index:1;}',
             // La ventana flotante de unidad (que sale al pasar el raton) es un
             // tippy: .tippy-box._messageBox_*. Su fondo sale de
             // --white-color-message-box (que tambien es el texto blanco de los
@@ -5513,7 +5522,7 @@ ta.value = '';
     }
     // Rol de una clave de paleta: a que propiedad pertenece.
     function rxPaginaRolClave(clave) {
-        if (clave === 'bg' || clave === 'soft' || clave === 'strong') return 'fondo';
+        if (clave === 'bg' || clave === 'soft' || clave === 'strong' || clave === 'veil') return 'fondo';
         if (clave === 'border') return 'borde';
         if (clave === 'fg' || clave === 'dim' || clave === 'mute' || clave === 'on') return 'texto';
         return 'acento'; // accent, hover, accent-2, accent-bg*, transparent
