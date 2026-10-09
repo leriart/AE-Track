@@ -5598,39 +5598,61 @@ ta.value = '';
         _rxVarsOrden.push(id);
         return id;
     }
+    // Atajos de color. Cuando un atajo lleva var() (background: var(--x);
+    // border: 1px solid var(--y)) el navegador lista las propiedades SUELTAS
+    // (background-color, border-top-color...) con valor VACIO y guarda el
+    // texto solo en el atajo. Recorrer unicamente style[i] ignoraba todas esas
+    // reglas (~1000 en la plataforma: fondos de dialogos, pestanas, bordes).
+    const RX_ATAJOS_COLOR = ['background', 'border', 'border-top', 'border-right', 'border-bottom',
+        'border-left', 'border-color', 'outline', 'column-rule'];
+    // Reescribe var(--token) por el color del rol y, fuera de variables, los
+    // literales por su rol. Devuelve el mismo texto si nada cambia.
+    function rxReescribirColor(val, prop, rol, esCustom) {
+        let v = val.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
+            const clave = rxTokenClave(tok, rol);
+            if (!clave) return full;
+            return 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave) + ')';
+        });
+        // Los literales solo en reglas normales: reescribir el valor de una
+        // variable por un literal la fijaria fuera del tema.
+        if (!esCustom) {
+            v = v.replace(RX_COLOR_LIT, (lit) => {
+                const clave = rxColorClave(lit, prop);
+                return clave ? 'var(--rpg-' + rxVarId(lit, clave) + ')' : lit;
+            });
+        }
+        return v;
+    }
     function rxDeclaracionesRondo(style, P, acc, acc2, accD) {
         let cambio = false;
         const partes = [];
+        const hechos = {};
         for (let i = 0; i < style.length; i++) {
             const prop = style[i];
             const val0 = style.getPropertyValue(prop);
-            let val = val0;
+            if (!val0) continue; // longhand de un atajo con var(): se ve abajo
             const esCustom = prop.indexOf('--') === 0;
             // Propiedades de color Y definiciones de variables: en ambos casos
             // se sustituye `var(--token)` por el color del rol correcto. Para
             // las custom properties el rol sale del NOMBRE (--tab-bg-color ->
             // fondo), porque el valor de la var no dice donde se usara.
-            if (esCustom || /color|background|border|outline|fill|stroke|caret/.test(prop)) {
-                const rol = esCustom ? rxRolNombre(prop) : rxPropRol(prop);
-                val = val.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
-                    const clave = rxTokenClave(tok, rol);
-                    if (!clave) return full;
-                    return 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave) + ')';
-                });
-                // Los literales solo en reglas normales: reescribir el valor de
-                // una variable por un literal la fijaria fuera del tema.
-                if (!esCustom) {
-                    val = val.replace(RX_COLOR_LIT, (lit) => {
-                        const clave = rxColorClave(lit, prop);
-                        if (clave) return 'var(--rpg-' + rxVarId(lit, clave) + ')';
-                        return lit;
-                    });
-                }
-            }
+            if (!(esCustom || /color|background|border|outline|fill|stroke|caret/.test(prop))) continue;
+            const val = rxReescribirColor(val0, prop, esCustom ? rxRolNombre(prop) : rxPropRol(prop), esCustom);
             if (val === val0) continue; // solo se emite lo que cambio
             cambio = true;
+            hechos[prop] = true;
             const prio = style.getPropertyPriority(prop);
             partes.push(prop + ':' + val + (prio ? ' !important' : '') + ';');
+        }
+        for (let k = 0; k < RX_ATAJOS_COLOR.length; k++) {
+            const atajo = RX_ATAJOS_COLOR[k];
+            if (hechos[atajo]) continue;
+            const v0 = style.getPropertyValue(atajo);
+            if (!v0 || v0.indexOf('var(') < 0) continue;
+            const v = rxReescribirColor(v0, atajo, rxPropRol(atajo), false);
+            if (v === v0) continue;
+            cambio = true;
+            partes.push(atajo + ':' + v + (style.getPropertyPriority(atajo) ? ' !important' : '') + ';');
         }
         return cambio ? partes.join('') : '';
     }
@@ -5755,15 +5777,16 @@ ta.value = '';
             if (prop.indexOf('--') === 0) continue;
             if (!/color|background|fill|stroke/.test(prop)) continue;
             const val0 = st.getPropertyValue(prop);
-            let val = val0.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
-                const clave = rxTokenClave(tok, rxPropRol(prop));
-                return clave ? 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave) + ')' : full;
-            });
-            val = val.replace(RX_COLOR_LIT, (lit) => {
-                const clave = rxColorClave(lit, prop);
-                return clave ? 'var(--rpg-' + rxVarId(lit, clave) + ')' : lit;
-            });
+            if (!val0) continue; // longhand de un atajo con var(): se ve abajo
+            const val = rxReescribirColor(val0, prop, rxPropRol(prop), false);
             if (val !== val0) { st.setProperty(prop, val, st.getPropertyPriority(prop)); cambio = true; }
+        }
+        for (let k = 0; k < RX_ATAJOS_COLOR.length; k++) {
+            const atajo = RX_ATAJOS_COLOR[k];
+            const v0 = st.getPropertyValue(atajo);
+            if (!v0 || v0.indexOf('var(') < 0) continue;
+            const v = rxReescribirColor(v0, atajo, rxPropRol(atajo), false);
+            if (v !== v0) { st.setProperty(atajo, v, st.getPropertyPriority(atajo)); cambio = true; }
         }
         return cambio;
     }
