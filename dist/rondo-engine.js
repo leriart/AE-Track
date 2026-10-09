@@ -4899,30 +4899,50 @@ ta.value = '';
     //   - Se amplia el mapeo: acento, hover, bordes, superficies y texto,
     //     tomando la paleta segun el tema activo (oscuro/claro) para que la
     //     pagina quede coherente con el panel.
+    //
+    // v6.19.3: se completa el mapeo del skin (p. ej. skytracking3). Antes
+    //   solo se pintaban las pestañas y los botones; quedaban sin tocar los
+    //   paneles (superior/izquierdo/inferior), las barras horizontales, el
+    //   acordeon, los dialogos de ayuda/asistente y el login. Ademas cada
+    //   variable cae ahora en la categoria que le corresponde por SU
+    //   significado (fondo de acento, hover, texto sobre acento, superficie,
+    //   texto o borde) en vez de asumir acento para todo. Esto corrige de
+    //   paso un bug: `execute-button-border-color` y los bordes del login
+    //   son colores sueltos, no el shorthand `1px solid`, y antes se
+    //   pintaban como "1px solid <color>" (invalido).
+    // Fondos que toman el acento tal cual.
     const RX_PAGINA_VARS = [
-        'horizontal-bar-item-active-background', 'horizontal-bar-item-hover-background',
-        'tabs-item-text-color', 'tabs-selected-item-text-color', 'tabs-item-hover-text-color',
-        'tabs-selected-item-line-color', 'tab-color-active',
-        'button-color', 'button-hover-color',
-        'execute-button-background', 'execute-button-hover-background', 'execute-button-hover-border-color',
-        'accordion-active-background',
-        'list-table-tab_button-active-background', 'list-table-tab_button-color', 'list-table-tab_button-hover-color',
+        'horizontal-bar-item-active-background',
+        'tabs-item-text-color', 'tabs-selected-item-text-color', 'tabs-selected-item-line-color',
+        'button-color',
+        'execute-button-background', 'accordion-active-background',
+        'list-table-tab_button-active-background', 'list-table-tab_button-color',
         'wizard-dialog-header-background', 'help-window-header-background',
-        'monitoring-login-primary-button-color', 'monitoring-login-primary-button-hover-color',
-        'monitoring-login-secondary-button-color', 'monitoring-login-forgot-pwd-color',
-        'monitoring-login-forgot-pwd-hover-color'
+        'monitoring-login-primary-button-color', 'monitoring-login-secondary-button-color',
+        'monitoring-login-forgot-pwd-color',
+        'execute-button-border-color', 'monitoring-login-primary-button-border-color',
+        'monitoring-login-secondary-button-border-color'
     ];
-    // Variables de hover: acento oscurecido.
+    // Variantes de hover/activo: acento oscurecido.
     const RX_PAGINA_HOVER = [
-        'horizontal-bar-item-hover-background', 'tabs-item-hover-text-color',
-        'button-hover-color', 'execute-button-hover-background', 'execute-button-hover-border-color',
-        'list-table-tab_button-hover-color', 'monitoring-login-primary-button-hover-color',
+        'horizontal-bar-item-hover-background', 'tabs-item-hover-text-color', 'tab-color-active',
+        'button-hover-color',
+        'execute-button-hover-background', 'execute-button-hover-border-color',
+        'list-table-tab_button-hover-color',
+        'monitoring-login-primary-button-hover-color', 'monitoring-login-primary-button-hover-border-color',
+        'monitoring-login-secondary-button-hover-color', 'monitoring-login-secondary-button-hover-border-color',
         'monitoring-login-forgot-pwd-hover-color'
     ];
-    // Las variables que representan un borde necesitan "1px solid <color>".
-    const RX_PAGINA_BORDES = ['execute-button-border-color', 'list-table-tab_button-active-border',
-        'monitoring-login-primary-button-border-color', 'monitoring-login-primary-button-hover-border-color',
-        'monitoring-login-secondary-button-border-color'];
+    // Texto sobre un fondo de acento (barra activa, botones, acordeon).
+    const RX_PAGINA_SOBRE_ACENTO = [
+        'horizontal-bar-item-active-color', 'horizontal-bar-item-hover-color',
+        'execute-button-color', 'execute-button-hover-color',
+        'accordion-active-color', 'list-table-tab_button-active-color'
+    ];
+    // Unicas variables que no llevan caja propia.
+    const RX_PAGINA_TRANSPARENTES = ['horizontal-bar-item-background'];
+    // La unica variable que espera el shorthand completo "1px solid <color>".
+    const RX_PAGINA_BORDES = ['list-table-tab_button-active-border'];
     // Superficies: variable del skin -> clave de la paleta de Rondo.
     const RX_PAGINA_SUPERFICIES = {
         'background': 'bg', 'background-content': 'bg', 'background-body': 'bg', 'background-app': 'bg',
@@ -4931,13 +4951,20 @@ ta.value = '';
         'background-modal': 'soft', 'background-menu': 'soft', 'background-dropdown': 'soft',
         'background-input': 'bg', 'background-tooltip': 'strong',
         'background-item-hover': 'strong', 'background-table-header': 'strong',
-        'background-table-row': 'soft', 'background-table-row-hover': 'strong'
+        'background-table-row': 'soft', 'background-table-row-hover': 'strong',
+        'panel-top-background': 'soft', 'panel-left-background': 'soft', 'panel-left-sub-background': 'bg',
+        'panel-bottom-background': 'soft',
+        'help-window-background': 'soft', 'wizard-dialog-background': 'soft',
+        'accordion-normal-background': 'soft', 'accordion-hover-background': 'strong',
+        'monitoring-login-form-bg-color': 'soft'
     };
     // Texto: variable del skin -> clave de la paleta de Rondo.
     const RX_PAGINA_TEXTOS = {
         'text-color': 'fg', 'text-color-primary': 'fg', 'text-color-strong': 'fg',
         'text-color-secondary': 'dim', 'text-color-dim': 'dim', 'text-color-muted': 'mute',
-        'text-color-disabled': 'mute', 'input-text-color': 'fg', 'input-placeholder-color': 'mute'
+        'text-color-disabled': 'mute', 'input-text-color': 'fg', 'input-placeholder-color': 'mute',
+        'panel-bottom-color': 'fg', 'horizontal-bar-item-color': 'fg',
+        'accordion-normal-color': 'fg', 'accordion-hover-color': 'fg'
     };
     // Bordes genericos.
     const RX_PAGINA_BORDES_GEN = {
@@ -4965,11 +4992,11 @@ ta.value = '';
             border: '#3a4252'
         };
         const decl = [];
-        RX_PAGINA_VARS.forEach((v) => {
-            if (RX_PAGINA_BORDES.indexOf(v) >= 0) decl.push('  --' + v + ':1px solid ' + acc + ' !important;');
-            else if (RX_PAGINA_HOVER.indexOf(v) >= 0) decl.push('  --' + v + ':' + accD + ' !important;');
-            else decl.push('  --' + v + ':' + acc + ' !important;');
-        });
+        RX_PAGINA_VARS.forEach((v) => decl.push('  --' + v + ':' + acc + ' !important;'));
+        RX_PAGINA_HOVER.forEach((v) => decl.push('  --' + v + ':' + accD + ' !important;'));
+        RX_PAGINA_SOBRE_ACENTO.forEach((v) => decl.push('  --' + v + ':#ffffff !important;'));
+        RX_PAGINA_TRANSPARENTES.forEach((v) => decl.push('  --' + v + ':transparent !important;'));
+        RX_PAGINA_BORDES.forEach((v) => decl.push('  --' + v + ':1px solid ' + acc + ' !important;'));
         Object.keys(RX_PAGINA_SUPERFICIES).forEach((v) => {
             decl.push('  --' + v + ':' + P[RX_PAGINA_SUPERFICIES[v]] + ' !important;');
         });
