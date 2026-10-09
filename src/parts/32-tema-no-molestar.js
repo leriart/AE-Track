@@ -668,10 +668,18 @@
         }
         return null;
     }
+    // Debe dar el MISMO color que rxPaginaToken para cada clave: el remap
+    // (var(--rpg-*)) y la emision global de variables comparten el mapa. Si
+    // faltaba una clave (transparent, tintes de acento), el remap caia al color
+    // de TEXTO y, p. ej., la barra superior (fondo transparente) salia clara.
     function rxColorValor(clave, P, acc, accD) {
         if (clave === 'accent') return acc;
         if (clave === 'hover') return accD;
         if (clave === 'on') return '#ffffff';
+        if (clave === 'transparent') return 'transparent';
+        if (clave === 'accent-2') return aclarar(acc, 0.28);
+        if (clave === 'accent-bg') return aclarar(acc, 0.28) + '22';
+        if (clave === 'accent-bg-hover') return aclarar(acc, 0.28) + '33';
         return P[clave] || P.fg;
     }
     // Rol de una clave de paleta: a que propiedad pertenece.
