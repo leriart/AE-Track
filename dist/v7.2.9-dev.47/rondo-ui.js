@@ -249,12 +249,12 @@
             "#rondo-panel .tab{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:4px;background:transparent;border:1px solid transparent;color:var(--rondo-fg-dim);padding:9px 2px;cursor:pointer;font:600 10.5px/1 var(--rondo-font);border-radius:var(--rondo-radius-sm);letter-spacing:.2px;transition:background .18s var(--rondo-easing),color .18s,box-shadow .18s,transform .1s}\n" +
             "#rondo-panel .tab:hover{color:var(--rondo-fg);background:var(--rondo-bg-strong);transform:translateY(-1px)}\n" +
             "#rondo-panel .tab.activo{color:#fff;background:var(--rondo-accent-grad);box-shadow:0 3px 10px rgba(var(--rondo-accent-rgb),.35)}\n" +
-            "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-strong);color:var(--rondo-fg);border:1px solid var(--rondo-border-soft);padding:0 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
-            "#rondo-panel .tab.activo .contador{background:rgba(0,0,0,.3);color:#fff;border-color:transparent}\n" +
+            "#rondo-panel .tab .contador{font-size:10px;background:var(--rondo-bg-soft);color:var(--rondo-fg);border:1px solid var(--rondo-border);padding:0 5px;border-radius:8px;margin-left:2px;display:inline-block;font-weight:700}\n" +
+            "#rondo-panel .tab.activo .contador{background:#000;color:#fff;border-color:transparent}\n" +
             // En tema claro, los numeros (contadores y valores KPI) deben ser
             // oscuros: si las variables del tema no bastan, se fuerzan.
             "body[data-rondo-theme='claro'] #rondo-panel .tab .contador{background:#eef2f7;color:#1d2433;border-color:#dfe4ec}\n" +
-            "body[data-rondo-theme='claro'] #rondo-panel .tab.activo .contador{background:rgba(0,0,0,.32);color:#fff;border-color:transparent}\n" +
+            "body[data-rondo-theme='claro'] #rondo-panel .tab.activo .contador{background:#000;color:#fff;border-color:transparent}\n" +
             "body[data-rondo-theme='claro'] #rondo-panel .kpi .kpi-val,body[data-rondo-theme='claro'] #rondo-panel .rondo-riesgo-kpi .kpi-val{color:#1d2433}\n" +
             "body[data-rondo-theme='claro'] #rondo-panel .contador{color:#1d2433}\n" +
             "#rondo-panel .tools{display:flex;gap:6px;padding:7px 9px;border-bottom:1px solid var(--rondo-border-soft);flex-wrap:wrap;align-items:center;background:var(--rondo-bg-soft)}\n" +
