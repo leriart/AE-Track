@@ -101,22 +101,26 @@ ok('idioma en -> en-US', g && g.voz() === 'en-US', g ? g.voz() : 'n/a');
 const h = conPagina({ _x: { api_url: 'u', http_lang: 'zz', _skin_data: { major: { data: { variables: {} } } } } });
 ok('idioma desconocido -> sin sugerencia', h && h.voz() === '', h ? h.voz() : 'n/a');
 
-ok('reestilizado de la pagina: usa las variables del skin y es reversible',
-    /const RX_PAGINA_VARS = \[/.test(src) && /'horizontal-bar-item-active-background'/.test(src) &&
+ok('reestilizado de la pagina: mapea las variables y es reversible',
+    /const RX_PAGINA_MAPA = \{/.test(src) && /'horizontal-bar-item-active-background'/.test(src) &&
     /el\.id = 'rondo-estilo-pagina'/.test(src) && /removeChild\(elPrev\)/.test(src));
-ok('reestilizado: los bordes se emiten como 1px solid',
-    /const RX_PAGINA_BORDES = \[/.test(src) && /':1px solid ' \+ acc \+ ' !important;'/.test(src));
+ok('reestilizado: el unico borrador shorthand se emite con 1px solid',
+    /const RX_PAGINA_BORDE_SHORTHAND = \{/.test(src) && /:1px solid ' \+/.test(src));
 ok('reestilizado: se aplica desde applyTheme', /try \{ rxAplicarEstiloPagina\(\); \} catch/.test(src));
 ok('reestilizado: hereda el acento de la plataforma solo si esta activo',
     /const acc = \(APP\.config\.temaPlataforma && rxPlatAcento\(\)\)/.test(src) &&
     /: \(APP\.config\.acento \|\| '#850D22'\);/.test(src));
 // v6.9.1: el reestilizado de la pagina se endurece para que SI se aplique.
 ok('reestilizado: emite !important en las declaraciones',
-    /:1px solid ' \+ acc \+ ' !important;'/.test(src) && /\+ P\[RX_PAGINA_SUPERFICIES\[v\]\] \+ ' !important;'/.test(src));
+    /\+ ' !important;'/.test(src) && /rxPaginaToken\(RX_PAGINA_MAPA\[v\], P, acc, acc2, accD\)/.test(src));
 ok('reestilizado: aplica sobre :root,html,body',
     /el\.textContent = ':root,html,body\{/.test(src));
-ok('reestilizado: mapea superficies y texto de la paleta',
-    /const RX_PAGINA_SUPERFICIES = \{/.test(src) && /const RX_PAGINA_TEXTOS = \{/.test(src));
+ok('reestilizado: mapea los tokens del tema a la paleta',
+    /const RX_PAGINA_MAPA = \{/.test(src) && /function rxPaginaToken\(/.test(src));
+ok('reestilizado: cubre los tokens base del tema de la plataforma',
+    /'accent-color': 'accent'/.test(src) && /'primary-color': 'fg'/.test(src) &&
+    /'base-bg-color': 'bg'/.test(src) && /'borders-color': 'border'/.test(src) &&
+    /'icons-action-color': 'dim'/.test(src));
 ok('reestilizado: paleta segun tema claro/oscuro',
     /const claro = APP\.config\.theme === 'claro'/.test(src) && /const P = claro \? \{/.test(src));
 
@@ -128,10 +132,10 @@ ok('reestilizado: mapea paneles, acordeon y dialogos del skin',
     /'panel-bottom-background': 'soft'/.test(src) && /'help-window-background': 'soft'/.test(src) &&
     /'wizard-dialog-background': 'soft'/.test(src) && /'accordion-normal-background': 'soft'/.test(src));
 ok('reestilizado: texto sobre acento en blanco',
-    /const RX_PAGINA_SOBRE_ACENTO = \[/.test(src) && /'horizontal-bar-item-active-color'/.test(src));
-ok('reestilizado: solo el shorthand lleva "1px solid"',
-    /const RX_PAGINA_BORDES = \['list-table-tab_button-active-border'\]/.test(src) &&
-    /'execute-button-border-color', 'monitoring-login-primary-button-border-color'/.test(src));
+    /'horizontal-bar-item-active-color': 'on'/.test(src) && /'execute-button-color': 'on'/.test(src));
+ok('reestilizado: los bordes-color son color, no shorthand',
+    /'execute-button-border-color': 'accent'/.test(src) &&
+    /'list-table-tab_button-active-border': 'accent'/.test(src));
 
 // Prueba funcional: se evalua la funcion con un DOM simulado y se revisan las
 // declaraciones emitidas (asi el bug de los bordes no puede volver).
@@ -153,6 +157,12 @@ ok('reestilizado real: emite paneles superior/izquierdo/inferior',
     /--panel-top-background:.+ !important;/.test(cssOsc) &&
     /--panel-left-background:.+ !important;/.test(cssOsc) &&
     /--panel-bottom-background:.+ !important;/.test(cssOsc), cssOsc.slice(0, 80));
+ok('reestilizado real: cubre los tokens base (acento, texto, bordes)',
+    /--accent-color:#B30B27 !important;/.test(cssOsc) &&
+    /--primary-color:#e8ecf3 !important;/.test(cssOsc) &&
+    /--base-bg-color:#1f2330 !important;/.test(cssOsc) &&
+    /--borders-color:#3a4252 !important;/.test(cssOsc) &&
+    /--icons-action-color:#9aa4b5 !important;/.test(cssOsc));
 ok('reestilizado real: texto sobre acento en blanco',
     /--horizontal-bar-item-active-color:#ffffff !important;/.test(cssOsc) &&
     /--execute-button-color:#ffffff !important;/.test(cssOsc));
@@ -168,6 +178,10 @@ ok('reestilizado real: viste los componentes wui-* de Wialon',
     /\.wui-input,\.wui-select,\.wui-textarea/.test(cssOsc) &&
     /html,body\{background:#1f2330 !important/.test(cssOsc) &&
     /\.wui-checkbox input:checked~\.wui-checkmark\{background:#B30B27 !important/.test(cssOsc));
+ok('reestilizado real: viste los componentes ant-* de Ant Design',
+    /\.ant-btn-primary\{background:#B30B27 !important/.test(cssOsc) &&
+    /\.ant-input,\.ant-input-affix-wrapper/.test(cssOsc) &&
+    /\.ant-modal-content/.test(cssOsc));
 ok('reestilizado real: hereda el acento de la plataforma en opt-in',
     generarEstilo({ temaPlataforma: true }, '#00A0B0').indexOf('--button-color:#00A0B0 !important;') >= 0);
 ok('reestilizado real: por defecto usa el acento de Rondo',

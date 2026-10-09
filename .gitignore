@@ -1,3 +1,6 @@
 build/
 node_modules/
 *.log
+
+# Volcado de referencia del CSS/codigo de la plataforma (no se versiona).
+CodigoWialon.txt
