@@ -186,6 +186,37 @@
         'monitoring-login-secondary-button-hover-border-color': 'hover',
         'monitoring-login-form-bg-color': 'soft', 'monitoring-login-separator-color': 'border',
         'monitoring-login-separator-text-color': 'mute',
+        // --- pestañas, calendario, avisos, estados ---
+        'tab-color': 'fg', 'tab-color-hover': 'fg', 'vtab-color-active': 'fg',
+        'tab-border-color': 'border', 'tab-border-color-hover': 'border', 'tab-border-color-active': 'border',
+        'tabs-item-hover-bg-color': 'strong',
+        'featured-dot-background': 'accent', 'notify-name-color': 'accent',
+        'calendar-main-text-color': 'accent', 'calendar-today-color': 'accent',
+        'calendar-restore-data-color': 'accent', 'calendar-main-text-hover-color': 'hover',
+        'calendar-weeknumber-text-color': 'dim',
+        'help-window-collapser-header-color': 'dim',
+        'switch-off-hover-bg': 'strong', 'switch-thumb-hover-border-color': 'border',
+        'switch-off-bg': 'strong', 'switch-disabled-bg': 'border',
+        'panel-list-item-button-noaccent-progress-bg': 'border',
+        'panel-list-group-button-noaccent-progress-bg': 'border',
+        'panel-list-group-expanded-button-noaccent-progress-bg': 'border',
+        'panel-list-item-input-button-noaccent-hover-bg': 'strong',
+        'panel-list-item-input-button-noaccent-active-bg': 'strong',
+        'primary-color-message-box': 'fg', 'secondary-color-message-box': 'dim',
+        'white-color-message-box': 'on', 'checkbox-border-color': 'border',
+        'list-table-tab_button-active-disabled-color': 'on',
+        'list-table-tab_button-active-disabled-background': 'accent',
+        'panel-list-item-button-noaccent-color': 'dim',
+        'panel-list-item-button-noaccent-hover-color': 'fg',
+        'panel-list-item-button-noaccent-disabled-color': 'mute',
+        'panel-list-item-input-button-noaccent-color': 'dim',
+        'panel-list-group-button-noaccent-color': 'dim',
+        'panel-list-group-button-noaccent-hover-color': 'fg',
+        'panel-list-group-button-noaccent-disabled-color': 'mute',
+        'panel-list-group-expanded-button-noaccent-color': 'dim',
+        'panel-list-group-expanded-button-noaccent-hover-color': 'fg',
+        'panel-list-group-expanded-button-noaccent-disabled-color': 'mute',
+        'panel-list-item-add-disabled-color': 'mute',
         // --- compatibilidad con nombres sueltos de la version previa ---
         'background': 'bg', 'background-content': 'bg', 'background-body': 'bg', 'background-app': 'bg',
         'background-header': 'soft', 'background-sidebar': 'soft', 'background-panel': 'soft',
@@ -199,7 +230,17 @@
         'border-color': 'border', 'border-color-soft': 'strong', 'divider-color': 'strong'
     };
     // Unico token que espera el shorthand completo "1px solid <color>".
-    const RX_PAGINA_BORDE_SHORTHAND = { 'list-table-tab_button-active-border': 'accent' };
+    const RX_PAGINA_BORDE_SHORTHAND = {
+        'list-table-tab_button-active-border': 'accent',
+        'list-table-tab_button-border': 'border',
+        'button-border': 'border'
+    };
+    // Todas las familias de scrollbar comparten la misma forma (bg + thumb +
+    // hover + active). Con estos prefijos se cubren las ~120 variables sin
+    // enumerarlas una a una.
+    const RX_PAGINA_SCROLL = ['default', 'modal', 'help', 'panel-left', 'input', 'tooltip',
+        'popup-hint', 'popup-help', 'popup-warning', 'popup-error', 'popup-success',
+        'banner-hint', 'banner-help', 'banner-warning', 'banner-error', 'banner-success'];
     // Redondeos: la plataforma usa 4px; Rondo es mas suave (8-12px). Como son
     // tokens, cambiarlos redondea de golpe botones, inputs, tarjetas y dialogos.
     const RX_PAGINA_RADIOS = {
@@ -270,6 +311,14 @@
         Object.keys(RX_PAGINA_RADIOS).forEach((v) => {
             decl.push('  --' + v + ':' + RX_PAGINA_RADIOS[v] + ' !important;');
         });
+        // Scrollbars acordes al tema (color + hover + activo).
+        decl.push('  --scrollbar-bg:' + P.bg + ' !important;');
+        RX_PAGINA_SCROLL.forEach((p) => {
+            decl.push('  --' + p + '-scrollbar-bg:' + P.bg + ' !important;');
+            decl.push('  --' + p + '-scrollbar-thumb-color:' + P.border + ' !important;');
+            decl.push('  --' + p + '-scrollbar-thumb-hover-color:' + P.dim + ' !important;');
+            decl.push('  --' + p + '-scrollbar-thumb-active-color:' + acc + ' !important;');
+        });
         // Logo "RONDO" (Ndot) en lugar del de SkyTracking.
         decl.push('  --logo-background:' + rondoLogoURI(acc) + ' no-repeat center center !important;');
         decl.push('  --monitoring-login-logo:' + rondoLogoURI(acc) + ' !important;');
@@ -280,6 +329,9 @@
         // contenedores raiz; nunca a etiquetas sueltas (romperia el panel).
         const comp = [
             'html,body{background:' + P.bg + ' !important;color:' + P.fg + ' !important;}',
+            '::selection{background:' + acc + ' !important;color:#fff !important;}',
+            'input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,' +
+                '.ant-btn:focus-visible,.wui-button:focus-visible{outline:2px solid ' + acc + ' !important;outline-offset:1px;}',
             '.wui-input,.wui-select,.wui-textarea,.wui-combobox input{background:' + P.soft +
                 ' !important;color:' + P.fg + ' !important;border-color:' + P.border + ' !important;}',
             '.wui-checkmark{border-color:' + P.border + ' !important;}',
@@ -387,6 +439,9 @@
      * head, asi gana en cascada sin usar !important (no rompe :hover). */
     function rxColorParse(v) {
         const t = String(v || '').trim().toLowerCase();
+        if (t === 'white') return { r: 255, g: 255, b: 255, a: 1 };
+        if (t === 'black') return { r: 0, g: 0, b: 0, a: 1 };
+        if (t === 'transparent' || t === 'currentcolor' || t === 'inherit' || t === 'none') return null;
         let m = /^#([0-9a-f]{3,8})$/.exec(t);
         if (m) {
             let h = m[1];
@@ -492,6 +547,7 @@
     }
     let _rxColorObs = null;
     let _rxColorTimer = 0;
+    let _rxColorSig = '';
     function rxProgramarColoresPagina() {
         clearTimeout(_rxColorTimer);
         _rxColorTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 350);
@@ -501,6 +557,7 @@
         if (!(APP.config && APP.config.estiloPagina)) {
             if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
             if (_rxColorObs) { _rxColorObs.disconnect(); _rxColorObs = null; }
+            _rxColorSig = '';
             return;
         }
         const acc = (APP.config.temaPlataforma && rxPlatAcento()) ? rxPlatAcento() : (APP.config.acento || '#850D22');
@@ -508,6 +565,10 @@
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         const P = rxPaginaPaleta(claro);
+        // Nada que rehacer si no cambio el tema/acento ni el numero de hojas.
+        const sig = (claro ? 'c' : 'o') + '|' + acc + '|' + (document.styleSheets ? document.styleSheets.length : 0);
+        if (elPrev && sig === _rxColorSig) return;
+        _rxColorSig = sig;
         const trozos = [];
         let bytes = 0;
         try {
