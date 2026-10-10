@@ -306,6 +306,89 @@ ok('color: las definiciones de variables se reescriben por el rol del nombre',
     /--tab-bg-color:var\(--rpg-/.test(decCustom));
 ok('color: una custom property sin token mapeado no se toca',
     M.decl(fakeStyle({ '--mi-tamano': 'calc(var(--base-size) * 2)' })) === '');
+// MOTOR DE VARIABLES (enfoque Dark Reader): se redefinen las variables de la
+// plataforma en :root en vez de clonar reglas. Antes solo se cubrian 288 de las
+// 853 variables; el resto (fondos de ventanas, scrollbars, estados) se quedaba
+// blanco por mucho selector que se clonara.
+(function () {
+    const M = new Function('const window={matchMedia:()=>({matches:false})};const document={styleSheets:[]};' + bloqueCSS +
+        '\nreturn { rol: rxRolPorNombre, manual: rxRolManual, esColor: rxEsColorValor, hoja: rxHojaVariables };')();
+    ok('variables: un hex/rgb/nombre/var() SI es color',
+        M.esColor('#fff') && M.esColor('#ffffffcc') && M.esColor('rgb(1,2,3)') && M.esColor('white') &&
+        M.esColor('var(--x)') && M.esColor('hsl(0,0%,0%)'));
+    ok('variables: medidas y numeros NO son color',
+        !M.esColor('12px') && !M.esColor('99') && !M.esColor('url(x.png) no-repeat') &&
+        !M.esColor('500 16px/22px Roboto,Arial,sans-serif') && !M.esColor('cubic-bezier(0, 0, 0.58, 1)'));
+    ok('variables: el rol sale del nombre (como Dark Reader)',
+        M.rol('--wizard-dialog-background', '#fff') === 'fondo' &&
+        M.rol('--input-background', '#fff') === 'fondo' &&
+        M.rol('--scrollbar-bg', '#fff') === 'fondo' &&
+        M.rol('--button-color', '#B30B27') === 'fg' &&
+        M.rol('--color-text-secondary', '#727883') === 'dim' &&
+        M.rol('--button-disabled-color', '#BBBEC4') === 'dim' &&
+        M.rol('--borders-color', '#E3E4E6') === 'borde' &&
+        M.rol('--popup-background-error', '#D11F1F') === 'badbg' &&
+        M.rol('--popup-success-scrollbar-thumb-color', '#fff') === 'okfg' &&
+        M.rol('--color-danger', '#D11F1F') === 'badfg' &&
+        M.rol('--tooltip-shadow', '0 4px 12px 0 #1723361A, 2px 0 4px 0 #1723361A') === 'sombra' &&
+        M.rol('--button-shadow', 'none') === null &&
+        M.rol('--switch-thumb-shadow', '0px 4px 12px 0px #1723361A') === 'sombra');
+    ok('variables: medidas con nombre de color NO se tematizan',
+        M.rol('--time-input-width', '54px') === null && M.rol('--layer-modal', '9000') === null &&
+        M.rol('--font-header', '500 16px/22px Roboto') === null && M.rol('--tab-border-width', '1px') === null &&
+        M.rol('--controls-border-radius', '4px') === null && M.rol('--animation-duration', '150ms') === null);
+    ok('variables: el mapa manual gana sobre la clasificacion automatica',
+        M.manual('color-text-secondary') === 'dim' && M.manual('button-color') === 'acento' &&
+        M.manual('inline-background-help') === 'infobg' && M.manual('no-existe-esta') === null &&
+        // ...y si el mapa manual calla, la clasificacion por nombre decide
+        (M.manual('popup-background-success') || M.rol('--popup-background-success', '#2D8631')) === 'okbg');
+    // Una variable mixta (--white, --wizard-dialog-background) vale como texto,
+    // fondo y borde segun el uso: un unico valor no puede servir para todo, asi
+    // que NO se redefine a la fuerza (la resuelve el remap por propiedad).
+    ok('variables: las mixtas se marcan y se dejan al remap por propiedad',
+        M.manual('white') === 'mixto' && M.manual('wizard-dialog-background') === 'mixto' &&
+        M.manual('base-bg-color') === 'mixto' && /if \(manual === 'mixto'\) continue;/.test(src));
+    ok('variables: las nuestras (--rondo-*) nunca se tematizan',
+        M.rol('--rondo-bg', '#1f2330') === 'fondo' && M.rol('--rondo-fg', '#e8ecf3') === 'fg');
+    // La hoja se genera con las variables que declara la plataforma. Las reglas
+    // se construyen DENTRO del new Function: JSON.stringify perderia los metodos.
+    const MH = new Function('const window={matchMedia:()=>({matches:false})};' + bloqueCSS + `
+        const st = (pares) => { const k = Object.keys(pares);
+            const o = { length: k.length, getPropertyValue: (p) => pares[p] || '' };
+            k.forEach((p, i) => { o[i] = p; }); return o; };
+        document = { styleSheets: [{ cssRules: [{ selectorText: ':root', style: st({
+            '--scrollbar-bg': '#fff', '--color-text-secondary': '#727883', '--base-size': '4px',
+            '--font-header': '500 16px/22px Roboto'
+        }) }] }] };
+        return { hoja: (P, a, a2) => rxHojaVariables(P, false, a, a2) };`)();
+    const PV = { bg: '#1f2330', soft: '#272d3c', strong: '#1a1f2b', fg: '#e8ecf3', dim: '#a9b2c3',
+        mute: '#7d8799', border: '#3a4252', shadow: 'none', okbg: '#1a2f1e', warnbg: '#2f2718',
+        badbg: '#33191b', infobg: '#182630', okfg: '#7fce8f', warnfg: '#e0b95f',
+        badfg: '#f08a8a', infofg: '#7fc4d8', claro: false };
+    const css = MH.hoja(PV, '#0d6e87', '#2b8ba6');
+    ok('variables: la hoja redefine las de la plataforma con !important en :root',
+        /^:root,html,body\{/.test(css) &&
+        css.indexOf('--scrollbar-bg:#272d3c !important') >= 0 &&
+        css.indexOf('--color-text-secondary:#a9b2c3 !important') >= 0 &&
+        css.indexOf('--scrollbar-bg:#272d3c !important') >= 0 &&
+        css.indexOf('--rondo-bg') < 0);
+    ok('variables: las medidas NO entran en la hoja',
+        css.indexOf('--base-size') < 0 && css.indexOf('--font-header') < 0);
+})();
+// CAPA 3 (literales en sitio): se respeta la posicion y el !important originales.
+(function () {
+    const M = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+        '\nreturn { lit: rxReescribirLiterales, tok: rxLiteralColor };')();
+    ok('literales: se reconocen hex, rgb, transparent y se ignoran el resto',
+        M.tok('#fff').hex === '#fff' && M.tok('rgb(23, 35, 54)').hex === '#172336' &&
+        M.tok('transparent').hex === null && M.tok('12px') === null &&
+        M.tok('var(--x)') === null && M.tok('0 0 3px 2px rgb(1 1 1)') === null);
+    ok('literales: se reescribe la MISMA regla conservando !important',
+        /st\.setProperty\(prop, P\.fg, prio\)/.test(src) && /st\.setProperty\(prop, P\.soft, prio\)/.test(src) &&
+        /st\.setProperty\(prop, P\.border, prio\)/.test(src));
+    ok('literales: se llama en cada pasada de pintado',
+        /rxPintarVariablesPlataforma\(P, acc, accD\);\s*rxReescribirLiterales\(P\);/.test(src));
+})();
 // ACENTO COMO TEXTO: el acento (#0d6e87) sobre una superficie oscura da ~2:1 y
 // dejaba "Cancel", "Restore properties" o la pestana activa casi invisibles.
 (function () {
@@ -351,7 +434,7 @@ ok('color: una custom property sin token mapeado no se toca',
         const H2 = new Function(code)(); H2.head.appendChild({ id: 'plat' }); return H2.fin() === false;
     })());
     ok('orden de hojas: se llama tras cada pasada y al detectar una hoja nueva',
-        /rxPintarTokens\(P, acc, accD\);\s*rxMantenerAlFinal\(\);/.test(src) &&
+        /rxPintarTokens\(P, acc, accD\);[\s\S]{0,160}?rxMantenerAlFinal\(\);/.test(src) &&
         /if \(hayNueva\) \{ rxMantenerAlFinal\(\); rxProgramarColoresPagina\(\); \}/.test(src));
     ok('dialogos: red de seguridad !important en el cuerpo del dialogo',
         /\.wizard-dlg-content-target,\.help-window-content,\.vtabs \.tabs-containers\{background:' \+ P\.soft/.test(src));
@@ -488,17 +571,17 @@ ok('estado: el fondo de estado y su texto no se contagian (rol por propiedad)',
 // de motor, satelites, conductor): td::before{position:absolute;inset:0;
 // z-index:0;background:var(--accent-gray-bg-color)} es una CAPA sobre el texto.
 // El token original es ~4% opaco; mapearlo a un gris opaco tapaba el dato.
-const MV = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+const MH = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
     '\nreturn { decl: rxDeclaracionesRondo, vars: _rxVars, pal: rxPaginaToken };')();
-const dVelo = MV.decl(fakeStyle({ 'background-color': 'var(--accent-gray-bg-color)' }));
+const dVelo = MH.decl(fakeStyle({ 'background-color': 'var(--accent-gray-bg-color)' }));
 const idVelo = (dVelo.match(/var\(--rpg-([\w]+)\)/) || [])[1];
 ok('capa ::before de las tablas del hint: se mapea a un VELO translucido (no opaco)',
-    MV.vars[idVelo] === 'veil');
+    MH.vars[idVelo] === 'veil');
 ok('velo oscuro y claro con alfa bajo (el texto de debajo se ve)',
     /rgba\(255,255,255,\.06\)/.test(src) && /rgba\(23,35,54,\.05\)/.test(src) &&
-    MV.pal('veil', { veil: 'rgba(255,255,255,.06)', fg: '#fff' }, '#000', '#000', '#000') === 'rgba(255,255,255,.06)');
+    MH.pal('veil', { veil: 'rgba(255,255,255,.06)', fg: '#fff' }, '#000', '#000', '#000') === 'rgba(255,255,255,.06)');
 ok('hover-bg-color (capa ::before de los botones) tambien es velo como fondo',
-    MV.vars[(MV.decl(fakeStyle({ 'background-color': 'var(--hover-bg-color)' })).match(/var\(--rpg-([\w]+)\)/) || [])[1]] === 'veil');
+    MH.vars[(MH.decl(fakeStyle({ 'background-color': 'var(--hover-bg-color)' })).match(/var\(--rpg-([\w]+)\)/) || [])[1]] === 'veil');
 ok('el contenido de la celda se eleva sobre su velo (z-index)',
     /\[class\*="_table_"\] td:not\(:empty\)>\*\{position:relative;z-index:1;\}/.test(src));
 // Estilos INLINE (Wialon pinta los sensores con style="..."). Antes quedaban

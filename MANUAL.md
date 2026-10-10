@@ -1294,7 +1294,23 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 > el dato). Los colores de estado (error, exito, aviso, ayuda) pasan a una pareja
 > fondo/texto propia de cada tema, legible en oscuro y con los pasteles
 > originales en claro.
-> Tres garantias adicionales: las hojas del remap se mantienen siempre **al
+> El motor sigue el enfoque de **Dark Reader** en tres capas, de mas general
+> a mas concreta: (1) **variables**: se redefinen las variables que declara la
+> plataforma en `:root` con `!important`, clasificadas por su nombre (`-bg`,
+> `-color`, `-border`, `-shadow`, estados) con el mapa manual como prioridad. Asi
+> un solo bloque tematiza a la vez dialogos, campos, scrollbars, avisos y
+> sombras, sin tocar ninguna regla ni pelear por especificidad. Se detectan ~630
+> variables y se tematizan ~420 de forma automatica; (2) **literales**: los
+> colores escritos a pel o en la regla original se reescriben DENTRO de esa
+> misma regla, conservando posicion, especificidad y `!important`; (3) el remap
+> por propiedad, que resuelve las variables mixtas (`--white`,
+> `--wizard-dialog-background`), que valen como texto, fondo y borde segun el uso.
+> Las hojas del remap se mantienen siempre **al final del `<head>`** (si la
+> plataforma carga un modulo despues, sus reglas ya no pisan el tema ni dejan un
+> dialogo en blanco), el **acento usado como texto** se aclara u oscurece hasta
+> 4,5:1 de contraste (pestana activa, "Cancel", "Restore properties") y las reglas
+> dentro de `@layer`/`@container` tambien se remapean.
+ las hojas del remap se mantienen siempre **al
 > final del `<head>** (si la plataforma carga un modulo despues, sus reglas ya no
 > pisan el tema ni dejan un dialogo en blanco), el **acento usado como texto**
 > se aclara u oscurece hasta 4,5:1 de contraste (pestana activa, "Cancel",
