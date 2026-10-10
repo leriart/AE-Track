@@ -714,7 +714,7 @@ ok('informe: el PDF se imprime con el maquetado del informe general',
     /rxImprimirHTML\(rxGeoInfHTML\(rxGeoInfReune\(\)\)\)/.test(src) &&
     /rxInfEstilo\(\)/.test(src) && /rxInfCabecera\(/.test(src) && /rxInfPie\(\)/.test(src));
 ok('informe: el CSV sale evento a evento', /rxCsvCelda/.test(src) &&
-    /'Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Minutos', 'Detalle', 'Lat', 'Lon', 'Fuente'/.test(src));
+    /'Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Chofer', 'Minutos', 'Detalle', 'Lat', 'Lon', 'Fuente'/.test(src));
 ok('informe: el markdown con tablas', /rxReplayDescargar\(rxGeoInfNombreArchivo\(d, '\.md'\)/.test(src));
 ok('informe: el nombre del archivo lleva geocerca, modo y fecha',
     /function rxGeoInfNombreArchivo\(d, ext\)/.test(src) &&
@@ -724,8 +724,17 @@ ok('informe: lee los cuatro origenes de datos', /function rxGeoInfDeBitacora\(/.
     /function rxGeoInfDeRastreo\(/.test(src));
 ok('rastreo: recorre las trazas de todas las unidades',
     /for \(const k of Object\.keys\(trazas\)\)/.test(src) && /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: k, fuente: 'rastreo' \}\)/.test(src));
-ok('rastreo: paradas de la traza con umbral propio',
-    /const RX_GEO_PARADA_MIN = 2/.test(src) && /const minSeg = Math\.max\(30, RX_GEO_PARADA_MIN \* 60\)/.test(src));
+ok('rastreo: paradas con detector unico y umbrales configurables',
+    /function rxGeoInfParadasDePuntos\(/.test(src) && /rxGeoInfParam\('pMin', 2/.test(src) &&
+    /rxGeoInfParadasDePuntos\(\s*[\s\S]*?s: p\.v \}\)\), k, 'rastreo'/.test(src));
+ok('parada: parametros de minutos, velocidad y margen de borde en `RX_GEO`',
+    /pMin: 2, pVel: 3, pMargen: 60,/.test(src) && /id="rgi-pmin"/.test(src) &&
+    /id="rgi-pvel"/.test(src) && /id="rgi-pmargen"/.test(src));
+ok('parada: la deteccion resuelve la zona por dentro, centro o margen de borde',
+    /function rxGeoInfZonaCerca\(/.test(src) && /geoAlertaDentro\(z, lat, lon, margen\)/.test(src));
+ok('chofer: se saca de los campos personalizados y se agrega por unidad',
+    /function rxGeoInfChofer\(/.test(src) && /conductor\|chofer\|driver\|piloto/.test(src) &&
+    /choferes: \{\}/.test(src) && /f\.choferes\[e\.chofer\]/.test(src));
 ok('rastreo: quien esta dentro ahora',
     /tipo: 'dentro', eco: info\.eco \|\| clave/.test(src) && /Dentro ahora/.test(src));
 ok('rastreo: alcance todas / seleccionadas',
@@ -738,8 +747,9 @@ ok('historial: escaneo con una peticion por unidad, cancelable y con tope',
     /messages\/load_interval/.test(src) && /RX_GEO_HIST_MAX_U/.test(src) &&
     /token\.cancelado/.test(src));
 ok('historial: deteccion sobre mensajes crudos (pura)',
-    /function rxGeoInfDeMensajes\(msgs, eco, fuente\)/.test(src) &&
-    /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: eco, fuente: fuente \|\| 'historial' \}\)/.test(src));
+    /function rxGeoInfDeMensajes\(msgs, eco, fuente, chofer\)/.test(src) &&
+    /rxGeoInfCruces\(pts, rxGeoInfZonaDe, \{ eco: eco, fuente: fuente \|\| 'historial' \}\)/.test(src) &&
+    /rxGeoInfParadasDePuntos\(arr, eco, fuente \|\| 'historial', chofer\)/.test(src));
 ok('historial: es la fuente por defecto con geocerca y flota',
     /if \(RX_GEO\.zona && hay\.some\(\(h\) => h\.k === 'historial'\)\) \{\s*\n\s*RX_GEO\.fuente = 'historial';/.test(src));
 ok('sin geocerca se prefiere una fuente local (instantanea)',

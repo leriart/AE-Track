@@ -65,6 +65,10 @@ const stubs = [
     ' const r=+z.w; if(!(r>0)) return false;',
     ' const mx=111320*Math.cos(b.cen_y*Math.PI/180), my=110540;',
     ' const dx=(lon-b.cen_x)*mx, dy=(lat-b.cen_y)*my; return Math.sqrt(dx*dx+dy*dy)<=r; }',
+    'function norm(s){ return String(s==null?"":s).normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toUpperCase().trim(); }',
+    'function geoAlertaDentro(z,lat,lon,margen){ if(inZone(lat,lon,z)) return true; const b=z&&z.b; if(!b||b.min_x==null||margen<=0) return false;' +
+        ' const mx=111320*Math.cos(lat*Math.PI/180)||111320, dl=margen/mx, da=margen/110540;' +
+        ' return (lon>=b.min_x-dl&&lon<=b.max_x+dl&&lat>=b.min_y-da&&lat<=b.max_y+da); }',
     'function rxFechaHora(t){ return t ? new Date(t).toISOString().slice(0,16).replace("T"," ") : "-"; }',
     'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
     'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1; var msgs = (H.msgsPorId||{})[p.itemId] || [];' +
@@ -80,7 +84,8 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfDeRastreo,rxGeoInfDeHistorial,rxGeoInfDeMensajes,' +
     'rxGeoInfEscanear,rxGeoInfRangoS,rxGeoInfHistKey,rxGeoInfEventos,rxGeoInfFuentesDisponibles,rxGeoInfCacheReset,' +
     'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfZonaSel,rxGeoInfReune,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
-    'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U};';
+    'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U,' +
+    'rxGeoInfParadasDePuntos,rxGeoInfChofer,rxGeoInfChoferDe,rxGeoInfChoferReset,rxGeoInfParam,rxGeoInfZonaCerca};';
 const mod = new Function('P', code)(H);
 
 let fallos = 0;
@@ -214,6 +219,51 @@ ok('agrupa: sin eventos no rompe', mod.rxGeoInfAgrupa([], 'cruces').filas.length
     mod.rxGeoInfAgrupa(null, 'cruces').total.cruces === 0);
 ok('agrupa: sin eco usa la clave', mod.rxGeoInfAgrupa([{ zona: 'X', tipo: 'entra', clave: 'PLACA9' }], 'cruces')
     .filas[0].eco === 'PLACA9');
+// ── Chofer ──────────────────────────────────────────────────────────────
+mod.rxGeoInfChoferReset();
+ok('chofer: se lee del campo personalizado (conductor/chofer)',
+    mod.rxGeoInfChofer({ flds: { conductor: { n: 'conductor', v: 'Juan Perez' } } }) === 'Juan Perez' &&
+    mod.rxGeoInfChofer({ flds: { Chofer: 'Maria Lopez' } }) === 'Maria Lopez');
+ok('chofer: tambien de un campo directo',
+    mod.rxGeoInfChofer({ chofer: 'Ana Ruiz' }) === 'Ana Ruiz' && mod.rxGeoInfChofer({ driver: { n: 'Luis' } }) === 'Luis');
+ok('chofer: valores vacios o "sin asignar" no cuentan',
+    mod.rxGeoInfChofer({ flds: { conductor: { v: 'sin asignar' } } }) === '' &&
+    mod.rxGeoInfChofer({}) === '' && mod.rxGeoInfChofer(null) === '');
+ok('chofer: se cachea por unidad (una sola consulta)',
+    mod.rxGeoInfChoferDe('105', { flds: { chofer: { v: 'Pedro' } } }) === 'Pedro' &&
+    mod.rxGeoInfChoferDe('105') === 'Pedro');
+const gch = mod.rxGeoInfAgrupa([{ eco: '105', tipo: 'detenida', min: 5, chofer: 'Juan', zona: 'PATIO', ts: 1 }], 'paradas');
+ok('agrupa: acumula choferes por unidad y los expone en las celdas',
+    gch.filas[0].choferes.Juan === 1 && mod.rxGeoInfCeldas(gch.filas[0]).chofer === 'Juan');
+ok('cabeceras: incluye la columna Chofer en los dos modos',
+    mod.rxGeoInfCabeceras('paradas')[1] === 'Chofer' && mod.rxGeoInfCabeceras('cruces')[1] === 'Chofer');
+ok('parametros: con valor por defecto y acotados',
+    mod.rxGeoInfParam('pMin', 2, 0.5, 240) === 2 && (function () {
+        mod.RX_GEO.pMin = 999; const v = mod.rxGeoInfParam('pMin', 2, 0.5, 240); mod.RX_GEO.pMin = 2; return v === 240;
+    })());
+// ── Parada JUSTO en el borde de la geocerca ──────────────────────────────
+// Puntos quietos a ~122 m del centro de una geocerca de 100 m de radio: estan
+// FUERA de inZone, pero dentro del margen de borde, asi que la parada cuenta.
+(function () {
+    const z = H.zonas[0]; // PATIO, circulo (0,0) r100
+    mod.RX_GEO.zona = 'PATIO';
+    const arr = [];
+    for (let k = 0; k <= 6; k++) arr.push({ t: 1000 + k * 30, lat: 0.0011, lon: 0, s: 0 });
+    const ps = mod.rxGeoInfParadasDePuntos(arr, '105', 'historial', '');
+    ok('parada: se detecta la que se detuvo JUSTO en el borde (fuera de inZone, dentro del margen)',
+        ps.length === 1 && ps[0].zona === 'PATIO' && ps[0].min === 3, JSON.stringify(ps));
+    // Lejos de toda geocerca no cuenta.
+    const lejos = [];
+    for (let k = 0; k <= 6; k++) lejos.push({ t: 1000 + k * 30, lat: 0.5, lon: 0.5, s: 0 });
+    ok('parada: una parada lejos de toda geocerca no cuenta',
+        mod.rxGeoInfParadasDePuntos(lejos, '105', 'historial', '').length === 0);
+    // Con el margen a 0 deja de contar el borde.
+    mod.RX_GEO.pMargen = 0;
+    ok('parada: con margen 0 no cuenta la de fuera del borde',
+        mod.rxGeoInfParadasDePuntos(arr, '105', 'historial', '').length === 0);
+    mod.RX_GEO.pMargen = 60;
+    mod.RX_GEO.zona = '';
+})();
 ok('agrupa: cuenta las paradas con motor apagado', (function () {
     const ev = [
         { zona: 'P', tipo: 'motor', eco: '1', min: 20 },

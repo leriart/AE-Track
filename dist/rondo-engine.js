@@ -5840,6 +5840,23 @@ ta.value = '';
         }
         return el;
     }
+    // Asigna el contenido solo si cambio. Reasignar textContent aunque sea igual
+    // obliga al navegador a REPARSEAR la hoja entera y a recalcular estilos de
+    // toda la plataforma: en cada pasada eso se notaba como "pesado".
+    function rxHojaSet(id, txt) {
+        const el = rxHojaRondo(id);
+        if (el.__rondoTxt === txt) return el;
+        el.textContent = txt;
+        el.__rondoTxt = txt;
+        return el;
+    }
+    // Anexa a una hoja (colores) sin reescribir lo ya puesto: crece con CSS-in-JS.
+    function rxHojaAnexar(id, txt) {
+        const el = rxHojaRondo(id);
+        el.textContent += txt;
+        el.__rondoTxt = el.textContent;
+        return el;
+    }
     // Pinta SOLO las variables del remap (barato): es lo unico que hay que
     // rehacer al cambiar de tema o acento.
     // v6.0.14: redefine las variables DE LA PLATAFORMA (no las nuestras). Se
@@ -5847,7 +5864,7 @@ ta.value = '';
     function rxPintarVariablesPlataforma(P, acc, acc2) {
         try {
             const txt = rxHojaVariables(P, P.claro, acc, acc2);
-            if (txt) rxHojaRondo('rondo-var-plataforma').textContent = txt;
+            if (txt) rxHojaSet('rondo-var-plataforma', txt);
         } catch (_) { /* noop */ }
     }
     function rxPintarTokens(P, acc, accD) {
@@ -5858,7 +5875,7 @@ ta.value = '';
             const v = rxColorValor(_rxVars[id], P, acc, accD);
             partes.push('  --rpg-' + id + ':' + rxConAlfaCss(v, _rxVarsAlfa[id]) + ';');
         }
-        rxHojaRondo('rondo-tokens-pagina').textContent = ':root,html,body{\n' + partes.join('\n') + '\n}\n';
+        rxHojaSet('rondo-tokens-pagina', ':root,html,body{\n' + partes.join('\n') + '\n}\n');
     }
     function rxProgramarColoresPagina() {
         clearTimeout(_rxTimer);
@@ -5878,6 +5895,7 @@ ta.value = '';
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarsAlfa).forEach((k) => delete _rxVarsAlfa[k]);
         _rxVarsMapa = null;
+        _rxSueltosVistos = null;
         _rxHojasVistas = null;
         if (_rxPoll) { clearInterval(_rxPoll); _rxPoll = 0; }
         _rxUltimoN = -1;
@@ -5897,7 +5915,7 @@ ta.value = '';
         let t = '';
         try { t = rxReglasRondo(desde ? Array.prototype.slice.call(rs, desde) : rs, P, acc, acc2, accD); } catch (_) { return false; }
         if (!t) return false;
-        rxHojaRondo('rondo-colores-pagina').textContent += '\n' + t;
+        rxHojaAnexar('rondo-colores-pagina', '\n' + t);
         return true;
     }
     // Las hojas del remap deben ser las ULTIMAS del <head>. A igual especificidad
@@ -6285,17 +6303,27 @@ ta.value = '';
         for (let i = 0; i < els.length; i++) { if (rxRemapearInline(els[i])) cambio = true; }
         return cambio;
     }
+    // Nodos con estilo inline ya vistos: reescanearlos en cada pasada era el
+    // grueso del coste (~60 ms con 1200 nodos) y era trabajo repetido, porque
+    // rxRemapearInline ya deja el valor en var(--rpg-*) (idempotente).
+    let _rxSueltosVistos = null;
     function rxRemapearVentanas() {
         let cambiado = false;
         try {
             const roots = document.querySelectorAll(RX_VENTANA_SEL);
             for (let i = 0; i < roots.length; i++) { if (rxRemapearInlineArbol(roots[i])) cambiado = true; }
-            // Red de seguridad: cualquier otro nodo con color/fondo inline que ya
-            // exista (un contenedor de dialogo con otro id/clase). Con tope para
-            // no recorrer paginas enormes; los nodos NUEVOS los cubre el observador.
+            // Red de seguridad para nodos que ya existian y no son "ventana": se
+            // recorre UNA vez cada nodo con [style] con color (WeakSet). Los nodos
+            // nuevos los cubre el observador del body.
+            if (typeof WeakSet !== 'function') return cambiado;
+            if (!_rxSueltosVistos) _rxSueltosVistos = new WeakSet();
             const sueltos = document.querySelectorAll('[style*="background"],[style*="color"],[style*="fill"],[style*="stroke"]');
-            const tope = Math.min(sueltos.length, 1500);
-            for (let i = 0; i < tope; i++) { if (rxRemapearInline(sueltos[i])) cambiado = true; }
+            for (let i = 0; i < sueltos.length; i++) {
+                const el = sueltos[i];
+                if (_rxSueltosVistos.has(el)) continue;
+                _rxSueltosVistos.add(el);
+                if (rxRemapearInline(el)) cambiado = true;
+            }
         } catch (_) { /* noop */ }
         return cambiado;
     }

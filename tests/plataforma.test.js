@@ -724,8 +724,13 @@ ok('remap: procesa cada hoja una sola vez (WeakSet)',
 ok('remap: se dispara desde applyTheme (si no, nunca corria)',
     /try \{ rxProgramarColoresPagina\(\); \}/.test(src));
 ok('remap: no reanaliza lo ya hecho y solo repinta variables al cambiar tema',
-    /function rxPintarTokens\(/.test(src) && /rxHojaRondo\('rondo-tokens-pagina'\)/.test(src) &&
+    /function rxPintarTokens\(/.test(src) && /rxHojaSet\('rondo-tokens-pagina'/.test(src) &&
     !/_rxDocHecho/.test(src));
+ok('remap: no reescribe una hoja si su contenido no cambio (evita reparseo)',
+    /function rxHojaSet\(/.test(src) && /el\.__rondoTxt === txt/.test(src) &&
+    /rxHojaSet\('rondo-var-plataforma'/.test(src));
+ok('remap: el barrido de estilos inline no repite nodos ya vistos',
+    /_rxSueltosVistos = new WeakSet\(\)/.test(src) && /_rxSueltosVistos\.has\(el\)/.test(src));
 ok('remap: no pierde las hojas que cargan tarde (<link> .sheet nulo)',
     /function rxEsperarHoja\(/.test(src) && /addEventListener\('load'/.test(src));
 ok('remap: sin reescaneo periodico de todo el documento',

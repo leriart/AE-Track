@@ -1538,6 +1538,9 @@
             "#rondo-dialog .rgi-rango .sep{font:700 11px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
             "#rondo-dialog .rgi-rango .mini{padding:3px 8px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10px var(--rondo-font)}\n" +
             "#rondo-dialog .rgi-rango .mini:hover{color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-num{display:inline-flex;align-items:center;gap:4px;font:600 10px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-dialog .rgi-num input{width:58px;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:4px 6px;font:500 11.5px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-num input:focus{outline:none;border-color:var(--rondo-accent)}\n" +
             // KPIs
             "#rondo-dialog .rgi-kpis{display:flex;gap:5px;flex-wrap:wrap}\n" +
             "#rondo-dialog .rgi-kpi{flex:1 1 68px;min-width:64px;background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-radius:8px;padding:6px;display:flex;flex-direction:column;gap:1px;text-align:center;border-top:2px solid var(--rondo-border)}\n" +
