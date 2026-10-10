@@ -1294,6 +1294,15 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 > el dato). Los colores de estado (error, exito, aviso, ayuda) pasan a una pareja
 > fondo/texto propia de cada tema, legible en oscuro y con los pasteles
 > originales en claro.
+> **Transparencias.** Todo color conserva su alfa: `rgba()`, `#rrggbbaa`,
+> `rgb(r g b / 20%)` y `transparent`. Un velo negro al 50% sigue siendo un velo
+> al 50% con el fondo del tema; un velo blanco al 10% en tema oscuro pasa a ser
+> un realce claro, no un oscurecimiento. Las sombras de caja no se reescriben.
+>
+> **Cambio de tema.** Al cambiar de tema se deshace lo escrito con el tema
+> anterior antes de remapear, y al desactivar la opcion se restauran los
+> valores originales de la plataforma.
+>
 > El motor sigue el enfoque de **Dark Reader** en tres capas, de mas general
 > a mas concreta: (1) **variables**: se redefinen las variables que declara la
 > plataforma en `:root` con `!important`, clasificadas por su nombre (`-bg`,
