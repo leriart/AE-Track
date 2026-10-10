@@ -5494,6 +5494,15 @@ ta.value = '';
      * Se ignoran los valores con var() y las custom properties: eso ya lo
      * cubre el mapa de tokens. La hoja reescrita se inserta al final del
      * head, asi gana en cascada sin usar !important (no rompe :hover). */
+    // Parsea un color CSS a {r,g,b,a}. Admite hex (3/4/6/8 digitos), rgb()/rgba()
+    // con coma o espacio, alfa con "/" y porcentajes. Devuelve null para
+    // transparent/currentcolor/inherit/none y para lo que no sabe leer (var()).
+    function rxParseAlfa(x) {
+        const t = String(x).trim();
+        const n = t.indexOf('%') >= 0 ? parseFloat(t) / 100 : parseFloat(t);
+        if (!isFinite(n)) return null;
+        return Math.max(0, Math.min(1, n));
+    }
     function rxColorParse(v) {
         const t = String(v || '').trim().toLowerCase();
         if (t === 'white') return { r: 255, g: 255, b: 255, a: 1 };
@@ -5511,17 +5520,33 @@ ta.value = '';
                 b: parseInt(h.slice(4, 6), 16), a: parseInt(h.slice(6, 8), 16) / 255
             };
         }
-        m = /^rgba?\(([^)]*)\)$/.exec(t);
-        if (m) {
-            const p = m[1].split(',').map((x) => x.trim());
-            if (p.length < 3) return null;
-            const num = (x) => (x.indexOf('%') >= 0 ? Math.round(parseFloat(x) * 2.55) : parseFloat(x));
-            const r = num(p[0]), g = num(p[1]), b = num(p[2]);
-            const a = p[3] === undefined ? 1 : (p[3].indexOf('%') >= 0 ? parseFloat(p[3]) / 100 : parseFloat(p[3]));
-            if (![r, g, b].every((x) => isFinite(x)) || !isFinite(a)) return null;
-            return { r: r, g: g, b: b, a: a };
-        }
-        return null;
+        m = /^rgba?\((.*)\)$/.exec(t);
+        if (!m) return null;
+        let cuerpo = m[1].trim();
+        let alfa = 1;
+        const barra = cuerpo.split('/');
+        if (barra.length === 2) { cuerpo = barra[0]; alfa = rxParseAlfa(barra[1]); }
+        const p = cuerpo.split(/[\s,]+/).filter(Boolean);
+        if (p.length === 4) alfa = rxParseAlfa(p[3]);
+        if (p.length < 3 || alfa === null) return null;
+        const num = (x) => (x.indexOf('%') >= 0 ? parseFloat(x) * 2.55 : parseFloat(x));
+        const r = num(p[0]), g = num(p[1]), b = num(p[2]);
+        if (![r, g, b].every((x) => isFinite(x))) return null;
+        return { r: Math.round(r), g: Math.round(g), b: Math.round(b), a: alfa };
+    }
+    // Alfa de un valor (1 si no es un color leible, p. ej. var()).
+    function rxAlfaDe(valor) {
+        const c = rxColorParse(valor);
+        return c ? c.a : 1;
+    }
+    // Aplica un alfa a un color. Si el color ya trae alfa, se multiplican.
+    // Un alfa de 1 devuelve el valor tal cual (no se degrada a rgb).
+    function rxConAlfaCss(valor, a) {
+        if (a === undefined || a === null || a >= 0.999) return valor;
+        const c = rxColorParse(valor);
+        if (!c) return valor;
+        const fin = Math.max(0, Math.min(1, a * c.a));
+        return 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',' + (Math.round(fin * 1000) / 1000) + ')';
     }
     function rxColorHue(r, g, b) {
         r /= 255; g /= 255; b /= 255;
@@ -5538,6 +5563,9 @@ ta.value = '';
     // aparece. Devuelve la clave, NO un color: la regla reescrita usara
     // var(--rpg-*) y cambiar de tema sera solo repintar esas variables, sin
     // volver a recorrer el CSS de la pagina.
+    let _rxTemaClaro = false; // tema activo durante la pasada (lo fija rxAplicarColoresPagina)
+    let _rxCtx = null;        // { P, acc, accD } de la pasada, para mapear literales
+    let _rxVarsMapa = null;   // variables de la plataforma de la pasada (con su alfa)
     function rxColorClave(v, prop) {
         const c = rxColorParse(v);
         if (!c) return null;
@@ -5557,13 +5585,15 @@ ta.value = '';
             // oscuro y saturado (azul marino del texto): cae a neutro
         }
         if (p.indexOf('background') === 0) {
+            // Un velo claro translucido (rgba(255,255,255,.1)) en tema oscuro debe
+            // seguir siendo un realce claro, no un oscurecimiento.
+            if (c.a < 1 && lum > 0.5) return _rxTemaClaro ? 'soft' : 'fg';
             if (lum > 0.9) return 'soft';
             if (lum > 0.45) return 'strong';
             return 'bg';
         }
         if (p.indexOf('border') === 0 || p.indexOf('outline') === 0 || p.indexOf('column-rule') === 0) return 'border';
         if (p === 'color' || p === 'fill' || p === 'stroke' || p === 'caret-color') {
-            if (c.a < 0.98) return null;
             if (lum > 0.85) return 'on';
             if (lum > 0.55) return 'mute';
             if (lum > 0.3) return 'dim';
@@ -5636,8 +5666,9 @@ ta.value = '';
     const _rxVars = {};
     const _rxVarsOrden = [];
     const _rxVarLit = {};
-    function rxVarId(lit, clave) {
-        const k = String(lit).trim().toLowerCase() + '|' + clave;
+    const _rxVarsAlfa = {}; // id -> alfa del literal original (transparencias)
+    function rxVarId(lit, clave, alfa) {
+        const k = String(lit).trim().toLowerCase() + '|' + clave + '|' + (alfa === undefined ? '' : alfa);
         if (_rxVarLit[k]) return _rxVarLit[k];
         let h = 5381;
         for (let i = 0; i < k.length; i++) h = ((h << 5) + h + k.charCodeAt(i)) | 0;
@@ -5646,6 +5677,7 @@ ta.value = '';
         while (_rxVars[id] !== undefined) { id = 'c' + (h >>> 0).toString(36) + 'x' + n; n++; }
         _rxVarLit[k] = id;
         _rxVars[id] = clave;
+        _rxVarsAlfa[id] = alfa === undefined ? rxAlfaDe(lit) : alfa;
         _rxVarsOrden.push(id);
         return id;
     }
@@ -5662,7 +5694,11 @@ ta.value = '';
         let v = val.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
             const clave = rxTokenClave(tok, rol);
             if (!clave) return full;
-            return 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave) + ')';
+            // El token hereda el alfa de la variable original (--accent-bg-color
+            // es translucida): sin esto el remap la volvia opaca.
+            const orig = _rxVarsMapa ? _rxVarsMapa.get(tok) : undefined;
+            const alfa = orig !== undefined ? rxAlfaDe(orig) : 1;
+            return 'var(--rpg-' + rxVarId('tok:' + tok + ':' + clave, clave, alfa) + ')';
         });
         // Los literales solo en reglas normales: reescribir el valor de una
         // variable por un literal la fijaria fuera del tema.
@@ -5770,7 +5806,8 @@ ta.value = '';
         const partes = [];
         for (let i = 0; i < _rxVarsOrden.length; i++) {
             const id = _rxVarsOrden[i];
-            partes.push('  --rpg-' + id + ':' + rxColorValor(_rxVars[id], P, acc, accD) + ';');
+            const v = rxColorValor(_rxVars[id], P, acc, accD);
+            partes.push('  --rpg-' + id + ':' + rxConAlfaCss(v, _rxVarsAlfa[id]) + ';');
         }
         rxHojaRondo('rondo-tokens-pagina').textContent = ':root,html,body{\n' + partes.join('\n') + '\n}\n';
     }
@@ -5779,7 +5816,9 @@ ta.value = '';
         _rxTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 400);
     }
     function rxDesactivarColores() {
-        ['rondo-colores-pagina', 'rondo-tokens-pagina'].forEach((id) => {
+        rxRestaurarLiterales();
+        _rxVarsPlat = null; _rxVarsLista = null; _rxVarsHojas = null;
+        ['rondo-colores-pagina', 'rondo-tokens-pagina', 'rondo-var-plataforma'].forEach((id) => {
             const el = document.getElementById(id);
             if (el && el.parentNode) el.parentNode.removeChild(el);
         });
@@ -5788,6 +5827,8 @@ ta.value = '';
         Object.keys(_rxVars).forEach((k) => delete _rxVars[k]);
         _rxVarsOrden.length = 0;
         Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
+        Object.keys(_rxVarsAlfa).forEach((k) => delete _rxVarsAlfa[k]);
+        _rxVarsMapa = null;
         _rxHojasVistas = null;
         if (_rxPoll) { clearInterval(_rxPoll); _rxPoll = 0; }
         _rxUltimoN = -1;
@@ -5857,7 +5898,20 @@ ta.value = '';
     // un fondo de Ant Design) se modifica DENTRO de la regla original: misma
     // posicion en la cascada, misma especificidad y mismo !important. Nada que
     //_gainar, nada que clonar.
-    const RX_PROPS_COLOR = /^(color|background|background-color|border|border-color|border-top-color|border-bottom-color|border-left-color|border-right-color|outline-color|box-shadow|text-shadow|fill|stroke|caret-color|column-rule-color)$/;
+    const RX_PROPS_COLOR = /^(color|background-color|border-top-color|border-right-color|border-bottom-color|border-left-color|outline-color|column-rule-color|fill|stroke|caret-color|text-decoration-color|box-shadow|text-shadow)$/;
+    // Literal de color dentro de un valor (hex o rgb/rgba, con alfa).
+    const RX_COLOR_LIT_G = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
+    // Las hojas de Rondo NO se tocan: si el motor se reescribiera a si mismo
+    // (sus tokens y sus reglas de compatibilidad) el tema se deformaria en cada
+    // pasada. Es el mismo filtro que usa rxAplicarColoresPagina.
+    function rxEsHojaRondo(sh) {
+        const o = sh && sh.ownerNode;
+        return !!(o && o.id && String(o.id).indexOf('rondo') === 0);
+    }
+    let _rxLitHojas = null;    // WeakMap hoja -> reglas ya leidas
+    let _rxLitHechos = null;   // WeakSet de reglas ya reescritas
+    let _rxLitTema = '';
+    let _rxLitRegistro = null; // [regla, prop, valorOriginal, prioridad] para restaurar
     function rxLiteralColor(v) {
         v = String(v || '').trim();
         if (/^transparent$/i.test(v)) return { hex: null };
@@ -5866,18 +5920,53 @@ ta.value = '';
         if (m) return { hex: '#' + [1, 2, 3].map((i) => (+m[i]).toString(16).padStart(2, '0')).join('') };
         return null;
     }
-    function rxReescribirLiterales(P) {
+    // v6.19.7: incremental. Antes recorria las ~11.000 reglas de la plataforma en
+    // CADA pasada (60-80 ms) y las reescribia una y otra vez: con el sondeo cada
+    // 1,5 s eso bloqueaba el hilo principal y las ventanas tardaban o no se
+    // montaban. Ahora cada hoja se lee una vez y solo se reescriben las reglas
+    // NUEVAS (las de CSS-in-JS, que crecen al abrir un dialogo). Cambiar de tema
+    // reinicia el registro, y rxDesactivarColores restaura los literales.
+    function rxReescribirLiterales(P, tema) {
         let n = 0;
         let rs = null;
         try { rs = document.styleSheets; } catch (_) { return n; }
+        if (typeof WeakMap !== 'function') return n;
+        const clave = (P && P.fg) + '|' + (P && P.soft) + '|' + (tema || '');
+        if (clave !== _rxLitTema || !_rxLitHojas) {
+            // Cambio de tema: primero se deshace lo escrito con el tema anterior.
+            // Sin esto el texto claro del tema oscuro se remapearia como si fuera
+            // el original y el tema claro quedaria con texto blanco.
+            if (_rxLitRegistro && _rxLitRegistro.length) rxRestaurarLiterales();
+            _rxLitTema = clave;
+            _rxLitHojas = new WeakMap();
+            _rxLitHechos = new WeakSet();
+            _rxLitRegistro = [];
+        }
         for (let i = 0; i < rs.length; i++) {
+            const hoja = rs[i];
+            if (rxEsHojaRondo(hoja)) continue;
             let reglas = null;
-            try { reglas = rs[i].cssRules; } catch (_) { continue; }
+            try { reglas = hoja.cssRules; } catch (_) { continue; }
             if (!reglas) continue;
+            if (_rxLitHojas.get(hoja) === reglas.length) continue;
+            _rxLitHojas.set(hoja, reglas.length);
             n += rxLiteralesDeReglas(reglas, P, 0);
         }
         return n;
     }
+    // Mapea UN literal de color al de la paleta conservando su alfa: un
+    // rgba(0,0,0,.5) de fondo sigue siendo un velo al 50%, con el color del tema.
+    function rxMapearLiteral(lit, prop) {
+        if (!_rxCtx) return lit;
+        const clave = rxColorClave(lit, prop);
+        if (!clave) return lit;
+        const base = rxColorValor(clave, _rxCtx.P, _rxCtx.acc, _rxCtx.accD);
+        if (!rxColorParse(base)) return lit; // transparent u otro no mapeable
+        return rxConAlfaCss(base, rxAlfaDe(lit));
+    }
+    // Reescribe los literales de cada LONGHAND. Chromium lista los atajos
+    // (border, background) como sus longhands, asi que el color de un
+    // "border: 1px solid #E3E4E6" se cambia sin tocar el resto del atajo.
     function rxLiteralesDeReglas(reglas, P, prof) {
         let n = 0;
         if (!reglas || prof > 4) return n;
@@ -5886,29 +5975,40 @@ ta.value = '';
             if (r.cssRules && !r.style) { n += rxLiteralesDeReglas(r.cssRules, P, prof + 1); continue; }
             const st = r.style;
             if (!st || !st.length) continue;
+            if (_rxLitHechos.has(r)) continue;
+            let toco = false;
             for (let j = st.length - 1; j >= 0; j--) {
                 const prop = st[j];
                 if (!RX_PROPS_COLOR.test(prop)) continue;
-                const lit = rxLiteralColor(st.getPropertyValue(prop));
-                if (!lit) continue;
+                const v = st.getPropertyValue(prop);
+                if (!v) continue;
+                const nv = v.replace(RX_COLOR_LIT_G, (lit) => rxMapearLiteral(lit, prop));
+                if (nv === v) continue;
                 const prio = st.getPropertyPriority(prop);
-                if (prop === 'color' || prop === 'fill' || prop === 'stroke' || prop === 'caret-color') {
-                    if (lit.hex === null) continue;
-                    st.setProperty(prop, P.fg, prio);
-                } else if (prop === 'background' || prop === 'background-color') {
-                    if (lit.hex === null) continue;
-                    st.setProperty(prop, P.soft, prio);
-                } else if (/border|outline|column-rule/.test(prop)) {
-                    if (lit.hex === null) continue;
-                    st.setProperty(prop, P.border, prio);
-                } else if (/shadow/.test(prop)) {
-                    if (lit.hex === null) { st.setProperty(prop, 'none', prio); continue; }
-                    st.setProperty(prop, lit.hex === P.fg || lit.hex === P.soft ? 'none' : P.shadow || 'none', prio);
-                }
+                _rxLitRegistro.push([r, prop, v, prio]);
+                st.setProperty(prop, nv, prio);
+                toco = true;
                 n++;
             }
+            if (toco) _rxLitHechos.add(r);
         }
         return n;
+    }
+    // Deshacer la reescritura en sitio: sin esto, desactivar estiloPagina dejaba
+    // las hojas de la plataforma con los colores oscuros ya escritos dentro.
+    function rxRestaurarLiterales() {
+        try {
+            if (_rxLitRegistro) {
+                for (let i = 0; i < _rxLitRegistro.length; i++) {
+                    const q = _rxLitRegistro[i];
+                    try { q[0].style.setProperty(q[1], q[2], q[3]); } catch (_) { /* noop */ }
+                }
+            }
+        } catch (_) { /* noop */ }
+        _rxLitRegistro = null;
+        _rxLitHojas = null;
+        _rxLitHechos = null;
+        _rxLitTema = '';
     }
     // ===== MOTOR DE VARIABLES (enfoque Dark Reader) =====
     // La plataforma define ~850 variables (:root) y pinta TODO con ellas. En vez
@@ -5954,17 +6054,37 @@ ta.value = '';
     // Recorre todas las hojas accesibles y recoge las variables que declara la
     // plataforma. Una variable se considera "de la plataforma" si la usan reglas
     // suyas: basta con estar declarada en una hoja ajena a Rondo.
-    function rxEscanearVariables() {
-        const out = new Map();
-        let rs = null;
-        try { rs = document.styleSheets; } catch (_) { return out; }
-        for (let i = 0; i < rs.length; i++) {
-            let reglas = null;
-            try { reglas = rs[i].cssRules; } catch (_) { continue; } // hoja de otro origen
-            if (!reglas) continue;
-            rxVarsDeReglas(reglas, out);
+    let _rxVarsHojas = null; // WeakMap hoja -> n.o de reglas leidas
+    let _rxVarsPlat = null;  // Map con las variables de la plataforma
+    let _rxVarsLista = null; // [{hoja, n, mapa}] para mezclarlas en orden
+    function rxEscanearVariables(forzar) {
+        if (typeof WeakMap !== 'function') return new Map();
+        if (forzar || !_rxVarsPlat) {
+            _rxVarsHojas = new WeakMap();
+            _rxVarsPlat = new Map();
+            _rxVarsLista = [];
         }
-        return out;
+        let rs = null;
+        try { rs = document.styleSheets; } catch (_) { return _rxVarsPlat; }
+        for (let i = 0; i < rs.length; i++) {
+            const hoja = rs[i];
+            if (rxEsHojaRondo(hoja)) continue;
+            let reglas = null;
+            try { reglas = hoja.cssRules; } catch (_) { continue; } // hoja de otro origen
+            if (!reglas) continue;
+            if (_rxVarsHojas.get(hoja) === reglas.length) continue;
+            _rxVarsHojas.set(hoja, reglas.length);
+            const propio = new Map();
+            rxVarsDeReglas(reglas, propio);
+            // La hoja mas reciente gana: el CSS-in-JS redefine :root al final.
+            _rxVarsLista.push([hoja, reglas.length, propio]);
+            _rxVarsPlat = new Map();
+            for (let q = 0; q < _rxVarsLista.length; q++) {
+                const m = _rxVarsLista[q][2];
+                m.forEach((v, k) => _rxVarsPlat.set(k, v));
+            }
+        }
+        return _rxVarsPlat;
     }
     function rxVarsDeReglas(reglas, out, profundidad) {
         if (!reglas || (profundidad || 0) > 4) return;
@@ -5977,7 +6097,8 @@ ta.value = '';
                 const prop = st[j];
                 if (prop.indexOf('--') !== 0) continue;
                 const clave = prop.slice(2);
-                if (clave.indexOf('rondo-') === 0) continue; // las nuestras: no se tocan
+                // Ni las nuestras (--rondo-*) ni los ids del remap (--rpg-*).
+                if (clave.indexOf('rondo-') === 0 || clave.indexOf('rpg-') === 0) continue;
                 const val = st.getPropertyValue(prop);
                 if (!rxEsColorValor(val)) continue;
                 if (!out.has(clave)) out.set(clave, val);
@@ -5990,12 +6111,14 @@ ta.value = '';
         const vars = rxEscanearVariables();
         const decl = [];
         for (const clave of vars.keys()) {
+            const orig = vars.get(clave);
+            if (/^\s*transparent\s*$/i.test(orig)) continue; // transparencia explicita
             const manual = rxRolManual(clave);
             if (manual === 'mixto') continue;
-            const rol = manual || rxRolPorNombre(clave, vars.get(clave));
+            const rol = manual || rxRolPorNombre(clave, orig);
             if (!rol) continue;
             const v = rxValorRol(rol, P, acc, acc2);
-            if (v) decl.push('--' + clave + ':' + v + ' !important');
+            if (v) decl.push('--' + clave + ':' + rxConAlfaCss(v, rxAlfaDe(orig)) + ' !important');
         }
         if (!decl.length) return '';
         // Son 850+ lineas: se agrupan de 60 para no crear un nodo de estilo enorme.
@@ -6107,6 +6230,9 @@ ta.value = '';
         const claro = APP.config.theme === 'claro' ||
             (APP.config.theme === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches);
         const P = rxPaginaPaleta(claro);
+        _rxCtx = { P: P, acc: acc, accD: accD };
+        _rxTemaClaro = !!claro;
+        _rxVarsMapa = rxEscanearVariables();
         // Se procesan TODAS las hojas cargadas; rxProcesarHoja ignora las ya
         // vistas, asi que esto es barato y no deja ninguna sin reescribir (la
         // plataforma carga el CSS de las ventanas de unidad en diferido).
@@ -6128,7 +6254,7 @@ ta.value = '';
         rxRemapearVentanas();
         rxPintarTokens(P, acc, accD);
         rxPintarVariablesPlataforma(P, acc, accD);
-        rxReescribirLiterales(P);
+        rxReescribirLiterales(P, APP.config.theme);
         rxMantenerAlFinal();
         rxObservar();
     }

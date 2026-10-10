@@ -375,19 +375,52 @@ ok('color: una custom property sin token mapeado no se toca',
     ok('variables: las medidas NO entran en la hoja',
         css.indexOf('--base-size') < 0 && css.indexOf('--font-header') < 0);
 })();
-// CAPA 3 (literales en sitio): se respeta la posicion y el !important originales.
+// CAPA 3 (literales) y ALFA: comportamiento real de las funciones, no regex.
 (function () {
-    const M = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
-        '\nreturn { lit: rxReescribirLiterales, tok: rxLiteralColor };')();
-    ok('literales: se reconocen hex, rgb, transparent y se ignoran el resto',
-        M.tok('#fff').hex === '#fff' && M.tok('rgb(23, 35, 54)').hex === '#172336' &&
-        M.tok('transparent').hex === null && M.tok('12px') === null &&
-        M.tok('var(--x)') === null && M.tok('0 0 3px 2px rgb(1 1 1)') === null);
-    ok('literales: se reescribe la MISMA regla conservando !important',
-        /st\.setProperty\(prop, P\.fg, prio\)/.test(src) && /st\.setProperty\(prop, P\.soft, prio\)/.test(src) &&
-        /st\.setProperty\(prop, P\.border, prio\)/.test(src));
-    ok('literales: se llama en cada pasada de pintado',
-        /rxPintarVariablesPlataforma\(P, acc, accD\);\s*rxReescribirLiterales\(P\);/.test(src));
+    const T = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+        '\nreturn { parse: rxColorParse, alfa: rxAlfaDe, conAlfa: rxConAlfaCss, clave: rxColorClave,' +
+        ' mapear: rxMapearLiteral, ctx: (c) => { _rxCtx = c; }, claro: (v) => { _rxTemaClaro = v; },' +
+        ' valor: rxColorValor, rolV: rxValorRol };')();
+    const P = { bg: '#1f2330', soft: '#272d3c', strong: '#1a1f2b', fg: '#e8ecf3', dim: '#a9b2c3', mute: '#7d8799', border: '#3a4252', shadow: 'none', claro: false };
+    const C = { P: P, acc: '#0d6e87', accD: '#0a5c72' };
+    T.ctx(C); T.claro(false);
+    ok('alfa: rgb con coma, con espacio y con "/" en porcentaje',
+        T.parse('rgb(1,2,3)').a === 1 && T.parse('rgba(1,2,3,.5)').a === 0.5 &&
+        T.parse('rgb(51 51 51 / 20%)').a === 0.2 && T.parse('rgb(10% 20% 30%)').r === 26);
+    ok('alfa: hex de 4 y 8 digitos (#ffffff80 = ~50%)',
+        Math.abs(T.parse('#ffffff80').a - 0.502) < 0.01 && T.parse('#fff8').a > 0.5 && T.parse('#fff').a === 1);
+    ok('alfa: transparent, var() y hsl no se leen (no se tocan)',
+        T.parse('transparent') === null && T.parse('var(--x)') === null && T.parse('hsl(0,0%,0%)') === null);
+    ok('alfa: conAlfa conserva el alfa original y multiplica si el color ya es translucido',
+        T.conAlfa('#272d3c', 0.5) === 'rgba(39,45,60,0.5)' && T.conAlfa('#272d3c', 1) === '#272d3c' &&
+        T.conAlfa('rgba(0,0,0,.5)', 0.5) === 'rgba(0,0,0,0.25)' && T.conAlfa('transparent', 0.5) === 'transparent');
+    ok('alfa: un velo negro al 50% de fondo se mapea al fondo base con su 50%',
+        T.mapear('rgba(0,0,0,.5)', 'background-color') === 'rgba(31,35,48,0.5)');
+    ok('alfa: un velo blanco al 10% en tema oscuro sigue siendo un realce CLARO',
+        T.mapear('rgba(255,255,255,.1)', 'background-color') === 'rgba(232,236,243,0.1)');
+    T.claro(true);
+    ok('alfa: el mismo velo blanco en tema claro queda claro (soft)',
+        /^rgba\(255,255,255,0\.1\)$/.test(T.mapear('rgba(255,255,255,.1)', 'background-color')) ||
+        T.mapear('rgba(255,255,255,.1)', 'background-color').indexOf('rgba(') === 0);
+    T.claro(false);
+    ok('literales: un color sin alfa se mapea a la paleta opaca',
+        T.mapear('#ffffff', 'background-color') === P.soft && T.mapear('#B30B27', 'color') === P.fg ||
+        T.mapear('#B30B27', 'color') === T.valor('acctxt', P, C.acc, C.accD));
+    ok('literales: transparent no se reescribe; un literal no-color (url) tampoco',
+        T.mapear('transparent', 'background-color') === 'transparent' &&
+        T.clave('url(x.png)', 'background-image') === null);
+    ok('literales: las sombras NO cambian (translucidas por diseno)',
+        T.clave('#1723361A', 'box-shadow') === null);
+    ok('literales: se reescribe por longhand y se restaura con el registro',
+        /_rxLitRegistro\.push\(\[r, prop, v, prio\]\);/.test(src) && /function rxRestaurarLiterales/.test(src));
+    ok('literales: las hojas de Rondo nunca se reescriben (el motor no se muerde)',
+        /if \(rxEsHojaRondo\(hoja\)\) continue;/.test(src) && /rxEsHojaRondo\(sh\)/.test(src));
+    ok('literales: incremental (cada hoja se lee una vez; cambiar de tema reinicia)',
+        /_rxLitHojas\.get\(hoja\) === reglas\.length/.test(src) && /if \(_rxLitHechos\.has\(r\)\) continue;/.test(src) &&
+        /clave !== _rxLitTema/.test(src));
+    ok('literales: cambiar de tema restaura antes de remapear (no hereda el tema anterior)',
+        /if \(_rxLitRegistro && _rxLitRegistro\.length\) rxRestaurarLiterales\(\);/.test(src));
+    ok('variables: una variable transparente no se redefine', /transparent\\s\*\$\/i\.test\(orig\)/.test(src));
 })();
 // ACENTO COMO TEXTO: el acento (#0d6e87) sobre una superficie oscura da ~2:1 y
 // dejaba "Cancel", "Restore properties" o la pestana activa casi invisibles.
