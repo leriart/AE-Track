@@ -1294,6 +1294,16 @@ Abre Ajustes con el boton de engranaje del panel. Pestanas:
 > el dato). Los colores de estado (error, exito, aviso, ayuda) pasan a una pareja
 > fondo/texto propia de cada tema, legible en oscuro y con los pasteles
 > originales en claro.
+> **Colores en graficas y SVG.** En SVG, el `fill` de una forma (`g`, `rect`,
+> `path`...) con relleno claro se trata como **region/fondo** (superficie oscura):
+> las bandas de la grafica de reportes ya no salen blancas. Un `<text>` o un
+> icono dentro de `<defs>` sigue siendo texto. Los identificadores de token del
+> remap son **autodescriptivos** (`--rpg-soft`, `--rpg-soft-a50`) y se vuelven a
+> registrar solos: si el contenido se clona (ventana de reporte) o se reactiva
+> la funcion, los `var(--rpg-*)` ya escritos se repintan en vez de quedar
+> huerfanos. Al desactivar se restauran tanto las reglas como los estilos
+> inline originales.
+>
 > **Transparencias.** Todo color conserva su alfa: `rgba()`, `#rrggbbaa`,
 > `rgb(r g b / 20%)` y `transparent`. Un velo negro al 50% sigue siendo un velo
 > al 50% con el fondo del tema; un velo blanco al 10% en tema oscuro pasa a ser
