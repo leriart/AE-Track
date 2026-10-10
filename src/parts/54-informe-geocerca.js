@@ -104,7 +104,8 @@ function rxGeoInfParada(p, zona, eco, fuente) {
         eco: eco || '', ts: (+p.t || +p.desde || 0),
         lat: p.lat, lon: p.lon, min: Math.round(seg / 60),
         motor: p.motor || '', motorFuente: p.motorFuente || '',
-        lugar: p.lugar || '', titulo: 'Parada', detalle: '',
+        lugar: p.lugar || '', chofer: p.chofer || '',
+        titulo: 'Parada', detalle: '',
         fuente: fuente || 'viajes'
     };
 }
@@ -159,7 +160,7 @@ function rxGeoInfAgrupa(eventos, modo) {
             f = por[clave] = {
                 eco: clave, cruces: 0, entradas: 0, salidas: 0, paradas: 0, dentro: 0,
                 min: 0, minMotor: 0, motor: 0, primero: 0, ultimo: 0,
-                lugares: {}, zonas: {}
+                lugares: {}, zonas: {}, choferes: {}
             };
         }
         if (e.tipo === 'entra' || e.tipo === 'sale') {
@@ -172,6 +173,7 @@ function rxGeoInfAgrupa(eventos, modo) {
             f.min += (+e.min || 0);
             if (e.tipo === 'motor' || e.motor === 'off') { f.motor++; f.minMotor += (+e.min || 0); }
         }
+        if (e.chofer) f.choferes[e.chofer] = (f.choferes[e.chofer] || 0) + 1;
         if (e.zona) f.zonas[e.zona] = (f.zonas[e.zona] || 0) + 1;
         if (e.lugar) f.lugares[e.lugar] = (f.lugares[e.lugar] || 0) + 1;
         if (e.ts) {
@@ -225,10 +227,12 @@ function rxGeoInfPorZona(eventos, orden) {
 function rxGeoInfCeldas(f) {
     const zonas = Object.keys(f.zonas || {});
     const lugares = Object.keys(f.lugares || {});
+    const choferes = Object.keys(f.choferes || {});
     return {
         eco: f.eco, cruces: f.cruces, entradas: f.entradas, salidas: f.salidas,
         paradas: f.paradas, dentro: f.dentro, min: f.min, motor: f.motor, minMotor: f.minMotor,
         primero: f.primero, ultimo: f.ultimo,
+        chofer: choferes.join(' | '),
         zonas: zonas.join(' | '),
         lugares: lugares.slice(0, 4).join(' | ')
     };
@@ -265,18 +269,18 @@ function rxGeoInfCruces(puntos, dentroDe, base) {
 
 function rxGeoInfCabeceras(modo) {
     return (modo === 'paradas')
-        ? ['Eco', 'Paradas', 'Min quieto', 'Min motor apagado', 'Paradas con motor', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima']
-        : ['Eco', 'Cruces', 'Entradas', 'Salidas', 'Paradas', 'Min quieto', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima'];
+        ? ['Eco', 'Chofer', 'Paradas', 'Min quieto', 'Min motor apagado', 'Paradas con motor', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima']
+        : ['Eco', 'Chofer', 'Cruces', 'Entradas', 'Salidas', 'Paradas', 'Min quieto', 'Dentro ahora', 'Geocercas', 'Primera', 'Ultima'];
 }
 // Celdas ya en HTML (para la tabla del PDF y la vista previa).
 function rxGeoInfCeldasHTML(c, modo) {
     const t = (ms) => (ms ? esc(rxFechaHora(ms)) : '-');
     const dn = (c.dentro ? 'Si' : '-');
     if (modo === 'paradas') {
-        return [esc(c.eco), String(c.paradas), String(c.min), String(c.minMotor),
+        return [esc(c.eco), esc(c.chofer || '-'), String(c.paradas), String(c.min), String(c.minMotor),
             String(c.motor), dn, esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
     }
-    return [esc(c.eco), String(c.cruces), String(c.entradas), String(c.salidas),
+    return [esc(c.eco), esc(c.chofer || '-'), String(c.cruces), String(c.entradas), String(c.salidas),
         String(c.paradas), String(c.min), dn, esc(c.zonas || '-'), t(c.primero), t(c.ultimo)];
 }
 // Filas planas (sin HTML) para CSV y Markdown.
@@ -284,10 +288,10 @@ function rxGeoInfCeldasPlanas(c, modo) {
     const t = (ms) => (ms ? rxFechaHora(ms) : '-');
     const dn = (c.dentro ? 'Si' : '-');
     if (modo === 'paradas') {
-        return [c.eco, String(c.paradas), String(c.min), String(c.minMotor),
+        return [c.eco, (c.chofer || '-'), String(c.paradas), String(c.min), String(c.minMotor),
             String(c.motor), dn, (c.zonas || '-'), t(c.primero), t(c.ultimo)];
     }
-    return [c.eco, String(c.cruces), String(c.entradas), String(c.salidas),
+    return [c.eco, (c.chofer || '-'), String(c.cruces), String(c.entradas), String(c.salidas),
         String(c.paradas), String(c.min), dn, (c.zonas || '-'), t(c.primero), t(c.ultimo)];
 }
 /* ====================== INFORME POR GEOCERCA: FUENTES ====================== */
@@ -297,6 +301,13 @@ function rxGeoInfCeldasPlanas(c, modo) {
 const RX_GEO = {
     fuente: 'bitacora', rango: 'hoy', modo: 'cruces', zona: '',
     desde: '', hasta: '', busca: '',
+    // Deteccion de parada (configurable desde el dialogo):
+    //   pMin    - minutos minimos quieto para contar como parada
+    //   pVel    - km/h por debajo de los cuales la unidad esta "quieta"
+    //   pMargen - metros de margen alrededor del borde de la geocerca, para
+    //             captar la unidad que se detuvo JUSTO en el limite (los
+    //             puntos de la traza caen a un lado u otro por el jitter GPS)
+    pMin: 2, pVel: 3, pMargen: 60,
     // Resultados: se calculan al pulsar "Generar reporte" (y al abrir, si la
     // fuente no consulta la plataforma). Cualquier cambio los deja pendientes.
     listo: false,
@@ -311,9 +322,104 @@ function rxGeoInfNombre(z) {
 function rxGeoInfEnZona(lat, lon, z) {
     if (!z || lat == null || lon == null) return false;
     try {
-        if (typeof geoAlertaDentro === 'function') return geoAlertaDentro(z, lat, lon, 40);
+        // Margen configurable: la parada "justo en el borde" cuenta.
+        if (typeof geoAlertaDentro === 'function') return geoAlertaDentro(z, lat, lon, rxGeoInfParam('pMargen', 60, 0, 2000));
         return !!inZone(lat, lon, z);
     } catch (_) { return false; }
+}
+// Valor numerico de un parametro del informe, acotado y con valor por defecto.
+function rxGeoInfParam(clave, def, min, max) {
+    const n = Number(RX_GEO[clave]);
+    const v = (Number.isFinite(n) && n >= 0) ? n : def;
+    return Math.min(max, Math.max(min, v));
+}
+// Geocerca dentro del margen de borde: prueba la elegida (rapido) o todas.
+// Solo se usa al cerrar una parada, no por punto, asi que no pesa.
+function rxGeoInfZonaCerca(lat, lon, margen) {
+    if (lat == null || lon == null) return '';
+    const dentro = (z) => {
+        if (!z || typeof geoAlertaDentro !== 'function') return false;
+        try { return geoAlertaDentro(z, lat, lon, margen); } catch (_) { return false; }
+    };
+    if (RX_GEO.zona) {
+        const z = rxGeoInfZonaSel();
+        return dentro(z) ? rxGeoInfNombre(z) : '';
+    }
+    for (const z of (APP.zonas || [])) {
+        if (dentro(z)) return rxGeoInfNombre(z);
+    }
+    return '';
+}
+// Chofer asignado a la unidad. Se saca de los campos personalizados (los
+// mismos que lee la IA: "conductor", "chofer", "driver"...) o de un campo
+// directo. Se cachea por unidad para no repetir la consulta.
+const RX_GEO_CHOFER_RE = /conductor|chofer|driver|piloto|operador|empleado/i;
+const RX_GEO_CHOFER_VACIO = /^(sin(\s.*)?|n\/?a|ninguno|no asignado|-+)$/i;
+function rxGeoInfChofer(o) {
+    if (!o || typeof o !== 'object') return '';
+    const flds = o.flds || o.campos || o.props || null;
+    if (flds && typeof flds === 'object') {
+        for (const k of Object.keys(flds)) {
+            if (!RX_GEO_CHOFER_RE.test(norm(k))) continue;
+            const v = flds[k];
+            const s = (v && typeof v === 'object') ? (v.v != null ? v.v : v.n) : v;
+            const t = String(s == null ? '' : s).trim();
+            if (t && !RX_GEO_CHOFER_VACIO.test(t)) return t;
+        }
+    }
+    const d = o.chofer || o.driver || o.conductor || o.piloto;
+    const td = String(d == null ? '' : (d && typeof d === 'object' ? (d.n || d.nombre || d.v) : d)).trim();
+    return (td && !RX_GEO_CHOFER_VACIO.test(td)) ? td : '';
+}
+const _rxGeoChofer = {}; // clave -> nombre (o '' si se sabe que no tiene)
+function rxGeoInfChoferDe(clave, o) {
+    if (o) {
+        const c = rxGeoInfChofer(o);
+        if (c) { _rxGeoChofer[clave] = c; return c; }
+    }
+    return _rxGeoChofer[clave] || '';
+}
+function rxGeoInfChoferReset() {
+    Object.keys(_rxGeoChofer).forEach((k) => delete _rxGeoChofer[k]);
+}
+// Detector de paradas UNICO (traza de viaje, rastreo o historial crudo). Se
+// agrupan los puntos consecutivos "quietos" (velocidad <= pVel) y, al
+// cerrar, la zona se resuelve por: algun punto dentro, el centro del grupo
+// dentro, o el grupo dentro del MARGEN de borde. Asi se detecta la parada
+// que cae exactamente sobre el limite de la geocerca.
+function rxGeoInfParadasDePuntos(arr, eco, fuente, chofer) {
+    const out = [];
+    if (!arr || arr.length < 2) return out;
+    const minSeg = Math.max(30, rxGeoInfParam('pMin', 2, 0.5, 240) * 60);
+    const vel = rxGeoInfParam('pVel', 3, 0, 80);
+    const margen = rxGeoInfParam('pMargen', 60, 0, 2000);
+    let desde = 0, ultimo = 0, zona = '', slat = 0, slon = 0, n = 0;
+    const cerrar = () => {
+        if (desde && zona && (ultimo - desde) >= minSeg * 1000) {
+            const clat = n ? (slat / n) : null, clon = n ? (slon / n) : null;
+            out.push({
+                zona: zona, tipo: 'detenida', eco: eco, ts: desde,
+                lat: clat, lon: clon, min: Math.round((ultimo - desde) / 60000),
+                motor: '', motorFuente: '', lugar: '', chofer: chofer || '',
+                centro: (clat != null ? { lat: clat, lon: clon } : null),
+                titulo: 'Parada', detalle: '', fuente: fuente || 'historial'
+            });
+        }
+        desde = 0; ultimo = 0; zona = ''; slat = 0; slon = 0; n = 0;
+    };
+    for (let i = 0; i < arr.length; i++) {
+        const p = arr[i];
+        const quieta = p && p.lat != null && p.lon != null && (p.s == null || +p.s <= vel);
+        if (!quieta) { cerrar(); continue; }
+        if (!desde) desde = p.t * 1000;
+        ultimo = p.t * 1000;
+        slat += p.lat; slon += p.lon; n++;
+        let nom = rxGeoInfZonaDe(p.lat, p.lon);
+        if (!nom) nom = rxGeoInfZonaCerca(p.lat, p.lon, margen);
+        if (nom) zona = nom;
+    }
+    cerrar();
+    return out;
 }
 // La geocerca elegida, con la geometria ya normalizada (si venia como
 // texto JSON se parsea UNA vez, no en cada punto como hace inZone). Se
@@ -386,7 +492,6 @@ function rxGeoInfEnSeleccion(clave, info) {
 }
 function rxGeoInfDeRastreo() {
     const out = [];
-    const minSeg = Math.max(30, RX_GEO_PARADA_MIN * 60);
     // 1) Trazas: cruces y paradas de cada unidad vigilada.
     const trazas = APP.trazas || {};
     for (const k of Object.keys(trazas)) {
@@ -394,33 +499,13 @@ function rxGeoInfDeRastreo() {
         if (arr.length < 2) continue;
         if (!rxGeoInfEnSeleccion(k, null)) continue;
         const pts = arr.map((p) => [p.lon, p.lat, (p.t || 0) * 1000]);
-        out.push.apply(out, rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: k, fuente: 'rastreo' }));
-        // Paradas: muestras consecutivas dentro y casi quietas. La duracion
-        // es la de la propia traza (hasta la ultima muestra quieta).
-        let desde = 0, ultimo = 0, zona = '';
-        const cerrar = () => {
-            if (!desde || !zona) { desde = 0; ultimo = 0; zona = ''; return; }
-            const seg = (ultimo - desde) / 1000;
-            if (seg >= minSeg) {
-                out.push({
-                    zona: zona, tipo: 'detenida', eco: k, ts: desde,
-                    lat: null, lon: null, min: Math.round(seg / 60),
-                    motor: '', motorFuente: '', lugar: '',
-                    titulo: 'Parada', detalle: '', fuente: 'rastreo'
-                });
-            }
-            desde = 0; ultimo = 0; zona = '';
-        };
-        for (let i = 0; i < arr.length; i++) {
-            const p = arr[i];
-            const nom = (p.lat == null) ? '' : rxGeoInfZonaDe(p.lat, p.lon);
-            const quieta = nom && (p.v == null || +p.v <= 3);
-            if (quieta) {
-                if (!desde || nom !== zona) { cerrar(); desde = p.t * 1000; zona = nom; }
-                ultimo = p.t * 1000;
-            } else cerrar();
-        }
-        cerrar();
+        const chofer = rxGeoInfChoferDe(k, null);
+        const cruces = rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: k, fuente: 'rastreo' });
+        for (const e of cruces) e.chofer = chofer;
+        out.push.apply(out, cruces);
+        // Paradas con el detector unico (velocidad/pMin/margen configurables).
+        out.push.apply(out, rxGeoInfParadasDePuntos(
+            arr.map((p) => ({ t: p.t, lat: p.lat, lon: p.lon, s: p.v })), k, 'rastreo', chofer));
     }
     // 2) Quien esta dentro de una geocerca AHORA (toda la flota que reporta).
     const ahora = Date.now();
@@ -451,10 +536,13 @@ function rxGeoInfDeViajes() {
             const zona = p.zona || rxGeoInfZonaDe(p.lat, p.lon);
             if (!zona) continue;
             const ev = rxGeoInfParada(p, zona, eco, 'viajes');
-            if (ev) out.push(ev);
+            if (ev) { ev.chofer = ev.chofer || rxGeoInfChoferDe(eco, null); out.push(ev); }
         }
         if (v.traza && v.traza.length > 1) {
-            out.push.apply(out, rxGeoInfCruces(v.traza, rxGeoInfZonaDe, { eco: eco, fuente: 'viajes' }));
+            const cr = rxGeoInfCruces(v.traza, rxGeoInfZonaDe, { eco: eco, fuente: 'viajes' });
+            const ch = rxGeoInfChoferDe(eco, null);
+            for (const e of cr) e.chofer = ch;
+            out.push.apply(out, cr);
         }
     }
     return out;
@@ -462,7 +550,7 @@ function rxGeoInfDeViajes() {
 // Deteccion de cruces y paradas sobre los mensajes CRUDOS de la plataforma
 // (formato { t (s), pos:{x,y,s} }), el mismo que devuelve load_interval y el
 // que usa el Replay. Es pura para poder probarla sin red.
-function rxGeoInfDeMensajes(msgs, eco, fuente) {
+function rxGeoInfDeMensajes(msgs, eco, fuente, chofer) {
     const arr = [];
     for (const m of (msgs || [])) {
         if (!m || !m.pos || !isFinite(+m.pos.y) || !isFinite(+m.pos.x)) continue;
@@ -474,32 +562,8 @@ function rxGeoInfDeMensajes(msgs, eco, fuente) {
     arr.sort((a, b) => a.t - b.t);
     const pts = arr.map((p) => [p.lon, p.lat, p.t * 1000]);
     const out = rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: eco, fuente: fuente || 'historial' });
-    // Paradas: tramos con la unidad casi quieta dentro de una geocerca.
-    const minSeg = Math.max(30, RX_GEO_PARADA_MIN * 60);
-    let desde = 0, ultimo = 0, zona = '';
-    const cerrar = () => {
-        if (desde && zona) {
-            const seg = (ultimo - desde) / 1000;
-            if (seg >= minSeg) {
-                out.push({
-                    zona: zona, tipo: 'detenida', eco: eco, ts: desde,
-                    lat: null, lon: null, min: Math.round(seg / 60),
-                    motor: '', motorFuente: '', lugar: '',
-                    titulo: 'Parada', detalle: '', fuente: fuente || 'historial'
-                });
-            }
-        }
-        desde = 0; ultimo = 0; zona = '';
-    };
-    for (const p of arr) {
-        const nom = rxGeoInfZonaDe(p.lat, p.lon);
-        const quieta = nom && p.s <= 3;
-        if (quieta) {
-            if (!desde || nom !== zona) { cerrar(); desde = p.t * 1000; zona = nom; }
-            ultimo = p.t * 1000;
-        } else cerrar();
-    }
-    cerrar();
+    for (const e of out) e.chofer = chofer || '';
+    out.push.apply(out, rxGeoInfParadasDePuntos(arr, eco, fuente || 'historial', chofer));
     return out;
 }
 // Eventos del recorrido cargado en la pestana Replay.
@@ -509,6 +573,8 @@ function rxGeoInfDeReplay() {
     const eco = r.eco || (r.info ? r.info.eco : '');
     const pts = r.msgs.map((m) => [m.lon, m.lat, (m.t || 0) * 1000]);
     const out = rxGeoInfCruces(pts, rxGeoInfZonaDe, { eco: eco, fuente: 'replay' });
+    const ch = rxGeoInfChoferDe(eco, null);
+    for (const e of out) e.chofer = ch;
     for (const p of (r.paradas || [])) {
         const zona = p.zona || rxGeoInfZonaDe(p.lat, p.lon);
         if (!zona) continue;
@@ -516,6 +582,7 @@ function rxGeoInfDeReplay() {
         if (!ev) continue;
         ev.ts = (+p.t || 0) * 1000;
         ev.lugar = p.lugar || '';
+        ev.chofer = ev.chofer || ch;
         out.push(ev);
     }
     return out;
@@ -526,7 +593,9 @@ function rxGeoInfDeReplay() {
 // informe.
 let _rxGeoHist = { key: '', t: 0, eventos: [], truncado: false, unidades: 0 };
 function rxGeoInfHistKey() {
-    return (RX_GEO.zona || '*') + '|' + (RX_GEO.desde || RX_GEO.rango) + '|' + (RX_GEO.hasta || '') + '|' + (RX_GEO.unidades || 'todas');
+    return (RX_GEO.zona || '*') + '|' + (RX_GEO.desde || RX_GEO.rango) + '|' + (RX_GEO.hasta || '') + '|' +
+        (RX_GEO.unidades || 'todas') + '|' + rxGeoInfParam('pMin', 2, 0.5, 240) + '|' +
+        rxGeoInfParam('pVel', 3, 0, 80) + '|' + rxGeoInfParam('pMargen', 60, 0, 2000);
 }
 function rxGeoInfDeHistorial() {
     if (_rxGeoHist.key !== rxGeoInfHistKey()) return [];
@@ -586,6 +655,17 @@ async function rxGeoInfEscanear(onProg, token) {
                     flags: 1, flagsMask: 1, loadCount: RX_GEO_HIST_MSGS
                 });
                 const evs = rxGeoInfDeMensajes((r && r.messages) || [], it.info.eco || it.clave, 'historial');
+                // Chofer: si la unidad ya trae el campo personalizado se usa
+                // directo; si hubo eventos y no lo trae, se consulta por API
+                // (una peticion, cacheada 30 min) y se anota por unidad/dia.
+                let ch = rxGeoInfChofer(it.u) || _rxGeoChofer[it.clave] || '';
+                if (!ch && evs.length && typeof iaFetchUnidadProps === 'function') {
+                    try { ch = rxGeoInfChofer(await iaFetchUnidadProps(it.u.id, it.info.nombre)); } catch (_) { /* noop */ }
+                }
+                if (ch) {
+                    _rxGeoChofer[it.clave] = ch;
+                    for (const e of evs) e.chofer = ch;
+                }
                 for (const e of evs) encontrados.push(e);
             } catch (_) { /* unidad sin historial o sin permiso: se salta */ }
             hechas++;
@@ -809,7 +889,7 @@ function rxGeoInfHTML(d) {
     ]);
     const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
     const filasDentro = dentro.map((e) => [
-        '<b>' + esc(e.eco) + '</b>', esc(e.zona),
+        '<b>' + esc(e.eco) + '</b>', esc(e.chofer || '-'), esc(e.zona),
         (e.vel == null ? '-' : (e.vel + ' km/h')),
         (e.online === false ? '<span class="bad">sin senal</span>' : '<span class="ok">en linea</span>'),
         coords(e.lat, e.lon)
@@ -817,7 +897,7 @@ function rxGeoInfHTML(d) {
     const detalle = d.eventos.slice(0, 200).map((e) => [
         esc(rxFechaHora(e.ts, true)),
         '<span class="pill">' + esc(RX_GEO_TIPOS[e.tipo] || e.tipo) + '</span>',
-        esc(e.zona), esc(e.eco || '-'), esc(e.detalle || e.titulo || '-'), coords(e.lat, e.lon)
+        esc(e.zona), esc(e.eco || '-'), esc(e.chofer || '-'), esc(e.detalle || e.titulo || '-'), coords(e.lat, e.lon)
     ]);
     // Secciones numeradas, como en el reporte del recorrido.
     const secciones = [];
@@ -826,14 +906,14 @@ function rxGeoInfHTML(d) {
     if (mapa) add('Mapa', mapa + leyenda);
     if (ficha) add('Geocerca' + (z ? ': ' + rxGeoInfNombre(z) : ''), ficha);
     if (filasDentro.length) add('Dentro ahora (' + filasDentro.length + ')',
-        rxInfTabla(['Eco', 'Geocerca', 'Velocidad', 'Estado', 'Coordenadas'], filasDentro));
+        rxInfTabla(['Eco', 'Chofer', 'Geocerca', 'Velocidad', 'Estado', 'Coordenadas'], filasDentro));
     add((d.modo === 'paradas' ? 'Paradas por unidad' : 'Cruces por unidad') + ' (' + d.unidades.filas.length + ')',
         rxInfTabla(cab, filas));
     add('Resumen por geocerca (' + filasZona.length + ')',
         rxInfTabla(['Geocerca', 'Cruces', 'Paradas', 'Min quieto', 'Unidades', 'Ecos'], filasZona));
     add('Detalle de eventos (' + Math.min(200, d.eventos.length) + ' de ' + d.eventos.length + ')',
         (d.eventos.length > 200 ? '<div class="callout">Se listan los 200 primeros eventos del filtro; el CSV lleva todos.</div>' : '') +
-        rxInfTabla(['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Detalle', 'Coordenadas'], detalle));
+        rxInfTabla(['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Chofer', 'Detalle', 'Coordenadas'], detalle));
     const fuenteTxt = (d.fuente === 'historial') ? 'Historial de la plataforma'
         : (d.fuente === 'rastreo') ? 'Rastreo de unidades'
             : (d.fuente === 'bitacora' ? 'Avisos de la sesion'
@@ -955,9 +1035,10 @@ function abrirInformeGeocerca(origen) {
             (org ? '<i class="rgi-ori o-' + org.id + '">' + esc(org.corto) + '</i>' : '') +
             '</div>';
         const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
+        const conChofer = d.unidades.filas.filter((f) => Object.keys(f.choferes || {}).length).length;
         const chipsDentro = dentro.length
             ? '<div class="rgi-dentro"><span class="rgi-dl">Dentro ahora</span>' + dentro.slice(0, 14).map((e) =>
-                '<span class="rgi-dchip" title="' + esc(e.zona) + (e.vel != null ? ' \u00b7 ' + e.vel + ' km/h' : '') + '">' +
+                '<span class="rgi-dchip" title="' + esc(e.zona) + (e.chofer ? ' \u00b7 ' + e.chofer : '') + (e.vel != null ? ' \u00b7 ' + e.vel + ' km/h' : '') + '">' +
                 '<span class="rondo-usym">' + UIS.pin + '</span>' + esc(e.eco) + '</span>').join('') +
                 (dentro.length > 14 ? '<span class="rgi-dmore">+' + (dentro.length - 14) + '</span>' : '') + '</div>'
             : '';
@@ -1013,6 +1094,12 @@ function abrirInformeGeocerca(origen) {
             '<input type="date" id="rgi-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_GEO.hasta) + '">' +
             (RX_GEO.desde || RX_GEO.hasta ? '<button type="button" class="mini" data-rgi="rango" data-v="hoy">Quitar</button>' : '') +
             '</span></div>' +
+            '<div class="rgi-row rgi-row-param"><span class="rgi-lb" title="Umbrales para decidir que es una parada">Parada</span>' +
+            '<span class="rgi-rango">' +
+            '<label class="rgi-num" title="Minutos quieto minimos para contar la parada">Min <input type="number" id="rgi-pmin" min="1" max="240" step="1" value="' + rxGeoInfParam('pMin', 2, 0.5, 240) + '"></label>' +
+            '<label class="rgi-num" title="Velocidad maxima (km/h) para considerar la unidad quieta">Vel <input type="number" id="rgi-pvel" min="0" max="80" step="1" value="' + rxGeoInfParam('pVel', 3, 0, 80) + '"></label>' +
+            '<label class="rgi-num" title="Metros de margen sobre el borde de la geocerca para captar la parada justo en el limite">Borde <input type="number" id="rgi-pmargen" min="0" max="2000" step="10" value="' + rxGeoInfParam('pMargen', 60, 0, 2000) + '"> m</label>' +
+            '</span></div>' +
             '<div class="rgi-row"><span class="rgi-lb">Datos</span><div class="rgi-chips">' +
             fuentes.map((f) => chip(RX_GEO.fuente === f.k, 'data-rgi="fuente"', f.k,
                 ETIQUETA[f.k] + ' \u00b7 ' + f.n, ETIQUETA[f.k])).join('') +
@@ -1025,6 +1112,7 @@ function abrirInformeGeocerca(origen) {
             '<div class="rgi-kpi"><b>' + tot.paradas + '</b><span>Paradas</span></div>' +
             '<div class="rgi-kpi"><b>' + tot.min + '</b><span>Min quieto</span></div>' +
             '<div class="rgi-kpi"><b>' + tot.motor + '</b><span>Motor apagado</span></div>' +
+            (conChofer ? '<div class="rgi-kpi"><b>' + conChofer + '</b><span>Con chofer</span></div>' : '') +
             (tot.dentro ? '<div class="rgi-kpi vivo"><b>' + tot.dentro + '</b><span>Dentro ahora</span></div>' : '') +
             '</div>' +
             chipsDentro +
@@ -1171,6 +1259,17 @@ function abrirInformeGeocerca(origen) {
                     }
                     RX_GEO.listo = false;
                     pinta(false);
+                    return;
+                }
+                if (t.id === 'rgi-pmin' || t.id === 'rgi-pvel' || t.id === 'rgi-pmargen') {
+                    // Cambiar los umbrales cambia que paradas se detectan: hay
+                    // que recalcular (y rescanear si la fuente es la plataforma).
+                    if (t.id === 'rgi-pmin') RX_GEO.pMin = Number(t.value);
+                    else if (t.id === 'rgi-pvel') RX_GEO.pVel = Number(t.value);
+                    else RX_GEO.pMargen = Number(t.value);
+                    RX_GEO.listo = false;
+                    rxGeoInfCacheReset();
+                    pinta(true);
                 }
             });
             // Los botones se atienden por delegacion en #rgi-box (arriba):
@@ -1186,10 +1285,10 @@ function abrirInformeGeocerca(origen) {
 function rxGeoInfCSV(d) {
     const cabU = rxGeoInfCabeceras(d.modo);
     const filasU = d.unidades.filas.map((c) => rxGeoInfCeldasPlanas(rxGeoInfCeldas(c), d.modo));
-    const cabE = ['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Minutos', 'Detalle', 'Lat', 'Lon', 'Fuente'];
+    const cabE = ['Fecha y hora', 'Evento', 'Geocerca', 'Eco', 'Chofer', 'Minutos', 'Detalle', 'Lat', 'Lon', 'Fuente'];
     const filasE = d.eventos.map((e) => [
         rxFechaHora(e.ts), (RX_GEO_TIPOS[e.tipo] || e.tipo), e.zona, (e.eco || ''),
-        String(e.min || 0), (e.detalle || e.titulo || ''),
+        (e.chofer || ''), String(e.min || 0), (e.detalle || e.titulo || ''),
         (e.lat == null ? '' : String(e.lat)), (e.lon == null ? '' : String(e.lon)), (e.fuente || '')
     ]);
     const txt = [cabU].concat(filasU).concat([cabE]).concat(filasE)
@@ -1215,10 +1314,10 @@ function rxGeoInfMD(d) {
     L.push('', '## Geocercas', '', '| Geocerca | Cruces | Paradas | Min quieto | Unidades |', '| --- | --- | --- | --- | --- |');
     for (const f of d.zonas) L.push('| ' + [f.zona, f.cruces, f.paradas, f.min, f.nUnidades].join(' | ') + ' |');
     L.push('', '## Eventos (' + d.eventos.length + ')', '',
-        '| Fecha y hora | Evento | Geocerca | Eco | Minutos | Detalle |', '| --- | --- | --- | --- | --- | --- |');
+        '| Fecha y hora | Evento | Geocerca | Eco | Chofer | Minutos | Detalle |', '| --- | --- | --- | --- | --- | --- | --- |');
     for (const e of d.eventos.slice(0, 300)) {
         L.push('| ' + [rxFechaHora(e.ts), (RX_GEO_TIPOS[e.tipo] || e.tipo), e.zona, (e.eco || '-'),
-            (e.min || 0), (e.detalle || e.titulo || '-').replace(/\|/g, '/')].join(' | ') + ' |');
+            (e.chofer || '-'), (e.min || 0), (e.detalle || e.titulo || '-').replace(/\|/g, '/')].join(' | ') + ' |');
     }
     if (d.eventos.length > 300) L.push('', '_Se muestran los 300 primeros eventos._');
     if (typeof rxReplayDescargar === 'function') rxReplayDescargar(rxGeoInfNombreArchivo(d, '.md'), L.join('\n'), 'text/markdown;charset=utf-8;');

@@ -522,6 +522,7 @@ Sale en **PDF**, **CSV** o **Markdown**.
 | Geocerca | Cualquiera de las cargadas (las de la plataforma y las de Rondo), o *Todas las geocercas*. Tiene **buscador** y muestra cuantos eventos tiene cada una |
 | Periodo | Hoy / 24 h / 7 dias / 15 dias / 30 dias / Todo |
 | Rango de dias | Dos fechas (desde – hasta), ambas incluidas |
+| **Parada** | Umbrales de deteccion: **Min** (minutos quieto minimos), **Vel** (km/h por debajo de los cuales la unidad esta quieta) y **Borde** (metros de margen alrededor de la geocerca). Cambiarlos recalcula el informe |
 | Unidades | **Toda la flota** (todas las que Rondo rastrea) o **solo las seleccionadas** (la lista vigilada) |
 | Datos | De donde salen los eventos (ver abajo) |
 | **Generar reporte** | Los cambios de opciones **no recargan solos**: el informe se calcula al pulsar el boton (y se recalcula solo al abrir, salvo con la fuente *Plataforma*) |
@@ -533,9 +534,22 @@ hasta) se corrigen solas. El resumen siempre dice el periodo exacto
 
 La ventana incluye un **mapa** con la geocerca marcada y las unidades
 encontradas (verde = dentro ahora, naranja = parada, rojo = motor apagado),
-una **barra de progreso** mientras reune y agrupa los datos, seis KPIs
-(unidades, cruces, entradas, paradas, minutos quietos, paradas con motor
-apagado) y una **vista previa** de las primeras 12 unidades. Abajo, la barra
+una **barra de progreso** mientras reune y agrupa los datos, KPIs (unidades,
+cruces, entradas, paradas, minutos quietos, paradas con motor apagado, **con
+chofer** y *dentro ahora*) y una **vista previa** de las primeras 12 unidades.
+
+La tabla y todas las salidas llevan una columna **Chofer**: el nombre que la
+unidad tiene asignado en sus **campos personalizados** (conductor, chofer,
+driver...). Se consulta por API una sola vez por unidad (cacheado 30 min) y
+solo para las unidades que aparecen en el informe.
+
+La **deteccion de paradas** es la misma para todas las fuentes y es
+configurable: agrupa los puntos consecutivos quietos (por debajo de **Vel**)
+durante al menos **Min** minutos y decide la geocerca por **cualquier punto
+dentro**, por el **centro** del grupo o por el **margen de borde** (**Borde**).
+Ese margen es lo que detecta a la unidad que se detuvo **justo sobre el limite**
+de la geocerca: los puntos de la traza caen a un lado u otro por el jitter del
+GPS, y sin margen la parada se perdia. Abajo, la barra
 de descarga: **PDF** (reporte listo para imprimir), **CSV** (evento a evento)
 y **Markdown**.
 
