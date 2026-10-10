@@ -375,6 +375,34 @@ ok('color: una custom property sin token mapeado no se toca',
     ok('variables: las medidas NO entran en la hoja',
         css.indexOf('--base-size') < 0 && css.indexOf('--font-header') < 0);
 })();
+// IDs AUTODESCRIPTIVOS del remap (--rpg-soft, --rpg-soft-a50): permiten
+// re-registrar un var(--rpg-*) que ya esta en el DOM, como los estilos inline
+// del SVG de la grafica, aunque el registro se haya reiniciado.
+(function () {
+    const T = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +
+        '\nreturn { id: rxVarId, parse: rxParseVarId, vars: _rxVars, ord: _rxVarsOrden,' +
+        ' alfa: _rxVarsAlfa, rw: rxReescribirColor, forma: rxEsFormaSVG, clave: rxColorClave };')();
+    ok('token: el id lleva la clave y el alfa (autoexplicativo)',
+        T.id('#ffffff', 'soft') === 'soft' && T.id('rgba(0,0,0,.5)', 'soft') === 'soft-a50' &&
+        T.id('#000000', 'fg', 0.12) === 'fg-a12');
+    ok('token: se puede interpretar de vuelta; el id opaco viejo no se confunde',
+        T.parse('soft').clave === 'soft' && T.parse('soft').alfa === 1 &&
+        Math.abs(T.parse('soft-a50').alfa - 0.5) < 0.001 &&
+        T.parse('accent-2').clave === 'accent-2' && T.parse('accent-2').alfa === 1 &&
+        T.parse('c9y16pd') === null && T.parse('') === null);
+    T.rw('var(--rpg-veil)', 'background-color', 'fondo', false, null);
+    ok('token: un var(--rpg-*) ya escrito se re-registra (reactivar, SVG de la grafica)',
+        T.vars['veil'] === 'veil' && T.ord.indexOf('veil') >= 0);
+    const forma = (tag, enDefs) => ({ tagName: tag, closest: () => (enDefs ? {} : null) });
+    ok('SVG: una forma con relleno claro es superficie; un texto o icono de <defs> no',
+        T.forma(forma('rect')) && T.forma(forma('g')) && T.forma(forma('path')) &&
+        !T.forma(forma('text')) && !T.forma(forma('tspan')) &&
+        !T.forma(forma('rect', true)));
+    ok('SVG: el fill claro de una region se mapea a superficie, no a blanco de texto',
+        T.clave('#f2f2f2', 'fill', forma('rect')) === 'soft' &&
+        T.clave('#ffffff', 'fill', forma('g')) === 'bg' &&
+        T.clave('#f2f2f2', 'fill', forma('text')) === 'on');
+})();
 // CAPA 3 (literales) y ALFA: comportamiento real de las funciones, no regex.
 (function () {
     const T = new Function('const window={matchMedia:()=>({matches:false})};const document={};' + bloqueCSS +

@@ -699,7 +699,18 @@
     let _rxTemaClaro = false; // tema activo durante la pasada (lo fija rxAplicarColoresPagina)
     let _rxCtx = null;        // { P, acc, accD } de la pasada, para mapear literales
     let _rxVarsMapa = null;   // variables de la plataforma de la pasada (con su alfa)
-    function rxColorClave(v, prop) {
+    // En SVG, `fill` pinta tanto texto/iconos como fondos de region (las bandas
+    // del grafico). Un <text> o un simbolo dentro de <defs>/<symbol> es TEXTO;
+    // una forma suelta (g, rect, path...) con relleno claro es una SUPERFICIE.
+    function rxEsFormaSVG(el) {
+        try {
+            const t = String(el && el.tagName || '').toLowerCase();
+            if (!/^(svg|g|rect|circle|ellipse|polygon|polyline|path|line|use)$/.test(t)) return false;
+            if (el.closest && el.closest('defs,symbol,marker,pattern,clipPath')) return false;
+            return true;
+        } catch (_) { return false; }
+    }
+    function rxColorClave(v, prop, el) {
         const c = rxColorParse(v);
         if (!c) return null;
         const p = String(prop || '').toLowerCase();
@@ -711,7 +722,10 @@
         const sat = max === 0 ? 0 : (max - min) / max;
         if (sat > 0.25) {
             const hue = rxColorHue(c.r, c.g, c.b);
-            const esTexto = p === 'color' || p === 'fill' || p === 'stroke' || p === 'caret-color';
+            // En SVG, el relleno de una forma (icono) es fondo; el de un <text> es
+            // texto. Pintar un icono con la variante de texto lo dejaria apagado.
+            const esTexto = p === 'color' || p === 'caret-color' ||
+                ((p === 'fill' || p === 'stroke') && !(el && rxEsFormaSVG(el)));
             if (hue <= 20 || hue >= 330) return esTexto ? 'acctxt' : 'accent';                // rojo del skin
             if (hue >= 190 && hue <= 265 && lum > 0.16) return esTexto ? 'acctxt' : 'accent'; // azul brillante
             if (lum > 0.16) return null;                                 // verde/ambar: estado
@@ -726,6 +740,14 @@
             return 'bg';
         }
         if (p.indexOf('border') === 0 || p.indexOf('outline') === 0 || p.indexOf('column-rule') === 0) return 'border';
+        // Relleno claro de una forma SVG sin texto: es una region/fondo, no
+        // texto sobre acento (el blanco de los iconos va por 'on').
+        if (p === 'fill' && el && rxEsFormaSVG(el)) {
+            if (lum > 0.98) return 'bg';
+            if (lum > 0.85) return 'soft';
+            if (lum > 0.45) return 'strong';
+            if (lum < 0.25) return 'fg';
+        }
         if (p === 'color' || p === 'fill' || p === 'stroke' || p === 'caret-color') {
             if (lum > 0.85) return 'on';
             if (lum > 0.55) return 'mute';
@@ -795,24 +817,41 @@
     }
     // Literales de color dentro de un valor (hex o rgb/rgba).
     const RX_COLOR_LIT = /#[0-9a-fA-F]{3,8}\b|rgba?\([^)]*\)/g;
-    // Registro de variables del remap: un id por (literal + rol).
+    // Registro de variables del remap. El id es AUTODESCRIPTIVO (clave + alfa), no
+    // un hash: asi cualquier var(--rpg-*) que ya este escrita en el DOM (estilos
+    // inline de un SVG, un nodo clonado o un ciclo desactivar/reactivar) se puede
+    // volver a registrar sin conocer el literal original. Con ids opacos,
+    // reactivar dejaba var(--rpg-c9y16pd) sin definir y la grafica salia blanca.
     const _rxVars = {};
     const _rxVarsOrden = [];
-    const _rxVarLit = {};
-    const _rxVarsAlfa = {}; // id -> alfa del literal original (transparencias)
+    const _rxVarsAlfa = {}; // id -> alfa (transparencias)
     function rxVarId(lit, clave, alfa) {
-        const k = String(lit).trim().toLowerCase() + '|' + clave + '|' + (alfa === undefined ? '' : alfa);
-        if (_rxVarLit[k]) return _rxVarLit[k];
-        let h = 5381;
-        for (let i = 0; i < k.length; i++) h = ((h << 5) + h + k.charCodeAt(i)) | 0;
-        let id = 'c' + (h >>> 0).toString(36);
-        let n = 1;
-        while (_rxVars[id] !== undefined) { id = 'c' + (h >>> 0).toString(36) + 'x' + n; n++; }
-        _rxVarLit[k] = id;
-        _rxVars[id] = clave;
-        _rxVarsAlfa[id] = alfa === undefined ? rxAlfaDe(lit) : alfa;
-        _rxVarsOrden.push(id);
+        const a = alfa === undefined ? rxAlfaDe(lit) : alfa;
+        const redondeado = Math.round(a * 100) / 100;
+        const id = redondeado < 0.999 ? clave + '-a' + Math.round(a * 100) : clave;
+        rxRegistrarVar(id, clave, redondeado < 0.999 ? redondeado : 1);
         return id;
+    }
+    function rxRegistrarVar(id, clave, alfa) {
+        if (id === undefined || id === null || id === '') return;
+        if (_rxVars[id] === undefined) _rxVarsOrden.push(id);
+        _rxVars[id] = clave;
+        _rxVarsAlfa[id] = alfa === undefined ? 1 : alfa;
+    }
+    // Claves de paleta validas: un id de la version anterior (hash opaco,
+    // p. ej. "c9y16pd") NO es una clave y no debe re-registrarse (se pintaria
+    // con el color de texto por defecto).
+    const RX_RPG_KEYS = {
+        bg: 1, soft: 1, strong: 1, veil: 1, fg: 1, dim: 1, mute: 1, border: 1, on: 1,
+        transparent: 1, accent: 1, hover: 1, 'accent-2': 1, 'accent-bg': 1,
+        'accent-bg-hover': 1, acctxt: 1, hovtxt: 1, okbg: 1, warnbg: 1, badbg: 1,
+        infobg: 1, okfg: 1, warnfg: 1, badfg: 1, infofg: 1
+    };
+    // Interpreta un id autodescriptivo: "soft", "soft-a12", "accent-2".
+    function rxParseVarId(id) {
+        const m = /^(.*?)(?:-a(\d{1,3}))?$/.exec(String(id));
+        if (!m || !m[1] || !RX_RPG_KEYS[m[1]]) return null;
+        return { clave: m[1], alfa: m[2] ? Math.min(1, parseInt(m[2], 10) / 100) : 1 };
     }
     // Atajos de color. Cuando un atajo lleva var() (background: var(--x);
     // border: 1px solid var(--y)) el navegador lista las propiedades SUELTAS
@@ -823,8 +862,18 @@
         'border-left', 'border-color', 'outline', 'column-rule'];
     // Reescribe var(--token) por el color del rol y, fuera de variables, los
     // literales por su rol. Devuelve el mismo texto si nada cambia.
-    function rxReescribirColor(val, prop, rol, esCustom) {
+    function rxReescribirColor(val, prop, rol, esCustom, el) {
         let v = val.replace(/var\(--([a-zA-Z0-9_-]+)\)/g, (full, tok) => {
+            if (tok.indexOf('rpg-') === 0) {
+                // Ya reescrita antes: se re-registra por si el registro se
+                // reinicio (desactivar/reactivar) o el nodo viene de otra parte.
+                const id = tok.slice(4);
+                if (!_rxVars[id]) {
+                    const p = rxParseVarId(id);
+                    if (p) rxRegistrarVar(id, p.clave, p.alfa);
+                }
+                return full;
+            }
             const clave = rxTokenClave(tok, rol);
             if (!clave) return full;
             // El token hereda el alfa de la variable original (--accent-bg-color
@@ -837,7 +886,7 @@
         // variable por un literal la fijaria fuera del tema.
         if (!esCustom) {
             v = v.replace(RX_COLOR_LIT, (lit) => {
-                const clave = rxColorClave(lit, prop);
+                const clave = rxColorClave(lit, prop, el);
                 return clave ? 'var(--rpg-' + rxVarId(lit, clave) + ')' : lit;
             });
         }
@@ -949,6 +998,7 @@
         _rxTimer = setTimeout(() => { try { rxAplicarColoresPagina(); } catch (_) { /* noop */ } }, 400);
     }
     function rxDesactivarColores() {
+        rxRestaurarInline();
         rxRestaurarLiterales();
         _rxVarsPlat = null; _rxVarsLista = null; _rxVarsHojas = null;
         ['rondo-colores-pagina', 'rondo-tokens-pagina', 'rondo-var-plataforma'].forEach((id) => {
@@ -959,7 +1009,6 @@
         if (_rxObsBody) { _rxObsBody.disconnect(); _rxObsBody = null; }
         Object.keys(_rxVars).forEach((k) => delete _rxVars[k]);
         _rxVarsOrden.length = 0;
-        Object.keys(_rxVarLit).forEach((k) => delete _rxVarLit[k]);
         Object.keys(_rxVarsAlfa).forEach((k) => delete _rxVarsAlfa[k]);
         _rxVarsMapa = null;
         _rxHojasVistas = null;
@@ -1310,6 +1359,32 @@
         try { return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-rail,#rondo-nmolestar,#rondo-btn-panel')); }
         catch (_) { return false; }
     }
+    // Originales de los estilos inline tocados: sin esto, desactivar dejaba el
+    // style="background-color: var(--rpg-...)" apuntando a un token que ya no
+    // existe y el elemento quedaba transparente.
+    let _rxInlineHechos = null; // WeakMap el -> { prop: true }
+    let _rxInlineReg = null;    // [[el, prop, valor, prioridad]]
+    function rxAnotarInline(el, prop, val, prio) {
+        if (typeof WeakMap !== 'function') return;
+        if (!_rxInlineHechos) { _rxInlineHechos = new WeakMap(); _rxInlineReg = []; }
+        let m = _rxInlineHechos.get(el);
+        if (!m) { m = {}; _rxInlineHechos.set(el, m); }
+        if (m[prop]) return;
+        m[prop] = 1;
+        _rxInlineReg.push([el, prop, val, prio]);
+    }
+    function rxRestaurarInline() {
+        try {
+            if (_rxInlineReg) {
+                for (let i = 0; i < _rxInlineReg.length; i++) {
+                    const q = _rxInlineReg[i];
+                    try { q[0].style.setProperty(q[1], q[2], q[3]); } catch (_) { /* noop */ }
+                }
+            }
+        } catch (_) { /* noop */ }
+        _rxInlineHechos = null;
+        _rxInlineReg = null;
+    }
     function rxRemapearInline(el) {
         const st = el && el.style;
         if (!st || !st.length || rxEsRondo(el)) return false;
@@ -1320,15 +1395,17 @@
             if (!/color|background|fill|stroke/.test(prop)) continue;
             const val0 = st.getPropertyValue(prop);
             if (!val0) continue; // longhand de un atajo con var(): se ve abajo
-            const val = rxReescribirColor(val0, prop, rxPropRol(prop), false);
-            if (val !== val0) { st.setProperty(prop, val, st.getPropertyPriority(prop)); cambio = true; }
+            const prio = st.getPropertyPriority(prop);
+            const val = rxReescribirColor(val0, prop, rxPropRol(prop), false, el);
+            if (val !== val0) { rxAnotarInline(el, prop, val0, prio); st.setProperty(prop, val, prio); cambio = true; }
         }
         for (let k = 0; k < RX_ATAJOS_COLOR.length; k++) {
             const atajo = RX_ATAJOS_COLOR[k];
             const v0 = st.getPropertyValue(atajo);
             if (!v0 || v0.indexOf('var(') < 0) continue;
+            const pr = st.getPropertyPriority(atajo);
             const v = rxReescribirColor(v0, atajo, rxPropRol(atajo), false);
-            if (v !== v0) { st.setProperty(atajo, v, st.getPropertyPriority(atajo)); cambio = true; }
+            if (v !== v0) { rxAnotarInline(el, atajo, v0, pr); st.setProperty(atajo, v, pr); cambio = true; }
         }
         return cambio;
     }
@@ -1349,7 +1426,7 @@
             // Red de seguridad: cualquier otro nodo con color/fondo inline que ya
             // exista (un contenedor de dialogo con otro id/clase). Con tope para
             // no recorrer paginas enormes; los nodos NUEVOS los cubre el observador.
-            const sueltos = document.querySelectorAll('[style*="background"],[style*="color"]');
+            const sueltos = document.querySelectorAll('[style*="background"],[style*="color"],[style*="fill"],[style*="stroke"]');
             const tope = Math.min(sueltos.length, 1500);
             for (let i = 0; i < tope; i++) { if (rxRemapearInline(sueltos[i])) cambiado = true; }
         } catch (_) { /* noop */ }
