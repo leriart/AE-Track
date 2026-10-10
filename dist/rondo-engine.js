@@ -5757,6 +5757,14 @@ ta.value = '';
     }
     // Pinta SOLO las variables del remap (barato): es lo unico que hay que
     // rehacer al cambiar de tema o acento.
+    // v6.0.14: redefine las variables DE LA PLATAFORMA (no las nuestras). Se
+    // refresca cada pasada porque una hoja cargada tarde declara variables nuevas.
+    function rxPintarVariablesPlataforma(P, acc, acc2) {
+        try {
+            const txt = rxHojaVariables(P, P.claro, acc, acc2);
+            if (txt) rxHojaRondo('rondo-var-plataforma').textContent = txt;
+        } catch (_) { /* noop */ }
+    }
     function rxPintarTokens(P, acc, accD) {
         if (!_rxVarsOrden.length) return;
         const partes = [];
@@ -5814,11 +5822,14 @@ ta.value = '';
             const col = document.getElementById('rondo-colores-pagina');
             if (!col || !head || !head.children) return false;
             const tok = document.getElementById('rondo-tokens-pagina');
+            const vrp = document.getElementById('rondo-var-plataforma');
             const h = head.children, n = h.length;
-            const bien = tok ? (n >= 2 && h[n - 1] === tok && h[n - 2] === col) : (n >= 1 && h[n - 1] === col);
+            const fin = vrp || tok || col;
+            const bien = n >= 1 && h[n - 1] === fin;
             if (bien) return false;
             head.appendChild(col);
             if (tok) head.appendChild(tok);
+            if (vrp) head.appendChild(vrp);
             return true;
         } catch (_) { return false; }
     }
@@ -5841,6 +5852,197 @@ ta.value = '';
     // asi que quedan como islas: texto claro sobre fondo claro del mismo color.
     // Se remapean igual (por propiedad) dentro de las ventanas/tarjetas, nunca
     // en el panel de Rondo.
+    // ===== CAPA 3: LITERALES REESCRITOS EN SITIO =====
+    // Lo que no pasa por variables (un color escrito a pelo en la regla, un SVG,
+    // un fondo de Ant Design) se modifica DENTRO de la regla original: misma
+    // posicion en la cascada, misma especificidad y mismo !important. Nada que
+    //_gainar, nada que clonar.
+    const RX_PROPS_COLOR = /^(color|background|background-color|border|border-color|border-top-color|border-bottom-color|border-left-color|border-right-color|outline-color|box-shadow|text-shadow|fill|stroke|caret-color|column-rule-color)$/;
+    function rxLiteralColor(v) {
+        v = String(v || '').trim();
+        if (/^transparent$/i.test(v)) return { hex: null };
+        if (/^#[0-9a-fA-F]{3,8}$/.test(v)) return { hex: v };
+        const m = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i.exec(v);
+        if (m) return { hex: '#' + [1, 2, 3].map((i) => (+m[i]).toString(16).padStart(2, '0')).join('') };
+        return null;
+    }
+    function rxReescribirLiterales(P) {
+        let n = 0;
+        let rs = null;
+        try { rs = document.styleSheets; } catch (_) { return n; }
+        for (let i = 0; i < rs.length; i++) {
+            let reglas = null;
+            try { reglas = rs[i].cssRules; } catch (_) { continue; }
+            if (!reglas) continue;
+            n += rxLiteralesDeReglas(reglas, P, 0);
+        }
+        return n;
+    }
+    function rxLiteralesDeReglas(reglas, P, prof) {
+        let n = 0;
+        if (!reglas || prof > 4) return n;
+        for (let i = 0; i < reglas.length; i++) {
+            const r = reglas[i];
+            if (r.cssRules && !r.style) { n += rxLiteralesDeReglas(r.cssRules, P, prof + 1); continue; }
+            const st = r.style;
+            if (!st || !st.length) continue;
+            for (let j = st.length - 1; j >= 0; j--) {
+                const prop = st[j];
+                if (!RX_PROPS_COLOR.test(prop)) continue;
+                const lit = rxLiteralColor(st.getPropertyValue(prop));
+                if (!lit) continue;
+                const prio = st.getPropertyPriority(prop);
+                if (prop === 'color' || prop === 'fill' || prop === 'stroke' || prop === 'caret-color') {
+                    if (lit.hex === null) continue;
+                    st.setProperty(prop, P.fg, prio);
+                } else if (prop === 'background' || prop === 'background-color') {
+                    if (lit.hex === null) continue;
+                    st.setProperty(prop, P.soft, prio);
+                } else if (/border|outline|column-rule/.test(prop)) {
+                    if (lit.hex === null) continue;
+                    st.setProperty(prop, P.border, prio);
+                } else if (/shadow/.test(prop)) {
+                    if (lit.hex === null) { st.setProperty(prop, 'none', prio); continue; }
+                    st.setProperty(prop, lit.hex === P.fg || lit.hex === P.soft ? 'none' : P.shadow || 'none', prio);
+                }
+                n++;
+            }
+        }
+        return n;
+    }
+    // ===== MOTOR DE VARIABLES (enfoque Dark Reader) =====
+    // La plataforma define ~850 variables (:root) y pinta TODO con ellas. En vez
+    // de clonar reglas y pelear por especificidad, se redefinen las variables
+    // con !important en :root/html/body: la cascada hace el resto y TODO lo que
+    // las use queda tematizado a la vez (dialogos, campos, avisos, scrollbars,
+    // estados, sombras...). No hay orden de hojas ni "!important" que gainar.
+    const RX_NOMBRES = /^(transparent|white|black|red|green|blue|gray|grey|orange|yellow|purple|pink|cyan|magenta|silver|maroon|navy|olive|lime|aqua|fuchsia|teal|currentcolor)$/i;
+    // v6.0.14 / v6.9.1: un valor es color si es hex, rgb()/hsl(), un nombre o var().
+    function rxEsColorValor(v) {
+        v = String(v || '').trim();
+        if (/^#[0-9a-fA-F]{3,8}\b/.test(v) || /^(rgb|hsl)a?\(/i.test(v) ||
+            RX_NOMBRES.test(v) || /var\(/.test(v)) return true;
+        // Sombra de caja: "0 4px 12px 0 #1723361A" o con varias capas separadas
+        // por comas. Trae longitudes Y color, asi que no es una medida suelta.
+        return /^-?[\d.]+(px|em|rem|%)?\b.*(#[0-9a-fA-F]{3,8}\b|(rgb|hsl)a?\()/i.test(v);
+    }
+    // Filtra medidas/cifras: --layer-modal, --time-input-width, --gap... no son color.
+    const RX_NO_ROL = /font|size|radius|duration|width|height|spacing|padding|margin|index|offset|line-|weight|family|transition|animation|transform|image|url\(|-layer-|container|gap/i;
+    function rxRolPorNombre(nombre, valor) {
+        if (!rxEsColorValor(valor)) return null;
+        const n = String(nombre).toLowerCase().replace(/^--/, '');
+        if (RX_NO_ROL.test(n) && !/shadow|(^|-)(bg|background|surface)(-|$)|-color$/.test(n)) return null;
+        const esFondo = /(^|-)(bg|background|surface|fill)(-|$)/.test(n);
+        const esBorde = /border|separator|outline|divider/.test(n);
+        const esSombra = /shadow/.test(n);
+        const esTexto = /(^|-)(color|fg|foreground|text)(-|$)|text-color|color$/.test(n);
+        if (esFondo && /error|danger|fail/.test(n)) return 'badbg';
+        if (esFondo && /warn/.test(n)) return 'warnbg';
+        if (esFondo && /success|(^|-)ok(-|$)/.test(n)) return 'okbg';
+        if (esFondo && /help|info/.test(n)) return 'infobg';
+        if (esSombra) return 'sombra';
+        if (esFondo) return 'fondo';
+        if (esBorde) return 'borde';
+        if (esTexto && /error|danger|fail/.test(n)) return 'badfg';
+        if (esTexto && /warn/.test(n)) return 'warnfg';
+        if (esTexto && /success/.test(n)) return 'okfg';
+        if (esTexto && /help|info/.test(n)) return 'infofg';
+        if (esTexto && /secondary|muted|disabled|placeholder|^light-/.test(n)) return 'dim';
+        if (esTexto) return 'fg';
+        return null;
+    }
+    // Recorre todas las hojas accesibles y recoge las variables que declara la
+    // plataforma. Una variable se considera "de la plataforma" si la usan reglas
+    // suyas: basta con estar declarada en una hoja ajena a Rondo.
+    function rxEscanearVariables() {
+        const out = new Map();
+        let rs = null;
+        try { rs = document.styleSheets; } catch (_) { return out; }
+        for (let i = 0; i < rs.length; i++) {
+            let reglas = null;
+            try { reglas = rs[i].cssRules; } catch (_) { continue; } // hoja de otro origen
+            if (!reglas) continue;
+            rxVarsDeReglas(reglas, out);
+        }
+        return out;
+    }
+    function rxVarsDeReglas(reglas, out, profundidad) {
+        if (!reglas || (profundidad || 0) > 4) return;
+        for (let i = 0; i < reglas.length; i++) {
+            const r = reglas[i];
+            if (r.cssRules && !r.style) { rxVarsDeReglas(r.cssRules, out, (profundidad || 0) + 1); continue; }
+            const st = r.style;
+            if (!st || !st.length) continue;
+            for (let j = 0; j < st.length; j++) {
+                const prop = st[j];
+                if (prop.indexOf('--') !== 0) continue;
+                const clave = prop.slice(2);
+                if (clave.indexOf('rondo-') === 0) continue; // las nuestras: no se tocan
+                const val = st.getPropertyValue(prop);
+                if (!rxEsColorValor(val)) continue;
+                if (!out.has(clave)) out.set(clave, val);
+            }
+        }
+    }
+    // Construye la hoja de redefiniciones. Prioridad: mapa manual > clasificacion
+    // por nombre > valor por defecto segun el tipo de variable.
+    function rxHojaVariables(P, claro, acc, acc2) {
+        const vars = rxEscanearVariables();
+        const decl = [];
+        for (const clave of vars.keys()) {
+            const manual = rxRolManual(clave);
+            if (manual === 'mixto') continue;
+            const rol = manual || rxRolPorNombre(clave, vars.get(clave));
+            if (!rol) continue;
+            const v = rxValorRol(rol, P, acc, acc2);
+            if (v) decl.push('--' + clave + ':' + v + ' !important');
+        }
+        if (!decl.length) return '';
+        // Son 850+ lineas: se agrupan de 60 para no crear un nodo de estilo enorme.
+        let css = '';
+        for (let i = 0; i < decl.length; i += 60) css += decl.slice(i, i + 60).join(';') + ';';
+        return ':root,html,body{' + css + '}';
+    }
+    // El mapa manual gana sobre la clasificacion automatica.
+    function rxRolManual(clave) {
+        const c = clave.replace(/^--/, '');
+        // Las variables MIXTAS (--white, --borders-color: valen como texto, fondo
+        // y borde segun donde se usen) NO se redefinen a la fuerza: un unico
+        // valor no puede ser superficie y a la vez texto legible. Las resuelve el
+        // remap por propiedad, que si sabe en que contexto esta cada uso.
+        if (RX_PAGINA_MIXTOS[c]) return 'mixto';
+        const r = RX_PAGINA_MAPA[c];
+        // El mapa manual usa claves de paleta (soft, border, fg, on...); hay que
+        // traducirlas al ROL que espera rxValorRol.
+        if (typeof r === 'string') return rxRolDeClave(r);
+        return RX_PAGINA_ESTADOS[c] || null;
+    }
+    function rxRolDeClave(k) {
+        if (k === 'bg' || k === 'soft' || k === 'strong' || k === 'veil') return 'fondo';
+        if (k === 'border') return 'borde';
+        if (k === 'fg') return 'fg';
+        if (k === 'dim' || k === 'mute') return 'dim';
+        if (k === 'on') return 'on';
+        if (/^(ok|warn|bad|info)bg$/.test(k)) return k;
+        if (/^(ok|warn|bad|info)fg$/.test(k)) return k;
+        if (k === 'shadow') return 'sombra';
+        return 'acento';
+    }
+    function rxValorRol(rol, P, acc, acc2) {
+        if (rol === 'fondo') return P.soft;
+        if (rol === 'borde') return P.border;
+        if (rol === 'fg') return P.fg;
+        if (rol === 'dim') return P.dim;
+        if (rol === 'sombra') return P.shadow || 'none';
+        if (rol === 'okbg') return P.okbg; if (rol === 'warnbg') return P.warnbg;
+        if (rol === 'badbg') return P.badbg; if (rol === 'infobg') return P.infobg;
+        if (rol === 'okfg') return P.okfg; if (rol === 'warnfg') return P.warnfg;
+        if (rol === 'badfg') return P.badfg; if (rol === 'infofg') return P.infofg;
+        if (rol === 'on') return '#ffffff';
+        if (rol === 'acento') return rxAcentoTexto(acc, P);
+        if (rol === 'accent') return acc;
+        return null;
+    }
     const RX_VENTANA_SEL = '[class*="_messageBox_"],[class*="_messageBoxWrapper_"],[class*="_contentWrapper_"],' +
         '[class*="_content-wrapper_"],[class*="_cell_"],[class*="_row_"],[class*="_table_"],' +
         '.tippy-box,.wui2-message-box,.wui-message-box,#tooltip,#tooltip2,.wui-tooltip,.x-unit-info,' +
@@ -5925,6 +6127,8 @@ ta.value = '';
         }
         rxRemapearVentanas();
         rxPintarTokens(P, acc, accD);
+        rxPintarVariablesPlataforma(P, acc, accD);
+        rxReescribirLiterales(P);
         rxMantenerAlFinal();
         rxObservar();
     }
