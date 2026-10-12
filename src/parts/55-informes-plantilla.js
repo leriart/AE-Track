@@ -515,6 +515,66 @@ function rxInfExplicaError(msg) {
     };
     return (T[c] || ('error de la plataforma (code ' + c + ')')) + ' \u2014 ' + m;
 }
+// ── Lectura de las filas tras exec_report ───────────────────────────────
+// OJO: exec_report NO devuelve las filas. Devuelve reportResult con una lista
+// de TABLAS (name, label, rows = numero de filas, header = columnas). El
+// contenido se pide aparte con report/get_result_rows, que responde un array
+// de filas { n, i1, i2, t1, t2, d, c:[ {t:texto, v:numero, y:lat, x:lon} ] }.
+// Esto es lo que hacia que un informe lleno se viera como "sin filas".
+async function rxInfFilasDeTabla(idx, total, token) {
+    const filas = [];
+    const tope = Math.min(Number(total) || 0, RX_INF_MAX_FILAS);
+    const paso = 1000;
+    for (let i = 0; i < tope; i += paso) {
+        if (token && token.cancelado) break;
+        const j = Math.min(tope, i + paso) - 1;
+        let r;
+        try { r = await remoteCall('report/get_result_rows', { tableIndex: idx, indexFrom: i, indexTo: j }); }
+        catch (e) { return { filas: filas, error: (e && e.message) || String(e) }; }
+        const arr = Array.isArray(r) ? r
+            : ((r && Array.isArray(r.rows)) ? r.rows
+                : ((r && r.reportResult && Array.isArray(r.reportResult.rows)) ? r.reportResult.rows : []));
+        if (!arr.length) break;
+        for (const o of arr) {
+            if (!o) continue;
+            const c = Array.isArray(o.c) ? o.c : [];
+            filas.push(c.map((cel) => {
+                if (cel == null) return '';
+                if (cel.t != null) return cel.t;
+                if (cel.v != null) return cel.v;
+                if (cel.y != null && cel.x != null) return cel.y + ',' + cel.x;
+                return '';
+            }));
+        }
+        if (arr.length < (j - i + 1)) break;
+    }
+    return { filas: filas, error: '' };
+}
+// Coge las filas del resultado ya ejecutado: busca en reportResult.tables la
+// tabla con mas filas, lee su cabecera y baja el contenido por paginas.
+async function rxInfLeeResultado(r, token) {
+    const rr = (r && r.reportResult) ? r.reportResult : r;
+    const tablas = (rr && Array.isArray(rr.tables)) ? rr.tables : [];
+    if (!tablas.length) return null;
+    let mejor = -1, max = 0;
+    tablas.forEach((t, i) => {
+        const n = Number((t && t.rows) || 0);
+        if (n > max) { max = n; mejor = i; }
+    });
+    if (mejor < 0 || !max) return null;
+    const leidas = await rxInfFilasDeTabla(mejor, max, token);
+    if (leidas.error) {
+        // Si la plataforma no deja leer el contenido, se deja en la traza:
+        // exec_report acepto el informe pero no se pudieron bajar las filas.
+        rxInfLog('get_result_rows fallo (tabla ' + mejor + ', ' + max + ' filas)',
+            (RX_INF.diag && RX_INF.diag.enviado) || {}, leidas.error);
+        RX_INF.diag = Object.assign({}, RX_INF.diag, { filasError: leidas.error, tabla: mejor, tablaFilas: max });
+        return null;
+    }
+    const cols = ((tablas[mejor] && tablas[mejor].header) || []).map((c) => String(c == null ? '' : c));
+    RX_INF.diag = Object.assign({}, RX_INF.diag, { tabla: mejor, tablaFilas: max, tablaCols: cols.length });
+    return { filas: leidas.filas, cols: cols };
+}
 // Una llamada a exec_report. La lectura es SINCRONA: el resultado viene en la
 // propia respuesta. Si la plataforma esta ocupada (1003) o rechaza el trozo
 // por pesado (1004), se limpia y se reintenta; si aun asi falla, y el trozo
@@ -538,12 +598,17 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
         try {
             await rxInfLimpiarInforme();
             const r = await remoteCall('report/exec_report', enviado);
-            const n = rxInfExtrae(r);
             RX_INF.diag = { enviado: enviado, error: '', ok: true, cuando: Date.now() };
+            // Las filas se piden aparte (ver rxInfLeeResultado).
+            const leido = await rxInfLeeResultado(r, token);
+            if (leido) {
+                rxInfIntento(enviado, '', leido.filas);
+                if (!leido.filas.length) rxInfLog('ejecutado sin filas', enviado);
+                return { filas: leido.filas, cols: leido.cols };
+            }
+            // Sin tablas: puede que la plataforma traiga las filas en linea.
+            const n = rxInfExtrae(r);
             rxInfIntento(enviado, '', n.filas);
-            // Sin filas no es un error, pero hay que poder verlo en consola:
-            // suele ser que el objeto o el modelo de objetos no es el que la
-            // plantilla espera.
             if (!n.filas.length) rxInfLog('ejecutado sin filas', enviado);
             return { filas: n.filas, cols: n.cols };
         } catch (e) {
