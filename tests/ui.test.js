@@ -772,8 +772,20 @@ ok('escaneo: los fallos de la plataforma se reintentan y se muestran',
     /fallos: fallos, errores: errores/.test(src) &&
     /unidad\(es\) fallaron al consultar/.test(src));
 ok('escaneo: reanuda por trozos cacheados (no se pierde el trabajo al cortar)',
-    /const _rxGeoTrozo = new Map\(\)/.test(src) && /while \(t0 <= rango\.hasta\)/.test(src) &&
-    /_rxGeoTrozo\.set\(tkey, evs\)/.test(src) && /RX_GEO_HIST_PASO_D \* 86400/.test(src));
+    /const _rxGeoTrozo = new Map\(\)/.test(src) && /function rxGeoInfTrozos\(desde, hasta, paso\)/.test(src));
+ok('informe: el boton se vuelve "Cancelar busqueda" mientras barre',
+    /id="rgi-cancel"/.test(src) && /Cancelar busqueda/.test(src) &&
+    /RX_GEO\._token\.cancelado = true;/.test(src) && /detiene el barrido y conserva lo encontrado/.test(src));
+ok('informe: mientras barre no se puede volver a generar ni cambiar opciones',
+    /if \(rxGeoInfBuscando\(\)\) return;/.test(src) && /RX_GEO\._buscando = true;/.test(src) &&
+    /RX_GEO\._buscando = false;/.test(src) && /function rxGeoInfBloq\(\) \{ return rxGeoInfBuscando\(\) \? ' disabled' : ''; \}/.test(src));
+ok('informe: el repintado en vivo solo rehace la zona de datos (no el select de geocercas)',
+    /<div id="rgi-dyn">/.test(src) && /function rxGeoInfCuerpoDyn\(d, generarPend\)/.test(src) &&
+    /dyn\.innerHTML = rxGeoInfCuerpoDyn\(rxGeoInfReune\(\), true\)/.test(src));
+ok('informe: ejecuta las plantillas de la plataforma por API y por trozos',
+    /async function rxGeoInfPlantillas\(\)/.test(src) && /id="rgi-tpl-run"/.test(src) &&
+    /id="rgi-tpl-load"/.test(src) && /report\/exec_report/.test(src) &&
+    /rxGeoInfEjecutarReporte\(tpl, r\.desde, r\.hasta/.test(src) && /report\/cleanup_result/.test(src));
 ok('escaneo: con "todo" arranca donde la plataforma guarda el primer mensaje',
     /async function rxGeoInfPrimerMensaje\(uid\)/.test(src) && /loadCount: 1/.test(src) &&
     /Datos desde el /.test(src));

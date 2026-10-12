@@ -74,6 +74,10 @@ const stubs = [
     // Stub fiel a load_interval: filtra por rango y corta a loadCount, asi se
     // puede probar la paginacion (meses de historial) sin red.
     'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1; H.porId = H.porId || {}; H.porId[p.itemId] = (H.porId[p.itemId]||0)+1;' +
+        // report/exec_report: dos filas por cada trozo de periodo.
+        ' if (m === "report/exec_report") { H.repCalls = H.repCalls||[]; H.repCalls.push({ from: p.interval.from, to: p.interval.to });' +
+        '   return Promise.resolve({ reportResult: { columns: [{ n: "Unidad" }, { n: "Km" }], rows: [["105", 120], ["205", 80]] } }); }' +
+        ' if (m === "report/cleanup_result") return Promise.resolve({});' +
         ' if (H.fallarPorId && H.fallarPorId[p.itemId]) return Promise.reject(new Error(m + " -> code 1054"));' +
         ' if (H.fallosPendientes && H.fallosPendientes[p.itemId] > 0){ H.fallosPendientes[p.itemId]--; return Promise.reject(new Error(m + " -> code 4 (timeout)")); }' +
         ' var msgs = ((H.msgsPorId||{})[p.itemId] || []).filter(function(mm){ return mm && mm.t >= (p.timeFrom||0) && mm.t <= (p.timeTo||2147483647); });' +
@@ -96,7 +100,9 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfZonaSel,rxGeoInfReune,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
     'rxGeoInfFetchMensajes,' +
     'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U,RX_GEO_HIST_MSGS,RX_GEO_HIST_PAGS,' +
-    'RX_GEO_HIST_PASO_D,rxGeoInfTrozoReset,rxGeoInfPrimerMensaje,rxGeoInfCargaTrozo,rxGeoInfTrozoKey,' +
+    'rxGeoInfTrozoReset,rxGeoInfPrimerMensaje,rxGeoInfCargaTrozo,rxGeoInfTrozoKey,' +
+    'rxGeoInfRepReset,rxGeoInfRepSet,rxGeoInfFilasReporte,rxGeoInfRepColUnidad,rxGeoInfEjecutarReporte,' +
+    'rxGeoInfDeReporte,rxGeoInfNombreReporte,RX_GEO_REP_DIAS,' +
     'setHist:function(v){ _rxGeoHist = v; },' +
     'rxGeoInfParadasDePuntos,rxGeoInfChofer,rxGeoInfChoferDe,rxGeoInfChoferReset,rxGeoInfParam,rxGeoInfZonaCerca};';
 const mod = new Function('P', code)(H);
@@ -769,6 +775,49 @@ ok('celdas: lugares joinados', mod.rxGeoInfCeldas({
     eco: '1', cruces: 1, entradas: 1, salidas: 0, paradas: 0, min: 0, minMotor: 0, motor: 0,
     primero: 0, ultimo: 0, zonas: { A: 1, B: 2 }, lugares: { X: 1, Y: 1, Z: 1, W: 1, V: 1 }
 }).lugares.split(' | ').length === 4);
+
+    // ── Fuente reportes de la plataforma (exec_report por trozos) ───────────
+// El informe nativo choca con el limite de tiempo de la plataforma; la via
+// API troceada lo esquiva uniendo las filas de cada trozo.
+mod.rxGeoInfRepReset();
+ok('reporte: normaliza filas de exec_report (arrays y objetos)',
+    (function () {
+        const a = mod.rxGeoInfFilasReporte({ rows: [['105', 120], ['205', 80]], columns: [{ n: 'Unidad' }, { n: 'Km' }] });
+        const b = mod.rxGeoInfFilasReporte({ rows: [{ Unidad: '105', Km: 120 }] });
+        const c = mod.rxGeoInfFilasReporte(null);
+        return a.filas.length === 2 && a.cols[0] === 'Unidad' && a.filas[1][1] === 80 &&
+            b.filas[0][0] === '105' && c.filas.length === 0;
+    })(), JSON.stringify(mod.rxGeoInfFilasReporte({ rows: [['105', 120]] })));
+ok('reporte: encuentra la columna de unidad venga en el idioma que venga',
+    mod.rxGeoInfRepColUnidad(['Fecha', 'Unidad', 'Km']) === 1 &&
+    mod.rxGeoInfRepColUnidad(['Vehicle', 'Mileage']) === 0 &&
+    mod.rxGeoInfRepColUnidad(['Solo', 'Fecha']) === -1);
+// Ejecucion por trozos: 21 dias a 7 dias por trozo = 3 llamadas.
+H.repCalls = [];
+const frm = Math.floor(Date.now() / 1000) - 21 * 86400;
+const fha = Math.floor(Date.now() / 1000);
+const rRep = await mod.rxGeoInfEjecutarReporte({ rid: 1, id: 5, nombre: 'Diario' }, frm, fha, () => {}, null);
+ok('reporte: ejecuta por trozos de 7 dias y une las filas',
+    H.repCalls.length === 3 && rRep.filas.length === 6,
+    'llamadas=' + H.repCalls.length + ' filas=' + rRep.filas.length);
+ok('reporte: cada trozo pide solo su intervalo',
+    H.repCalls[0] && H.repCalls[0].from === frm && H.repCalls[1].to > H.repCalls[0].to);
+ok('reporte: las columnas salen de la plataforma y se renombran',
+    rRep.cols[0] === 'Unidad' && rRep.cols[1] === 'Km', JSON.stringify(rRep.cols));
+// Cancelable.
+H.repCalls = [];
+const rRepC = await mod.rxGeoInfEjecutarReporte({ rid: 1, id: 5 }, frm, fha, () => {}, { cancelado: true });
+ok('reporte: se puede cancelar', rRepC.cancelado === true && H.repCalls.length === 0);
+// Los datos del reporte salen como eventos por unidad.
+mod.rxGeoInfRepSet({ tpl: { rid: 1, id: 5, nombre: 'Diario' }, cols: ['Unidad', 'Conductor', 'Km', 'Minutos'], filas: [['105', 'Juan', '120.5', '90'], ['205', '', '80', '40']] });
+const evsRep = mod.rxGeoInfDeReporte();
+ok('reporte: sus filas sirven de datos para el informe (eco, chofer, km y minutos)',
+    evsRep.length === 2 && evsRep[0].eco === '105' && evsRep[0].chofer === 'Juan' &&
+    evsRep[0].km === 121 && evsRep[0].min === 90 && evsRep[1].chofer === '',
+    JSON.stringify(evsRep));
+ok('reporte: el archivo se llama con la plantilla', /^rondo_Diario_\d{4}-\d{2}-\d{2}\.csv$/.test(mod.rxGeoInfNombreReporte({ nombre: 'Diario' }, '.csv')),
+    mod.rxGeoInfNombreReporte({ nombre: 'Diario' }, '.csv'));
+mod.rxGeoInfRepReset();
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

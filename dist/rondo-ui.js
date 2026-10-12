@@ -11183,6 +11183,11 @@ const RX_GEO_HIST_PASO_D = 7;
 // pedir cientos de miles de mensajes; al llegar al tope se para guardando
 // lo que ya hay y se avisa (con la cache, pulsar otra vez continua).
 const RX_GEO_HIST_MAX_MSG = 400000;
+// Dias por trozo al ejecutar un reporte nativo por API (report/exec_report).
+const RX_GEO_REP_DIAS = 7;
+// Tope de trozos por reporte nativo, para que un "todo" de años no se
+// quede horas calculando en segundo plano.
+const RX_GEO_REP_MAX_TROZOS = 60;
 // Peticiones simultaneas al escanear el historial. En serie, una flota de
 // varios cientos tardaria una eternidad; con un pool de 10 va muy rapido sin
 // castigar al servidor de la plataforma.
@@ -11469,6 +11474,145 @@ function rxGeoInfCeldasPlanas(c, modo) {
         String(c.paradas), String(c.min), dn, (c.zonas || '-'), t(c.primero), t(c.ultimo)];
 }
 /* ====================== INFORME POR GEOCERCA: FUENTES ====================== */
+// Divide [desde, hasta] en trozos de paso segundos. Se reparte el rango de
+// forma exacta (n = ceil) para que no salga un trozo final de un segundo por
+// el redondeo de los milisegundos: n trozos iguales, el ultimo cierra en
+// "hasta".
+function rxGeoInfTrozos(desde, hasta, paso) {
+    const out = [];
+    if (!(hasta >= desde)) return out;
+    const p = Math.max(1, paso || 1);
+    let t0 = desde;
+    while (t0 <= hasta) {
+        const t1 = Math.min(hasta, t0 + p - 1);
+        out.push([t0, t1]);
+        if (t1 >= hasta) break;
+        // Un resto menor del 10% del paso se absorbe en este trozo: si no,
+        // el redondeo de los milisegundos anade una llamada extra de un
+        // segundo por cada unidad de la flota.
+        if ((hasta - t1) < (p * 0.1)) { out[out.length - 1][1] = hasta; break; }
+        t0 = t1 + 1;
+    }
+    return out;
+}
+// ── Fuente reportes de la plataforma (API por trozos) ───────────────────
+// Las plantillas de informe que el operador ya tiene en AE-Track (con sus
+// filtros) se ejecutan por report/exec_report, pero POR TROZOS de periodo:
+// una sola llamada con 714 unidades y meses de datos revienta con el limite
+// de tiempo de la plataforma ("El tiempo de ejecucion ha superado el
+// limite"). Troceando y pegando los resultados no hay limite practico.
+async function rxGeoInfPlantillas() {
+    const out = [];
+    try {
+        const r = await remoteCall('core/search_items', {
+            spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
+            force: 1, flags: 1 | 8192, from: 0, to: 0
+        });
+        (r.items || []).forEach((res) => {
+            const rep = res && res.rep;
+            if (!rep || typeof rep !== 'object') return;
+            Object.keys(rep).forEach((k) => {
+                const t = rep[k];
+                if (t && t.id != null) out.push({ rid: (res.id != null ? res.id : null), id: t.id, nombre: t.n || ('Reporte ' + t.id) });
+            });
+        });
+    } catch (_) { /* sin acceso a plantillas */ }
+    out.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
+    return out;
+}
+// Normaliza una respuesta de exec_report: columnas + filas planas.
+function rxGeoInfFilasReporte(rr) {
+    if (!rr || typeof rr !== 'object') return { cols: [], filas: [] };
+    let filas = rr.rows;
+    if (!Array.isArray(filas)) filas = (Array.isArray(rr.stats) ? rr.stats : []);
+    if (!filas.length) return { cols: [], filas: [] };
+    const plano = filas.map((f) => (Array.isArray(f) ? f.map((x) => (x && typeof x === 'object' ? (x.v != null ? x.v : x.n) : x))
+        : (typeof f === 'object' ? Object.keys(f).map((k) => f[k]) : [f])));
+    const cols = (Array.isArray(rr.columns) && rr.columns.length)
+        ? rr.columns.map((c, i) => String((c && (c.n || c.t)) || ('Columna ' + (i + 1))))
+        : (plano[0] || []).map((_, i) => 'Columna ' + (i + 1));
+    return { cols: cols, filas: plano };
+}
+// Ejecuta una plantilla por trozos de periodo y une los resultados.
+// `onProg(hechas, total)` alimenta la barra; `token` cancela.
+async function rxGeoInfEjecutarReporte(tpl, desde, hasta, onProg, token) {
+    const cols = [];
+    const filas = [];
+    let hechas = 0;
+    const trozos = rxGeoInfTrozos(desde, hasta, RX_GEO_REP_DIAS * 86400);
+    for (let i = 0; i < trozos.length; i++) {
+        if (token && token.cancelado) break;
+        let r = null;
+        for (let intento = 0; intento < 3 && !r; intento++) {
+            if (token && token.cancelado) break;
+            try {
+                r = await remoteCall('report/exec_report', {
+                    reportResourceId: tpl.rid, reportTemplateId: tpl.id,
+                    reportObjectId: 0, reportObjectSecId: 0,
+                    interval: { from: trozos[i][0], to: trozos[i][1], flags: 0 }
+                });
+            } catch (e) {
+                r = null;
+                await new Promise((x) => { try { setTimeout(x, 600 * (intento + 1)); } catch (_) { x(); } });
+            }
+        }
+        if (r) {
+            const n = rxGeoInfFilasReporte(r.reportResult || r);
+            if (n.cols.length && !cols.length) n.cols.forEach((c, k) => { cols[k] = c; });
+            for (const f of n.filas) filas.push(f);
+        }
+        try { await remoteCall('report/cleanup_result', {}); } catch (_) { /* noop */ }
+        hechas++;
+        if (onProg) onProg(hechas, trozos.length, filas.length);
+        if (hechas >= RX_GEO_REP_MAX_TROZOS) break;
+        await rxGeoInfYield();
+    }
+    return { cols: cols, filas: filas, trozos: trozos.length, hechas: hechas, cancelado: !!(token && token.cancelado) };
+}
+function rxGeoInfNombreReporte(tpl, ext) {
+    const nm = String((tpl && tpl.nombre) || 'reporte').replace(/[^\w\-]+/g, '_').slice(0, 40);
+    return 'rondo_' + nm + '_' + new Date().toISOString().slice(0, 10) + ext;
+}
+// Estado del ultimo reporte ejecutado por la via de plantillas.
+let _rxGeoRep = { tpl: null, cols: [], filas: [], t: 0 };
+function rxGeoInfRepReset() { _rxGeoRep = { tpl: null, cols: [], filas: [], t: 0 }; }
+function rxGeoInfRepSet(v) { _rxGeoRep = v || _rxGeoRep; }
+// Indice de la fila por la columna "unidad"/"eco", para agrupar sin depender
+// del idioma del informe. -1 si el informe no trae esa columna.
+function rxGeoInfRepColUnidad(cols) {
+    for (let i = 0; i < (cols || []).length; i++) {
+        if (/^(unidad|eco|vehiculo|vehicle|object|name|nombre|imm|hostname)$/i.test(norm(cols[i]).trim())) return i;
+    }
+    return -1;
+}
+// Un reporte nativo -> una tabla por unidad en el informe (asi se puede
+// comparar con el resto de fuentes y exportar en la misma salida).
+function rxGeoInfDeReporte() {
+    const out = [];
+    const ci = rxGeoInfRepColUnidad(_rxGeoRep.cols);
+    const cols = (_rxGeoRep.cols || []).map((c) => norm(c).trim());
+    const idx = {};
+    cols.forEach((c, i) => { if (idx[c] == null) idx[c] = i; });
+    const chs = ['chofer', 'conductor', 'driver'].map(norm);
+    const idxCh = chs.map((k) => {
+        for (let i = 0; i < cols.length; i++) if (cols[i] === k || cols[i].indexOf(k) >= 0) return i;
+        return -1;
+    });
+    const idxKm = [];
+    cols.forEach((c, i) => { if (/km|kilometr|distancia/i.test(c)) idxKm.push(i); });
+    const idxMin = [];
+    cols.forEach((c, i) => { if (/min|duracion|tiempo/i.test(c)) idxMin.push(i); });
+    for (const f of (_rxGeoRep.filas || [])) {
+        const eco = (ci >= 0 && f[ci] != null) ? String(f[ci]).trim() : '';
+        let km = 0, min = 0, ch = '';
+        for (const i of idxKm) km += (Number(String(f[i]).replace(/[^\d,.\-]/g, '').replace(',', '.')) || 0);
+        for (const i of idxMin) min += (Number(String(f[i]).replace(/[^\d,.\-]/g, '').replace(',', '.')) || 0);
+        for (const i of idxCh) { if (i >= 0 && f[i] != null && String(f[i]).trim()) { ch = String(f[i]).trim(); break; } }
+        out.push({ zona: RX_GEO.zona || 'Reporte de la plataforma', tipo: 'reporte', eco: eco, clave: eco, ts: 0, min: Math.round(min), chofer: ch, km: Math.round(km), titulo: 'Reporte', detalle: '', fuente: 'reporte' });
+    }
+    return out;
+}
+function rxGeoInfDePlantilla() { return _rxGeoRep; }
 // Estado de la consulta (fuente, periodo, geocerca, modo y alcance del
 // rastreo). Vive aqui, con los lectores, porque el alcance tambien cambia
 // lo que devuelve el rastreo.
@@ -11951,16 +12095,14 @@ async function rxGeoInfEscanear(onProg, token) {
                     if (!desdeDatos || p < desdeDatos) desdeDatos = p;
                 }
                 // El rango se recorre en trozos de una semana: cada uno se
-                // cachea, asi el corte no tira el trabajo hecho. El avance es
-                // t1 + 1 (no t0 + paso) para no dejar un trozo final de un
-                // segundo cuando el rango es multiplo exacto del paso.
-                const paso = RX_GEO_HIST_PASO_D * 86400;
+                // cachea, asi el corte no tira el trabajo hecho.
                 const eventos = [];
-                let t0 = ini;
-                while (t0 <= rango.hasta) {
+                const trozos = rxGeoInfTrozos(ini, rango.hasta, RX_GEO_HIST_PASO_D * 86400);
+                for (let i = 0; i < trozos.length; i++) {
                     if (token && token.cancelado) return;
                     if (msgsLeidos >= RX_GEO_HIST_MAX_MSG) { sinPresupuesto = true; break; }
-                    const t1 = Math.min(rango.hasta, t0 + paso - 1);
+                    const t0 = trozos[i][0];
+                    const t1 = trozos[i][1];
                     const tkey = rxGeoInfTrozoKey(it.u.id, t0);
                     let evs = _rxGeoTrozo.get(tkey);
                     if (!evs) {
@@ -11975,8 +12117,6 @@ async function rxGeoInfEscanear(onProg, token) {
                         _rxGeoTrozo.set(tkey, evs);
                     }
                     if (evs.length) eventos.push.apply(eventos, evs);
-                    if (t1 >= rango.hasta) break;
-                    t0 = t1 + 1;
                 }
                 // Chofer: si la unidad ya trae el campo personalizado se usa
                 // directo; si hubo eventos y no lo trae, se consulta por API
@@ -12327,6 +12467,73 @@ function rxGeoInfLeeFechas() {
         RX_GEO.hasta = tmp;
     }
 }
+// Estado del barrido en curso: con la accion en "cancelar" y los controles
+// bloqueados, para que un doble clic no lance dos escaneos a la vez.
+function rxGeoInfBuscando() { return !!RX_GEO._buscando; }
+function rxGeoInfBloq() { return rxGeoInfBuscando() ? ' disabled' : ''; }
+// ── Zona que cambia con los datos (KPIs, avisos, tabla) ─────────────────
+// Vive aparte del resto del cuerpo a proposito: mientras barre la flota se
+// repinta SOLO esto. Rehacer el cuerpo entero rehace el <select> con ~1766
+// geocercas, y eso era justo lo que congelaba la pestana.
+function rxGeoInfCuerpoDyn(d, generarPend) {
+    const tot = d.unidades.total;
+    const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
+    const conChofer = d.unidades.filas.filter((f) => Object.keys(f.choferes || {}).length).length;
+    const chipsDentro = dentro.length
+        ? '<div class="rgi-dentro"><span class="rgi-dl">Dentro ahora</span>' + dentro.slice(0, 14).map((e) =>
+            '<span class="rgi-dchip" title="' + esc(e.zona) + (e.chofer ? ' \u00b7 ' + e.chofer : '') + (e.vel != null ? ' \u00b7 ' + e.vel + ' km/h' : '') + '">' +
+            '<span class="rondo-usym">' + UIS.pin + '</span>' + esc(e.eco) + '</span>').join('') +
+            (dentro.length > 14 ? '<span class="rgi-dmore">+' + (dentro.length - 14) + '</span>' : '') + '</div>'
+        : '';
+    const kpis = '<div class="rgi-kpis">' +
+        '<div class="rgi-kpi' + (tot.unidades ? ' ok' : '') + '"><b>' + tot.unidades + '</b><span>Unidades</span></div>' +
+        '<div class="rgi-kpi"><b>' + tot.cruces + '</b><span>Cruces</span></div>' +
+        '<div class="rgi-kpi"><b>' + tot.entradas + '</b><span>Entradas</span></div>' +
+        '<div class="rgi-kpi"><b>' + tot.paradas + '</b><span>Paradas</span></div>' +
+        '<div class="rgi-kpi"><b>' + tot.min + '</b><span>Min quieto</span></div>' +
+        '<div class="rgi-kpi"><b>' + tot.motor + '</b><span>Motor apagado</span></div>' +
+        (conChofer ? '<div class="rgi-kpi"><b>' + conChofer + '</b><span>Con chofer</span></div>' : '') +
+        (tot.dentro ? '<div class="rgi-kpi vivo"><b>' + tot.dentro + '</b><span>Dentro ahora</span></div>' : '') +
+        '</div>';
+    const avisos = ((!d.eventos.length && (APP.unidades || []).length && RX_GEO.fuente !== 'historial')
+            ? '<div class="rgi-aviso">No hay eventos en esta fuente. ' +
+              'Para rastrear <b>toda la flota</b> en el rango elegido, usa el historial de la plataforma.' +
+              '<button type="button" class="mini" data-rgi="fuente" data-v="historial"' + rxGeoInfBloq() + '>' +
+              '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar en la plataforma</button></div>'
+            : '') +
+        ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey()
+            && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs || _rxGeoHist.sinDatos
+                || _rxGeoHist.fallos || _rxGeoHist.presupuesto || _rxGeoHist.desdeDatos))
+            ? '<div class="rgi-aviso">' + rxGeoInfAvisoHistorial() + '</div>'
+            : '');
+    const prev = '<div class="rgi-prev">' + (d.unidades.filas.length
+        ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
+            .map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo))) +
+        (d.unidades.filas.length > 12 ? '<p class="rgi-more">y ' + (d.unidades.filas.length - 12) + ' unidad(es) m\u00e1s en el PDF y el CSV.</p>' : '')
+        : '<p class="rgi-more">Sin unidades con este filtro.</p>') + '</div>';
+    return kpis + chipsDentro +
+        '<p class="rgi-res">' + esc(rxGeoInfResumen(d)) + '</p>' +
+        avisos + prev;
+}
+// Texto de avisos del escaneo del historial (fallos, topes, cobertura).
+function rxGeoInfAvisoHistorial() {
+    const h = _rxGeoHist;
+    let t = '';
+    if (h.fallos) {
+        t += ('<b>' + h.fallos + ' unidad(es) fallaron al consultar</b> (' +
+            ((h.errores || [])[0] || 'error desconocido') +
+            ((h.errores || []).length > 1 ? ' y ' + ((h.errores.length) - 1) + ' mas' : '') + '). ');
+    }
+    if (h.presupuesto) {
+        t += ('Se leyo el tope de ' + Math.round(RX_GEO_HIST_MAX_MSG / 1000) + 'k mensajes y se paro. ' +
+            'Vuelve a pulsar "Generar reporte": continua donde se quedo (lo ya leido esta cacheado). ');
+    }
+    if (h.sinDatos) t += (h.sinDatos + ' unidad(es) no reportaron en el periodo: se saltan sin consultar. ');
+    if (h.truncado) t += 'Se escanearon ' + RX_GEO_HIST_MAX_U + ' unidades de ' + ((APP.unidades || []).length) + '. ';
+    if (h.truncMsgs) t += 'Alguna unidad tiene mas historial del tope de seguridad. ';
+    if (h.desdeDatos) t += ('Datos desde el ' + rxGeoInfFechaTxt(h.desdeDatos * 1000) + '. ');
+    return t;
+}
 // Dialogo: que informe, de que geocerca, de que periodo, con que datos, un
 // mapa con la geocerca y las unidades, y las tres salidas.
 function abrirInformeGeocerca(origen) {
@@ -12366,10 +12573,14 @@ function abrirInformeGeocerca(origen) {
     // El escaneo del historial es cancelable: al cerrar el dialogo se aborta.
     if (RX_GEO._token) RX_GEO._token.cancelado = true;
     RX_GEO._token = { cancelado: false };
-    const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
+const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
+    // Plantillas de informe de la plataforma (se llenan al abrir o al pulsar
+    // "Buscar plantillas").
+    let plantillas = RX_GEO._plantillas || [];
     const cuerpo = (d, fuentes, selZ, generarPend) => {
         const chip = (act, attr, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
-            '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + '>' + esc(txt) + '</button>';
+            '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') +
+            rxGeoInfBloq() + '>' + esc(txt) + '</button>';
         const tot = d.unidades.total;
         // Hero: que geocerca se informa, de donde viene y que datos tiene.
         const z = RX_GEO.zona ? rxGeoInfZonaSel() : null;
@@ -12387,30 +12598,29 @@ function abrirInformeGeocerca(origen) {
             '<span>' + esc(ficha) + '</span></div>' +
             (org ? '<i class="rgi-ori o-' + org.id + '">' + esc(org.corto) + '</i>' : '') +
             '</div>';
-        const dentro = d.eventos.filter((e) => e.tipo === 'dentro');
-        const conChofer = d.unidades.filas.filter((f) => Object.keys(f.choferes || {}).length).length;
-        const chipsDentro = dentro.length
-            ? '<div class="rgi-dentro"><span class="rgi-dl">Dentro ahora</span>' + dentro.slice(0, 14).map((e) =>
-                '<span class="rgi-dchip" title="' + esc(e.zona) + (e.chofer ? ' \u00b7 ' + e.chofer : '') + (e.vel != null ? ' \u00b7 ' + e.vel + ' km/h' : '') + '">' +
-                '<span class="rondo-usym">' + UIS.pin + '</span>' + esc(e.eco) + '</span>').join('') +
-                (dentro.length > 14 ? '<span class="rgi-dmore">+' + (dentro.length - 14) + '</span>' : '') + '</div>'
-            : '';
-        // Acciones de descarga, con PDF como accion principal.
+        // Acciones de descarga, con PDF como accion principal. Mientras se
+        // escanea el boton principal se convierte en "Cancelar busqueda" y el
+        // resto queda bloqueado.
+        const busy = rxGeoInfBuscando();
         const acciones = '<div class="rgi-generar">' +
-            '<button type="button" class="rgi-btn gen' + (generarPend ? ' pulsa' : '') + '" id="rgi-generar">' +
-            '<span class="rondo-usym">' + (generarPend ? UIS.refresh : UIS.check) + '</span>' +
-            '<b>' + (generarPend ? 'Generar reporte' : 'Actualizar reporte') + '</b>' +
-            '<i>' + (generarPend ? 'pulsa para consultar y calcular' : 'vuelve a consultar los datos') + '</i></button>' +
+            (busy
+                ? '<button type="button" class="rgi-btn gen busy" id="rgi-cancel">' +
+                  '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar busqueda</b>' +
+                  '<i>detiene el barrido y conserva lo encontrado</i></button>'
+                : '<button type="button" class="rgi-btn gen' + (generarPend ? ' pulsa' : '') + '" id="rgi-generar">' +
+                  '<span class="rondo-usym">' + (generarPend ? UIS.refresh : UIS.check) + '</span>' +
+                  '<b>' + (generarPend ? 'Generar reporte' : 'Actualizar reporte') + '</b>' +
+                  '<i>' + (generarPend ? 'pulsa para consultar y calcular' : 'vuelve a consultar los datos') + '</i></button>') +
             '<span class="rgi-gen-hint">' + esc((RX_GEO.fuente === 'historial')
                 ? 'La fuente Plataforma consulta el historial de toda la flota: se lanza con el boton.'
                 : 'Los cambios de opciones no recargan solos: pulsa el boton para actualizar el informe.') + '</span>' +
             '</div>' +
             '<div class="rgi-io">' +
-            '<button type="button" class="rgi-btn primary" id="rgi-pdf" title="Reporte imprimible (Guardar como PDF)">' +
+            '<button type="button" class="rgi-btn primary" id="rgi-pdf" title="Reporte imprimible (Guardar como PDF)"' + rxGeoInfBloq() + '>' +
             '<span class="rondo-usym">' + UIS.export + '</span><b>PDF</b><i>reporte listo para imprimir</i></button>' +
-            '<button type="button" class="rgi-btn" id="rgi-csv" title="Detalle evento a evento">' +
+            '<button type="button" class="rgi-btn" id="rgi-csv" title="Detalle evento a evento"' + rxGeoInfBloq() + '>' +
             '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>evento a evento</i></button>' +
-            '<button type="button" class="rgi-btn" id="rgi-md" title="Informe en texto">' +
+            '<button type="button" class="rgi-btn" id="rgi-md" title="Informe en texto"' + rxGeoInfBloq() + '>' +
             '<span class="rondo-usym">' + UIS.copy + '</span><b>Markdown</b><i>texto para pegar</i></button>' +
             '</div>';
         return '<div class="rgi">' +
@@ -12460,56 +12670,24 @@ function abrirInformeGeocerca(origen) {
             fuentes.map((f) => chip(RX_GEO.fuente === f.k, 'data-rgi="fuente"', f.k,
                 ETIQUETA[f.k] + ' \u00b7 ' + f.n, ETIQUETA[f.k])).join('') +
             '</div></div>' +
+            // Reportes de la plataforma: se ejecutan por API y POR TROZOS, que
+            // es la via de sacar periodos largos sin el limite de tiempo del
+            // informe nativo.
+            '<div class="rgi-row rgi-row-tpl"><span class="rgi-lb">Plantilla</span>' +
+            '<span class="rgi-rango">' +
+            '<select id="rgi-tpl" class="filtro"' + rxGeoInfBloq() + '>' +
+            (plantillas.length
+                ? plantillas.map((t) => '<option value="' + esc(t.rid + ':' + t.id) + '">' + esc(t.nombre) + '</option>').join('')
+                : '<option value="">Sin plantillas en la plataforma</option>') +
+            '</select>' +
+            '<button type="button" class="mini" id="rgi-tpl-run"' + rxGeoInfBloq() + '>' +
+            '<span class="rondo-usym">' + UIS.play + '</span> Ejecutar por API</button>' +
+            (plantillas.length ? '' :
+                '<button type="button" class="mini" id="rgi-tpl-load"' + rxGeoInfBloq() + '>' +
+                '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar plantillas</button>') +
+            '</span></div>' +
             '</div>' +
-            '<div class="rgi-kpis">' +
-            '<div class="rgi-kpi' + (tot.unidades ? ' ok' : '') + '"><b>' + tot.unidades + '</b><span>Unidades</span></div>' +
-            '<div class="rgi-kpi"><b>' + tot.cruces + '</b><span>Cruces</span></div>' +
-            '<div class="rgi-kpi"><b>' + tot.entradas + '</b><span>Entradas</span></div>' +
-            '<div class="rgi-kpi"><b>' + tot.paradas + '</b><span>Paradas</span></div>' +
-            '<div class="rgi-kpi"><b>' + tot.min + '</b><span>Min quieto</span></div>' +
-            '<div class="rgi-kpi"><b>' + tot.motor + '</b><span>Motor apagado</span></div>' +
-            (conChofer ? '<div class="rgi-kpi"><b>' + conChofer + '</b><span>Con chofer</span></div>' : '') +
-            (tot.dentro ? '<div class="rgi-kpi vivo"><b>' + tot.dentro + '</b><span>Dentro ahora</span></div>' : '') +
-            '</div>' +
-            chipsDentro +
-            '<p class="rgi-res">' + esc(rxGeoInfResumen(d)) + '</p>' +
-            ((!d.eventos.length && (APP.unidades || []).length && RX_GEO.fuente !== 'historial')
-                ? '<div class="rgi-aviso">No hay eventos en esta fuente. ' +
-                  'Para rastrear <b>toda la flota</b> en el rango elegido, usa el historial de la plataforma.' +
-                  '<button type="button" class="mini" data-rgi="fuente" data-v="historial">' +
-                  '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar en la plataforma</button></div>'
-                : '') +
-            ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey()
-                && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs || _rxGeoHist.sinDatos
-                    || _rxGeoHist.fallos || _rxGeoHist.presupuesto || _rxGeoHist.desdeDatos))
-                ? '<div class="rgi-aviso">' +
-                  (_rxGeoHist.fallos
-                      ? ('<b>' + _rxGeoHist.fallos + ' unidad(es) fallaron al consultar</b> (' +
-                          ((_rxGeoHist.errores || [])[0] || 'error desconocido') +
-                          (_rxGeoHist.errores && _rxGeoHist.errores.length > 1
-                              ? ' y ' + (_rxGeoHist.errores.length - 1) + ' mas' : '') + '). ')
-                      : '') +
-                  (_rxGeoHist.presupuesto
-                      ? ('Se leyo el tope de ' + Math.round(RX_GEO_HIST_MAX_MSG / 1000) + 'k mensajes y se paro. ' +
-                          'Vuelve a pulsar "Generar reporte": continua donde se quedo (lo ya leido esta cacheado). ')
-                      : '') +
-                  (_rxGeoHist.sinDatos
-                      ? (_rxGeoHist.sinDatos + ' unidad(es) no reportaron en el periodo: se saltan sin consultar. ')
-                      : '') +
-                  (_rxGeoHist.truncado
-                      ? 'Se escanearon ' + RX_GEO_HIST_MAX_U + ' unidades de ' + ((APP.unidades || []).length) + '. '
-                      : '') +
-                  (_rxGeoHist.truncMsgs ? 'Alguna unidad tiene mas historial del tope de seguridad. ' : '') +
-                  (_rxGeoHist.desdeDatos
-                      ? ('Datos desde el ' + rxGeoInfFechaTxt(_rxGeoHist.desdeDatos * 1000) + '. ')
-                      : '') +
-                  '</div>'
-                : '') +
-            '<div class="rgi-prev">' + (d.unidades.filas.length
-                ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
-                    .map((c) => rxGeoInfCeldasHTML(rxGeoInfCeldas(c), d.modo))) +
-                (d.unidades.filas.length > 12 ? '<p class="rgi-more">y ' + (d.unidades.filas.length - 12) + ' unidad(es) m\u00e1s en el PDF y el CSV.</p>' : '')
-                : '<p class="rgi-more">Sin unidades con este filtro.</p>') + '</div>' +
+            '<div id="rgi-dyn">' + rxGeoInfCuerpoDyn(d, generarPend) + '</div>' +
             acciones +
             '</div>';
     };
@@ -12550,6 +12728,8 @@ function abrirInformeGeocerca(origen) {
             const pinta = async (generar) => {
                 const mio = ++pintaN;
                 if (generar) {
+                    // Un doble clic en "Generar reporte" no lanza dos barridos.
+                    if (rxGeoInfBuscando()) return;
                     // Respeta la fecha que el operador acaba de escribir
                     // aunque su `change` no haya saltado todavia.
                     rxGeoInfLeeFechas();
@@ -12557,10 +12737,13 @@ function abrirInformeGeocerca(origen) {
                     await rxGeoInfYield();
                     if (RX_GEO.fuente === 'historial') {
                         RX_GEO._token = { cancelado: false };
+                        RX_GEO._buscando = true;
                         // Repintado en vivo: con una flota de varios cientos
                         // el barrido tarda, y el operador ve las unidades y
                         // los eventos que YA han salido en lugar de una espera
-                        // en seco. Se limita a uno cada ~800 ms.
+                        // en seco. Se limita a uno cada ~800 ms y SOLO se
+                        // rehace la zona de datos (#rgi-dyn): el <select> de
+                        // las ~1766 geocercas no se toca hasta el final.
                         let ultimoPintado = 0;
                         try {
                             await rxGeoInfEscanear((hechas, total, eco, hallados, leidos) => {
@@ -12572,11 +12755,12 @@ function abrirInformeGeocerca(origen) {
                                 const ahora = Date.now();
                                 if (mio === pintaN && (ahora - ultimoPintado) > 800) {
                                     ultimoPintado = ahora;
-                                    setHtml(box, cuerpo(rxGeoInfReune(),
-                                        rxGeoInfFuentesDisponibles(), rxGeoInfSelect(), true));
+                                    const dyn = byId('rgi-dyn');
+                                    if (dyn) dyn.innerHTML = rxGeoInfCuerpoDyn(rxGeoInfReune(), true);
                                 }
                             }, RX_GEO._token);
                         } catch (_) { /* noop */ }
+                        RX_GEO._buscando = false;
                         if (mio !== pintaN) return;
                     }
                     RX_GEO.listo = true;
@@ -12591,12 +12775,19 @@ function abrirInformeGeocerca(origen) {
                 rxGeoInfPintaMapa(d);
                 if (carga) carga.style.display = 'none';
             };
-            box.addEventListener('click', (ev) => {
+            box.addEventListener('click', async (ev) => {
                 const btn = ev.target.closest && ev.target.closest('button');
                 // Salidas y "Generar reporte": el cuerpo se repinta en cada
                 // cambio, asi que los botones se atienden por delegacion (el
                 // contenedor #rgi-box no se reemplaza).
                 if (btn && box.contains(btn)) {
+                    // Cancelar: detiene el barrido y conserva lo encontrado
+                    // (los trozos ya leidos siguen en la cache).
+                    if (btn.id === 'rgi-cancel') {
+                        if (RX_GEO._token) RX_GEO._token.cancelado = true;
+                        if (cargaT) cargaT.textContent = 'Cancelando\u2026';
+                        return;
+                    }
                     if (btn.id === 'rgi-generar') { pinta(true); return; }
                     if (btn.id === 'rgi-pdf') {
                         rxGeoInfLeeFechas();
@@ -12606,9 +12797,58 @@ function abrirInformeGeocerca(origen) {
                     }
                     if (btn.id === 'rgi-csv') { rxGeoInfLeeFechas(); rxGeoInfCSV(rxGeoInfReune()); return; }
                     if (btn.id === 'rgi-md') { rxGeoInfLeeFechas(); rxGeoInfMD(rxGeoInfReune()); return; }
+                    // Plantilla de la plataforma por report/exec_report, por
+                    // trozos (sin limite de tiempo).
+                    if (btn.id === 'rgi-tpl-load') {
+                        btn.disabled = true;
+                        setProg(20, 'Buscando plantillas\u2026');
+                        try {
+                            plantillas = await rxGeoInfPlantillas();
+                            RX_GEO._plantillas = plantillas;
+                        } catch (_) { plantillas = []; }
+                        RX_GEO._buscando = false;
+                        await pinta(false);
+                        return;
+                    }
+                    if (btn.id === 'rgi-tpl-run') {
+                        const sel = byId('rgi-tpl');
+                        const v = (sel && sel.value) || '';
+                        if (!v) { adviceWarn('Sin plantilla', 'Elige una plantilla de informe.'); return; }
+                        const tpl = { rid: v.split(':')[0], id: v.split(':')[1], nombre: (sel.selectedOptions && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : v) };
+                        if (rxGeoInfBuscando()) return;
+                        rxGeoInfLeeFechas();
+                        RX_GEO._buscando = true;
+                        RX_GEO._token = { cancelado: false };
+                        const dt = box.querySelector('#rgi-dyn');
+                        if (dt) dt.innerHTML = '<div class="rgi-aviso">Ejecutando <b>' + esc(tpl.nombre) +
+                            '</b> por trozos de ' + RX_GEO_REP_DIAS + ' dias\u2026</div>';
+                        setProg(10, 'Ejecutando plantilla\u2026');
+                        const r = await rxGeoInfRangoS();
+                        let res;
+                        try {
+                            res = await rxGeoInfEjecutarReporte(tpl, r.desde, r.hasta, (hechas, total, filas) => {
+                                setProg(10 + Math.round((hechas / Math.max(1, total)) * 80),
+                                    'Trozo ' + hechas + '/' + total + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
+                            }, RX_GEO._token);
+                        } catch (e) { res = { cols: [], filas: [], trozos: 0, hechas: 0, error: (e && e.message) || e }; }
+                        RX_GEO._buscando = false;
+                        rxGeoInfRepSet({ tpl: tpl, cols: res.cols, filas: res.filas, t: Date.now() });
+                        if (carga) carga.style.display = 'none';
+                        await pinta(false);
+                        advice(res.filas.length
+                            ? 'Reporte generado'
+                            : 'Sin filas',
+                            res.filas.length + ' fila(s) de ' + tpl.nombre +
+                            (res.cancelado ? ' (cancelado)' : '') +
+                            (res.error ? ' \u00b7 ' + res.error : ''));
+                        return;
+                    }
                 }
                 const b = ev.target.closest && ev.target.closest('[data-rgi]');
                 if (!b || !box.contains(b)) return;
+                // Mientras se barre la flota las opciones van bloqueadas: si no,
+                // cambiar el periodo a mitad dejaria el resultado a medias.
+                if (rxGeoInfBuscando()) return;
                 if (b.dataset.rgi === 'rango') {
                     // Un atajo de periodo borra el rango escrito a mano.
                     RX_GEO.rango = b.dataset.v;
@@ -12638,6 +12878,7 @@ function abrirInformeGeocerca(origen) {
             box.addEventListener('change', (ev) => {
                 const t = ev.target;
                 if (!t || !t.id) return;
+                if (rxGeoInfBuscando()) return;
                 if (t.id === 'rgi-buscar') return;
                 if (t.id === 'rgi-zona') {
                     RX_GEO.zona = t.value || '';
@@ -12673,6 +12914,16 @@ function abrirInformeGeocerca(origen) {
             // (las fuentes locales son instantaneas). Con "Plataforma" se
             // espera al boton para no barrer la flota sin querer.
             pinta(RX_GEO.fuente !== 'historial');
+            // Las plantillas de informe se piden una vez por apertura y en
+            // segundo plano: si no hay ninguna, sale el boton para buscarlas.
+            if (!plantillas.length) {
+                rxGeoInfPlantillas().then((lst) => {
+                    plantillas = lst || [];
+                    RX_GEO._plantillas = plantillas;
+                    if (!plantillas.length) return;
+                    try { pinta(false); } catch (_) { /* noop */ }
+                }).catch(() => { /* sin acceso a plantillas */ });
+            }
         },
         onOk: () => { /* las salidas se eligen en la barra de acciones */ }
     });
