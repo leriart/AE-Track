@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '7.7.0-dev.7';
+    const VER = '7.9.0-dev.72';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -589,7 +589,11 @@
         // semana. Con una flota grande el barrido no cabe en una pasada, asi
         // que lo ya consultado se guarda: al recargar o al volver a generar
         // se continua solo por lo que falta en vez de empezar de cero.
-        geoinf: 'rondo.api.geoinf'
+        geoinf: 'rondo.api.geoinf',
+        // Resultados de los informes por plantilla: filas ya calculadas por
+        // la plataforma, por trozo. Permite repetir un informe largo sin
+        // volver a pedirle lo mismo al servidor.
+        infplant: 'rondo.api.infplant'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
