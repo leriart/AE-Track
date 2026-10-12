@@ -1,149 +1,123 @@
 /* ============================================================================
- * RONDO · SONDEO DE PLANTILLAS (v3) · como se llama de verdad a exec_report
+ * RONDO · SONDEO DE PLANTILLAS (v4) · espia(total)
  * ----------------------------------------------------------------------------
- * Pegalo en la consola (F12) dentro de AE-Track con sesion iniciada.
- * Solo LEE: no crea ni modifica nada.
+ * Pegalo en la consola (F12) de AE-Track con sesion iniciada. Solo LEE.
  *
- * Lo que sabemos ya:
- *   - reportObjectId 0            -> code 7 (parametros invalidos)
- *   - reportObjectId = id unidad  -> code 4 (error interno del servidor)
- *   - no hay ningun servicio de estructura de plantillas (code 2 en todos)
+ * Situacion: report/exec_report devuelve code 4 (error interno del servidor)
+ * en las 11 combinaciones probadas, y code 7 con reportObjectId 0. O sea que
+ * no es como lo llamamos, es que el servicio falla siempre.
  *
- * Esta v3 hace DOS cosas:
+ * Este script NO prueba nada por su cuenta: se limita a APUNTAR todo lo que
+ * hace la plataforma, para ver por donde calcula sus informes de verdad.
+ * Vigila a la vez:
+ *   - remoteCall (la API de Wialon)
+ *   - fetch y XMLHttpRequest (por si AE-Track usa REST en vez de remoteCall)
+ *   - ReportManager del SDK, si existe
  *
- *   FASE A (automatica) - prueba una matriz de combinaciones resource/unidad
- *   en reportObjectId, reportObjectSecId, reportSrc/reportDst e interval, y
- *   te dice cual entra.
- *
- *   FASE B (manual)      - se CUELA en remoteCall y apunta todas las llamadas
- *   que hace la propia pantalla de la plataforma. Abre el informe nativo
- *   "GEOCERCA", dale a Ejecutar, y luego ejecuta en la consola:
- *
- *         __rondoSpyFin()
- *
- *   Con eso sale la llamada exacta (servicio + parametros) que usa tu
- *   plataforma, y Rondo puede copiarla tal cual.
+ * USO:
+ *   1. Pega esto.
+ *   2. Abre el informe NATIVO "GEOCERCA" y pulsa Ejecutar/Generar.
+ *   3. Vuelve a la consola y ejecuta:      __rondoSpyFin()
  * ========================================================================== */
 (function () {
-    const R = wialon.core.Remote.getInstance();
-    const orig = R.remoteCall;
-    const call = (svc, params) => new Promise((res) => {
-        orig.call(R, svc, params, (code, result) => res({ code: code, r: result || {} }));
-    });
-    const log = (t) => console.log('%c' + t, 'font-weight:700;color:#0af');
-    const ok = (t) => console.log('%cOK   ' + t, 'color:#0a0;font-weight:700');
-    const ko = (t) => console.log('%cFALLA ' + t, 'color:#a00');
+    const ventana = window;
+    const out = { remoteCall: [], fetch: [], xhr: [], reportManager: [], otros: [] };
+    const ver = (s) => (typeof s === 'string' ? s : String(s));
 
-    // ───────────────────────── FASE B: espia (se instala ya) ─────────────
-    const capturadas = [];
-    R.remoteCall = function (svc, params, cb) {
+    // ── 1) remoteCall de Wialon ────────────────────────────────────────
+    try {
+        const R = wialon.core.Remote.getInstance();
+        const origRC = R.remoteCall;
+        R.remoteCall = function (svc, params, cb) {
+            try {
+                if (/report|informer|banda|geofence|geocerca/i.test(ver(svc)) ||
+                    (params && (params.reportTemplateId != null || params.reportObjectId != null))) {
+                    out.remoteCall.push({ svc: ver(svc), params: JSON.parse(JSON.stringify(params || {})) });
+                    console.log('%c[rc] ' + svc, 'color:#f60', params);
+                }
+            } catch (_) { /* noop */ }
+            return origRC.call(R, svc, params, cb);
+        };
+        ventana.__rondoRC = origRC;
+    } catch (e) { console.warn('No se pudo espiar remoteCall:', e.message); }
+
+    // ── 2) fetch ───────────────────────────────────────────────────────
+    try {
+        const origF = ventana.fetch;
+        ventana.fetch = function (url, opts) {
+            try {
+                const u = ver(url && url.url ? url.url : url);
+                if (/report|informer|export|stat|geofence|geocerca/i.test(u)) {
+                    const o = (opts && opts.body) ? (() => { try { return JSON.parse(opts.body); } catch (_) { return ver(opts.body).slice(0, 400); } })() : null;
+                    out.fetch.push({ url: u, metodo: (opts && opts.method) || 'GET', cuerpo: o });
+                    console.log('%c[fetch] ' + u, 'color:#fa0', o);
+                }
+            } catch (_) { /* noop */ }
+            return origF.apply(this, arguments);
+        };
+    } catch (e) { console.warn('No se pudo espiar fetch:', e.message); }
+
+    // ── 3) XMLHttpRequest ───────────────────────────────────────────────
+    try {
+        const origSend = XMLHttpRequest.prototype.send;
+        const origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function (m, u) {
+            this.__u = ver(u);
+            this.__m = m;
+            return origOpen.apply(this, arguments);
+        };
+        XMLHttpRequest.prototype.send = function (cuerpo) {
+            try {
+                if (/report|informer|export|stat|geofence|geocerca/i.test(this.__u || '')) {
+                    out.xhr.push({ url: this.__u, metodo: this.__m, cuerpo: ver(cuerpo).slice(0, 400) });
+                    console.log('%c[xhr] ' + this.__u, 'color:#fc0', cuerpo);
+                }
+            } catch (_) { /* noop */ }
+            return origSend.apply(this, arguments);
+        };
+    } catch (e) { console.warn('No se pudo espiar XHR:', e.message); }
+
+    // ── 4) ReportManager del SDK ────────────────────────────────────────
+    try {
+        const w = ventana.wialon;
+        ['ReportManager', 'Reports', 'Report'].forEach((k) => {
+            const m = w && w.core && w.core[k];
+            if (!m || typeof m !== 'object') return;
+            try {
+                if (typeof m.getInstance === 'function') {
+                    const inst = m.getInstance();
+                    Object.keys(inst || {}).forEach((fn) => {
+                        if (typeof inst[fn] !== 'function' || /constructor/i.test(fn)) return;
+                        const orig = inst[fn].bind(inst);
+                        inst[fn] = function () {
+                            out.reportManager.push({ manager: k, fn: fn, args: JSON.parse(JSON.stringify(Array.from(arguments).map((a) => {
+                                if (a == null) return a;
+                                if (typeof a === 'object') { try { return JSON.parse(JSON.stringify(a)); } catch (_) { return '[obj]'; } }
+                                return a;
+                            }))) });
+                            console.log('%c[rm] ' + k + '.' + fn, 'color:#af0', arguments[0]);
+                            return orig.apply(null, arguments);
+                        };
+                    });
+                }
+            } catch (e) { console.warn('No se pudo espiar ' + k + ':', e.message); }
+        });
+    } catch (e) { /* sin SDK */ }
+
+    // ── Volcado ────────────────────────────────────────────────────────
+    ventana.__rondoSpy = out;
+    ventana.__rondoSpyFin = function () {
+        const n = out.remoteCall.length + out.fetch.length + out.xhr.length + out.reportManager.length;
+        console.log('%c=== CAPTURADO ===', 'font-weight:700;color:#f60');
+        console.log(JSON.stringify(out, null, 1));
         try {
-            if (/report/i.test(String(svc)) || (params && (params.reportTemplateId != null))) {
-                capturadas.push({
-                    svc: String(svc),
-                    params: JSON.parse(JSON.stringify(params || {}))
-                });
-                console.log('%c[espia] ' + svc, 'color:#f60', params);
-            }
-        } catch (_) { /* noop */ }
-        return orig.call(R, svc, params, cb);
+            navigator.clipboard.writeText(JSON.stringify(out, null, 1)).then(
+                () => console.log('%cCopiado (' + n + ' llamadas).', 'font-weight:700;color:#0a0'),
+                () => console.log('%cCopia el texto a mano.', 'font-weight:700;color:#f60'));
+        } catch (_) { console.log('Copia el texto a mano.'); }
+        return out;
     };
-    window.__rondoSpy = capturadas;
-    window.__rondoSpyFin = function () {
-        R.remoteCall = orig;   // se desconecta la espia
-        console.log('%c=== LLAMADAS CAPTURADAS ===', 'font-weight:700;color:#f60');
-        console.log(JSON.stringify(capturadas, null, 1));
-        try {
-            navigator.clipboard.writeText(JSON.stringify(capturadas, null, 1)).then(
-                () => log('Copiado al portapapeles.'),
-                () => log('Copia el texto de arriba a mano.'));
-        } catch (_) { log('Copia el texto de arriba a mano.'); }
-        log('Espia desconectada (' + capturadas.length + ' llamada(s)).');
-        return capturadas;
-    };
-    log('ESPIA ACTIVA: abre el informe nativo GEOCERCA, pulsa Ejecutar y luego __rondoSpyFin()');
-
-    // ───────────────────────── FASE A: matriz de llamadas ────────────────
-    (async () => {
-        log('FASE A: probando combinaciones de parametros...');
-        let unidades = [], rid = null, tpls = [];
-        const u = await call('core/search_items', {
-            spec: { itemsType: 'avl_unit', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
-            force: 1, flags: 1 | 1024, from: 0, to: 0
-        });
-        unidades = u.r.items || [];
-        const res = await call('core/search_items', {
-            spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
-            force: 1, flags: 1 | 8192, from: 0, to: 0
-        });
-        (res.r.items || []).forEach((x) => {
-            rid = (x.id != null) ? x.id : rid;
-            const rep = x.rep;
-            if (!rep || typeof rep !== 'object') return;
-            Object.keys(rep).forEach((k) => {
-                const t = rep[k];
-                if (t && t.id != null) tpls.push({ rid: x.id, id: t.id, nombre: t.n || ('Plantilla ' + t.id) });
-            });
-        });
-        const t = tpls.filter((x) => (x.nombre || '').toUpperCase().indexOf('GEOCERCA') >= 0)[0] || tpls[0];
-        const uid = (unidades[0] && unidades[0].id) || 0;
-        log('   recurso=' + rid + '  unidad=' + uid + ' (' + ((unidades[0] && unidades[0].nm) || '') + ')  plantilla=' + (t ? t.nombre + '#' + t.id : 'ninguna'));
-        if (!t) return;
-
-        const ahora = Math.floor(Date.now() / 1000);
-        const desde = ahora - 24 * 3600;
-        const iv = { from: desde, to: ahora, flags: 0 };
-        const base = { reportResourceId: t.rid, reportTemplateId: t.id };
-        const combos = [
-            ['recurso / 0', Object.assign({}, base, { reportObjectId: rid, reportObjectSecId: 0, interval: iv })],
-            ['recurso / unidad', Object.assign({}, base, { reportObjectId: rid, reportObjectSecId: uid, interval: iv })],
-            ['unidad / recurso', Object.assign({}, base, { reportObjectId: uid, reportObjectSecId: rid, interval: iv })],
-            ['recurso / 0 + reportSrc', Object.assign({}, base, {
-                reportObjectId: rid, reportObjectSecId: 0, interval: iv,
-                reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: rid, reportObjectSecId: 0 }
-            })],
-            ['recurso / unidad + reportSrc', Object.assign({}, base, {
-                reportObjectId: rid, reportObjectSecId: uid, interval: iv,
-                reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: rid, reportObjectSecId: uid }
-            })],
-            ['recurso / unidad + reportDst', Object.assign({}, base, {
-                reportObjectId: rid, reportObjectSecId: uid, interval: iv,
-                reportDst: { type: 'json', fields: [] }
-            })],
-            ['recurso / unidad + reportSrc + reportDst', Object.assign({}, base, {
-                reportObjectId: rid, reportObjectSecId: uid, interval: iv,
-                reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: rid, reportObjectSecId: uid },
-                reportDst: { type: 'json', fields: [] }
-            })],
-            ['recurso / unidad, interval sin flags', Object.assign({}, base, {
-                reportObjectId: rid, reportObjectSecId: uid, interval: { from: desde, to: ahora }
-            })],
-            ['recurso / unidad, sin interval', Object.assign({}, base, {
-                reportObjectId: rid, reportObjectSecId: uid
-            })],
-            ['recurso solo', Object.assign({}, base, { reportObjectId: rid })],
-            ['unidad solo', Object.assign({}, base, { reportObjectId: uid })]
-        ];
-        const resA = [];
-        for (const [nombre, params] of combos) {
-            const r = await call('report/exec_report', params);
-            const rr = (r.r && r.r.reportResult) ? r.r.reportResult : (r.r || {});
-            const filas = Array.isArray(rr.rows) ? rr.rows : (Array.isArray(rr.stats) ? rr.stats : []);
-            if (r.code === 0) {
-                ok(nombre + '  -> ' + filas.length + ' fila(s), claves: ' + Object.keys(rr).join(','));
-                resA.push({ nombre: nombre, params: params, ok: true, claves: Object.keys(rr), columnas: (rr.columns || []).map((c) => (c && (c.n || c.t)) || c), filas: filas.slice(0, 3) });
-            } else {
-                ko(nombre + '  -> code ' + r.code);
-                resA.push({ nombre: nombre, ok: false, code: r.code });
-            }
-            try { await call('report/cleanup_result', {}); } catch (_) { /* noop */ }
-        }
-        log('=== FASE A terminada ===');
-        const txt = JSON.stringify({ faseA: resA, capturadas: capturadas }, null, 1);
-        console.log(txt);
-        try {
-            navigator.clipboard.writeText(txt).then(() => log('Copiado.'), () => log('Copia el texto.'));
-        } catch (_) { log('Copia el texto.'); }
-        log('Recuerda: despues de ejecutar el informe nativo, llama a __rondoSpyFin()');
-    })();
+    console.log('%cESPIA ACTIVA. Abre el informe NATIVO "GEOCERCA", pulsa Ejecutar y luego __rondoSpyFin()',
+        'font-weight:700;color:#0af');
+    console.log('%cSi no captura nada, el informe nativo no usa la API: puede calcularse en el navegador. En ese caso __rondoSpyFin() lo dira.', 'color:#888');
 })();
