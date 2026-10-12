@@ -51,7 +51,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfPlantillaInfo,rxInfObjetos,rxInfLecturas,rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
+    'rxInfPlantillaInfo,rxInfObjetos,rxInfLecturas,rxInfTablasRes,rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -562,6 +562,25 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
             }, APP);
             const r = await soloTabla2.rxInfEjecutaRemoto({ rid: 3, id: 11, nombre: 'X' }, '119', null, 100);
             return r.filas.length === 1 && r.filas[0][0] === '105';
+        })());
+
+
+    // Tablas del resultado: es lo que dice que tabla tiene datos y hasta que
+    // fila pedir (sin esto se pedia la tabla de dibujar o un rango inventado).
+    ok('tablas: lee nombre y filas de report/get_report_tables',
+        (function () {
+            const t = mod.rxInfTablasRes({ tables: [
+                { n: 'geofences', rows: 0 },
+                { n: 'geozone_stats', rows: 2 },
+                { n: 'geozone_units', rows: 8 }
+            ] });
+            return t.length === 3 && t[2].nombre === 'geozone_units' && t[2].filas === 8 && t[2].idx === 2;
+        })(), JSON.stringify(mod.rxInfTablasRes({ tables: [{ n: 'a', rows: 3 }] })));
+    ok('tablas: tambien acepta respuestas anidadas o con otros nombres',
+        (function () {
+            const a = mod.rxInfTablasRes({ reportResult: { bands: [{ name: 'Datos', count: 5 }] } });
+            const b = mod.rxInfTablasRes(null);
+            return a.length === 1 && a[0].filas === 5 && b.length === 0;
         })());
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
