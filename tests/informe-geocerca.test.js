@@ -102,7 +102,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U,RX_GEO_HIST_MSGS,RX_GEO_HIST_PAGS,' +
     'rxGeoInfTrozoReset,rxGeoInfPrimerMensaje,rxGeoInfCargaTrozo,rxGeoInfTrozoKey,' +
     'rxGeoInfRepReset,rxGeoInfRepSet,rxGeoInfFilasReporte,rxGeoInfRepColUnidad,rxGeoInfEjecutarReporte,' +
-    'rxGeoInfDeReporte,rxGeoInfNombreReporte,RX_GEO_REP_DIAS,' +
+    'rxGeoInfDeReporte,rxGeoInfNombreReporte,RX_GEO_REP_DIAS,rxGeoInfTrozos,' +
     'setHist:function(v){ _rxGeoHist = v; },' +
     'rxGeoInfParadasDePuntos,rxGeoInfChofer,rxGeoInfChoferDe,rxGeoInfChoferReset,rxGeoInfParam,rxGeoInfZonaCerca};';
 const mod = new Function('P', code)(H);
@@ -818,6 +818,27 @@ ok('reporte: sus filas sirven de datos para el informe (eco, chofer, km y minuto
 ok('reporte: el archivo se llama con la plantilla', /^rondo_Diario_\d{4}-\d{2}-\d{2}\.csv$/.test(mod.rxGeoInfNombreReporte({ nombre: 'Diario' }, '.csv')),
     mod.rxGeoInfNombreReporte({ nombre: 'Diario' }, '.csv'));
 mod.rxGeoInfRepReset();
+
+    // ── Cache persistente: lo consultado sobrevive a la recarga ─────────────
+// Es lo que hace que un informe de 714 unidades y un ano llegue a憑alguna
+// parte: cada pasada continua donde se quedo en vez de empezar de cero.
+ok('escaneo: lo ya consultado se guarda en localStorage',
+    /geoinf: 'rondo\.api\.geoinf'/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'parts', '06-localstorage.js'), 'utf8')) &&
+    /function rxGeoInfTrozoCargar\(\)/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'parts', '54-informe-geocerca.js'), 'utf8')));
+ok('escaneo: la pasada se detiene sola por tiempo y avisa para continuar',
+    /RX_GEO_HIST_SEGUNDOS = 150/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'parts', '54-informe-geocerca.js'), 'utf8')) &&
+    /Esta pasada agoto su tiempo/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'parts', '54-informe-geocerca.js'), 'utf8')));
+ok('escaneo: prioriza las unidades mas cercanas a la geocerca elegida',
+    /const zsel = RX_GEO\.zona \? rxGeoInfZonaSel\(\) : null;/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'parts', '54-informe-geocerca.js'), 'utf8')) &&
+    /return a\.d - b\.d;/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'parts', '54-informe-geocerca.js'), 'utf8')));
+ok('informe: los trozos se reparten en trozos iguales sin resto de un segundo',
+    (function () {
+        const d = 1000000000, h = d + 21 * 86400;
+        const tz = mod.rxGeoInfTrozos(d, h, 7 * 86400);
+        return tz.length === 3 && tz[0][0] === d && tz[tz.length - 1][1] === h &&
+            tz.every((t) => t[1] >= t[0]);
+    })(), JSON.stringify(mod.rxGeoInfTrozos(1000000000, 1000000000 + 21 * 86400, 7 * 86400)));
+ok('informe: sin rango valido no hay trozos', mod.rxGeoInfTrozos(100, 50, 604800).length === 0);
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

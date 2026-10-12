@@ -35,6 +35,15 @@ const RX_GEO_HIST_PASO_D = 7;
 // pedir cientos de miles de mensajes; al llegar al tope se para guardando
 // lo que ya hay y se avisa (con la cache, pulsar otra vez continua).
 const RX_GEO_HIST_MAX_MSG = 400000;
+// Segundos de calculo por pasada. El tope de mensajes puede no llegar
+// (unidades con pocos datos) y aun asi tardar una eternidad: con este
+// limite la pasada termina sola, avisa y se continua en la siguiente.
+const RX_GEO_HIST_SEGUNDOS = 150;
+// Techo de la cache persistente (caracteres). Los trozos SIN eventos son
+// baratisimos y son los que mas se repiten (unidades que no pasaron por ahi),
+// asi que se guardan todos; los que traen eventos se guardan hasta que se
+// llene el presupuesto.
+const RX_GEO_TROZOS_MAX = 2500000;
 // Dias por trozo al ejecutar un reporte nativo por API (report/exec_report).
 const RX_GEO_REP_DIAS = 7;
 // Tope de trozos por reporte nativo, para que un "todo" de años no se
@@ -781,6 +790,9 @@ function rxGeoInfDeReplay() {
 // forma asincrona y `rxGeoInfDeHistorial` (sync) lo lee para el resto del
 // informe.
 let _rxGeoHist = { key: '', t: 0, eventos: [], truncado: false, unidades: 0 };
+// Invalida el resultado del barrido (el "listo" del informe) sin tocar la
+// cache de trozos: se usa al vaciar lo ya consultado.
+function rxGeoInfHistInvalidar() { _rxGeoHist = { key: '', t: 0, eventos: [], truncado: false, unidades: 0 }; }
 function rxGeoInfHistKey() {
     return (RX_GEO.zona || '*') + '|' + (RX_GEO.desde || RX_GEO.rango) + '|' + (RX_GEO.hasta || '') + '|' +
         (RX_GEO.unidades || 'todas') + '|' + rxGeoInfParam('pMin', 2, 0.5, 240) + '|' +
@@ -849,14 +861,55 @@ async function rxGeoInfCargaTrozo(uid, desde, hasta, token) {
 // nunca los mensajes crudos, asi que la memoria se aguanta.
 const _rxGeoTrozo = new Map();     // uid|desde|params -> eventos del trozo
 const _rxGeoPrimero = new Map();   // uid -> primer mensaje guardado (0 = ninguno)
+let _rxGeoTrozoCargado = false;
+// La cache se guarda en localStorage para que una pasada interrumpida no se
+// pierda al recargar: con una flota grande el informe se llena a base de
+// pasadas sucesivas y sin esto nunca llegaria al final.
+function rxGeoInfTrozoCargar() {
+    if (_rxGeoTrozoCargado) return;
+    _rxGeoTrozoCargado = true;
+    try {
+        const g = (typeof readJSON === 'function') ? readJSON(LS.geoinf, null) : null;
+        if (!g || typeof g !== 'object') return;
+        for (const k of Object.keys(g)) _rxGeoTrozo.set(k, g[k]);
+    } catch (_) { /* storage bloqueado: se sigue solo en memoria */ }
+}
+function rxGeoInfTrozoGuardar() {
+    // Volcado agrupado (uno cada 5 s como mucho): escribir en localStorage en
+    // cada trozo seria tan lento como la propia consulta.
+    const t = Date.now();
+    if (t - (rxGeoInfTrozoGuardar.t || 0) < 5000) return;
+    rxGeoInfTrozoGuardar.t = t;
+    try {
+        if (typeof writeJSON !== 'function' || !LS || !LS.geoinf) return;
+        const o = {};
+        const claves = [];
+        _rxGeoTrozo.forEach((v, k) => claves.push(k));
+        let n = 0;
+        // Al reves: lo mas reciente es lo que se esta usando ahora.
+        for (let i = claves.length - 1; i >= 0; i--) {
+            const k = claves[i];
+            const v = _rxGeoTrozo.get(k);
+            const s = JSON.stringify(v);
+            if (n + s.length > RX_GEO_TROZOS_MAX) break;
+            o[k] = v;
+            n += s.length;
+        }
+        writeJSON(LS.geoinf, o);
+    } catch (_) { /* cuota llena o storage bloqueado: sigue en memoria */ }
+}
 function rxGeoInfTrozoKey(uid, desde) {
     return uid + '|' + desde + '|' + rxGeoInfParam('pMin', 2, 0.5, 240) + '|' +
         rxGeoInfParam('pVel', 3, 0, 80) + '|' + rxGeoInfParam('pMargen', 60, 0, 2000) + '|' +
         rxGeoInfParam('pHueco', RX_GEO_HUECO_MIN, 0, 240);
 }
-function rxGeoInfTrozoReset() {
+function rxGeoInfTrozoReset(soloMemoria) {
     _rxGeoTrozo.clear();
     _rxGeoPrimero.clear();
+    _rxGeoTrozoCargado = true;
+    if (!soloMemoria) {
+        try { if (typeof writeJSON === 'function' && LS && LS.geoinf) writeJSON(LS.geoinf, {}); } catch (_) { /* noop */ }
+    }
 }
 // Primer mensaje que la plataforma guarda de la unidad (0 = no guarda
 // ninguno). UNA peticion: sin ella, pedir "todo" obligaba a preguntar semana
@@ -879,6 +932,7 @@ async function rxGeoInfPrimerMensaje(uid) {
 // actualiza la barra; `token` permite cancelar (al cerrar el dialogo o cambiar
 // opciones).
 async function rxGeoInfEscanear(onProg, token) {
+    rxGeoInfTrozoCargar();
     const cfg = { desde: RX_GEO.desde, hasta: RX_GEO.hasta, rango: RX_GEO.rango, zona: RX_GEO.zona, unidades: RX_GEO.unidades };
     const key = rxGeoInfHistKey();
     // Cache de 10 min: el historico pasado no cambia, y regenerar un reporte
@@ -905,19 +959,35 @@ async function rxGeoInfEscanear(onProg, token) {
         lista.push({ u: u, info: info, clave: clave, t: t });
         if (lista.length >= RX_GEO_HIST_MAX_U) break;
     }
-    // Ordena por interes: las de la lista vigilada primero y, dentro de
-    // cada grupo, las que reportaron mas reciente. Asi los resultados
-    // utiles salen en los primeros segundos aunque el barrido siga.
+    // Ordena por interes, de mas a menos probable que pase por la geocerca:
+    // vigiladas primero, luego las mas CERCANAS a la geocerca elegida (su
+    // ultima posicion ya viene en la lista de la plataforma, asi que es
+    // gratis) y por ultimo las que reportaron mas reciente. Con una flota
+    // grande esto es la diferencia entre gastar los primeros mensajes en
+    // las unidades que de verdad pasan por ahi o en las que estan al otro
+    // lado del mapa.
+    const zsel = RX_GEO.zona ? rxGeoInfZonaSel() : null;
+    let cen = null;
+    if (zsel) { try { cen = centroDeZona(zsel); } catch (_) { cen = null; } }
+    const dist = (it) => {
+        if (!cen || cen.lat == null) return 0;
+        const st = (() => { try { return unitState(it.u); } catch (_) { return null; } })();
+        if (!st || st.lat == null) return 1e9;
+        try { return haversine(st.lat, st.lon, cen.lat, cen.lon); } catch (_) { return 1e9; }
+    };
+    lista.forEach((it) => { it.d = dist(it); });
     lista.sort((a, b) => {
         const wa = (sel && sel.has(a.clave)) ? 0 : 1;
         const wb = (sel && sel.has(b.clave)) ? 0 : 1;
         if (wa !== wb) return wa - wb;
+        if (cen && cen.lat != null && a.d !== b.d) return a.d - b.d;
         return (b.t || 0) - (a.t || 0);
     });
     const encontrados = [];
     const total = lista.length;
     let hechas = 0, idx = 0, truncMsgs = false, msgsLeidos = 0;
-    let fallos = 0, sinPresupuesto = false, desdeDatos = 0;
+    let fallos = 0, sinPresupuesto = false, sinTiempo = false, desdeDatos = 0;
+    const tInicio = Date.now();
     const errores = [];
     // Se publica el resultado a medias (vacio al principio) para que el
     // dialogo pueda ir pintando lo que ya ha salido: con una flota grande el
@@ -932,7 +1002,12 @@ async function rxGeoInfEscanear(onProg, token) {
             // Presupuesto: con flota grande y periodos largos la cola podia
             // crecer sin fin. Se para guardando lo hecho y la cache por
             // semanas deja continuar en la siguiente pasada.
+            // Dos topes: por volumen de mensajes y por tiempo de calculo.
+            // Con el segundo la pasada termina sola aunque el volumen nunca
+            // llegue: el operador recupera el dialogo y la siguiente pasada
+            // continua donde se quedo (todo lo leido queda cacheado).
             if (msgsLeidos >= RX_GEO_HIST_MAX_MSG) { sinPresupuesto = true; return; }
+            if ((Date.now() - tInicio) >= RX_GEO_HIST_SEGUNDOS * 1000) { sinTiempo = true; return; }
             const it = lista[idx++];
             const eco = it.info.eco || it.clave;
             try {
@@ -953,6 +1028,7 @@ async function rxGeoInfEscanear(onProg, token) {
                 for (let i = 0; i < trozos.length; i++) {
                     if (token && token.cancelado) return;
                     if (msgsLeidos >= RX_GEO_HIST_MAX_MSG) { sinPresupuesto = true; break; }
+                    if ((Date.now() - tInicio) >= RX_GEO_HIST_SEGUNDOS * 1000) { sinTiempo = true; break; }
                     const t0 = trozos[i][0];
                     const t1 = trozos[i][1];
                     const tkey = rxGeoInfTrozoKey(it.u.id, t0);
@@ -967,6 +1043,7 @@ async function rxGeoInfEscanear(onProg, token) {
                         if (r.truncado) truncMsgs = true;
                         evs = rxGeoInfDeMensajes(r.msgs, eco, 'historial');
                         _rxGeoTrozo.set(tkey, evs);
+                        rxGeoInfTrozoGuardar();
                     }
                     if (evs.length) eventos.push.apply(eventos, evs);
                 }
@@ -1005,6 +1082,7 @@ async function rxGeoInfEscanear(onProg, token) {
         key: key, t: Date.now(), eventos: encontrados,
         truncado: lista.length >= RX_GEO_HIST_MAX_U, truncMsgs: truncMsgs,
         sinDatos: sinDatos, unidades: total, parcial: false,
+        sinTiempo: sinTiempo, cacheados: _rxGeoTrozo.size,
         // Volumen leido, fallos y la fecha real mas antigua con datos: lo que
         // el dialogo muestra para que un informe vacio se entienda.
         mensajes: msgsLeidos, fallos: fallos, errores: errores,
@@ -1323,6 +1401,14 @@ function rxGeoInfLeeFechas() {
 // bloqueados, para que un doble clic no lance dos escaneos a la vez.
 function rxGeoInfBuscando() { return !!RX_GEO._buscando; }
 function rxGeoInfBloq() { return rxGeoInfBuscando() ? ' disabled' : ''; }
+// Semanas ya consultadas guardadas en este navegador (se lee del storage
+// sin cargar todo en memoria, solo para el contador del boton).
+function rxGeoInfTrozoTotal() {
+    try {
+        const g = (typeof readJSON === 'function') ? readJSON(LS.geoinf, null) : null;
+        return g ? Object.keys(g).length : _rxGeoTrozo.size;
+    } catch (_) { return _rxGeoTrozo.size; }
+}
 // ── Zona que cambia con los datos (KPIs, avisos, tabla) ─────────────────
 // Vive aparte del resto del cuerpo a proposito: mientras barre la flota se
 // repinta SOLO esto. Rehacer el cuerpo entero rehace el <select> con ~1766
@@ -1355,7 +1441,8 @@ function rxGeoInfCuerpoDyn(d, generarPend) {
             : '') +
         ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey()
             && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs || _rxGeoHist.sinDatos
-                || _rxGeoHist.fallos || _rxGeoHist.presupuesto || _rxGeoHist.desdeDatos))
+                || _rxGeoHist.fallos || _rxGeoHist.presupuesto || _rxGeoHist.sinTiempo
+                || _rxGeoHist.desdeDatos || _rxGeoHist.cacheados))
             ? '<div class="rgi-aviso">' + rxGeoInfAvisoHistorial() + '</div>'
             : '');
     const prev = '<div class="rgi-prev">' + (d.unidades.filas.length
@@ -1377,8 +1464,15 @@ function rxGeoInfAvisoHistorial() {
             ((h.errores || []).length > 1 ? ' y ' + ((h.errores.length) - 1) + ' mas' : '') + '). ');
     }
     if (h.presupuesto) {
-        t += ('Se leyo el tope de ' + Math.round(RX_GEO_HIST_MAX_MSG / 1000) + 'k mensajes y se paro. ' +
+        t += ('Se leyeron ' + Math.round(RX_GEO_HIST_MAX_MSG / 1000) + 'k mensajes y se paro. ' +
             'Vuelve a pulsar "Generar reporte": continua donde se quedo (lo ya leido esta cacheado). ');
+    }
+    if (h.sinTiempo) {
+        t += ('Esta pasada agoto su tiempo (' + RX_GEO_HIST_SEGUNDOS + ' s). Pulsa "Generar reporte" otra vez para seguir: ' +
+            'solo consultara lo que falte. ');
+    }
+    if (h.cacheados) {
+        t += (h.cacheados + ' semana(s) por unidad ya consultadas en este navegador. ');
     }
     if (h.sinDatos) t += (h.sinDatos + ' unidad(es) no reportaron en el periodo: se saltan sin consultar. ');
     if (h.truncado) t += 'Se escanearon ' + RX_GEO_HIST_MAX_U + ' unidades de ' + ((APP.unidades || []).length) + '. ';
@@ -1538,6 +1632,14 @@ const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Aviso
                 '<button type="button" class="mini" id="rgi-tpl-load"' + rxGeoInfBloq() + '>' +
                 '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar plantillas</button>') +
             '</span></div>' +
+            // Lo ya consultado se guarda en este navegador: permite continuar
+            // en varias pasadas y no repetir la misma semana.
+            '<div class="rgi-row"><span class="rgi-lb"></span>' +
+            '<button type="button" class="mini" id="rgi-trozos-limpiar"' + rxGeoInfBloq() +
+            ' title="Borra las semanas ya consultadas de este navegador y vuelve a empezar el barrido">' +
+            '<span class="rondo-usym">' + UIS.clear + '</span> Vaciar historial consultado' +
+            (rxGeoInfTrozoTotal() ? ' (' + rxGeoInfTrozoTotal() + ')' : '') + '</button>' +
+            '</div>' +
             '</div>' +
             '<div id="rgi-dyn">' + rxGeoInfCuerpoDyn(d, generarPend) + '</div>' +
             acciones +
@@ -1651,8 +1753,16 @@ const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Aviso
                     if (btn.id === 'rgi-md') { rxGeoInfLeeFechas(); rxGeoInfMD(rxGeoInfReune()); return; }
                     // Plantilla de la plataforma por report/exec_report, por
                     // trozos (sin limite de tiempo).
+                    // Vaciar lo ya consultado: el siguiente barrido empieza de cero.
+                    if (btn.id === 'rgi-trozos-limpiar') {
+                        rxGeoInfTrozoReset();
+                        rxGeoInfHistInvalidar();
+                        rxGeoInfCacheReset();
+                        adviceOk('Historial vaciado', 'El proximo informe consultara todo de nuevo.');
+                        await pinta(false);
+                        return;
+                    }
                     if (btn.id === 'rgi-tpl-load') {
-                        btn.disabled = true;
                         setProg(20, 'Buscando plantillas\u2026');
                         try {
                             plantillas = await rxGeoInfPlantillas();
