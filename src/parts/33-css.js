@@ -1621,6 +1621,12 @@
             "#rondo-dialog .rgi-prev th.ord:hover{color:var(--rondo-fg)}\n" +
             "#rondo-dialog .rgi-prev th.ord.on{color:var(--rondo-accent-2)}\n" +
             "#rondo-dialog .rgi-zonas{max-height:96px;overflow:auto}\n" +
+            "#rondo-dialog .rgi-unis{display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:0;max-height:92px;overflow:auto}\n" +
+            "#rondo-dialog .rgi-tabs .rgi-chip i{font:700 8.5px var(--rondo-font);font-style:normal;margin-left:5px;opacity:.75}\n" +
+            "#rondo-dialog .rgi-filtros{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:5px;max-height:150px;overflow:auto}\n" +
+            "#rondo-dialog .rgi-filtro{display:flex;align-items:center;gap:6px;min-width:0}\n" +
+            "#rondo-dialog .rgi-filtro b{flex:0 0 auto;font:700 9px var(--rondo-font);text-transform:uppercase;letter-spacing:.3px;color:var(--rondo-fg-mute);max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}\n" +
+            "#rondo-dialog .rgi-filtro input{flex:1;min-width:60px}\n" +
             // Tarjeta de geocerca de la app: distintivo violeta/acento.
             "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
             "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";

@@ -37,6 +37,9 @@ const RX_INF_MAX_FILAS = 60000;
 // plantilla de geocercas se ejecuta UNA VEZ POR ZONA: sin tope, 1700 zonas x
 // varios trozos son miles de llamadas. Se acota y se avisa.
 const RX_INF_MAX_OBJETOS = 40;
+// Tope de tablas que se bajan de un resultado (la principal + consumo,
+// resumenes, etc.). Evita traer tablas enormes que nadie va a mirar.
+const RX_INF_MAX_TABLAS = 6;
 // Techo (caracteres) de la cache de resultados en localStorage.
 const RX_INF_CACHE_MAX = 3000000;
 // Estado de la pantalla. Vive aqui, y no en el closure del dialogo, porque el
@@ -51,6 +54,13 @@ const RX_INF = {
     eco: '',             // filtro por unidad sobre las filas ya calculadas
     zonas: [],           // geocercas marcadas (plantilla de geocercas)
     zonaBusca: '',       // filtro de texto del selector de geocercas
+    filtros: {},         // filtros de la plantilla elegidos a mano (units, geozones...)
+    uniSel: {},          // unidades marcadas para filtrar las filas (vacio = todas)
+    uniBusca: '',        // buscador del selector de unidades
+    colsOcultas: {},     // columnas ocultas de la tabla (indice -> 1)
+    conductor: null,     // mapa idUnidad -> conductor (dato extra, opt-in)
+    tablas: [],          // todas las tablas del ultimo informe (pestanas)
+    tablaSel: null,      // indice de la tabla activa
     orden: null,         // {col, dir} de la tabla de resultados
     // Resultado de la ultima ejecucion.
     cols: [], filas: [], meta: null,
@@ -588,51 +598,57 @@ async function rxInfFilasDeTabla(idx, total, token) {
     }
     return { filas: filas, error: '' };
 }
-// Coge las filas del resultado ya ejecutado: busca en reportResult.tables la
-// tabla con mas filas, lee su cabecera y baja el contenido por paginas.
+// Coge las filas del resultado ya ejecutado. Se leen TODAS las tablas con
+// filas (no solo la mas grande): asi el operador puede cambiar de tabla
+// (p.ej. la de consumo de combustible) sin volver a ejecutar.
 async function rxInfLeeResultado(r, token) {
     const rr = (r && r.reportResult) ? r.reportResult : r;
-    const tablas = (rr && Array.isArray(rr.tables)) ? rr.tables : [];
-    if (!tablas.length) return null;
-    let mejor = -1, max = 0;
-    tablas.forEach((t, i) => {
-        const n = Number((t && t.rows) || 0);
-        if (n > max) { max = n; mejor = i; }
-    });
-    if (mejor < 0 || !max) return null;
-    const leidas = await rxInfFilasDeTabla(mejor, max, token);
-    if (leidas.error) {
-        // Si la plataforma no deja leer el contenido, se deja en la traza:
-        // exec_report acepto el informe pero no se pudieron bajar las filas.
-        rxInfLog('get_result_rows fallo (tabla ' + mejor + ', ' + max + ' filas)',
-            (RX_INF.diag && RX_INF.diag.enviado) || {}, leidas.error);
-        RX_INF.diag = Object.assign({}, RX_INF.diag, { filasError: leidas.error, tabla: mejor, tablaFilas: max });
-        return null;
-    }
-    const cols = ((tablas[mejor] && tablas[mejor].header) || []).map((c) => String(c == null ? '' : c));
-    // Las columnas de item (Unidad) a veces llegan como id numerico: se
-    // traduce al eco de la flota para que la tabla se lea.
-    const iUni = (function () {
-        for (let k = 0; k < cols.length; k++) {
-            if (/^(UNIDAD|UNIDADES|ECO|VEHICULO|VEHICLE|IMM|NAME|NOMBRE|OBJECT|OBJETO)/.test(rxInfNombreCol(cols[k]))) return k;
+    const meta = (rr && Array.isArray(rr.tables)) ? rr.tables : [];
+    if (!meta.length) return null;
+    const salida = [];
+    for (let i = 0; i < meta.length && salida.length < RX_INF_MAX_TABLAS; i++) {
+        const t = meta[i] || {};
+        const n = Number(t.rows || 0);
+        if (!n) continue;
+        const leidas = await rxInfFilasDeTabla(i, n, token);
+        if (leidas.error) {
+            // Si la plataforma no deja leer el contenido, se deja en la traza.
+            rxInfLog('get_result_rows fallo (tabla ' + i + ', ' + n + ' filas)',
+                (RX_INF.diag && RX_INF.diag.enviado) || {}, leidas.error);
+            RX_INF.diag = Object.assign({}, RX_INF.diag, { filasError: leidas.error, tabla: i, tablaFilas: n });
+            continue;
         }
-        return -1;
-    })();
-    if (iUni >= 0) {
-        const id2eco = {};
-        (APP.unidades || []).forEach((u) => {
-            if (!u || u.id == null) return;
-            let info = null;
-            try { info = parseUnitName(u); } catch (_) { info = null; }
-            id2eco[String(u.id)] = (info && (info.eco || info.clave)) || u.nm || String(u.id);
-        });
-        leidas.filas.forEach((f) => {
-            const v = String(f[iUni] == null ? '' : f[iUni]);
-            if (id2eco[v]) f[iUni] = id2eco[v];
-        });
+        const cols = ((t && t.header) || []).map((c) => String(c == null ? '' : c));
+        rxInfCorrigeUnidades(cols, leidas.filas);
+        salida.push({ idx: i, name: t.name || '', label: t.label || '', cols: cols, filas: leidas.filas });
     }
-    RX_INF.diag = Object.assign({}, RX_INF.diag, { tabla: mejor, tablaFilas: max, tablaCols: cols.length });
-    return { filas: leidas.filas, cols: cols };
+    if (!salida.length) return null;
+    // La tabla elegida por defecto es la que mas filas tiene (suele ser el
+    // detalle); el resto quedan como pestañas.
+    let el = 0, max = -1;
+    salida.forEach((t, k) => { if (t.filas.length > max) { max = t.filas.length; el = k; } });
+    RX_INF.diag = Object.assign({}, RX_INF.diag, { tablas: salida.length, tabla: salida[el].idx, tablaFilas: salida[el].filas.length });
+    return { tablas: salida, filas: salida[el].filas, cols: salida[el].cols };
+}
+// Las columnas de item (Unidad) a veces llegan como id numerico: se traduce al
+// eco de la flota para que la tabla se lea.
+function rxInfCorrigeUnidades(cols, filas) {
+    let iUni = -1;
+    for (let k = 0; k < (cols || []).length; k++) {
+        if (/^(UNIDAD|UNIDADES|ECO|VEHICULO|VEHICLE|IMM|NAME|NOMBRE|OBJECT|OBJETO)/.test(rxInfNombreCol(cols[k]))) { iUni = k; break; }
+    }
+    if (iUni < 0) return;
+    const id2eco = {};
+    (APP.unidades || []).forEach((u) => {
+        if (!u || u.id == null) return;
+        let info = null;
+        try { info = parseUnitName(u); } catch (_) { info = null; }
+        id2eco[String(u.id)] = (info && (info.eco || info.clave)) || u.nm || String(u.id);
+    });
+    (filas || []).forEach((f) => {
+        const v = String(f[iUni] == null ? '' : f[iUni]);
+        if (id2eco[v]) f[iUni] = id2eco[v];
+    });
 }
 // Una llamada a exec_report. La lectura es SINCRONA: el resultado viene en la
 // propia respuesta. Si la plataforma esta ocupada (1003) o rechaza el trozo
@@ -663,13 +679,16 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
             if (leido) {
                 rxInfIntento(enviado, '', leido.filas);
                 if (!leido.filas.length) rxInfLog('ejecutado sin filas', enviado);
-                return { filas: leido.filas, cols: leido.cols };
+                return { filas: leido.filas, cols: leido.cols, tablas: leido.tablas };
             }
             // Sin tablas: puede que la plataforma traiga las filas en linea.
             const n = rxInfExtrae(r);
             rxInfIntento(enviado, '', n.filas);
             if (!n.filas.length) rxInfLog('ejecutado sin filas', enviado);
-            return { filas: n.filas, cols: n.cols };
+            return {
+                filas: n.filas, cols: n.cols,
+                tablas: n.filas.length ? [{ idx: 0, name: '', label: '', cols: n.cols, filas: n.filas }] : []
+            };
         } catch (e) {
             err = (e && e.message) || String(e);
             if (!/1003|1004|4/.test(err) || i === 1) break;
@@ -700,6 +719,128 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
 //   3) los items guardados en los filtros de la plantilla (units)
 //   4) una geocerca de la plataforma (para detectar el modelo por geocerca)
 //   5) la primera unidad de la flota
+// ── Filtros de la plantilla ─────────────────────────────────────────────
+// De los parametros guardados, unos son FILTROS (units, geozones, drivers...)
+// y otros son solo FORMATO/CALCULO de la plataforma (address_format,
+// time_format, us_units, averaging...). Los segundos no se ensenan: no filtran
+// nada y solo confunden.
+const RX_INF_AJUSTE = /^(address_format|time_format|date_format|us_units|units_format|measure_units|volume_units|distance_units|fuel_units|speed_format|currency|language|locale|time_zone|timezone|averaging|geofence_exit_msg|geofence_enter_msg|speed_limit|parking|motionless)$/i;
+// Claves que se ofrecen como filtros: las que admite la tabla (filter_order)
+// mas las que ya vienen guardadas y no son ajuste.
+function rxInfFiltrosDe(info) {
+    const out = [], vistos = {};
+    const meter = (k) => {
+        const s = String(k == null ? '' : k).trim();
+        if (!s || vistos[s] || RX_INF_AJUSTE.test(s)) return;
+        vistos[s] = 1;
+        out.push(s);
+    };
+    (info && info.tablas ? info.tablas : []).forEach((tb) => (tb.filtros || []).forEach(meter));
+    (info && info.params ? info.params : []).forEach((p) => meter(p && p.k));
+    return out;
+}
+// Valor actual de un filtro: lo que tecleo el operador o lo que trae guardado
+// la plantilla.
+function rxInfFiltroValor(info, k) {
+    if (RX_INF.filtros && RX_INF.filtros[k] != null) return String(RX_INF.filtros[k]);
+    const p = (info && info.params ? info.params : []).filter((x) => x && x.k === k)[0];
+    return p ? String(p.v == null ? '' : p.v) : '';
+}
+// Acepta ids o NOMBRES (el operador escribe "CDOS.4286" o "105" y se resuelve
+// al id). Los ecos pueden ser numericos, asi que se prueba primero el nombre y
+// solo despues se toma como id.
+function rxInfFiltroResuelve(k, v) {
+    const partes = String(v == null ? '' : v).split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
+    const ids = partes.map((x) => {
+        const n = norm(x);
+        if (/unit|unidad/i.test(k)) {
+            for (const u of (APP.unidades || [])) {
+                let i = null;
+                try { i = parseUnitName(u); } catch (_) { i = null; }
+                const eco = (i && (i.eco || i.clave)) || u.nm || '';
+                if (eco && norm(eco) === n) return String(u.id);
+            }
+        }
+        if (/geozon|geofence|zona/i.test(k)) {
+            for (const z of (APP.zonas || [])) {
+                if (norm(rxGeoInfNombre(z)) === n) return String(z.id);
+            }
+        }
+        return x;
+    }).filter(Boolean);
+    return ids.join(',');
+}
+// Filtros efectivos (resueltos a ids) de la pantalla.
+function rxInfFiltrosEfectivos() {
+    const out = {};
+    Object.keys(RX_INF.filtros || {}).forEach((k) => {
+        const v = String(RX_INF.filtros[k] == null ? '' : RX_INF.filtros[k]).trim();
+        if (!v) return;
+        out[k] = rxInfFiltroResuelve(k, v);
+    });
+    return out;
+}
+// Pista para el campo de un filtro: que se puede escribir.
+function rxInfFiltroPista(k) {
+    if (/unit|unidad/i.test(k)) return 'eco o id de unidad';
+    if (/geozon|geofence|zona/i.test(k)) return 'nombre o id de geocerca';
+    if (/driver|conductor/i.test(k)) return 'id de conductor';
+    if (/trailer|remolque/i.test(k)) return 'id de remolque';
+    if (/group|grupo/i.test(k)) return 'id de grupo';
+    return 'id o valor';
+}
+// Filtros por plantilla, persistidos: el operador no tiene que volver a
+// teclearlos cada vez que abre el informe.
+function rxInfFiltrosGuardados() {
+    try {
+        if (typeof readJSON !== 'function' || !LS || !LS.infplantfilt) return {};
+        const g = readJSON(LS.infplantfilt, {});
+        return (g && typeof g === 'object') ? g : {};
+    } catch (_) { return {}; }
+}
+function rxInfFiltrosGuardar() {
+    try {
+        if (typeof writeJSON !== 'function' || !LS || !LS.infplantfilt) return;
+        const k = rxInfClave(RX_INF.tpl);
+        if (!k) return;
+        const g = rxInfFiltrosGuardados();
+        const limpio = {};
+        Object.keys(RX_INF.filtros || {}).forEach((x) => {
+            if (String((RX_INF.filtros || {})[x] || '').trim()) limpio[x] = RX_INF.filtros[x];
+        });
+        if (Object.keys(limpio).length) g[k] = limpio; else delete g[k];
+        writeJSON(LS.infplantfilt, g);
+    } catch (_) { /* sin storage */ }
+}
+function rxInfFiltrosCargar() {
+    const g = rxInfFiltrosGuardados();
+    const k = rxInfClave(RX_INF.tpl);
+    RX_INF.filtros = (k && g[k] && typeof g[k] === 'object') ? Object.assign({}, g[k]) : {};
+}
+// Definicion propia de la plantilla (reportTemplateId 0 + reportTemplate) con
+// los filtros elegidos aplicados. Null si no hay filtros: entonces se usa la
+// plantilla tal cual (con la definicion "sin filtros" como ultimo recurso).
+function rxInfDefFiltros(datos, tplId, filtros) {
+    if (!filtros || !Object.keys(filtros).length) return null;
+    try {
+        const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+        const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+        if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
+        const def = JSON.parse(JSON.stringify(t));
+        def.id = 0;
+        def.tbl.forEach((tb) => {
+            let p = {};
+            try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
+            Object.keys(filtros).forEach((k) => {
+                const v = filtros[k];
+                if (v == null || v === '') delete p[k];
+                else p[k] = v;
+            });
+            tb.p = JSON.stringify(p);
+        });
+        return def;
+    } catch (_) { return null; }
+}
 // Definicion propia de la plantilla (reportTemplateId 0 + reportTemplate) con
 // los filtros de unidad/objeto quitados. Es lo que hace el operador en la
 // plataforma cuando el informe guardado viene atado a una unidad concreta que
@@ -723,7 +864,7 @@ function rxInfDefSinUnidades(datos, tplId) {
         return def;
     } catch (_) { return null; }
 }
-function rxInfCandidatos(tpl, info, datos) {
+function rxInfCandidatos(tpl, info, datos, defBase) {
     const out = [];
     const visto = {};
     const meter = (rid, id, eco, esZona, def) => {
@@ -767,7 +908,7 @@ function rxInfCandidatos(tpl, info, datos) {
     // 6) La plantilla SIN sus filtros guardados (definicion propia). Es la
     //    carta que hace que un informe atado a una unidad sin datos vuelva a
     //    traer lo de todas.
-    const def = rxInfDefSinUnidades(datos, tpl.id);
+    const def = defBase || rxInfDefSinUnidades(datos, tpl.id);
     if (def) {
         prueba.forEach((z) => mkZona(z, def));
         meter(tpl.rid, '0', 'informe (sin filtro)', false, def);
@@ -778,8 +919,8 @@ function rxInfCandidatos(tpl, info, datos) {
 // candidatos con una ventana corta y se queda con el MODELO que trae filas
 // (y, si ninguno trae, con el primero ACEPTADO por la plataforma: code 0 con
 // cero filas es valido; code 4/7 es un modelo invalido).
-async function rxInfModelo(tpl, info, datos, desde, hasta, token) {
-    const cands = rxInfCandidatos(tpl, info, datos);
+async function rxInfModelo(tpl, info, datos, desde, hasta, token, defBase) {
+    const cands = rxInfCandidatos(tpl, info, datos, defBase);
     const h = hasta, d = Math.max(desde, hasta - (RX_INF_DIAS_TROZO * 86400));
     let primeroOk = null, conFilas = null;
     for (const c of cands) {
@@ -817,6 +958,17 @@ async function rxInfModelo(tpl, info, datos, desde, hasta, token) {
         { reportObjectId: elegido.rid, reportObjectSecId: elegido.id }, '');
     return [elegido];
 }
+// Pega las tablas de un trozo en el acumulado del informe (por indice).
+function rxInfAcumulaTablas(acum, tablas) {
+    (tablas || []).forEach((t) => {
+        if (!t) return;
+        let g = null;
+        for (const x of acum) if (x.idx === t.idx) { g = x; break; }
+        if (!g) { g = { idx: t.idx, name: t.name || '', label: t.label || '', cols: t.cols || [], filas: [] }; acum.push(g); }
+        if ((!g.cols || !g.cols.length) && t.cols && t.cols.length) g.cols = t.cols;
+        for (const f of (t.filas || [])) g.filas.push(f);
+    });
+}
 // ── Ejecucion por trozos ────────────────────────────────────────────────
 // Ejecuta la plantilla por objeto y por trozos de periodo, y pega los
 // resultados. Objeto x trozo, de uno en uno y cacheado: ninguna peticion crece
@@ -836,14 +988,18 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
         const datos = await rxInfDatosPlantilla(tpl);
         const info = rxInfPlantillaInfo(datos, tpl.id);
         const esGeo = info ? info.esGeo : (rxInfPista(tpl) === 'geocercas');
+        // Filtros elegidos por el operador (units, geozones...): van como
+        // definicion propia para TODOS los objetos.
+        const defBase = rxInfDefFiltros(datos, tpl.id, rxInfFiltrosEfectivos());
         if (esGeo) {
-            objs = await rxInfModelo(tpl, info, datos, desde, hasta, token);
+            objs = await rxInfModelo(tpl, info, datos, desde, hasta, token, defBase);
             modo = 'geocercas';
         } else {
             objs = rxInfUnidades(desde).map((u) => ({ id: u.id, eco: u.eco, rid: tpl.rid }));
             if (!objs.length) objs = [{ id: '0', eco: '', rid: tpl.rid }];
             modo = 'flota';
         }
+        if (defBase) objs.forEach((o) => { o.def = defBase; });
     }
     const trabajos = [];
     for (const o of objs) {
@@ -852,6 +1008,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     const total = trabajos.length;
     const filas = [];
     const errores = [];
+    const acumTablas = [];   // una entrada por tabla de la plantilla
     let cols = [];
     let hechos = 0, fallos = 0, cacheados = 0, lleno = false, idx = 0;
     let bloqueado = false;   // la plataforma rechaza en bloque
@@ -869,6 +1026,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
             if (enCache) {
                 cacheados++;
                 if (enCache.c) cols = enCache.c;
+                rxInfAcumulaTablas(acumTablas, enCache.t || [{ idx: 0, name: '', label: '', cols: enCache.c || cols, filas: enCache.f || [] }]);
                 for (const f of enCache.f) filas.push(f);
             } else {
                 const r = await rxInfEjecuta(tpl, w.obj, w.desde, w.hasta, token, 0, w.obj.def);
@@ -881,8 +1039,9 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
                     seguidos = 0;
                     if (r.cols && r.cols.length && !cols.length) cols = r.cols;
                     const n = r.filas || [];
+                    rxInfAcumulaTablas(acumTablas, r.tablas);
                     for (const f of n) filas.push(f);
-                    if (filas.length < RX_INF_MAX_FILAS) rxInfCachePoner(k, { c: cols, f: n });
+                    if (filas.length < RX_INF_MAX_FILAS) rxInfCachePoner(k, { c: cols, f: n, t: r.tablas || [] });
                     else lleno = true;
                 }
             }
@@ -897,13 +1056,54 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     for (let i = 0; i < n; i++) tareas.push(obrero());
     await Promise.all(tareas);
     rxInfCacheGuardar(true);
+    // La tabla activa es la que mas filas tiene (suele ser el detalle); las
+    // demas quedan como pestanas.
+    let activa = null;
+    acumTablas.forEach((t) => { if (!activa || t.filas.length > activa.filas.length) activa = t; });
     return {
-        cols: cols, filas: filas, trozos: trozos.length, hechos: hechos,
+        cols: (activa && activa.cols.length) ? activa.cols : cols,
+        filas: activa ? activa.filas : filas,
+        tablas: acumTablas,
+        trozos: trozos.length, hechos: hechos,
         objetos: objs.length, asked: total, alcance: modo, recortado: recortado,
         fallos: fallos, errores: errores, cacheados: cacheados, lleno: lleno,
         bloqueado: bloqueado,
         cancelado: !!(token && token.cancelado), ms: Date.now() - t0
     };
+}
+// ── Dato extra: conductor de cada unidad ────────────────────────────────
+// La plantilla no siempre trae el conductor. Cuando no lo trae, se puede
+// anadir preguntando a la plataforma por las asignaciones unidad-conductor.
+// Es un dato de HOY (el ultimo asignado), no historico: sirve como contexto.
+let _rxInfCond = null, _rxInfCondRid = null;
+function rxInfEcoAId() {
+    const m = {};
+    (APP.unidades || []).forEach((u) => {
+        if (!u || u.id == null) return;
+        let i = null;
+        try { i = parseUnitName(u); } catch (_) { i = null; }
+        const eco = (i && (i.eco || i.clave)) || u.nm;
+        if (eco) m[norm(eco)] = String(u.id);
+    });
+    return m;
+}
+async function rxInfCargaConductores(rid) {
+    if (_rxInfCond && _rxInfCondRid === rid) return _rxInfCond;
+    const out = {};
+    try {
+        const r = await remoteCall('resource/get_unit_drivers', { itemId: rid, flags: 0 });
+        const arr = Array.isArray(r) ? r : ((r && (r.items || r.drivers || r.uds)) || []);
+        const lista = Array.isArray(arr) ? arr : Object.keys(arr || {}).map((k) => arr[k]);
+        lista.forEach((x) => {
+            if (!x) return;
+            const u = (x.u != null) ? x.u : ((x.unitId != null) ? x.unitId : x.uid);
+            const nm = x.n || x.nm || x.name || (x.d && (x.d.n || x.d.nm)) || '';
+            if (u != null && nm) out[String(u)] = String(nm);
+        });
+    } catch (_) { /* servicio distinto o sin permiso: se queda vacio */ }
+    _rxInfCond = out;
+    _rxInfCondRid = rid;
+    return out;
 }
 // ── Filtro por geocerca sobre las filas ─────────────────────────────────
 // Geocerca de una fila: la columna que se dedujo o, si no la hay, cualquier
@@ -1146,16 +1346,42 @@ function rxInfVista() {
         RX_INF.zonas.forEach((z) => { setZ[norm(z)] = 1; });
         pre = pre.filter((f) => setZ[norm(rxInfZonaDeFila(f, iZona))]);
     }
-    // Filtro por unidad.
+    // Filtro por unidad (texto).
     if (iUni >= 0 && RX_INF.eco) {
         const q = norm(RX_INF.eco);
         pre = pre.filter((f) => norm(f[iUni]).indexOf(q) >= 0);
+    }
+    // Filtro por unidades marcadas (lista tipo Excel). Vacio = todas.
+    const uniMarcadas = Object.keys(RX_INF.uniSel || {}).filter((k) => RX_INF.uniSel[k]);
+    if (iUni >= 0 && uniMarcadas.length) {
+        const setU = {};
+        uniMarcadas.forEach((m) => { setU[norm(m)] = 1; });
+        pre = pre.filter((f) => setU[norm(f[iUni])]);
     }
     // Resumen por unidad: sobre lo ya filtrado.
     if (RX_INF.vista === 'unidad') {
         const r = rxInfResumenUnidad(RX_INF.cols, pre, { iUni: iUni, iFec: tipos.iFec, num: tipos.num, txt: tipos.txt });
         cols = r.cols;
         pre = r.filas;
+    }
+    // Columna extra de conductor (si se pidio y la plantilla no la trae).
+    if (RX_INF.conductor && iUni >= 0) {
+        const nombres = cols.map(rxInfNombreCol).join(' ');
+        if (!/CONDUCTOR|DRIVER|PILOTO|OPERADOR/.test(nombres)) {
+            const eco2id = rxInfEcoAId();
+            const mapa = RX_INF.conductor;
+            const ya = {};
+            let hay = false;
+            const iC = cols.length;
+            for (const f of pre) {
+                const id = eco2id[norm(f[iUni])];
+                const c = (id && mapa[id]) ? mapa[id] : '';
+                if (c) hay = true;
+                f.push(c);
+            }
+            if (hay) { cols = cols.concat(['Conductor']); }
+            else { for (const f of pre) f.pop(); }
+        }
     }
     const total = pre.length;
     pre = rxInfFiltra(pre, RX_INF.q, 8);
@@ -1183,19 +1409,40 @@ function rxInfResumenLinea(v) {
         (m.cacheados ? ' \u00b7 ' + m.cacheados + ' ya estaban en cache' : '') +
         (m.fallos ? ' \u00b7 ' + m.fallos + ' trozo(s) con error' : '');
 }
+// Indices de columna que se ven (la tabla es como un Excel: se pueden
+// ocultar columnas para la vista y para las salidas).
+function rxInfVisibles(cols) {
+    const out = [];
+    for (let i = 0; i < (cols || []).length; i++) if (!RX_INF.colsOcultas[i]) out.push(i);
+    return out.length ? out : (cols || []).map((c, i) => i);
+}
+// Recorta columnas y filas a las visibles (para CSV/PDF/Markdown).
+function rxInfRecortaVisible(cols, filas) {
+    const vis = rxInfVisibles(cols);
+    if (vis.length === (cols || []).length) return { cols: cols, filas: filas, vis: vis };
+    return {
+        cols: vis.map((i) => cols[i]),
+        filas: (filas || []).map((f) => vis.map((i) => f[i])),
+        vis: vis
+    };
+}
 // Tabla de la vista previa: celdas escapadas, numeros alineados y cabecera
 // pulsable para ordenar (lo que se ve es lo que se exporta).
 function rxInfTablaHTML(cols, filas, max) {
     const orden = RX_INF.orden;
-    const cab = (cols || []).slice(0, 14).map((c, i) => {
+    const vis = rxInfVisibles(cols);
+    const colsV = vis.map((i) => cols[i]);
+    const filasV = (filas || []).map((f) => vis.map((i) => f[i]));
+    const cab = colsV.slice(0, 14).map((c, k) => {
+        const i = vis[k];
         const act = orden && orden.col === i;
         const flecha = act ? (orden.dir < 0 ? ' \u25be' : ' \u25b4') : '';
         return '<th class="ord' + (act ? ' on' : '') + '" data-col="' + i + '" title="Ordenar por esta columna">' +
             esc(c) + flecha + '</th>';
     }).join('');
-    const cuerpo = (filas || []).slice(0, max || 60).map((f) => {
+    const cuerpo = filasV.slice(0, max || 60).map((f) => {
         let out = '';
-        for (let i = 0; i < Math.min((cols || []).length, 14); i++) {
+        for (let i = 0; i < Math.min(colsV.length, 14); i++) {
             const v = f[i];
             const txt = (v == null || v === '') ? '-' : String(v);
             const num = rxInfNum(v) != null;
@@ -1409,6 +1656,23 @@ function abrirInformesPlantilla(origen) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc('La plantilla se ejecuta unidad por unidad y por trozos; el resultado se une.') + '</span></div>');
                 }
+                // Paso 4: filtros de la plantilla (todo lo que admite, menos
+                // los ajustes de formato). Es lo que antes no se podia tocar.
+                const filtrosKeys = rxInfFiltrosDe(RX_INF.decl);
+                let pasoFiltros = '';
+                if (tpl && filtrosKeys.length) {
+                    pasoFiltros = paso(4, 'Filtros de la plantilla',
+                        '<div class="rgi-filtros">' +
+                        filtrosKeys.map((k) => '<label class="rgi-filtro">' +
+                            '<b>' + esc(k) + '</b>' +
+                            '<input type="text" class="filtro" data-filtro="' + esc(k) + '" value="' +
+                            esc(rxInfFiltroValor(RX_INF.decl, k)) + '" placeholder="' + esc(rxInfFiltroPista(k)) + '"' + dis + '></label>').join('') +
+                        '</div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        esc('Aceptan ids o nombres separados por comas (ej. "CDOS.4286, 105"). Los ajustes de la plataforma (address_format, us_units, averaging...) no filtran nada y no se listan.') +
+                        '</span></div>');
+                }
+                const nRes = filtrosKeys.length ? 5 : 4;
                 // Avisos.
                 const avisos = [];
                 if (RX_INF.alcance === 'sel' && !nUn && !esGeo) avisos.push(esc('No hay unidades seleccionadas: usa "Toda la flota" o selecciona unidades en la lista.'));
@@ -1472,15 +1736,52 @@ function abrirInformesPlantilla(origen) {
                       '<span class="rgi-barra"><i id="rgi-prog-b" style="width:' +
                         Math.max(2, RX_INF.prog.pct || 0) + '%"></i></span></div>'
                     : '';
-                // Resultados.
-                const barraVista = hay ? paso(4, 'Resultados', '<div class="rgi-row"><span class="rgi-lb">Ver</span><div class="rgi-chips">' +
-                    '<button type="button" class="rgi-chip' + (RX_INF.vista !== 'unidad' ? ' activo' : '') + '" data-i="vista" data-v="filas"' + dis + '>Filas</button>' +
-                    '<button type="button" class="rgi-chip' + (RX_INF.vista === 'unidad' ? ' activo' : '') + '" data-i="vista" data-v="unidad"' + dis + '>Resumen por unidad</button>' +
-                    '</div><span class="rgi-busca" style="margin-left:auto"><span class="rondo-usym">' + UIS.filter + '</span>' +
-                    '<input type="text" id="rgi-q" class="filtro" placeholder="Filtrar filas\u2026" value="' + esc(RX_INF.q || '') + '"' + dis + '></span></div>' +
-                    (v.iUni >= 0 ? '<div class="rgi-row"><span class="rgi-lb">Unidad</span><span class="rgi-busca">' +
-                        '<span class="rondo-usym">' + UIS.filter + '</span>' +
-                        '<input type="text" id="rgi-eco" class="filtro" placeholder="Filtrar por unidad\u2026" value="' + esc(RX_INF.eco || '') + '"' + dis + '></span></div>' : '')) : '';
+                // Resultados: pestanas de tabla, filtro de unidades tipo
+                // Excel, selector de columnas y filtro de texto.
+                let barraVista = '';
+                if (hay) {
+                    const tabs = (RX_INF.tablas && RX_INF.tablas.length > 1)
+                        ? '<div class="rgi-row"><span class="rgi-lb">Tabla</span><div class="rgi-chips rgi-tabs">' +
+                          RX_INF.tablas.map((t) => '<button type="button" class="rgi-chip' +
+                              (((RX_INF.tablaSel == null && t === RX_INF.tablas[0]) || RX_INF.tablaSel === t.idx) ? ' activo' : '') +
+                              '" data-tab="' + esc(String(t.idx)) + '"' + dis + '>' + esc(t.label || t.name || ('Tabla ' + t.idx)) +
+                              '<i>' + (t.filas || []).length + '</i></button>').join('') + '</div></div>' : '';
+                    // Unidades presentes en la tabla activa (como un Excel).
+                    let unis = '';
+                    if (v.iUni >= 0) {
+                        const setU = {};
+                        (RX_INF.filas || []).forEach((f) => {
+                            const u = String(f[v.iUni] == null ? '' : f[v.iUni]).trim();
+                            if (u) setU[u] = 1;
+                        });
+                        let lista = Object.keys(setU).sort((a, b) => String(a).localeCompare(String(b), 'es'));
+                        const q = norm(RX_INF.uniBusca || '');
+                        if (q) lista = lista.filter((u) => norm(u).indexOf(q) >= 0);
+                        const marcadas = Object.keys(RX_INF.uniSel || {}).filter((k) => RX_INF.uniSel[k]).length;
+                        unis = '<div class="rgi-row"><span class="rgi-lb">Unidades</span><span class="rgi-busca">' +
+                            '<span class="rondo-usym">' + UIS.filter + '</span>' +
+                            '<input type="text" id="rgi-uni-busca" class="filtro" placeholder="Buscar unidad\u2026" value="' + esc(RX_INF.uniBusca || '') + '"' + dis + '>' +
+                            '<i>' + (marcadas ? (marcadas + ' de ' + Object.keys(setU).length) : Object.keys(setU).length) + '</i></span>' +
+                            (marcadas ? '<button type="button" class="mini" id="rgi-uni-limpiar"' + dis + '>limpiar</button>' : '') + '</div>' +
+                            '<div class="rgi-row"><span class="rgi-lb"></span><div class="rgi-unis" id="rgi-unis">' +
+                            lista.map((u) => '<button type="button" class="rgi-chip' + (RX_INF.uniSel[u] ? ' activo' : '') +
+                                '" data-uni="' + esc(u) + '"' + dis + '>' + esc(u) + '</button>').join('') +
+                            '</div></div>';
+                    }
+                    // Columnas: se pueden ocultar (como un Excel).
+                    const colsVis = '<div class="rgi-row"><span class="rgi-lb">Columnas</span><div class="rgi-unis">' +
+                        (v.cols || []).map((c, i) => '<button type="button" class="rgi-chip' +
+                            (RX_INF.colsOcultas[i] ? '' : ' activo') + '" data-colvis="' + i + '"' + dis +
+                            ' title="Mostrar u ocultar esta columna">' + esc(c) + '</button>').join('') + '</div></div>';
+                    barraVista = paso(nRes, 'Resultados', tabs + unis + colsVis +
+                        '<div class="rgi-row"><span class="rgi-lb">Ver</span><div class="rgi-chips">' +
+                        '<button type="button" class="rgi-chip' + (RX_INF.vista !== 'unidad' ? ' activo' : '') + '" data-i="vista" data-v="filas"' + dis + '>Filas</button>' +
+                        '<button type="button" class="rgi-chip' + (RX_INF.vista === 'unidad' ? ' activo' : '') + '" data-i="vista" data-v="unidad"' + dis + '>Resumen por unidad</button>' +
+                        (v.iUni >= 0 ? '<button type="button" class="rgi-chip' + (RX_INF.conductor ? ' activo' : '') + '" id="rgi-conductor"' + dis +
+                            ' title="Anade el conductor asignado a cada unidad (dato actual de la plataforma)">+ Conductor</button>' : '') +
+                        '</div><span class="rgi-busca" style="margin-left:auto"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rgi-q" class="filtro" placeholder="Filtrar filas\u2026" value="' + esc(RX_INF.q || '') + '"' + dis + '></span></div>');
+                }
                 const kpis = hay ? '<div class="rgi-kpis">' +
                     '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>Filas</span></div>' +
                     (v.iUni >= 0 ? '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' : '') +
@@ -1508,7 +1809,7 @@ function abrirInformesPlantilla(origen) {
                     '<span class="rondo-usym">' + UIS.clear + '</span> Vaciar resultados guardados</button></div>' : '';
                 return '<div class="rgi">' + hero + paso1 + prog +
                     ((avisos.length) ? '<div class="rgi-aviso">' + avisos.join(' ') + '</div>' : '') +
-                    paso2 + paso3 + barraEjec +
+                    paso2 + paso3 + pasoFiltros + barraEjec +
                     (hay ? barraVista + '<div id="rgi-dyn">' + kpis + resumen + tabla + '</div>' + salidas : '<div id="rgi-dyn">' + tabla + '</div>') +
                     '</div>';
             };
@@ -1537,7 +1838,7 @@ function abrirInformesPlantilla(origen) {
                 let ok = true;
                 try { plantillas = await rxInfPlantillas(); } catch (_) { plantillas = []; ok = false; }
                 RX_INF._cargadas = true;
-                if (!RX_INF.tpl && plantillas.length) RX_INF.tpl = plantillas[0];
+                if (!RX_INF.tpl && plantillas.length) { RX_INF.tpl = plantillas[0]; rxInfFiltrosCargar(); }
                 RX_INF._buscando = false;
                 pinta();
                 if (plantillas.length && !ok) adviceWarn('Sin plantillas', 'No se pudieron leer las plantillas de la plataforma.');
@@ -1591,6 +1892,12 @@ function abrirInformesPlantilla(origen) {
                 finProg();
                 RX_INF.cols = res.cols || [];
                 RX_INF.filas = res.filas || [];
+                RX_INF.tablas = res.tablas || [];
+                RX_INF.tablaSel = (RX_INF.tablas[0] && RX_INF.tablas[0].idx != null) ? RX_INF.tablas[0].idx : null;
+                // Las unidades y las columnas de un informe nuevo no tienen
+                // por que ser las del anterior: se limpia la seleccion.
+                RX_INF.uniSel = {};
+                RX_INF.colsOcultas = {};
                 const v = rxInfVista();
                 RX_INF.meta = {
                     filas: RX_INF.filas.length, unidades: v.unidades, trozos: res.trozos, objetos: res.objetos,
@@ -1633,12 +1940,13 @@ function abrirInformesPlantilla(origen) {
                         const titulo = 'Informe: ' + ((RX_INF.tpl && RX_INF.tpl.nombre) || 'plantilla');
                         const sub = (RX_INF.desde || '') + ' \u2192 ' + (RX_INF.hasta || 'hoy') +
                             ' \u00b7 ' + (RX_INF.vista === 'unidad' ? 'resumen por unidad' : 'filas');
+                        const rec = rxInfRecortaVisible(v.cols, v.filas);
                         if (btn.id === 'rgi-pdf') {
                             // Si algo del documento falla, se dice: antes el
                             // boton no hacia nada y no habia forma de saberlo.
                             try {
                                 rxImprimirHTML(rxInfHTML({
-                                    titulo: titulo, subtitulo: sub, cols: v.cols, filas: v.filas,
+                                    titulo: titulo, subtitulo: sub, cols: rec.cols, filas: rec.filas,
                                     mapa: rxInfMapaHTML(v, 660, 240),
                                     meta: Object.assign({}, v.meta, { unidades: v.unidades }),
                                     resumen: rxInfResumenLinea(v)
@@ -1650,7 +1958,7 @@ function abrirInformesPlantilla(origen) {
                             return;
                         }
                         if (btn.id === 'rgi-csv') {
-                            rxInfDescarga(rxInfCSVTexto(v.cols, v.filas, [
+                            rxInfDescarga(rxInfCSVTexto(rec.cols, rec.filas, [
                                 'Informe', (RX_INF.tpl && RX_INF.tpl.nombre) || '',
                                 'Desde', RX_INF.desde || '', 'Hasta', RX_INF.hasta || '',
                                 'Vista', RX_INF.vista, 'Generado', rxFechaHora(Date.now(), true)
@@ -1659,10 +1967,10 @@ function abrirInformesPlantilla(origen) {
                             return;
                         }
                         const L = ['# ' + titulo, '', '- ' + sub, '- ' + rxInfResumenLinea(v), '',
-                            '| ' + v.cols.slice(0, 14).join(' | ') + ' |',
-                            '| ' + v.cols.slice(0, 14).map(() => '---').join(' | ') + ' |'];
-                        for (const f of v.filas.slice(0, 500)) {
-                            L.push('| ' + v.cols.slice(0, 14).map((c, i) => String(f[i] == null ? '-' : f[i]).replace(/\|/g, '/')).join(' | ') + ' |');
+                            '| ' + rec.cols.slice(0, 14).join(' | ') + ' |',
+                            '| ' + rec.cols.slice(0, 14).map(() => '---').join(' | ') + ' |'];
+                        for (const f of rec.filas.slice(0, 500)) {
+                            L.push('| ' + rec.cols.slice(0, 14).map((c, i) => String(f[i] == null ? '-' : f[i]).replace(/\|/g, '/')).join(' | ') + ' |');
                         }
                         const txt = L.join('\n');
                         if (typeof rxReplayDescargar === 'function') rxReplayDescargar(rxInfNombreArchivo(RX_INF.tpl, RX_INF.vista, '.md'), txt, 'text/markdown;charset=utf-8;');
@@ -1675,7 +1983,11 @@ function abrirInformesPlantilla(origen) {
                 const rb = ev.target.closest && ev.target.closest('[data-tplrun]');
                 if (rb && box.contains(rb)) {
                     const t = rxInfTplDeClave(rb.dataset.tplrun);
-                    if (t) { RX_INF.tpl = plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0] || t; ejecutar(); }
+                    if (t) {
+                        RX_INF.tpl = plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0] || t;
+                        rxInfFiltrosCargar();
+                        ejecutar();
+                    }
                     return;
                 }
                 // Elegir plantilla: se lee lo que declara y se repinta.
@@ -1685,6 +1997,7 @@ function abrirInformesPlantilla(origen) {
                     const t = rxInfTplDeClave(tb.dataset.tpl);
                     if (t) {
                         RX_INF.tpl = plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0] || t;
+                        rxInfFiltrosCargar();
                         // Cambiar de plantilla invalida lo calculado y los
                         // filtros que dependian de sus columnas.
                         RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
@@ -1728,12 +2041,67 @@ function abrirInformesPlantilla(origen) {
                     }
                     return;
                 }
+                // Cambiar de tabla (pestanas): la activa pasa a ser la vista.
+                const tb2 = ev.target.closest && ev.target.closest('[data-tab]');
+                if (tb2 && box.contains(tb2)) {
+                    if (RX_INF._buscando) return;
+                    const idxTab = Number(tb2.dataset.tab);
+                    const t = (RX_INF.tablas || []).filter((x) => x.idx === idxTab)[0];
+                    if (t) {
+                        RX_INF.tablaSel = idxTab;
+                        RX_INF.cols = t.cols;
+                        RX_INF.filas = t.filas;
+                        RX_INF.orden = null;
+                        pinta();
+                    }
+                    return;
+                }
+                // Marcar/desmarcar una unidad (filtro tipo Excel).
+                const ub2 = ev.target.closest && ev.target.closest('[data-uni]');
+                if (ub2 && box.contains(ub2)) {
+                    if (RX_INF._buscando) return;
+                    const u = ub2.dataset.uni;
+                    if (RX_INF.uniSel[u]) delete RX_INF.uniSel[u]; else RX_INF.uniSel[u] = 1;
+                    pintaResultados();
+                    return;
+                }
+                if (ev.target.closest && ev.target.closest('#rgi-conductor')) {
+                    if (RX_INF._buscando) return;
+                    if (RX_INF.conductor) { RX_INF.conductor = null; pinta(); return; }
+                    if (!RX_INF.tpl) return;
+                    RX_INF.conductor = { cargando: 1 };
+                    pinta();
+                    const mapa = await rxInfCargaConductores(RX_INF.tpl.rid);
+                    RX_INF.conductor = (mapa && Object.keys(mapa).length) ? mapa : null;
+                    if (!RX_INF.conductor) adviceWarn('Sin conductores', 'La plataforma no devolvio asignaciones unidad-conductor.');
+                    pinta();
+                    return;
+                }
+                if (ev.target.closest && ev.target.closest('#rgi-uni-limpiar')) {
+                    if (RX_INF._buscando) return;
+                    RX_INF.uniSel = {};
+                    pintaResultados();
+                    return;
+                }
+                // Mostrar u ocultar una columna.
+                const cb = ev.target.closest && ev.target.closest('[data-colvis]');
+                if (cb && box.contains(cb)) {
+                    if (RX_INF._buscando) return;
+                    const i = Number(cb.dataset.colvis);
+                    if (RX_INF.colsOcultas[i]) delete RX_INF.colsOcultas[i]; else RX_INF.colsOcultas[i] = 1;
+                    pinta();
+                    return;
+                }
                 const b = ev.target.closest && ev.target.closest('[data-i]');
                 if (!b || !box.contains(b)) return;
                 if (RX_INF._buscando) return;
                 if (b.dataset.i === 'rango') { RX_INF.rango = b.dataset.v; RX_INF.desde = ''; RX_INF.hasta = ''; }
                 else RX_INF[b.dataset.i] = b.dataset.v;
                 pinta();
+            });
+            box.addEventListener('change', (ev) => {
+                const t = ev.target;
+                if (t && t.dataset && t.dataset.filtro) { rxInfFiltrosGuardar(); return; }
             });
             box.addEventListener('input', (ev) => {
                 const t = ev.target;
@@ -1765,6 +2133,26 @@ function abrirInformesPlantilla(origen) {
                 }
                 if (t.id === 'rgi-eco') { RX_INF.eco = t.value || ''; pintaResultados(); return; }
                 if (t.id === 'rgi-q') { RX_INF.q = t.value || ''; pintaResultados(); return; }
+                if (t.dataset && t.dataset.filtro) { RX_INF.filtros[t.dataset.filtro] = t.value || ''; return; }
+                if (t.id === 'rgi-uni-busca') {
+                    // Solo se repinta la lista: el campo no pierde el foco.
+                    RX_INF.uniBusca = t.value || '';
+                    const cont = byId('rgi-unis');
+                    if (cont) {
+                        const v = rxInfVista();
+                        const setU = {};
+                        (RX_INF.filas || []).forEach((f) => {
+                            const u = String(f[v.iUni] == null ? '' : f[v.iUni]).trim();
+                            if (u) setU[u] = 1;
+                        });
+                        const q = norm(RX_INF.uniBusca || '');
+                        cont.innerHTML = Object.keys(setU).sort((a, b) => String(a).localeCompare(String(b), 'es'))
+                            .filter((u) => !q || norm(u).indexOf(q) >= 0)
+                            .map((u) => '<button type="button" class="rgi-chip' + (RX_INF.uniSel[u] ? ' activo' : '') +
+                                '" data-uni="' + esc(u) + '">' + esc(u) + '</button>').join('');
+                    }
+                    return;
+                }
             });
             cargarTpl();
         }

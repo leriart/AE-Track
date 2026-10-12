@@ -220,7 +220,8 @@ function chipEn(que, v) {
     mod.RX_INF.decl = {
         nombre: 'GEOCERCA', tipoObj: 'avl_geozone', esGeo: true, esUnidad: false,
         columnas: ['Unidad', 'Hora de entrada', 'Hora de salida', 'Duracion en'],
-        params: [{ tabla: 'Unidades', k: 'units', v: '27418488' }], tablas: []
+        params: [{ tabla: 'Unidades', k: 'units', v: '27418488' }],
+        tablas: [{ n: 'x', l: 'Unidades', filtros: ['units', 'geozones', 'address_format', 'us_units'], etiquetas: ['Unidad'], claves: [] }]
     };
     chipEn('vista', 'filas');
     await new Promise((r) => setTimeout(r, 20));
@@ -244,6 +245,22 @@ function chipEn(que, v) {
     ok('PDF: se monta el documento con la tabla',
         R.prints.length === 1 && /<table>/.test(R.prints[0]) && /CDOS\.1/.test(R.prints[0]) && /Hora de entrada/.test(R.prints[0]),
         'prints=' + R.prints.length);
+
+    // 9) Filtros de plantilla (sin los ajustes de formato) y controles tipo
+    //    Excel: lista de unidades y columnas que se pueden ocultar.
+    const hF = byId('rgi-box').innerHTML;
+    ok('el panel de filtros lista los utiles y no los ajustes de formato',
+        /data-filtro="units"/.test(hF) && /data-filtro="geozones"/.test(hF) &&
+        !/data-filtro="address_format"/.test(hF) && !/data-filtro="us_units"/.test(hF),
+        hF.slice(hF.indexOf('data-filtro') - 40, hF.indexOf('data-filtro') + 140));
+    ok('con resultados hay lista de unidades y selector de columnas',
+        /data-uni=/.test(hF) && /data-colvis=/.test(hF));
+    const elU = { dataset: { uni: 'CDOS.1' }, contains: () => true };
+    for (const h of (byId('rgi-box').handlers.click || [])) {
+        h({ target: { closest: (sel) => (sel === '[data-uni]' ? elU : null) } });
+    }
+    ok('marcar una unidad la deja seleccionada para filtrar',
+        mod.RX_INF.uniSel && mod.RX_INF.uniSel['CDOS.1'] === 1, JSON.stringify(mod.RX_INF.uniSel));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

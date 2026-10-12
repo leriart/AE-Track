@@ -33,7 +33,11 @@
         // Resultados de los informes por plantilla: filas ya calculadas por
         // la plataforma, por trozo. Permite repetir un informe largo sin
         // volver a pedirle lo mismo al servidor.
-        infplant: 'rondo.api.infplant'
+        infplant: 'rondo.api.infplant',
+        // V8.0: filtros de cada plantilla de informe elegidos por el
+        // operador (units, geozones...), para no tener que volver a
+        // teclearlos cada vez.
+        infplantfilt: 'rondo.api.infplantfilt'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
