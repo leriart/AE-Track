@@ -185,9 +185,16 @@ function rxInfCols(cols) {
     return out;
 }
 // Un valor de celda como numero (acepta "1.234,5", "12 km", "", "-").
+// Tambien duraciones "H:MM:SS" o "MM:SS", que se pasan a segundos para poder
+// sumarlas en el resumen (la columna "Duracion en" viene asi).
 function rxInfNum(v) {
     if (v == null || v === '') return null;
     if (typeof v === 'number') return isFinite(v) ? v : null;
+    const dur = String(v).trim().match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+    if (dur) {
+        const a = Number(dur[1]), b = Number(dur[2]), c = Number(dur[3] || 0);
+        return (dur[3] != null) ? (a * 3600 + b * 60 + c) : (a * 60 + b);
+    }
     let s = String(v).replace(/[^\d,.\-]/g, '');
     if (!s || s === '-') return null;
     // "1.234,56" (es) -> coma decimal; "1234.56" (en) -> punto decimal.
@@ -196,6 +203,12 @@ function rxInfNum(v) {
     else if (s.indexOf(',') >= 0) s = s.replace(',', '.');
     const n = Number(s);
     return isFinite(n) ? n : null;
+}
+// Segundos como duracion "H:MM:SS" (para el resumen por unidad).
+function rxInfFmtDur(seg) {
+    const s = Math.max(0, Math.round(Number(seg) || 0));
+    const p2 = (x) => (x < 10 ? '0' + x : String(x));
+    return Math.floor(s / 3600) + ':' + p2(Math.floor((s % 3600) / 60)) + ':' + p2(s % 60);
 }
 // Un numero para pintar en espanol: miles con punto, decimal con coma y como
 // mucho 2 decimales (los datos de la plataforma vienen asi).
@@ -248,9 +261,25 @@ function rxInfResumenUnidad(cols, filas, tipos) {
         }
     }
     const outCols = ['Unidad', 'Filas'].concat(t.num.map((i) => String(cols[i] || ('Col ' + (i + 1)))));
+    // Columnas de duracion ("0:08:01"): se suman en segundos pero se pintan
+    // otra vez como duracion, que es como las lee el operador.
+    const esDur = {};
+    for (const i of t.num) {
+        let vio = false, dur = true;
+        for (const f of (filas || []).slice(0, 50)) {
+            const s = String(f[i] == null ? '' : f[i]).trim();
+            if (!s || s === '-') continue;
+            vio = true;
+            if (!/^\d+:\d{1,2}(:\d{1,2})?$/.test(s)) { dur = false; break; }
+        }
+        esDur[i] = vio && dur;
+    }
     const outFilas = orden.map((g) => {
         const fila = [g.eco, g.n];
-        for (const i of t.num) fila.push(rxInfFmt(g.sumas[i] == null ? 0 : g.sumas[i]));
+        for (const i of t.num) {
+            const s = g.sumas[i] == null ? 0 : g.sumas[i];
+            fila.push(esDur[i] ? rxInfFmtDur(s) : rxInfFmt(s));
+        }
         return fila;
     });
     outFilas.sort((a, b) => (b[1] - a[1]) || String(a[0]).localeCompare(String(b[0]), 'es'));
@@ -521,11 +550,15 @@ function rxInfExplicaError(msg) {
 // contenido se pide aparte con report/get_result_rows, que responde un array
 // de filas { n, i1, i2, t1, t2, d, c:[ {t:texto, v:numero, y:lat, x:lon} ] }.
 // Esto es lo que hacia que un informe lleno se viera como "sin filas".
-// Una celda de fila: texto si lo trae, si no el valor numerico, si no las
-// coordenadas. OJO: las celdas de columnas de item (Unidad) traen `t: ""` y el
-// dato en `v` (el id): hay que preferir el texto NO vacio.
+// Una celda de fila. OJO: la plataforma mezcla formas en la MISMA fila:
+//   "CDOS.4286 - JY21236"                          -> texto plano (Unidad)
+//   { t:"14.09.2026 15:13:41", v:..., y:..., x:... } -> objeto (fechas, numeros)
+//   "0:08:01"                                      -> texto plano (duracion)
+// Asi que una celda que no sea objeto se devuelve tal cual; las de objeto
+// prefieren el texto NO vacio (las de item traen t:"" y el id en v).
 function rxInfCelda(cel) {
     if (cel == null) return '';
+    if (typeof cel !== 'object') return cel;
     if (cel.t != null && String(cel.t) !== '') return cel.t;
     if (cel.v != null) return cel.v;
     if (cel.y != null && cel.x != null) return cel.y + ',' + cel.x;
