@@ -389,15 +389,32 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
         mod.RX_INF.zonas = [];
         return v.filas.length === 1 && v.filas[0][0] === '205';
     })(), JSON.stringify(mod.rxInfVista().filas));
-    ok('filtro: sin columna de geocerca no filtra por ella',
+    // Regresion: una plantilla de geocercas sin columna "Geocerca" (puede
+    // devolver solo cruces por unidad) tambien tiene que filtrar: se busca
+    // el nombre de la geocerca dentro de la fila.
+    ok('filtro: sin columna de geocerca busca la geocerca dentro de la fila',
         (function () {
+            APP.zonas = [{ n: 'PATIO' }, { n: 'CEDIS' }];
             mod.RX_INF.sonda = null;
+            mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
             mod.RX_INF.cols = ['Unidad', 'Km'];
-            mod.RX_INF.filas = [['105', 1], ['205', 2]];
+            mod.RX_INF.filas = [['105', 'PATIO', 1], ['205', 'CEDIS', 2]];
             mod.RX_INF.zonas = ['PATIO'];
             const v = mod.rxInfVista();
             mod.RX_INF.zonas = [];
-            return v.filas.length === 2 && v.iZona < 0;
+            APP.zonas = [];
+            return v.filas.length === 1 && v.filas[0][0] === '105';
+        })(), JSON.stringify(mod.rxInfVista().filas));
+    ok('geocercas: la plantilla de geocerca siempre ofrece el filtro',
+        (function () {
+            mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
+            mod.RX_INF.sonda = { estado: 'ok', clase: { tipo: 'vehiculos', iZona: -1, iUni: 0, campos: [] }, zonas: [], unidades: [] };
+            const a = mod.rxInfEsDeGeocercas();
+            mod.RX_INF.sonda = null;
+            mod.RX_INF.tpl = { rid: 3, id: 11, nombre: 'Resumen diario' };
+            const b = mod.rxInfEsDeGeocercas();
+            mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
+            return a === true && b === false;
         })());
 
 

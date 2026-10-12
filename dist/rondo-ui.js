@@ -12973,6 +12973,9 @@ const RX_INF = {
     orden: null,         // {col, dir} de la tabla de resultados
     // Resultado de la ultima ejecucion.
     cols: [], filas: [], meta: null,
+    // Progreso en pantalla (dentro del cuerpo, no solo en la barra de
+    // arriba: si el dialogo esta desplazado, la de arriba no se ve).
+    prog: { activo: false, hechas: 0, total: 0, filas: 0, txt: '' },
     // Lo que la plantilla trae: columnas y de que trata (unidades o
     // geocercas). Se deduce ejecutandola una vez por una ventana corta.
     sonda: null, _sondaKey: '',
@@ -13548,6 +13551,7 @@ async function rxInfSondea(tpl) {
     // despues una ejecucion real, que es lo que de verdad dice si trae filas.
     const datos = await rxInfDatosPlantilla(tpl);
     const secs = rxInfSecundarios(datos);
+    const declarado = rxInfDeclarado(datos);
     let info = null;
     let err = '';
     for (const obj of (secs.length ? secs.slice(0, 3).map((x) => x.id) : [rxInfUnidades(hasta - 30 * 24 * 3600).map((u) => u.id)[0] || 0])) {
@@ -13573,6 +13577,7 @@ async function rxInfSondea(tpl) {
     info.zonas = [];
     info.unidades = [];
     info.objetos = secs.length;
+    info.declarado = declarado;
     if (info.clase.iZona >= 0) {
         const set = {};
         info.muestra.forEach((f) => { const v = String(f[info.clase.iZona] == null ? '' : f[info.clase.iZona]).trim(); if (v) set[v] = 1; });
@@ -13613,13 +13618,52 @@ function rxInfZonasDeSonda() {
     }
     return out;
 }
+// Lo que la plantilla DECLARA (report/get_report_data): que objetos admite y
+// como se llaman. Se enseña en pantalla, para que se vea que se puede pedir y
+// sobre que.
+function rxInfDeclarado(datos) {
+    const objs = rxInfSecundarios(datos);
+    const claves = [];
+    try {
+        if (datos && typeof datos === 'object') {
+            Object.keys(datos).forEach((k) => { if (!/^\d+$/.test(k)) claves.push(k); });
+        }
+    } catch (_) { /* noop */ }
+    return { objetos: objs, claves: claves };
+}
+
 // Aplica a la vista que la plantilla es de geocercas (por el sondeo o, si no
 // hay sondeo, por el nombre de la plantilla).
 function rxInfEsDeGeocercas() {
     const c = (RX_INF.sonda && RX_INF.sonda.clase) ? RX_INF.sonda.clase : null;
     if (c && c.iZona >= 0) return true;
-    if (c && c.tipo) return false;
-    return rxInfPista(RX_INF.tpl) === 'geocercas';
+    // Aunque la plantilla NO traiga columna de geocerca (puede devolver solo
+    // cruces por unidad), si es una plantilla de geocercas se sigue
+    // preguntando por ellas: el filtro busca el nombre dentro de la fila.
+    if (rxInfPista(RX_INF.tpl) === 'geocercas') return true;
+    if (RX_INF.sonda && (RX_INF.sonda.zonas || []).length) return true;
+    return false;
+}
+// Geocerca de una fila: la columna que dijo el sondeo o, si no la hay,
+// cualquier celda cuyo texto coincide con una geocerca (asi el filtro
+// funciona aunque la plantilla no nombre la columna "Geocerca").
+function rxInfZonaDeFila(f, iZona) {
+    if (iZona >= 0) {
+        const v = f[iZona];
+        return (v == null) ? '' : String(v).trim();
+    }
+    if (!f) return '';
+    for (let i = 0; i < f.length; i++) {
+        const v = f[i];
+        if (v == null) continue;
+        const t = norm(v);
+        if (!t || t.length < 3) continue;
+        for (const z of (APP.zonas || [])) {
+            const nm = rxGeoInfNombre(z);
+            if (nm && norm(nm) === t) return String(nm);
+        }
+    }
+    return '';
 }
 // Columnas que la plantilla trae pero sin datos: normalmente es que le
 // falta un filtro, y avisa de que el informe sale incompleto.
@@ -13864,12 +13908,18 @@ function rxInfVista() {
         return -1;
     })();
     const iUni = (clase && clase.iUni >= 0) ? clase.iUni : tipos.iUni;
-    // Filtro por geocerca (solo tiene sentido si la plantilla trae una).
+    // Filtro por geocerca. Con columna de geocerca es directo; si no la hay,
+    // se busca el nombre de la geocerca dentro de la fila (una plantilla de
+    // geocercas suele devolver el dato junto al nombre, no en columna propia).
     let pre = filas;
-    if (iZona >= 0 && RX_INF.zonas && RX_INF.zonas.length) {
-        const set = {};
-        RX_INF.zonas.forEach((z) => { set[norm(z)] = 1; });
-        pre = pre.filter((f) => set[norm(f[iZona])]);
+    const setZ = {};
+    if (RX_INF.zonas && RX_INF.zonas.length) {
+        RX_INF.zonas.forEach((z) => { setZ[norm(z)] = 1; });
+        pre = pre.filter((f) => setZ[norm(rxInfZonaDeFila(f, iZona))]);
+    }
+    const zonasVistas = {};
+    if (iZona < 0 && Object.keys(setZ).length) {
+        for (const f of pre) { const z = rxInfZonaDeFila(f, iZona); if (z) zonasVistas[z] = 1; }
     }
     // Filtro por unidad.
     if (iUni >= 0 && RX_INF.eco) {
@@ -13888,6 +13938,7 @@ function rxInfVista() {
     const unidades = {};
     if (iUni >= 0) pre.forEach((f) => { unidades[String(f[iUni] == null ? '' : f[iUni])] = 1; });
     const zonas = {};
+    for (const k of Object.keys(zonasVistas)) zonas[k] = 1;
     if (iZona >= 0) pre.forEach((f) => { zonas[String(f[iZona] == null ? '' : f[iZona])] = 1; });
     return {
         cols: cols, filas: pre, total: filas.length, tipos: tipos, clase: clase,
@@ -13991,10 +14042,28 @@ function abrirInformesPlantilla(origen) {
             const carga = el.querySelector('#rgi-carga');
             const barra = el.querySelector('#rgi-barra');
             const cargaT = el.querySelector('#rgi-carga-t');
+            // El progreso se pinta en DOS sitios: la barra de arriba del
+            // dialogo y una fila dentro del cuerpo. Asi se ve siempre, con el
+            // dialogo desplazado o no.
             const setProg = (p, t) => {
-                if (barra) barra.style.width = Math.max(0, Math.min(100, p)) + '%';
+                const pc = Math.max(0, Math.min(100, p || 0));
+                if (barra) barra.style.width = pc + '%';
                 if (cargaT && t) cargaT.textContent = t;
                 if (carga) carga.style.display = 'flex';
+                const pin = byId('rgi-prog');
+                if (pin) {
+                    const pt = pin.querySelector('#rgi-prog-t');
+                    const pb = pin.querySelector('#rgi-prog-b');
+                    if (pt && t) pt.textContent = t;
+                    if (pb) pb.style.width = pc + '%';
+                    pin.style.display = 'flex';
+                }
+            };
+            const finProg = () => {
+                RX_INF.prog.activo = false;
+                if (carga) carga.style.display = 'none';
+                const pin = byId('rgi-prog');
+                if (pin) pin.style.display = 'none';
             };
             let plantillas = [];
             let pintaN = 0;
@@ -14082,6 +14151,14 @@ function abrirInformesPlantilla(origen) {
                         '</div>' +
                         (sonda && sonda.estado === 'ok' && sonda.clase ? rxInfCamposHTML(sonda) : '') +
                         (sonda && sonda.msg ? '<div class="rgi-sonda-e">' + esc(sonda.msg) + '</div>' : '') +
+                        (tpl && (sonda && sonda.declarado && sonda.declarado.objetos.length)
+                            ? '<div class="rgi-campos"><span class="rgi-campo">' + sonda.declarado.objetos.length +
+                              ' objeto(s) que admite la plantilla</span>' +
+                              sonda.declarado.objetos.slice(0, 12).map((o) => '<span class="rgi-campo">' +
+                                  esc(o.eco) + '</span>').join('') +
+                              (sonda.declarado.objetos.length > 12
+                                  ? '<span class="rgi-campo">+' + (sonda.declarado.objetos.length - 12) + '</span>' : '') +
+                              '</div>' : '') +
                         '</div>';
                 }
                 // Si es de geocercas, se PREGUNTA por geocercas: selector con
@@ -14213,9 +14290,19 @@ function abrirInformesPlantilla(origen) {
                     '<div class="rgi-row"><span class="rgi-lb"></span>' +
                     '<button type="button" class="mini" id="rgi-cache-limpiar"' + dis + '>' +
                     '<span class="rondo-usym">' + UIS.clear + '</span> Vaciar resultados guardados</button></div>' : '';
+                // Progreso dentro del cuerpo: visible aunque el dialogo este
+                // desplazado y aunque la barra de arriba quede fuera de vista.
+                const prog = RX_INF.prog && RX_INF.prog.activo
+                    ? '<div class="rgi-carga" id="rgi-prog" style="display:flex">' +
+                      '<span id="rgi-prog-t">' + esc(RX_INF.prog.txt || 'Calculando\u2026') + '</span>' +
+                      '<span class="rgi-barra"><i id="rgi-prog-b" style="width:' +
+                        Math.max(2, Math.round((RX_INF.prog.hechas / Math.max(1, RX_INF.prog.total)) * 100)) +
+                        '%"></i></span></div>'
+                    : '';
                 return '<div class="rgi">' + hero +
                     '<div class="rgi-cfg">' + filaTpl + listaHtml + '</div>' +
                     panelSonda +
+                    prog +
                     '<div class="rgi-cfg">' + filaPeriodo + filaGeos + filaEco + '</div>' +
                     (avisos.length ? '<div class="rgi-aviso">' + avisos.map(esc).join(' ') + '</div>' : '') +
                     barraEjec +
@@ -14317,12 +14404,19 @@ function abrirInformesPlantilla(origen) {
                 if (RX_INF.alcance === 'sel' && (!sel || !sel.length)) { adviceWarn('Sin unidades', 'Selecciona unidades en la lista o elige "Toda la flota".'); return; }
                 RX_INF._buscando = true;
                 RX_INF._token = { cancelado: false };
+                RX_INF.prog = { activo: true, hechas: 0, total: 0, filas: 0, txt: '' };
                 pinta();
+                // El progreso aparece DE INMEDIATO, antes del primer trozo
+                // (que con 700 unidades tarda): si no, seemed un dialogo
+                // parado.
+                setProg(4, 'Preparando\u2026');
                 let res;
                 try {
                     res = await rxInfCorre(RX_INF.tpl, r.desde, r.hasta, sel, (h, t, filas, eco) => {
-                        setProg(8 + Math.round((h / Math.max(1, t)) * 84),
-                            'Trozo ' + h + '/' + t + (eco ? ' \u00b7 ' + eco : '') +
+                        RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: eco || '' };
+                        setProg(6 + Math.round((h / Math.max(1, t)) * 86),
+                            (RX_INF.tpl ? RX_INF.tpl.nombre + ' \u00b7 ' : '') + h + '/' + t +
+                            (eco ? ' \u00b7 ' + eco : '') +
                             (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
                         // En vivo: el conteo de filas sin rehacer la pantalla
                         // entera (que tiene la lista de plantillas).
@@ -14336,9 +14430,10 @@ function abrirInformesPlantilla(origen) {
                     res = { cols: RX_INF.cols, filas: RX_INF.filas, trozos: 0, hechos: 0, objetos: 0, fallos: 1, errores: [(e && e.message) || e], cacheados: 0, ms: 0, cancelado: false };
                 }
                 RX_INF._buscando = false;
+                finProg();
                 RX_INF.cols = res.cols || [];
                 RX_INF.filas = res.filas || [];
-                RX_INF.meta = { filas: RX_INF.filas.length, unidades: 0, trozos: res.trozos, objetos: res.objetos, ms: res.ms, fallos: res.fallos, errores: res.errores, cacheados: res.cacheados, lleno: res.lleno };
+                RX_INF.meta = { filas: RX_INF.filas.length, unidades: rxInfVista().unidades, trozos: res.trozos, objetos: res.objetos, ms: res.ms, fallos: res.fallos, errores: res.errores, cacheados: res.cacheados, lleno: res.lleno };
                 // Si no se sondeo antes, el resultado real sirve de sondeo:
                 // el panel de datos y el filtro de geocercas aparecen solos.
                 if (RX_INF.cols.length && RX_INF._sondaKey !== 'sondeo|' + rxInfClave(RX_INF.tpl)) {
@@ -14360,7 +14455,6 @@ function abrirInformesPlantilla(origen) {
                     RX_INF.sonda = info;
                     RX_INF._sondaKey = 'sondeo|' + rxInfClave(RX_INF.tpl);
                 }
-                if (carga) carga.style.display = 'none';
                 pinta();
                 if (res.cancelado) advice('Informe cancelado', RX_INF.filas.length + ' fila(s) hasta donde llego (quedan guardadas).');
                 else adviceOk('Informe generado', RX_INF.filas.length + ' fila(s) de ' + (RX_INF.tpl ? RX_INF.tpl.nombre : '') +
@@ -14370,7 +14464,11 @@ function abrirInformesPlantilla(origen) {
                 const btn = ev.target.closest && ev.target.closest('button');
                 if (btn && box.contains(btn)) {
                     if (btn.id === 'rgi-ejecutar') { ejecutar(); return; }
-                    if (btn.id === 'rgi-cancel') { if (RX_INF._token) RX_INF._token.cancelado = true; if (cargaT) cargaT.textContent = 'Cancelando\u2026'; return; }
+                    if (btn.id === 'rgi-cancel') {
+                        if (RX_INF._token) RX_INF._token.cancelado = true;
+                        setProg(99, 'Cancelando\u2026');
+                        return;
+                    }
                     if (btn.id === 'rgi-tpl-cargar') { await cargarTpl(); return; }
                     if (btn.id === 'rgi-sonda') { sondea(true); return; }
                     if (btn.id === 'rgi-cache-limpiar') {
