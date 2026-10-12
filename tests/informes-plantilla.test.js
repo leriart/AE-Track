@@ -116,8 +116,8 @@ function remote(m, p) {
     if (m === 'report/get_result_rows') {
         if (!tablaReal) return Promise.resolve([]);
         return Promise.resolve([
-            { n: 0, c: [{ t: '105' }, { t: '1', v: 1 }] },
-            { n: 1, c: [{ t: '205' }, { t: '2', v: 2 }] }
+            { n: 0, c: [{ t: '', v: 7 }, { t: '1', v: 1 }] },
+            { n: 1, c: [{ t: '', v: 7 }, { t: '2', v: 2 }] }
         ]);
     }
     return Promise.resolve({});
@@ -208,6 +208,7 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     tablaReal = false;
     ok('filas: pide el contenido con report/get_result_rows',
         rt.filas.length === 4 && rt.cols[0] === 'Unidad' && rt.filas[0][1] === '1' &&
+        rt.filas[0][0] === '105' &&
         calls.some((c) => c.m === 'report/get_result_rows'),
         JSON.stringify({ filas: rt.filas.length, cols: rt.cols, pide: calls.some((c) => c.m === 'report/get_result_rows') }));
 
