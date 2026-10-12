@@ -51,7 +51,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
+    'rxInfPlantillaInfo,rxInfObjetos,rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -74,7 +74,17 @@ function remote(m, p) {
     }
     if (m === 'report/cleanup_result') { calls.push({ m: m, p: {} }); return Promise.resolve({}); }
     if (m === 'report/get_report_data') {
-        return Promise.resolve({ 12: [{ id: '119', nm: '105' }, { id: '1820', nm: '205' }] });
+        // Estructura real devuelta por la plataforma (plantilla de geocerca).
+        return Promise.resolve([{
+            id: 12, n: 'GEOCERCA', ct: 'avl_geozone',
+            tbl: [{
+                n: 'geozone_units', l: 'Unidades',
+                c: '[\"unit_name\",\"time_begin\",\"time_end\",\"duration_in\"]',
+                cl: '[\"Unidad\",\"Hora de entrada\",\"Hora de salida\",\"Duracion en\"]',
+                p: '{\"units\":\"27418488\"}',
+                filter_order: ['duration', 'mileage', 'speed', 'stops', 'driver']
+            }]
+        }]);
     }
     if (m === 'report/get_report_status') return Promise.resolve({ reportResult: { status: 'done' } });
     if (m === 'report/apply_report_result') return Promise.resolve({});
@@ -430,7 +440,7 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
             ];
             const u = mod.rxInfUnidades(ahora - 7 * 86400);
             APP.unidades = [];
-            return u.length === 1 && u[0].id === 11;
+            return u.length === 1 && u[0].id === '11';
         })());
     await (async () => {
         const ahora = Math.floor(Date.now() / 1000);
@@ -440,9 +450,9 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
         const rU = await mod.rxInfCorre({ rid: 3, id: 11, nombre: 'Resumen diario' }, ahora - 7 * 86400, ahora, null, () => {}, null);
         const execs = calls.filter((c) => c.m === 'report/exec_report');
         APP.unidades = [];
-        ok('corre: pide un informe por objeto secundario (los que declara la plantilla)',
+        ok('corre: sin declaracion de objetos usa la flota, y el objeto es el recurso',
             execs.length === 2 && execs.every((c) => c.p.reportObjectId === 3 &&
-                (c.p.reportObjectSecId === '119' || c.p.reportObjectSecId === '1820')),
+                (c.p.reportObjectSecId === '11' || c.p.reportObjectSecId === '22')),
             JSON.stringify(execs.map((c) => c.p.reportObjectSecId)));
         ok('corre: cuenta los objetos pedidos y las filas pegadas',
             rU.objetos === 2 && rU.filas.length === 2,
@@ -483,6 +493,48 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
                 return Promise.resolve({});
             }, APP);
             return solo.rxInfNormFilas({}).filas.length === 0;
+        })());
+
+
+    // ── Que declara la plantilla (report/get_report_data) ────────────────
+    const info = mod.rxInfPlantillaInfo([{
+        id: 12, n: 'GEOCERCA', ct: 'avl_geozone',
+        tbl: [{
+            n: 'geozone_units', l: 'Unidades',
+            c: '[\"unit_name\",\"time_begin\",\"time_end\",\"duration_in\"]',
+            cl: '[\"Unidad\",\"Hora de entrada\",\"Hora de salida\",\"Duracion en\"]',
+            p: '{\"units\":\"27418488\"}',
+            filter_order: ['duration', 'mileage', 'driver']
+        }]
+    }], 12);
+    ok('plantilla: se lee a que esta atada (geocercas)',
+        info && info.esGeo === true && info.esUnidad === false && info.tipoObj === 'avl_geozone');
+    ok('plantilla: sus columnas declaradas (las que vera el operador)',
+        info.columnas.join(', ') === 'Unidad, Hora de entrada, Hora de salida, Duracion en',
+        JSON.stringify(info.columnas));
+    ok('plantilla: los filtros con los que viene guardada',
+        info.params.length === 1 && info.params[0].k === 'units' && info.params[0].v === '27418488',
+        JSON.stringify(info.params));
+    ok('plantilla: los filtros que admite',
+        info.tablas[0].filtros.join(',') === 'duration,mileage,driver');
+    ok('plantilla: una plantilla de unidades se distingue de una de geocercas',
+        mod.rxInfPlantillaInfo([{ id: 1, n: 'X', ct: 'avl_unit', tbl: [] }], 1).esUnidad === true &&
+        mod.rxInfPlantillaInfo([{ id: 1, n: 'X', ct: 'avl_unit', tbl: [] }], 1).esGeo === false);
+    ok('plantilla: respuesta vacia no rompe', mod.rxInfPlantillaInfo(null, 12) === null &&
+        mod.rxInfPlantillaInfo([], 12) === null);
+    ok('objetos: una plantilla de geocercas se ejecuta sobre las geocercas',
+        (function () {
+            APP.zonas = [{ id: 119, n: 'PATIO' }, { id: 1820, n: 'CEDIS' }];
+            const o = mod.rxInfObjetos({ nombre: 'GEOCERCA' }, info);
+            APP.zonas = [];
+            return o.length === 2 && o[0].id === '119' && o[0].eco === 'PATIO' && o[0].esZona === true;
+        })(), JSON.stringify(mod.rxInfObjetos({ nombre: 'GEOCERCA' }, info)));
+    ok('objetos: una plantilla de unidades se ejecuta sobre la flota',
+        (function () {
+            APP.unidades = [{ id: 11, nm: '105' }];
+            const o = mod.rxInfObjetos({ nombre: 'Recorrido' }, mod.rxInfPlantillaInfo([{ id: 1, ct: 'avl_unit', tbl: [] }], 1));
+            APP.unidades = [];
+            return o.length === 1 && o[0].id === '11';
         })());
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
