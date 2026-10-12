@@ -14,8 +14,8 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 
 <div align="center">
 
-[![version](https://img.shields.io/badge/version-7.12.6-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/7.12.6.md)
-[![tests](https://img.shields.io/badge/tests-1999%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![version](https://img.shields.io/badge/version-7.12.7-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/7.12.7.md)
+[![tests](https://img.shields.io/badge/tests-2001%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -417,7 +417,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**24 suites, ~1999 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**24 suites, ~2001 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

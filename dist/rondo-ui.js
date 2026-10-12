@@ -12958,6 +12958,10 @@ const RX_INF_CONC = 1;
 // Tope de filas acumuladas: evita que un informe enorme reviente la
 // memoria del navegador.
 const RX_INF_MAX_FILAS = 60000;
+// Tope de objetos a ejecutar cuando no se ha marcado ninguno. Una plantilla
+// de geocercas se ejecuta UNA VEZ POR ZONA: sin tope, 176 zonas x 5 trozos
+// son 880 llamadas. Se acota y se avisa.
+const RX_INF_MAX_OBJETOS = 25;
 // Techo (caracteres) de la cache de resultados en localStorage.
 const RX_INF_CACHE_MAX = 3000000;
 // Estado de la pantalla. Vive aqui, y no en el closure del dialogo, porque
@@ -13569,13 +13573,24 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     const trozos = rxGeoInfTrozos(desde, hasta, RX_INF_DIAS_TROZO * 86400).slice(0, RX_INF_MAX_TROZOS);
     let objs = unidades;
     let modo = '';
+    let recortado = false;
     if (!objs) {
         // Los objetos secundarios son los que la plataforma pide de verdad
-        // (reportObjectSecId); salen de report/get_report_data. Si no
-        // responde, se usa la flota como aproximacion.
+        // (reportObjectSecId). En una plantilla de geocercas son las
+        // geocercas: se ejecuta una vez por zona, asi que se respeta lo que
+        // el operador haya marcado en el filtro y, si no marco nada, se
+        // acota con un tope (antes lanzaba 883 trozos sin avisar).
         const datos = await rxInfDatosPlantilla(tpl);
         const info = rxInfPlantillaInfo(datos, tpl.id);
-        const secs = rxInfObjetos(tpl, info);
+        let secs = rxInfObjetos(tpl, info);
+        const marcadas = (RX_INF.zonas || []);
+        if (secs.length && marcadas.length) {
+            const set = {};
+            marcadas.forEach((z) => { set[norm(z)] = 1; });
+            const filtradas = secs.filter((o) => set[norm(o.eco)]);
+            if (filtradas.length) secs = filtradas;
+        }
+        if (secs.length > RX_INF_MAX_OBJETOS) { secs = secs.slice(0, RX_INF_MAX_OBJETOS); recortado = true; }
         if (secs.length) { objs = secs; modo = (info && info.esGeo) ? 'geocercas' : 'secundarios'; }
         else {
             const todas = rxInfUnidades(desde);
@@ -13639,7 +13654,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     rxInfCacheGuardar(true);
     return {
         cols: cols, filas: filas, trozos: trozos.length, hechos: hechos,
-        objetos: objs.length, asked: total, alcance: modo, modos: modos,
+        objetos: objs.length, asked: total, alcance: modo, modos: modos, recortado: recortado,
         fallos: fallos, errores: errores, cacheados: cacheados, lleno: cheio,
         bloqueado: parity,
         cancelado: !!(token && token.cancelado), ms: Date.now() - t0
@@ -14488,6 +14503,9 @@ function abrirInformesPlantilla(origen) {
                     avisos.push('"Todo" puede abarcar mas de lo que la plataforma guarda; por eso se trocea y se avisa al terminar.');
                 }
                 if (RX_INF.meta && RX_INF.meta.fallos) avisos.push(RX_INF.meta.fallos + ' trozo(s) fallaron: ' + ((RX_INF.meta.errores || [])[0] || 'error desconocido'));
+                if (RX_INF.meta && RX_INF.meta.recortado) {
+                    avisos.push('Se ejecutaron ' + RX_INF_MAX_OBJETOS + ' objetos como maximo. Marca en el filtro de geocercas las que te interesen para ajustarlo.');
+                }
                 if (RX_INF.meta && RX_INF.meta.bloqueado) {
                     avisos.push('La plataforma esta rechazando la ejecucion (' + RX_INF.meta.fallos +
                         ' trozos seguidos con el mismo error). Se ha parado en vez de repetirlo 30 veces: revisa el detalle.');
