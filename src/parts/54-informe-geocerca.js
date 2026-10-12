@@ -17,24 +17,32 @@ const RX_GEO_FUENTES = Object.freeze(['historial', 'rastreo', 'bitacora', 'viaje
 // Limites del escaneo del historial de la plataforma (el mismo endpoint que
 // el Replay, paginando por unidad hasta agotar el rango). Con flotas enormes
 // se acota para que el informe no tarde una eternidad.
-// Tope de unidades por barrido. Con el descarte por "no reporta desde el
-// inicio del rango" (abajo) las flotas grandes ya no se recortan: esto solo
-// protege de una lista absurda (miles de unidades vivas a la vez).
-const RX_GEO_HIST_MAX_U = 400;
+// Tope de unidades por barrido: solo es una red de seguridad contra listas
+// absurdas (decenas de miles). Una flota real (varios cientos) se barre
+// entera, y las unidades que no reportaron en el rango ni se consultan.
+const RX_GEO_HIST_MAX_U = 5000;
 // Mensajes por peticion (load_interval devuelve como maximo esto por llamada).
 const RX_GEO_HIST_MSGS = 5000;
 // Trozos maximos por unidad: el historial se descarga paginando (meses o
 // todo lo que la API guarde) y este tope evita que una unidad con años de
 // GPS frene el barrido de toda la flota.
 const RX_GEO_HIST_PAGS = 30;
-// Peticiones simultaneas al escanear el historial. En serie, 150 unidades
-// tardan una eternidad; con un pool de 6 va varias veces mas rapido sin
+// Peticiones simultaneas al escanear el historial. En serie, una flota de
+// varios cientos tardaria una eternidad; con un pool de 10 va muy rapido sin
 // castigar al servidor de la plataforma.
-const RX_GEO_HIST_CONC = 6;
+const RX_GEO_HIST_CONC = 10;
 // Minutos quieto para que una parada de la traza cuente. Es menor que el
 // umbral del Replay porque aqui la traza se toma en vivo, con puntos cada
 // pocos segundos: esperar 15 min seria exigir demasiado.
 const RX_GEO_PARADA_MIN = 2;
+// Minutos sin reportes con la unidad dentro de la geocerca que cuentan como
+// parada seguida. Da igual la causa del silencio: motor apagado (la
+// plataforma deja de generar mensajes), o vehiculo parado CON el motor
+// encendido cuando la unidad esta configurada para reportar solo en
+// movimiento. Sin esto, la parada se corta en el ultimo mensaje recibido y
+// el reporte infravalora el tiempo quieto dentro de la geocerca.
+// 0 = solo cuentan las paradas con mensajes de por medio.
+const RX_GEO_HUECO_MIN = 20;
 const RX_GEO_RANGOS = Object.freeze(['hoy', '24h', '7d', '15d', '30d', '60d', '90d', 'todo']);
 const RX_GEO_TIPOS = Object.freeze({
     entra: 'Entrada',
@@ -317,7 +325,11 @@ const RX_GEO = {
     //   pMargen - metros de margen alrededor del borde de la geocerca, para
     //             captar la unidad que se detuvo JUSTO en el limite (los
     //             puntos de la traza caen a un lado u otro por el jitter GPS)
-    pMin: 2, pVel: 3, pMargen: 60,
+    //   pHueco  - minutos sin reportes que, con la unidad quieta dentro, se
+    //             cuentan como parada seguida (motor apagado, o plataforma
+    //             que solo reporta en movimiento: en ambos casos se perdian
+    //             los minutos de parada)
+    pMin: 2, pVel: 3, pMargen: 60, pHueco: RX_GEO_HUECO_MIN,
     // Resultados: se calculan al pulsar "Generar reporte" (y al abrir, si la
     // fuente no consulta la plataforma). Cualquier cambio los deja pendientes.
     listo: false,
@@ -406,6 +418,7 @@ function rxGeoInfParadasDePuntos(arr, eco, fuente, chofer) {
     const minSeg = Math.max(30, rxGeoInfParam('pMin', 2, 0.5, 240) * 60);
     const vel = rxGeoInfParam('pVel', 3, 0, 80);
     const margen = rxGeoInfParam('pMargen', 60, 0, 2000);
+    const hueco = rxGeoInfParam('pHueco', RX_GEO_HUECO_MIN, 0, 240);
     let desde = 0, ultimo = 0, zona = '', slat = 0, slon = 0, n = 0;
     const cerrar = () => {
         if (desde && zona && (ultimo - desde) >= minSeg * 1000) {
@@ -423,7 +436,18 @@ function rxGeoInfParadasDePuntos(arr, eco, fuente, chofer) {
     for (let i = 0; i < arr.length; i++) {
         const p = arr[i];
         const quieta = p && p.lat != null && p.lon != null && (p.s == null || +p.s <= vel);
-        if (!quieta) { cerrar(); continue; }
+        if (!quieta) {
+            // Hueco sin reportes con la unidad quieta dentro: da igual por que
+            // callara la plataforma (motor apagado, o solo reporta en
+            // movimiento). Si entre el ultimo punto quieto y este hay mucho
+            // silencio, la unidad estuvo parada ahi y la parada llega hasta
+            // este mensaje en vez de cortarse en el ultimo que llego.
+            if (hueco > 0 && ultimo && desde && p && p.t && ((p.t * 1000 - ultimo) >= hueco * 60000)) {
+                ultimo = p.t * 1000;
+            }
+            cerrar();
+            continue;
+        }
         if (!desde) desde = p.t * 1000;
         ultimo = p.t * 1000;
         slat += p.lat; slon += p.lon; n++;
@@ -608,7 +632,8 @@ let _rxGeoHist = { key: '', t: 0, eventos: [], truncado: false, unidades: 0 };
 function rxGeoInfHistKey() {
     return (RX_GEO.zona || '*') + '|' + (RX_GEO.desde || RX_GEO.rango) + '|' + (RX_GEO.hasta || '') + '|' +
         (RX_GEO.unidades || 'todas') + '|' + rxGeoInfParam('pMin', 2, 0.5, 240) + '|' +
-        rxGeoInfParam('pVel', 3, 0, 80) + '|' + rxGeoInfParam('pMargen', 60, 0, 2000);
+        rxGeoInfParam('pVel', 3, 0, 80) + '|' + rxGeoInfParam('pMargen', 60, 0, 2000) + '|' +
+        rxGeoInfParam('pHueco', RX_GEO_HUECO_MIN, 0, 240);
 }
 function rxGeoInfDeHistorial() {
     if (_rxGeoHist.key !== rxGeoInfHistKey()) return [];
@@ -692,6 +717,10 @@ async function rxGeoInfEscanear(onProg, token) {
     const encontrados = [];
     const total = lista.length;
     let hechas = 0, idx = 0, truncMsgs = false;
+    // Se publica el resultado a medias (vacio al principio) para que el
+    // dialogo pueda ir pintando lo que ya ha salido: con una flota grande el
+    // barrido tarda, y el operador ve resultados en vez de una espera en seco.
+    _rxGeoHist = { key: key, t: Date.now(), eventos: encontrados, parcial: true, unidades: total };
     // Pool de peticiones en paralelo: cada obrero toma la siguiente unidad
     // libre hasta agotarlas. Es la diferencia entre minutos y segundos.
     const obreros = Math.max(1, Math.min(RX_GEO_HIST_CONC, total || 1));
@@ -730,7 +759,7 @@ async function rxGeoInfEscanear(onProg, token) {
     _rxGeoHist = {
         key: key, t: Date.now(), eventos: encontrados,
         truncado: lista.length >= RX_GEO_HIST_MAX_U, truncMsgs: truncMsgs,
-        sinDatos: sinDatos, unidades: total
+        sinDatos: sinDatos, unidades: total, parcial: false
     };
     return _rxGeoHist;
 }
@@ -1168,6 +1197,7 @@ function abrirInformeGeocerca(origen) {
             '<label class="rgi-num" title="Minutos quieto minimos para contar la parada">Min <input type="number" id="rgi-pmin" min="1" max="240" step="1" value="' + rxGeoInfParam('pMin', 2, 0.5, 240) + '"></label>' +
             '<label class="rgi-num" title="Velocidad maxima (km/h) para considerar la unidad quieta">Vel <input type="number" id="rgi-pvel" min="0" max="80" step="1" value="' + rxGeoInfParam('pVel', 3, 0, 80) + '"></label>' +
             '<label class="rgi-num" title="Metros de margen sobre el borde de la geocerca para captar la parada justo en el limite">Borde <input type="number" id="rgi-pmargen" min="0" max="2000" step="10" value="' + rxGeoInfParam('pMargen', 60, 0, 2000) + '"> m</label>' +
+            '<label class="rgi-num" title="Minutos sin reportes que cuentan como parada seguida dentro de la geocerca: da igual que el motor este apagado o que la unidad solo reporte en movimiento. 0 = solo con mensajes de por medio">Hueco <input type="number" id="rgi-phueco" min="0" max="240" step="5" value="' + rxGeoInfParam('pHueco', RX_GEO_HUECO_MIN, 0, 240) + '"> min</label>' +
             '</span></div>' +
             '<div class="rgi-row"><span class="rgi-lb">Datos</span><div class="rgi-chips">' +
             fuentes.map((f) => chip(RX_GEO.fuente === f.k, 'data-rgi="fuente"', f.k,
@@ -1254,12 +1284,23 @@ function abrirInformeGeocerca(origen) {
                     await rxGeoInfYield();
                     if (RX_GEO.fuente === 'historial') {
                         RX_GEO._token = { cancelado: false };
+                        // Repintado en vivo: con una flota de varios cientos
+                        // el barrido tarda, y el operador ve las unidades y
+                        // los eventos que YA han salido en lugar de una espera
+                        // en seco. Se limita a uno cada ~800 ms.
+                        let ultimoPintado = 0;
                         try {
                             await rxGeoInfEscanear((hechas, total, eco, hallados) => {
                                 setProg(6 + Math.round((hechas / Math.max(1, total)) * 80),
                                     'Consultando ' + hechas + '/' + total +
                                     (eco ? ' \u00b7 ' + eco : '') +
                                     (hallados ? ' \u00b7 ' + hallados + ' evento(s)' : ''));
+                                const ahora = Date.now();
+                                if (mio === pintaN && (ahora - ultimoPintado) > 800) {
+                                    ultimoPintado = ahora;
+                                    setHtml(box, cuerpo(rxGeoInfReune(),
+                                        rxGeoInfFuentesDisponibles(), rxGeoInfSelect(), true));
+                                }
                             }, RX_GEO._token);
                         } catch (_) { /* noop */ }
                         if (mio !== pintaN) return;
@@ -1340,11 +1381,12 @@ function abrirInformeGeocerca(origen) {
                     pinta(false);
                     return;
                 }
-                if (t.id === 'rgi-pmin' || t.id === 'rgi-pvel' || t.id === 'rgi-pmargen') {
+                if (t.id === 'rgi-pmin' || t.id === 'rgi-pvel' || t.id === 'rgi-pmargen' || t.id === 'rgi-phueco') {
                     // Cambiar los umbrales cambia que paradas se detectan: hay
                     // que recalcular (y rescanear si la fuente es la plataforma).
                     if (t.id === 'rgi-pmin') RX_GEO.pMin = Number(t.value);
                     else if (t.id === 'rgi-pvel') RX_GEO.pVel = Number(t.value);
+                    else if (t.id === 'rgi-phueco') RX_GEO.pHueco = Number(t.value);
                     else RX_GEO.pMargen = Number(t.value);
                     RX_GEO.listo = false;
                     rxGeoInfCacheReset();

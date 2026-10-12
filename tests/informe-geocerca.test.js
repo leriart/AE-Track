@@ -101,6 +101,7 @@ function ok(nombre, cond, extra) {
     else { fallos++; console.log('FALLO - ' + nombre + (extra ? ' (' + extra + ')' : '')); }
 }
 const min = (n) => n * 60000;
+const RX_HUECO_ORIGINAL = mod.RX_GEO.pHueco;
 
 function reinicia() {
     H.historial.length = 0;
@@ -288,6 +289,54 @@ ok('parametros: con valor por defecto y acotados',
     mod.RX_GEO.pMargen = 60;
     mod.RX_GEO.zona = '';
 })();
+// Parada por hueco sin mensajes: la unidad entra, se para, la plataforma
+// deja de reportar (motor apagado) y el siguiente mensaje ya es en
+// movimiento. Sin el hueco, la parada se corta en el ultimo punto recibido.
+ok('parada: el hueco sin mensajes prolonga la parada hasta el siguiente mensaje',
+    (function () {
+        const t0 = 1000;
+        const arr = [
+            { t: t0, lat: 0.02, lon: 0, s: 40 },              // entra
+            { t: t0 + 60, lat: 0, lon: 0, s: 0 },              // quieta en el borde
+            { t: t0 + 180, lat: 0, lon: 0, s: 0 },
+            { t: t0 + 3600, lat: 0.02, lon: 0, s: 40 }        // 1 h de silencio y sale
+        ];
+        mod.RX_GEO.pHueco = 20;
+        const conHueco = mod.rxGeoInfParadasDePuntos(arr, '105', 'historial', '');
+        mod.RX_GEO.pHueco = 0;
+        const sinHueco = mod.rxGeoInfParadasDePuntos(arr, '105', 'historial', '');
+        return conHueco.length === 1 && conHueco[0].min >= 55 &&
+            (sinHueco.length === 0 || sinHueco[0].min < 10);
+    })(), 'con hueco=' + mod.rxGeoInfParam('pHueco', 20, 0, 240));
+ok('parada: motor encendido y plataforma que solo reporta en movimiento',
+    (function () {
+        // Entra en marcha, se para (v=0), la plataforma calla 2 h porque solo
+        // reporta en movimiento, sigue quieta y luego arranca.
+        const arr = [
+            { t: 0, lat: 0.02, lon: 0, s: 40 },
+            { t: 60, lat: 0, lon: 0, s: 0 },
+            { t: 120, lat: 0, lon: 0, s: 0 },
+            { t: 60 + 7320, lat: 0, lon: 0, s: 0 },        // 2 h despues, aun quieta
+            { t: 60 + 7380, lat: 0, lon: 0, s: 0 },
+            { t: 60 + 7440, lat: 0.02, lon: 0, s: 40 }     // arranca
+        ];
+        mod.RX_GEO.pHueco = 20;
+        const conHueco = mod.rxGeoInfParadasDePuntos(arr, '105', 'historial', '');
+        mod.RX_GEO.pHueco = 0;
+        const sinHueco = mod.rxGeoInfParadasDePuntos(arr, '105', 'historial', '');
+        mod.RX_GEO.pHueco = RX_HUECO_ORIGINAL;
+        // Una sola parada dentro de la geocerca y con los minutos reales.
+        return conHueco.length === 1 && conHueco[0].zona === 'PATIO' && conHueco[0].min >= 115 &&
+            conHueco[0].min >= sinHueco[0].min;
+    })(), 'motor encendido');
+ok('parada: el hueco viene en la clave del escaneo (cambiarlo re-barre)',
+    (function () {
+        const a = mod.rxGeoInfHistKey();
+        mod.RX_GEO.pHueco = 5;
+        const b = mod.rxGeoInfHistKey();
+        mod.RX_GEO.pHueco = RX_HUECO_ORIGINAL;
+        return a !== b;
+    })());
 ok('agrupa: cuenta las paradas con motor apagado', (function () {
     const ev = [
         { zona: 'P', tipo: 'motor', eco: '1', min: 20 },
@@ -590,8 +639,8 @@ mod.RX_GEO.rango = 'hoy';
 
     // Descarte por "no reporta desde el inicio del rango": la plataforma
     // trae la hora del ultimo reporte, asi que esas unidades no cuestan
-    // ninguna peticion y el tope de 400 no recorta flotas grandes.
-    ok('historial: tope de unidades ampliado a 400', mod.RX_GEO_HIST_MAX_U === 400,
+    // ninguna peticion y una flota grande se barre entera.
+    ok('historial: el tope de unidades no recorta una flota real', mod.RX_GEO_HIST_MAX_U >= 2000,
         String(mod.RX_GEO_HIST_MAX_U));
     mod.RX_GEO.rango = '7d';
     H.unidades = [
@@ -606,7 +655,31 @@ mod.RX_GEO.rango = 'hoy';
     ok('historial: las unidades sin mensajes en el rango no se consultan',
         H.peticiones === 2 && rD.sinDatos === 1 && rD.unidades === 2,
         'peticiones=' + H.peticiones + ' sinDatos=' + rD.sinDatos + ' unidades=' + rD.unidades);
-    mod.RX_GEO.rango = 'hoy';
+mod.RX_GEO.rango = 'hoy';
+
+    // Flota grande: se escanea ENTERA (el caso real de 700+ unidades), sin
+    // recorte y en vivo (los resultados parciales se van publicando).
+    mod.RX_GEO.rango = 'hoy'; mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = '';
+    H.unidades = []; H.msgsPorId = {};
+    const N_U = 714;
+    for (let k = 1; k <= N_U; k++) {
+        const id = 1000 + k;
+        H.unidades.push({ id: id, nm: String(700 + k), pos: { y: 0, x: 0, t: T - 60 } });
+        H.msgsPorId[id] = (k % 2) ? msgs(11) : [];
+    }
+    APP.unidades = H.unidades;
+    H.peticiones = 0;
+    let parcialesVistos = 0;
+    const rG = await mod.rxGeoInfEscanear((h, t, eco, hall) => {
+        // El informe debe ir viendo unidades ya consultadas mientras barre.
+        if (h > 0 && h < t && mod.rxGeoInfDeHistorial().length > 0) parcialesVistos++;
+    }, null);
+    ok('historial: una flota de ' + N_U + ' unidades se escanea entera',
+        rG.unidades === N_U && H.peticiones === N_U && !rG.truncado,
+        'unidades=' + rG.unidades + ' peticiones=' + H.peticiones);
+    ok('historial: los resultados se publican mientras escanea',
+        parcialesVistos > 0, 'parciales=' + parcialesVistos);
+    ok('historial: al terminar ya no es parcial', rG.parcial === false);
 
 
     // ── Celdas para las salidas ─────────────────────────────────────────────
