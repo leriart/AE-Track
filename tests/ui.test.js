@@ -762,8 +762,16 @@ ok('dialogo: boton "Generar reporte" (no recarga en cada cambio)',
 ok('dialogo: al abrir no barre la flota (espera al boton con Plataforma)',
     /pinta\(RX_GEO\.fuente !== 'historial'\)/.test(src));
 ok('historial: peticiones en paralelo con pool',
-    /const RX_GEO_HIST_CONC = 6/.test(src) && /const obrero = async \(\) =>/.test(src) &&
+    /const RX_GEO_HIST_CONC = 10/.test(src) && /const obrero = async \(\) =>/.test(src) &&
     /await Promise\.all\(tareas\)/.test(src));
+ok('historial: la flota entera se escanea (tope solo de seguridad) y sin datos se saltan',
+    /const RX_GEO_HIST_MAX_U = 5000/.test(src) && /rango\.desde > 0 && t < rango\.desde\) \{ sinDatos\+\+; continue; \}/.test(src));
+ok('historial: resultados en vivo mientras escanea',
+    /parcial: true/.test(src) && /ultimoPintado/.test(src) &&
+    /if \(mio === pintaN && \(ahora - ultimoPintado\) > 800\)/.test(src));
+ok('parada: el hueco sin reportes prolonga la parada (motor apagado o solo-en-movimiento)',
+    /const hueco = rxGeoInfParam\('pHueco', RX_GEO_HUECO_MIN, 0, 240\)/.test(src) &&
+    /hueco > 0 && ultimo && desde/.test(src) && /id="rgi-phueco"/.test(src));
 ok('historial: prioriza vigiladas y reporte reciente',
     /lista\.sort\(\(a, b\) => \{/.test(src) && /return \(b\.t \|\| 0\) - \(a\.t \|\| 0\)/.test(src));
 ok('dialogo: aviso para buscar en la plataforma si no hay eventos',
