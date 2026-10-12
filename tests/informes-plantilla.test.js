@@ -188,10 +188,10 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     mod.RX_INF.zonas = ['PATIO'];
     const tplG = { rid: 3, id: 12, nombre: 'GEOCERCA' };
     const rg = await mod.rxInfCorre(tplG, t0, t0 + 7 * unDia - 1, null, null, null);
-    ok('geocercas: un solo objeto y filas pegadas',
+    ok('geocercas: se ejecuta por la geocerca marcada (modelo por geocerca)',
         rg.objetos === 1 && rg.alcance === 'geocercas' && rg.filas.length > 0, 'objetos=' + rg.objetos);
-    ok('geocercas: el primer modelo probado es el informe entero (recurso + 0)',
-        execs()[0].p.reportObjectId === 3 && execs()[0].p.reportObjectSecId === '0',
+    ok('geocercas: usa el recurso dueño de la zona y su id como secundario',
+        execs()[0].p.reportObjectId === 27414156 && execs()[0].p.reportObjectSecId === '119',
         JSON.stringify(execs()[0].p));
     mod.RX_INF.zonas = [];
 
