@@ -13397,6 +13397,20 @@ function rxInfUnidades(rangoDesde) {
 function rxInfEspera(ms) {
     return new Promise((r) => { try { setTimeout(r, ms); } catch (_) { r(); } });
 }
+// Traza de la ultima peticion: en consola queda que se envio y que contesto
+// la plataforma. Sin esto, un "no sale nada" es imposible de diagnosticar.
+function rxInfLog(tipo, enviado, err) {
+    try {
+        console.warn('[Rondo informe] ' + tipo, {
+            objeto: enviado && enviado.reportObjectId,
+            secundario: enviado && enviado.reportObjectSecId,
+            plantilla: enviado && enviado.reportTemplateId,
+            desde: enviado && enviado.interval && enviado.interval.from,
+            hasta: enviado && enviado.interval && enviado.interval.to,
+            error: err || ''
+        });
+    } catch (_) { /* noop */ }
+}
 function rxInfLimpiarInforme() {
     // El informe ejecutado queda guardado en la sesion; sin liberarlo, la
     // siguiente ejecucion responde "code 4".
@@ -13445,6 +13459,10 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof) {
             const r = await remoteCall('report/exec_report', enviado);
             const n = rxInfExtrae(r);
             RX_INF.diag = { enviado: enviado, error: '', ok: true, cuando: Date.now() };
+            // Sin filas no es un error, pero hay que poder verlo en consola:
+            // suele ser que el objeto o el modelo de objetos no es el que la
+            // plantilla espera.
+            if (!n.filas.length) rxInfLog('ejecutado sin filas', enviado);
             return { filas: n.filas, cols: n.cols };
         } catch (e) {
             err = (e && e.message) || String(e);
@@ -13452,6 +13470,7 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof) {
             await rxInfEspera(700 * (i + 1));
         }
     }
+    rxInfLog('error', enviado, err);
     RX_INF.diag = { enviado: enviado, error: err, ok: false, cuando: Date.now() };
     // Particion adaptativa: el trozo abarcaba de mas, se parte en dos.
     if (/1004/.test(err) && (hasta - desde) > 86400 && (prof || 0) < 4) {
@@ -14084,6 +14103,14 @@ function abrirInformesPlantilla(origen) {
                             ', secundario "' + RX_INF.diag.enviado.reportObjectSecId + '"')
                         : 'sin datos') + ' \u00b7 ' +
                         '<button type="button" class="mini" id="rgi-diag">ver detalle</button>');
+                }
+                // Se ejecuto y no llego nada: no es un fallo de red, es que la
+                // plataforma no tiene filas para ese objeto/periodo. Se dice
+                // con que objeto se probo, que es el dato que hace falta.
+                if (!hay && RX_INF.meta && RX_INF.diag && RX_INF.diag.enviado && !RX_INF.diag.error) {
+                    avisos.push(esc('La plataforma ejecut\u00f3 la plantilla pero no devolvi\u00f3 filas (objeto ' +
+                        RX_INF.diag.enviado.reportObjectId + ', secundario "' + RX_INF.diag.enviado.reportObjectSecId +
+                        '"). Prueba otro periodo, otra geocerca, o mira la consola del navegador (F12), entrada [Rondo informe].'));
                 }
                 // Boton generar / cancelar.
                 const r = rangoS();
