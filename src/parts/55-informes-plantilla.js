@@ -378,22 +378,25 @@ async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
             remoteExec: 1
         });
     } catch (e) { return { filas: [], error: (e && e.message) || String(e) }; }
-    // Con remoteExec el calculo va por detras: se sondea el estado.
+    // Con remoteExec el calculo va por detras: se sondea el estado. Solo
+    // unas pocas veces: si la plataforma no dice nada (o ya ha terminado sin
+    // decirlo), se lee igualmente el resultado en vez de quedarse esperando.
     const t0 = Date.now();
-    for (let i = 0; i < 150; i++) {
-        if (token && token.cancelado) return { filas: [], error: 'cancelado' };
+    let leido = false;
+    for (let i = 0; i < 4; i++) {
         let st = null;
         try { st = await remoteCall('report/get_report_status', {}); } catch (_) { st = null; }
         const s = (st && (st.reportResult || st.result)) ? (st.reportResult || st.result) : (st || {});
         const txt = norm((s && (s.status || s.state)) || '');
-        const listo = /LISTO|FIN|DONE|COMPLET|READY/.test(txt) ||
+        if (/LISTO|FIN|DONE|COMPLET|READY/.test(txt) ||
             (s && (s.done === true || s.isDone === true || s.finished === true)) ||
-            (s && s.progress != null && Number(s.progress) >= 100);
-        const fallo = /ERROR|FALL|FAIL/.test(txt);
-        if (fallo) return { filas: [], error: 'la plataforma no pudo calcular el informe (estado ' + (txt || 'error') + ')' };
-        if (listo) break;
-        if ((Date.now() - t0) > 150000) return { filas: [], error: 'tiempo de espera agotado' };
-        await rxInfEspera(400);
+            (s && s.progress != null && Number(s.progress) >= 100)) { leido = true; break; }
+        if (/ERROR|FALL|FAIL/.test(txt)) {
+            return { filas: [], error: 'la plataforma no pudo calcular el informe (estado ' + (txt || 'error') + ')' };
+        }
+        if (i >= 1) break;   // dos sondeos sin senal: se lee y ya esta
+        if ((Date.now() - t0) > 20000) break;
+        await rxInfEspera(350);
     }
     try { await remoteCall('report/apply_report_result', {}); } catch (_) { /* noop */ }
     const filas = [];
@@ -1221,6 +1224,8 @@ function abrirInformesPlantilla(origen) {
                 const rangoS = rxInfRangoS();
                 const nTrozos = Math.min(RX_INF_MAX_TROZOS,
                     rxGeoInfTrozos(rangoS.desde, rangoS.hasta, RX_INF_DIAS_TROZO * 86400).length);
+                // Si ya hay resultados, la pantalla muestra avisos sobre ellos.
+                const hay = (RX_INF.cols || []).length > 0;
                 const avisos = [];
                 if (RX_INF.alcance === 'sel' && !nUn) avisos.push('No hay unidades seleccionadas: usa "Toda la flota" o selecciona unidades en la lista.');
                 if (RX_INF.rango === 'todo' && rangoS.desde > 0 && ((Date.now() / 1000 - rangoS.desde) > 400 * 86400)) {
@@ -1246,7 +1251,6 @@ function abrirInformesPlantilla(origen) {
                         ? (busy ? 'Calculando... puedes cancelar cuando quieras.' : 'La plataforma calcula cada trozo; el resultado se guarda en este navegador.')
                         : 'Selecciona una plantilla para empezar.') + '</span></div>';
                 // Resultados.
-                const hay = (RX_INF.cols || []).length > 0;
                 const barraVista = '<div class="rgi-row"><span class="rgi-lb">Ver</span><div class="rgi-chips">' +
                     '<button type="button" class="rgi-chip' + (RX_INF.vista !== 'unidad' ? ' activo' : '') + '" data-i="vista" data-v="filas"' + dis + '>Filas</button>' +
                     '<button type="button" class="rgi-chip' + (RX_INF.vista === 'unidad' ? ' activo' : '') + '" data-i="vista" data-v="unidad"' + dis + '>Resumen por unidad</button>' +
@@ -1489,7 +1493,7 @@ function abrirInformesPlantilla(origen) {
                 const rb = ev.target.closest && ev.target.closest('[data-tplrun]');
                 if (rb && box.contains(rb)) {
                     const t = rxInfTplDeClave(rb.dataset.tplrun);
-                    if (t) { RX_INF.tpl = { rid: t.rid, id: t.id, nombre: (plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0] || t).nombre }; ejecuta(); }
+                    if (t) { RX_INF.tpl = { rid: t.rid, id: t.id, nombre: (plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0] || t).nombre }; ejecutar(); }
                     return;
                 }
                 // Elegir plantilla: se sondea para saber que datos trae (si
