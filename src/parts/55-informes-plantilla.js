@@ -254,24 +254,47 @@ async function rxInfEjecutar(tpl, objId, desde, hasta, token) {
     }
     return { filas: [], error: err };
 }
-// Ejecuta la plantilla por trozos y pega los resultados.
-//   onProg(hechos, total, filas, obj)
-// Devuelve {cols, filas, trozos, hechos, objetos, fallos, errores,
-//           cancelado, ms, cacheados}.
+// Unidades que se pueden pedir a la plataforma. OJO: reportObjectId TIENE
+// que ser el id de un objeto concreto; con 0 el servidor responde "code 7"
+// (parametros invalidos), que es lo que pasaba al pedir la plantilla entera
+// de una vez. Ademas se descartan las unidades cuyo ultimo reporte es
+// anterior al rango: no pueden tener filas y no cuestan una llamada.
+function rxInfUnidades(rangoDesde) {
+    const out = [];
+    for (const u of (APP.unidades || [])) {
+        if (!u || u.id == null) continue;
+        let info = null;
+        try { info = parseUnitName(u); } catch (_) { info = null; }
+        let t = 0;
+        try { t = (typeof unitState === 'function' ? (unitState(u).t || 0) : 0); } catch (_) { t = 0; }
+        if (t > 0 && rangoDesde > 0 && t < rangoDesde) continue;
+        out.push({ id: u.id, eco: (info && (info.eco || info.clave)) || String(u.id) });
+    }
+    // Mas recientes primero: si hay que parar por tiempo, se han visto antes
+    // las unidades que mas_rows pueden traer.
+    out.sort((a, b) => (b.t || 0) - (a.t || 0));
+    return out;
+}
+
+// Ejecuta la plantilla POR UNIDAD y por trozos de periodo, y pega los
+// resultados. Unidad x trozo, en paralelo y cacheado: ninguna peticion crece
+// (de ahi que ninguna reviente con el limite de tiempo) y repetir el informe
+// no vuelve a preguntar lo mismo.
+//   onProg(hechos, total, filas, eco)
 async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     const t0 = Date.now();
     rxInfCacheCargar();
     const trozos = rxGeoInfTrozos(desde, hasta, RX_INF_DIAS_TROZO * 86400).slice(0, RX_INF_MAX_TROZOS);
-    // Con "solo las seleccionadas" la plantilla se pide unidad a unidad
-    // (reportObjectId). Con toda la flota, una llamada por trozo que ya
-    // cubre las 714 unidades.
+    let objs = unidades;
+    if (!objs) {
+        const todas = rxInfUnidades(desde);
+        // Sin unidades (o sin permiso para verlas) se prueba con 0, que es
+        // lo unico que queda: si el servidor lo rechaza, se avisa claro.
+        objs = todas.length ? todas : [{ id: 0, eco: '' }];
+    }
     const trabajos = [];
-    if (unidades && unidades.length) {
-        for (const u of unidades) {
-            for (const t of trozos) trabajos.push({ obj: u.id, desde: t[0], hasta: t[1], eco: u.eco });
-        }
-    } else {
-        for (const t of trozos) trabajos.push({ obj: 0, desde: t[0], hasta: t[1], eco: '' });
+    for (const u of objs) {
+        for (const t of trozos) trabajos.push({ obj: u.id, desde: t[0], hasta: t[1], eco: u.eco });
     }
     const total = trabajos.length;
     const filas = [];
@@ -293,7 +316,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
                 const r = await rxInfEjecutar(tpl, w.obj, w.desde, w.hasta, token);
                 if (r.error) {
                     fallos++;
-                    if (errores.length < 5) errores.push((w.eco ? (w.eco + ': ') : '') + r.error);
+                    if (errores.length < 5) errores.push((w.eco ? (w.eco + ': ') : '') + rxInfExplicaError(r.error));
                 } else {
                     const n = rxInfNormFilas(r.filas);
                     if (n.cols.length && !cols.length) cols = n.cols;
@@ -315,11 +338,27 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     rxInfCacheGuardar(true);
     return {
         cols: cols, filas: filas, trozos: trozos.length, hechos: hechos,
-        objetos: (unidades && unidades.length) ? unidades.length : 0,
+        objetos: objs.length, asked: total,
         fallos: fallos, errores: errores, cacheados: cacheados, lleno: cheio,
-        cancelado: !!(token && token.cancelado), ms: Date.now() - t0, parcial: trozos.length < Math.max(0,
-            Math.ceil((Math.max(1, (hasta - desde)) / (RX_INF_DIAS_TROZO * 86400))))
+        cancelado: !!(token && token.cancelado), ms: Date.now() - t0
     };
+}
+// Los codigos de error de la plataforma son crípticos ("code 7"). Este
+// TRADUCTOR es lo que evita tener que adivinar por que no sale nada.
+function rxInfExplicaError(msg) {
+    const m = String(msg || '');
+    const code = (m.match(/code (\d+)/i) || [])[1];
+    if (!code) return m;
+    const c = String(code);
+    const T = {
+        '2': 'el servicio no existe en esta version de la plataforma (code 2)',
+        '4': 'la peticion es demasiado pesada para el servidor (code 4): acorta el periodo',
+        '5': 'sin permiso para ejecutar esa plantilla (code 5)',
+        '7': 'parametros invalidos (code 7): normalmente que reportObjectId no sea un objeto real, o que la plantilla pida un filtro que no se le esta mandando',
+        '8': 'objeto o recurso no encontrado (code 8): la plantilla puede haberse borrado',
+        '10': 'sin acceso a los datos (code 10)'
+    };
+    return (T[c] || ('error de la plataforma (code ' + c + ')')) + ' — ' + m;
 }
 // ── De que trata la plantilla ───────────────────────────────────────────
 // Deducido de lo que la plantilla DEVUELVE (sus columnas y sus valores),
@@ -399,10 +438,18 @@ async function rxInfSondea(tpl) {
     const c = rxInfCacheCargar();
     if (c[key]) { RX_INF.sonda = c[key]; RX_INF._sondaKey = key; return c[key]; }
     const hasta = Math.floor(Date.now() / 1000);
+    // El sondeo va con una unidad real: con reportObjectId 0 el servidor
+    // responde "code 7" (parametros invalidos).
+    const us = rxInfUnidades(hasta - 30 * 24 * 3600);
+    const objetos = us.length ? us.slice(0, 3).map((u) => u.id) : [0];
     let info = null;
     let err = '';
     for (const horas of [24, 24 * 7, 24 * 30]) {
-        const r = await rxInfEjecutar(tpl, 0, hasta - horas * 3600, hasta, null);
+        let r = null;
+        for (const obj of objetos) {
+            r = await rxInfEjecutar(tpl, obj, hasta - horas * 3600, hasta, null);
+            if (!r.error) break;
+        }
         if (r.error) { err = r.error; continue; }
         const n = rxInfNormFilas(r.filas);
         if (n.cols.length) {
@@ -415,7 +462,7 @@ async function rxInfSondea(tpl) {
         // o que necesite filtros que la plataforma no expone por API.
         const pista = rxInfPista(tpl);
         return rxInfSondaVacia('vacio',
-            err ? ('la plataforma respondio: ' + err)
+            err ? rxInfExplicaError(err)
                 : (pista === 'geocercas'
                     ? 'sin filas en el sondeo. Si la plantilla pide una geocerca concreta, elijela abajo y ejecuta el periodo completo.'
                     : 'sin filas en el sondeo. Puede que la plantilla pida filtros que no se pueden enviar por API.'));

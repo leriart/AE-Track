@@ -1,113 +1,157 @@
 /* ============================================================================
- * RONDO · SONDEO DE PLANTILLAS DE INFORME
+ * RONDO · SONDEO DE PLANTILLAS DE INFORME (v2)
  * ----------------------------------------------------------------------------
- * Pegalo entero en la consola del navegador, en una pestana de AE-Track/Wialon
- * con la sesion iniciada, y dale a Enter.
+ * Pegalo entero en la consola del navegador (F12), dentro de AE-Track con la
+ * sesion iniciada, y dale a Enter. Solo LEE: no crea ni modifica nada.
  *
- * Solo LEE: no crea, no modifica y no borra nada de la plataforma.
- *
- * Que te da:
- *   1. Todas las plantillas de informe que hay en los recursos.
- *   2. De cada una: que servicios de estructura existen (los de Wialon varian
- *      por version) y que devuelve realmente exec_report (columnas, filas y
- *      todo lo demas que trae en reportResult: summary, reportSpec, band...).
- *   3. Al final imprime un JSON para copiar y pegar aqui.
- *
- * ParaPlugin: abre la consola con F12 y pegalo. Si sale "wialon no definido",
- * estas en la pestana equivocada: entra primero en la plataforma.
+ * La v1 enseño que report/exec_report con reportObjectId 0 responde
+ * "code 7" en esta plataforma. Esta v2 comprueba que pasando el id de una
+ * unidad REAL la llamada entra, y si entra, vuelca:
+ *   - que servicios de estructura existen en esta version
+ *   - que devuelve exec_report: columnas, filas y todo lo que viene en
+ *     reportResult sin las filas (summary, reportSpec, banda, objeto...)
+ *   - los campos que salen vacios (los filtros que le faltan a la plantilla)
+ * Al final imprime un JSON para copiar y pegar.
  * ========================================================================== */
 (async () => {
     const R = wialon.core.Remote.getInstance();
     const call = (svc, params) => new Promise((res, rej) => {
-        R.remoteCall(svc, params, (code, result) => code ? rej(new Error(svc + ' -> code ' + code)) : res(result || {}));
+        R.remoteCall(svc, params, (code, result) => code ? rej(new Error(code + '')) : res(result || {}));
     });
     const log = (t) => console.log('%c' + t, 'font-weight:700;color:#0af');
-    const salida = { plantillas: [], servicios: {}, momento: new Date().toISOString() };
+    const salida = { momento: new Date().toISOString(), llamadaValida: null, plantillas: [] };
 
-    // 1) Plantillas de informe de todos los recursos
-    log('1. Buscando plantillas de informe...');
-    let items = [];
+    // 1) Unidades (el objeto que hay que pasarle al informe)
+    log('1. Leyendo unidades...');
+    let unidades = [];
+    try {
+        const r = await call('core/search_items', {
+            spec: { itemsType: 'avl_unit', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
+            force: 1, flags: 1 | 1024, from: 0, to: 0
+        });
+        unidades = (r.items || []).slice(0, 5).map((u) => ({ id: u.id, nm: u.nm || u.n || '' }));
+    } catch (e) { console.error('No se pudieron leer las unidades:', e.message); }
+    log('   -> ' + unidades.length + ' unidad(es) de prueba: ' +
+        unidades.map((u) => u.id + '=' + u.nm).join(', '));
+
+    // 2) Plantillas
+    let tpls = [];
     try {
         const r = await call('core/search_items', {
             spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
             force: 1, flags: 1 | 8192, from: 0, to: 0
         });
-        items = r.items || [];
-    } catch (e) { console.error('No se pudieron leer los recursos:', e.message); return; }
-    const tpls = [];
-    items.forEach((res) => {
-        const rep = res && res.rep;
-        if (!rep || typeof rep !== 'object') return;
-        Object.keys(rep).forEach((k) => {
-            const t = rep[k];
-            if (t && t.id != null) tpls.push({ rid: res.id, id: t.id, nombre: t.n || ('Plantilla ' + t.id) });
+        (r.items || []).forEach((res) => {
+            const rep = res && res.rep;
+            if (!rep || typeof rep !== 'object') return;
+            Object.keys(rep).forEach((k) => {
+                const t = rep[k];
+                if (t && t.id != null) tpls.push({ rid: res.id, id: t.id, nombre: t.n || ('Plantilla ' + t.id) });
+            });
         });
-    });
+    } catch (e) { console.error('No se pudieron leer las plantillas:', e.message); return; }
     log('   -> ' + tpls.length + ' plantilla(s)');
 
-    // 2) Servicios que PODRIAN dar la estructura/filtros de una plantilla.
-    //    No todas las versiones de Wialon los tienen: se prueban y se anota
-    //    cuales respondieron.
-    const introspeccion = [
-        ['report/get_report_structure', (t) => ({ reportResourceId: t.rid, reportTemplateId: t.id })],
-        ['report/get_report_template', (t) => ({ reportResourceId: t.rid, reportTemplateId: t.id })],
-        ['report/get_report_spec', (t) => ({ reportResourceId: t.rid, reportTemplateId: t.id })],
-        ['report/get_report_source', (t) => ({ reportResourceId: t.rid, reportTemplateId: t.id })],
-        ['report/get_report', (t) => ({ reportResourceId: t.rid, reportTemplateId: t.id })]
-    ];
+    // 3) La plantilla que nos interesa (cambia el id si hace falta)
+    const ELEGIDA = 'GEOCERCA';
+    const t = tpls.filter((x) => (x.nombre || '').toUpperCase().indexOf(ELEGIDA) >= 0)[0] || tpls[0];
+    if (!t) { console.error('No hay plantillas.'); return; }
+    log('3. Probando la llamada con "' + t.nombre + '" (#' + t.id + ')...');
 
-    // 3) Una ejecucion corta por plantilla (24 h, toda la flota) y volcado de
-    //    TODO lo que devuelve, que es donde se ven los filtros/objetos.
+    // 3a) Cuatro variantes, para saber cual acepta el servidor. La que
+    //     funcione es la que usara Rondo.
     const ahora = Math.floor(Date.now() / 1000);
-    for (const t of tpls) {
-        const info = { rid: t.rid, id: t.id, nombre: t.nombre, servicios: {}, ejecucion: null };
-        // 3a) Introspeccion
-        for (const [svc, mk] of introspeccion) {
-            try {
-                const r = await call(svc, mk(t));
-                info.servicios[svc] = { ok: true, claves: Object.keys(r || {}) };
-                salida.servicios[svc] = true;
-            } catch (e) {
-                info.servicios[svc] = { ok: false, error: e.message };
-            }
-        }
-        // 3b) Ejecucion real (el indice de mensajes se limpia luego)
+    const desde = ahora - 24 * 3600;
+    const uid = unidades.length ? unidades[0].id : 0;
+    const variantes = [
+        ['objeto real + interval', {
+            reportResourceId: t.rid, reportTemplateId: t.id,
+            reportObjectId: uid, reportObjectSecId: 0,
+            interval: { from: desde, to: ahora, flags: 0 }
+        }],
+        ['objeto 0 + interval', {
+            reportResourceId: t.rid, reportTemplateId: t.id,
+            reportObjectId: 0, reportObjectSecId: 0,
+            interval: { from: desde, to: ahora, flags: 0 }
+        }],
+        ['objeto real + reportSrc/reportDst', {
+            reportResourceId: t.rid, reportTemplateId: t.id,
+            reportObjectId: uid, reportObjectSecId: 0,
+            reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: uid },
+            reportDst: { type: 'json', fields: [] },
+            interval: { from: desde, to: ahora, flags: 0 }
+        }],
+        ['objeto real + interval sin flags', {
+            reportResourceId: t.rid, reportTemplateId: t.id,
+            reportObjectId: uid, reportObjectSecId: 0,
+            interval: { from: desde, to: ahora }
+        }]
+    ];
+    const resultados = [];
+    for (const [nombre, params] of variantes) {
         try {
-            const r = await call('report/exec_report', {
-                reportResourceId: t.rid, reportTemplateId: t.id,
-                reportObjectId: 0, reportObjectSecId: 0,
-                interval: { from: ahora - 24 * 3600, to: ahora, flags: 0 }
-            });
+            const r = await call('report/exec_report', params);
             const rr = (r && r.reportResult) ? r.reportResult : (r || {});
             const filas = Array.isArray(rr.rows) ? rr.rows : (Array.isArray(rr.stats) ? rr.stats : []);
-            info.ejecucion = {
-                ok: true,
+            const res = {
+                variante: nombre, ok: true,
                 clavesRaiz: Object.keys(r || {}),
                 clavesResultado: Object.keys(rr || {}),
                 columnas: (rr.columns || []).map((c) => (c && (c.n || c.t)) || c),
                 nFilas: filas.length,
                 muestra: filas.slice(0, 3),
-                // Lo que venga SIN las filas: aqui suelen salir el resumen,
-                // el objeto usado, la banda y los parametros del informe.
                 resto: Object.keys(rr || {}).filter((k) => k !== 'rows' && k !== 'stats')
                     .reduce((o, k) => { try { o[k] = rr[k]; } catch (_) { o[k] = '[ilegible]'; } return o; }, {})
             };
+            resultados.push(res);
+            console.log('%cOK: ' + nombre, 'color:#0a0;font-weight:700', res);
+            if (!salida.llamadaValida) salida.llamadaValida = { variante: nombre, params: Object.keys(params) };
         } catch (e) {
-            info.ejecucion = { ok: false, error: e.message };
+            resultados.push({ variante: nombre, ok: false, error: 'code ' + e.message });
+            console.log('%cFALLA: ' + nombre + ' (code ' + e.message + ')', 'color:#a00');
         }
         try { await call('report/cleanup_result', {}); } catch (_) { /* noop */ }
-        salida.plantillas.push(info);
-        console.log('%c' + t.nombre + ' (#' + t.id + ')', 'font-weight:700', info.ejecucion);
     }
 
-    // 4) Volcado final, para pegar aqui
+    // 4) Con la variante que funciono, Todas las plantillas: que traen y que
+    //    columnas salen vacias (eso suele ser el filtro que les falta).
+    const buena = resultados.find((r) => r.ok);
+    if (buena) {
+        log('4. Volcando TODAS las plantillas con la variante "' + buena.variante + '"...');
+        for (const x of tpls) {
+            const info = { id: x.id, nombre: x.nombre, ok: false };
+            try {
+                const r = await call('report/exec_report', {
+                    reportResourceId: x.rid, reportTemplateId: x.id,
+                    reportObjectId: uid, reportObjectSecId: 0,
+                    interval: { from: desde, to: ahora, flags: 0 }
+                });
+                const rr = (r && r.reportResult) ? r.reportResult : (r || {});
+                const filas = Array.isArray(rr.rows) ? rr.rows : (Array.isArray(rr.stats) ? rr.stats : []);
+                const cols = (rr.columns || []).map((c) => (c && (c.n || c.t)) || c);
+                const planas = filas.map((f) => (Array.isArray(f) ? f : Object.keys(f || {}).map((k) => f[k])));
+                info.ok = true;
+                info.columnas = cols;
+                info.nFilas = filas.length;
+                info.muestra = planas.slice(0, 3);
+                info.columnasVacias = cols.filter((c, i) => !planas.some((f) => f[i] != null && String(f[i]).trim() !== ''));
+                info.clavesResultado = Object.keys(rr || {});
+                info.resto = Object.keys(rr || {}).filter((k) => k !== 'rows' && k !== 'stats')
+                    .reduce((o, k) => { try { o[k] = rr[k]; } catch (_) { o[k] = '[ilegible]'; } return o; }, {});
+            } catch (e) { info.error = 'code ' + e.message; }
+            try { await call('report/cleanup_result', {}); } catch (_) { /* noop */ }
+            salida.plantillas.push(info);
+        }
+    }
+
+    salida.variantes = resultados.map((r) => (r.ok ? (r.variante + ': OK') : (r.variante + ': ' + r.error)));
     const txt = JSON.stringify(salida, null, 1);
     console.log('%c=== COPIA ESTO Y PEGAMELO ===', 'font-weight:700;color:#f60');
     console.log(txt);
     try {
         navigator.clipboard.writeText(txt).then(
             () => log('Copiado al portapapeles.'),
-            () => log('No se pudo copiar: selecciona el texto de arriba y copialo a mano.'));
-    } catch (_) { log('Selecciona el texto de arriba y copialo a mano.'); }
-    log('Fin del sondeo. Plantillas: ' + salida.plantillas.length);
+            () => log('Copia el texto de arriba a mano.'));
+    } catch (_) { log('Copia el texto de arriba a mano.'); }
+    log('Fin: ' + salida.variantes.join(' | '));
 })();
