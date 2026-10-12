@@ -20,9 +20,10 @@ const RX_INF_DIAS_TROZO = 7;
 // Tope de trozos (a ~2 anos). pasada de ahi, el aviso explica que se pidio
 // mas de lo que la plataforma guarda.
 const RX_INF_MAX_TROZOS = 110;
-// Llamadas simultaneas. Son caras (el servidor calcula el informe entero),
-// asi que van en paralelo pero con pool corto.
-const RX_INF_CONC = 4;
+// Llamadas simultaneas. La plataforma calcula UN informe a la vez por
+// sesion y rechaza el segundo (code 1004), asi que aqui van de una en una:
+// la espera se paga en segundos, no en errores.
+const RX_INF_CONC = 1;
 // Tope de filas acumuladas: evita que un informe enorme reviente la
 // memoria del navegador.
 const RX_INF_MAX_FILAS = 60000;
@@ -48,6 +49,10 @@ const RX_INF = {
     // Lo que la plantilla trae: columnas y de que trata (unidades o
     // geocercas). Se deduce ejecutandola una vez por una ventana corta.
     sonda: null, _sondaKey: '',
+    // Ultimo intento (para el boton de diagnostico): que se mando y que
+    // devolvio la plataforma. Sin esto no hay forma de saber por que un
+    // template en concreto se niega a ejecutarse.
+    diag: null,
     _buscando: false, _token: null
 };
 // ── Descubrimiento de plantillas ────────────────────────────────────────
@@ -373,14 +378,48 @@ function rxInfSecundarios(datos) {
 // Ejecuta la plantilla como lo hace la plataforma y devuelve sus filas.
 async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
     await rxInfLimpiarInforme();
-    try {
-        await remoteCall('report/exec_report', {
-            reportResourceId: tpl.rid, reportTemplateId: tpl.id, reportTemplate: null,
+    // El servidor tiene UN solo informe en marcha por sesion: si se le pide
+    // otro mientras calcula, lo rechaza (code 1004). Se reintenta con espera
+    // larga en lugar de perder el trozo a la primera.
+    let ultimo = '';
+    for (let i = 0; i < 4; i++) {
+        if (token && token.cancelado) return { filas: [], error: 'cancelado' };
+        try {
+            await remoteCall('report/exec_report', {
+                reportResourceId: tpl.rid, reportTemplateId: tpl.id, reportTemplate: null,
+                reportObjectId: tpl.rid, reportObjectSecId: String(secId),
+                interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 },
+                remoteExec: 1
+            });
+            ultimo = '';
+            break;
+        } catch (e) {
+            ultimo = (e && e.message) || String(e);
+            if (!/1004|1003/.test(ultimo) || i === 3) break;
+            await rxInfEspera(1200 * (i + 1));
+        }
+    }
+    if (ultimo) {
+        RX_INF.diag = {
+            svc: 'report/exec_report',
+            enviado: {
+                reportResourceId: tpl.rid, reportTemplateId: tpl.id,
+                reportObjectId: tpl.rid, reportObjectSecId: String(secId),
+                interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 }, remoteExec: 1
+            },
+            error: ultimo, cuando: Date.now()
+        };
+        return { filas: [], error: ultimo };
+    }
+    RX_INF.diag = {
+        svc: 'report/exec_report',
+        enviado: {
+            reportResourceId: tpl.rid, reportTemplateId: tpl.id,
             reportObjectId: tpl.rid, reportObjectSecId: String(secId),
-            interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 },
-            remoteExec: 1
-        });
-    } catch (e) { return { filas: [], error: (e && e.message) || String(e) }; }
+            interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 }, remoteExec: 1
+        },
+        ok: true, cuando: Date.now()
+    };
     // Con remoteExec el calculo va por detras: se sondea el estado. Solo
     // unas pocas veces: si la plataforma no dice nada (o ya ha terminado sin
     // decirlo), se lee igualmente el resultado en vez de quedarse esperando.
@@ -534,7 +573,12 @@ function rxInfExplicaError(msg) {
         '5': 'sin permiso para ejecutar esa plantilla (code 5)',
         '7': 'parametros invalidos (code 7): normalmente que reportObjectId no sea un objeto real, o que la plantilla pida un filtro que no se le esta mandando',
         '8': 'objeto o recurso no encontrado (code 8): la plantilla puede haberse borrado',
-        '10': 'sin acceso a los datos (code 10)'
+        '10': 'sin acceso a los datos (code 10)',
+        '1001': 'el objeto (o la unidad) no existe para esta plantilla (code 1001)',
+        '1002': 'la plantilla no admite ese objeto secundario (code 1002)',
+        '1003': 'ya hay un informe en marcha en esta sesion (code 1003): espera a que termine',
+        '1004': 'la plataforma rechaza la ejecucion (code 1004): normalmente el objeto secundario no es valido para esta plantilla, o ya hay un informe calculado',
+        '1005': 'la ejecucion supera el limite de tiempo de la plataforma (code 1005)'
     };
     return (T[c] || ('error de la plataforma (code ' + c + ')')) + ' — ' + m;
 }
@@ -1309,6 +1353,13 @@ function abrirInformesPlantilla(origen) {
                     avisos.push('"Todo" puede abarcar mas de lo que la plataforma guarda; por eso se trocea y se avisa al terminar.');
                 }
                 if (RX_INF.meta && RX_INF.meta.fallos) avisos.push(RX_INF.meta.fallos + ' trozo(s) fallaron: ' + ((RX_INF.meta.errores || [])[0] || 'error desconocido'));
+                if (RX_INF.diag && RX_INF.diag.error) {
+                    avisos.push('Ultimo intento: ' + (RX_INF.diag.enviado
+                        ? ('plantilla ' + RX_INF.diag.enviado.reportTemplateId + ', objeto ' + RX_INF.diag.enviado.reportObjectId +
+                            ', secundario "' + RX_INF.diag.enviado.reportObjectSecId + '"')
+                        : 'sin datos') + ' \u00b7 ' +
+                        '<button type="button" class="mini" id="rgi-diag"' + dis + '>ver detalle</button>');
+                }
                 if (RX_INF.meta && RX_INF.meta.lleno) avisos.push('Se alcanzo el tope de ' + Math.round(RX_INF_MAX_FILAS / 1000) + 'k filas: acorta el periodo.');
                 if (hay) {
                     const vacias = rxInfColumnasVacias(v.cols, v.filas);
@@ -1540,6 +1591,12 @@ function abrirInformesPlantilla(origen) {
                     }
                     if (btn.id === 'rgi-tpl-cargar') { await cargarTpl(); return; }
                     if (btn.id === 'rgi-sonda') { sondea(true); return; }
+                    if (btn.id === 'rgi-diag') {
+                        try { await navigator.clipboard.writeText(JSON.stringify(RX_INF.diag, null, 1)); } catch (_) { /* noop */ }
+                        console.log('[Rondo] ultimo intento de informe', RX_INF.diag);
+                        advice('Detalle copiado', 'Tambien esta en la consola del navegador.');
+                        return;
+                    }
                     if (btn.id === 'rgi-cache-limpiar') {
                         rxInfCacheLimpiar();
                         RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
