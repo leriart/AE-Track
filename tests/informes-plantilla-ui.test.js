@@ -22,7 +22,7 @@ const APP = {
     zonas: [{ n: 'PATIO', t: 3, w: 100 }], unidades: [{ id: 7, nm: '105', pos: { t: 1750000000, y: 0, x: 0 } }],
     historial: [], viajes: {}, trazas: {}, seleccion: new Set(['105']), config: {}, unlocked: false
 };
-const R = { dialogos: [], llamadas: [] };
+const R = { dialogos: [], llamadas: [], prints: [], descargas: 0 };
 const LS = { infplant: 'rondo.api.infplant' };
 
 function fakeEl(id) {
@@ -232,6 +232,18 @@ function chipEn(que, v) {
         /Filtros guardados/.test(h3) && /units: 27418488/.test(h3));
     ok('la plantilla de geocercas ofrece el filtro de geocerca',
         /id="rgi-zona-busca"/.test(h3) || /data-zona/.test(h3));
+
+    // 8) El PDF se monta de verdad (regresion: el boton no hacia nada porque
+    //    rxInfHTML pasaba a rxInfTabla filas ya montadas y saltaba un error).
+    mod.RX_INF.cols = ['Unidad', 'Hora de entrada', 'Duración en'];
+    mod.RX_INF.filas = [['CDOS.1', '14.09.2026 15:13:41', '0:08:01']];
+    mod.RX_INF.meta = { filas: 1, unidades: 1, trozos: 1, objetos: 1, ms: 1200, fallos: 0, cacheados: 0 };
+    R.prints.length = 0;
+    clickEn('rgi-pdf');
+    await new Promise((r) => setTimeout(r, 20));
+    ok('PDF: se monta el documento con la tabla',
+        R.prints.length === 1 && /<table>/.test(R.prints[0]) && /CDOS\.1/.test(R.prints[0]) && /Hora de entrada/.test(R.prints[0]),
+        'prints=' + R.prints.length);
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

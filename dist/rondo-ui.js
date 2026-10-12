@@ -14031,27 +14031,30 @@ function rxInfDescarga(txt, nombre, mime) {
 // Documento imprimible: cabecera, KPIs, tabla y minimapa. Reusa el maquetado
 // del informe general para que el PDF salga igual de bonito.
 function rxInfHTML(t) {
-    const cab = (t.cols || []).slice(0, 14);
+    // rxInfTabla (50-informe.js) espera las columnas y las filas como arrays y
+    // YA monta <thead>/<tr>/<td>: aqui se le pasa el valor ya escapado.
+    const cab = (t.cols || []).slice(0, 14).map((c) => esc(c));
     const filas = (t.filas || []).slice(0, 400).map((f) => {
         const out = [];
         for (let i = 0; i < cab.length; i++) {
             const v = f[i];
-            out.push('<td>' + esc(v == null ? '-' : String(v)) + '</td>');
+            out.push(esc(v == null ? '-' : String(v)));
         }
-        return '<tr>' + out.join('') + '</tr>';
+        return out;
     });
+    const m = t.meta || {};
     const kpi = (n, s) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(s) + '</span></div>';
     const mas = ((t.filas || []).length > 400)
         ? '<div class="callout">Se listan las primeras 400 filas; el CSV lleva todas.</div>' : '';
     return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' +
         esc(t.titulo || 'Informe') + '</title><style>' + rxInfEstilo() + '</style></head><body>' +
         rxInfCabecera('Rondo', t.titulo || 'Informe de la plataforma',
-            esc((t.subtitulo || '') + '<br>Documento de solo lectura')) +
+            esc(t.subtitulo || '') + '<br>Documento de solo lectura') +
         '<div class="kpis">' +
-        kpi(t.meta.filas, 'Filas') + kpi(t.meta.unidades, 'Unidades') +
-        kpi(t.meta.trozos, 'Trozos de 7 dias') + kpi(t.meta.objetos, 'Objetos') +
-        kpi(Math.round(t.meta.ms / 1000) + ' s', 'Calculo') +
-        (t.meta.fallos ? kpi(t.meta.fallos, 'Trozos con error') : '') +
+        kpi(m.filas, 'Filas') + kpi(m.unidades, 'Unidades') +
+        kpi(m.trozos, 'Trozos de 7 dias') + kpi(m.objetos, 'Objetos') +
+        kpi(Math.round((m.ms || 0) / 1000) + ' s', 'Calculo') +
+        (m.fallos ? kpi(m.fallos, 'Trozos con error') : '') +
         '</div>' +
         '<p class="resumen">' + esc(t.resumen || '') + '</p>' +
         (t.mapa ? '<h2 class="seccion">1. Mapa</h2>' + t.mapa : '') +
@@ -14566,13 +14569,19 @@ function abrirInformesPlantilla(origen) {
                         const sub = (RX_INF.desde || '') + ' \u2192 ' + (RX_INF.hasta || 'hoy') +
                             ' \u00b7 ' + (RX_INF.vista === 'unidad' ? 'resumen por unidad' : 'filas');
                         if (btn.id === 'rgi-pdf') {
-                            rxImprimirHTML(rxInfHTML({
-                                titulo: titulo, subtitulo: sub, cols: v.cols, filas: v.filas,
-                                mapa: rxInfMapaHTML(v, 660, 240),
-                                meta: Object.assign({}, v.meta, { unidades: v.unidades }),
-                                resumen: rxInfResumenLinea(v)
-                            }));
-                            advice('Reporte listo', 'Elige "Guardar como PDF" en el di\u00e1logo de impresi\u00f3n.');
+                            // Si algo del documento falla, se dice: antes el
+                            // boton no hacia nada y no habia forma de saberlo.
+                            try {
+                                rxImprimirHTML(rxInfHTML({
+                                    titulo: titulo, subtitulo: sub, cols: v.cols, filas: v.filas,
+                                    mapa: rxInfMapaHTML(v, 660, 240),
+                                    meta: Object.assign({}, v.meta, { unidades: v.unidades }),
+                                    resumen: rxInfResumenLinea(v)
+                                }));
+                                advice('Reporte listo', 'Elige "Guardar como PDF" en el di\u00e1logo de impresi\u00f3n.');
+                            } catch (e) {
+                                adviceErr('No se pudo preparar el reporte', (e && e.message) || 'error inesperado');
+                            }
                             return;
                         }
                         if (btn.id === 'rgi-csv') {
