@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '7.8.3-dev.71';
+    const VER = '7.7.0-dev.7';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -584,7 +584,12 @@
         municipios: 'rondo.api.municipios',
         // v6.13: copia persistente de las geocercas creadas en Rondo. Solo
         // se escribe si el operador marca "Recordar en este navegador".
-        geolocal: 'rondo.api.geolocal'
+        geolocal: 'rondo.api.geolocal',
+        // v7.x: eventos ya calculados del informe por geocerca, por unidad y
+        // semana. Con una flota grande el barrido no cabe en una pasada, asi
+        // que lo ya consultado se guarda: al recargar o al volver a generar
+        // se continua solo por lo que falta en vez de empezar de cero.
+        geoinf: 'rondo.api.geoinf'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
