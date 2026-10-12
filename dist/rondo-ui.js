@@ -13682,6 +13682,7 @@ async function rxInfSondea(tpl) {
     const RI = rxInfPlantillaInfo(datos, tpl.id);
     const secs = rxInfObjetos(tpl, RI);
     const declarado = rxInfDeclarado(datos);
+    let info = null;
     let err = '';
     for (const obj of (secs.length ? secs.slice(0, 3).map((x) => x.id) : [rxInfUnidades(hasta - 30 * 24 * 3600).map((u) => u.id)[0] || 0])) {
         const r = await rxInfEjecutaRemoto(tpl, obj, null, 300);

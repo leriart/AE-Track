@@ -325,6 +325,13 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
     ok('sondeo: lista las unidades y geocercas que aparecen',
         s1.unidades.indexOf('105') >= 0 && s1.zonas.indexOf('PATIO') >= 0,
         JSON.stringify(s1.unidades) + ' / ' + JSON.stringify(s1.zonas));
+    // Regresion: un ReferenceError dentro del sondeo seelia como un error
+    // generico en el panel ("info is not defined"), sin rastro de nada util.
+    ok('sondeo: termina en estado ok, sin errores internos',
+        s1.estado === 'ok' && !s1.fallo && !s1.msg, JSON.stringify({ estado: s1.estado, msg: s1.msg }));
+    ok('sondeo: guarda la declaracion de la plantilla (columnas y filtros)',
+        !!s1.declaracion && s1.declaracion.esGeo === true && s1.declaracion.columnas.length === 4,
+        JSON.stringify(s1.declaracion && s1.declaracion.columnas));
     ok('sondeo: se cachea (no se vuelve a ejecutar)',
         (function () {
             const antes = calls.length;
