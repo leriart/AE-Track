@@ -13222,7 +13222,7 @@ async function rxInfEjecutaDirecto(tpl, objId, desde, hasta, token) {
 async function rxInfEjecutar(tpl, objId, desde, hasta, token) {
     let r = null, err = '';
     try {
-        r = await rxInfEjecutaRemoto(tpl, objId, token, 2000);
+        r = await rxInfEjecutaRemoto(tpl, objId, token, 2000, desde, hasta);
         if (r.error) err = r.error;
         if (!r.error && (r.filas.length || (r.cols && r.cols.length))) return { filas: r.filas, cols: r.cols, modo: 'plantilla' };
         if (r.error === 'cancelado') return { filas: [], error: 'cancelado' };
@@ -13233,38 +13233,6 @@ async function rxInfEjecutar(tpl, objId, desde, hasta, token) {
     return { filas: d.filas, cols: d.cols, modo: ok ? 'elegido' : 'nada' };
 }
 
-// ── Protocolo real de la plataforma (capturado de su propia pantalla) ───
-//   report/cleanup_result
-//   report/exec_report { reportResourceId, reportTemplateId, reportTemplate:null,
-//                        reportObjectId:<recurso>, reportObjectSecId:"<secId>",
-//                        interval:{flags:16777220, from:0, to:1}, remoteExec:1 }
-//   report/get_report_status   (en bucle, hasta que acaba)
-//   report/apply_report_result
-//   report/select_result_rows  { tableIndex:0, config:{type:'range',
-//                          data:{from,to,level:0,unitInfo:1}} }
-// Los intentos anteriores fallaban porque: el objeto va en el RECURSO, el
-// secId es texto, la ejecucion es asincrona (remoteExec) con sondeo de
-// estado, y las filas se leen por rangos del resultado de la sesion.
-const RX_INF_FLAGS_REMOTO = 16777220;
-// Formas de leer el resultado, de la mas probable a la menos. La ultima
-// ganadora se recuerda para no repetir el tanteo en cada trozo.
-let _rxInfLecturaOk = -1;
-function rxInfLecturas() {
-    const todas = [
-        { t: 0, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 1 } } },
-        { t: 1, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 1 } } },
-        { t: 2, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 1 } } },
-        { t: 0, c: { type: 'range', data: { from: 0, to: 199 } } },
-        { t: 0, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 0 } } },
-        { t: 0, c: { type: 'range', data: { from: 0, to: 199, level: 1, unitInfo: 1 } } },
-        { t: 1, c: { type: 'range', data: { from: 0, to: 199 } } },
-        { t: 0, c: { type: 'all' } }
-    ];
-    if (_rxInfLecturaOk >= 0 && todas[_rxInfLecturaOk]) {
-        return [todas[_rxInfLecturaOk]].concat(todas.filter((_, i) => i !== _rxInfLecturaOk));
-    }
-    return todas;
-}
 function rxInfEspera(ms) {
     return new Promise((r) => { try { setTimeout(r, ms); } catch (_) { r(); } });
 }
@@ -13277,30 +13245,65 @@ function rxInfLimpiarInforme() {
 // columnas: cada uno las anida de forma distinta (reportResult, rows, table,
 // report...). Asi el nucleo no depende de la forma exacta.
 function rxInfExtrae(r) {
+    // El resultado de un informe viene por capas (reportResult, reportLayer)
+    // y no siempre con las filas al primer nivel. Se recorren TODAS las
+    // ramas, se recogen las candidatas a tabla y se elige la que mas filas
+    // trae, que es la de datos.
+    const cols = [];
+    const mejor = { filas: [], cols: [], n: 0 };
     const vistos = new Set();
-    const cola = [r];
-    while (cola.length) {
-        const x = cola.shift();
-        if (!x || typeof x !== 'object' || vistos.has(x)) continue;
+    const mirar = (x, prof) => {
+        if (prof > 6 || x == null) return;
+        if (typeof x === 'string') {
+            // Algunas capas llegan como JSON serializado.
+            const t = x.trim();
+            if ((t[0] === '{' || t[0] === '[') && t.length > 2) {
+                try { mirar(JSON.parse(t), prof + 1); } catch (_) { /* noop */ }
+            }
+            return;
+        }
+        if (typeof x !== 'object' || vistos.has(x)) return;
         vistos.add(x);
         if (Array.isArray(x)) {
-            if (x.length && Array.isArray(x[0])) return { cols: [], filas: x };
-            continue;
+            const filasArr = x.filter((f) => Array.isArray(f) && f.length);
+            if (filasArr.length > mejor.n) { mejor.n = filasArr.length; mejor.filas = filasArr; }
+            const objs = x.filter((f) => f && typeof f === 'object' && !Array.isArray(f));
+            // OJO: un array de objetos con claves de definicion (n, name, l,
+            // sl, t, f, v) es la lista de COLUMNAS, no filas. Si se cuela,
+            // acaba pintando los nombres de campo como si fueran datos.
+            const esMeta = objs.length && objs.every((f) => {
+                const ks = Object.keys(f);
+                return ks.length <= 2 && ks.every((k) => /^(n|name|l|sl|t|f|v|id)$/.test(k));
+            });
+            // Las filas de verdad tienen valores sueltos: un array de objetos
+            // cuyos valores son a su vez arrays u objetos es un envoltorio
+            // (bands -> rows), no una tabla.
+            const escalares = objs.length && objs.every((f) => Object.keys(f).every((k) => {
+                const v = f[k];
+                return v == null || (typeof v !== 'object');
+            }));
+            if (objs.length > mejor.n && !esMeta && escalares) {
+                const keys = [];
+                objs.forEach((f) => Object.keys(f).forEach((k) => { if (keys.indexOf(k) < 0) keys.push(k); }));
+                if (keys.length) {
+                    mejor.n = objs.length;
+                    mejor.filas = objs.map((f) => keys.map((k) => f[k]));
+                    mejor.cols = keys;
+                }
+            }
+            x.slice(0, 60).forEach((y) => mirar(y, prof + 1));
+            return;
         }
-        const filas = x.rows || x.stats || x.data || x.result;
-        const cols = x.columns || x.cols || x.fields || x.header;
-        if (Array.isArray(filas) && filas.length) {
-            const cl = Array.isArray(cols) ? cols.map((c) => String((c && (c.n || c.t || c.name)) || c))
-                : (typeof cols === 'string' ? cols.split(/[,;|]/).map((c) => c.trim()) : []);
-            return {
-                cols: cl,
-                filas: filas.map((f) => (Array.isArray(f) ? f : (f && typeof f === 'object' ? Object.keys(f).map((k) => f[k]) : [f])))
-            };
+        const c = x.columns || x.cols;
+        if (Array.isArray(c) && c.length && !cols.length) {
+            c.forEach((v) => cols.push(String((v && (v.n || v.name || v.sl || v.t)) || v)));
         }
-        Object.keys(x).forEach((k) => { if (typeof x[k] === 'object' && x[k]) cola.push(x[k]); });
-    }
-    return { cols: [], filas: [] };
+        Object.keys(x).forEach((k) => mirar(x[k], prof + 1));
+    };
+    mirar(r, 0);
+    return { cols: (mejor.cols.length ? mejor.cols : cols), filas: mejor.filas };
 }
+
 // Que objetos secondary admite la plantilla y que datos declara. Es la via
 // barata para saber que trae sin ejecutar nada.
 async function rxInfDatosPlantilla(tpl) {
@@ -13404,147 +13407,47 @@ function rxInfObjetos(tpl, info) {
     return rxInfUnidades(0);
 }
 
-// Tablas del resultado (report/get_report_tables): nombre y numero de filas
-// de cada una. Es lo que usa la propia pantalla para saber que tabla leer y
-// hasta que fila, en vez de ir a ciegas.
-function rxInfTablasRes(r) {
-    const out = [];
-    const walk = (x, d) => {
-        if (!x || typeof x !== 'object' || d > 4) return;
-        if (Array.isArray(x)) { x.slice(0, 60).forEach((y) => walk(y, d + 1)); return; }
-        const nombre = x.n || x.name || x.l || x.title;
-        const filas = (x.rows != null) ? x.rows : ((x.rowCount != null) ? x.rowCount : ((x.rc != null) ? x.rc : x.count));
-        if (nombre != null && filas != null && !/^\d+$/.test(String(nombre))) {
-            out.push({ nombre: String(nombre), filas: Number(filas) || 0 });
-        }
-        Object.keys(x).forEach((k) => walk(x[k], d + 1));
-    };
-    walk(r, 0);
-    out.forEach((t, i) => { t.idx = i; });
-    return out;
-}
 // Ejecuta la plantilla como lo hace la plataforma y devuelve sus filas.
-async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
+async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas, desde, hasta) {
+    // LLAMADA SINCRONA. Comprobado contra la plataforma: exec_report sin
+    // remoteExec responde code 0 y trae el resultado en la propia respuesta.
+    // La via asincrona (remoteExec + get_report_status + apply_report_result
+    // + select_result_rows) NO funciona en esta instalacion: el estado se
+    // queda en "2" para siempre, apply devuelve code 4 y leer filas, code 5.
+    // Ademas la sincrona admite el intervalo elegido, asi que el periodo lo
+    // manda el operador y no lo que tenga guardado la plantilla.
     await rxInfLimpiarInforme();
-    // El servidor tiene UN solo informe en marcha por sesion: si se le pide
-    // otro mientras calcula, lo rechaza (code 1004). Se reintenta con espera
-    // larga en lugar de perder el trozo a la primera.
-    let ultimo = '';
-    for (let i = 0; i < 4; i++) {
+    const ahora = Math.floor(Date.now() / 1000);
+    const iv = (desde && hasta)
+        ? { from: desde, to: hasta, flags: 0 }
+        : { from: ahora - 30 * 24 * 3600, to: ahora, flags: 0 };
+    const enviado = {
+        reportResourceId: tpl.rid, reportTemplateId: tpl.id, reportTemplate: null,
+        reportObjectId: tpl.rid, reportObjectSecId: String(secId), interval: iv
+    };
+    let r = null;
+    let err = '';
+    for (let i = 0; i < 3; i++) {
         if (token && token.cancelado) return { filas: [], error: 'cancelado' };
         try {
-            await remoteCall('report/exec_report', {
-                reportResourceId: tpl.rid, reportTemplateId: tpl.id, reportTemplate: null,
-                reportObjectId: tpl.rid, reportObjectSecId: String(secId),
-                interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 },
-                remoteExec: 1
-            });
-            ultimo = '';
+            r = await remoteCall('report/exec_report', enviado);
+            err = '';
             break;
         } catch (e) {
-            ultimo = (e && e.message) || String(e);
-            if (!/1004|1003/.test(ultimo) || i === 3) break;
+            err = (e && e.message) || String(e);
+            // El servidor calcula un informe a la vez: si esta ocupado se
+            // espera y se reintenta en lugar de perder el trozo.
+            if (!/1003|1004/.test(err) || i === 2) break;
             await rxInfEspera(1200 * (i + 1));
         }
     }
-    if (ultimo) {
-        RX_INF.diag = {
-            svc: 'report/exec_report',
-            enviado: {
-                reportResourceId: tpl.rid, reportTemplateId: tpl.id,
-                reportObjectId: tpl.rid, reportObjectSecId: String(secId),
-                interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 }, remoteExec: 1
-            },
-            error: ultimo, cuando: Date.now()
-        };
-        return { filas: [], error: ultimo };
-    }
-    RX_INF.diag = {
-        svc: 'report/exec_report',
-        enviado: {
-            reportResourceId: tpl.rid, reportTemplateId: tpl.id,
-            reportObjectId: tpl.rid, reportObjectSecId: String(secId),
-            interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 }, remoteExec: 1
-        },
-        ok: true, cuando: Date.now()
-    };
-    // Con remoteExec el calculo va por detras: se sondea el estado. Solo
-    // unas pocas veces: si la plataforma no dice nada (o ya ha terminado sin
-    // decirlo), se lee igualmente el resultado en vez de quedarse esperando.
-    const t0 = Date.now();
-    let leido = false;
-    for (let i = 0; i < 4; i++) {
-        let st = null;
-        try { st = await remoteCall('report/get_report_status', {}); } catch (_) { st = null; }
-        const s = (st && (st.reportResult || st.result)) ? (st.reportResult || st.result) : (st || {});
-        const txt = norm((s && (s.status || s.state)) || '');
-        if (/LISTO|FIN|DONE|COMPLET|READY/.test(txt) ||
-            (s && (s.done === true || s.isDone === true || s.finished === true)) ||
-            (s && s.progress != null && Number(s.progress) >= 100)) { leido = true; break; }
-        if (/ERROR|FALL|FAIL/.test(txt)) {
-            return { filas: [], error: 'la plataforma no pudo calcular el informe (estado ' + (txt || 'error') + ')' };
-        }
-        if (i >= 1) break;   // dos sondeos sin senal: se lee y ya esta
-        if ((Date.now() - t0) > 20000) break;
-        await rxInfEspera(350);
-    }
-    try { await remoteCall('report/apply_report_result', {}); } catch (_) { /* noop */ }
-    // Que tablas tiene el resultado y cuantas filas cada una. La pantalla usa
-    // esto para pedir la tabla de datos (no la de dibujar) y el rango justo.
-    let tablas = [];
-    try { tablas = rxInfTablasRes(await remoteCall('report/get_report_tables', {})); } catch (_) { tablas = []; }
-    const conFilas = tablas.filter((t) => t.filas > 0);
-    const orden = (conFilas.length ? conFilas : tablas).map((t) => t.idx);
-    // La plantilla guarda VARIAS tablas (geofences, geozone_stats,
-    // geozone_units...) y no todas se leen igual: la de dibujo no devuelve
-    // filas y alguna exige otro 'level'. Se prueban las formas conocidas y
-    // se sigue con la primera que responda.
-    const filas = [];
-    let cols = [];
-    const pagina = 200;
-    let error = '';
-    const lecturas = [];
-    for (const idx of orden) {
-        const t = tablas[idx];
-        const tope = (t && t.filas > 0) ? (t.filas - 1) : 199;
-        lecturas.push({ t: idx, c: { type: 'range', data: { from: 0, to: Math.min(tope, 199), level: 0, unitInfo: 1 } }, tope: tope });
-    }
-    for (const lectura of (lecturas.length ? lecturas : rxInfLecturas())) {
-        const intento = [];
-        let ok = false;
-        const fin = Math.min(limiteFilas || 2000, (lectura.tope != null ? lectura.tope + 1 : (limiteFilas || 2000)));
-        for (let desde = 0; desde < fin; desde += pagina) {
-            let r = null;
-            try {
-                r = await remoteCall('report/select_result_rows', {
-                    tableIndex: lectura.t,
-                    config: Object.assign({}, lectura.c, {
-                        data: Object.assign({}, lectura.c.data, (desde ? { from: desde, to: desde + pagina - 1 } : {}))
-                    })
-                });
-            } catch (e) { error = (e && e.message) || String(e); break; }
-            const n = rxInfExtrae(r);
-            if (n.cols.length && !cols.length) cols = n.cols;
-            if (!n.filas.length) break;
-            for (const f of n.filas) intento.push(f);
-            if (n.filas.length < pagina) break;
-        }
-        if (intento.length) {
-            for (const f of intento) filas.push(f);
-            ok = true;
-            break;
-        }
-        if (!error) error = 'la plataforma no devolvio filas';
-    }
-    if (!filas.length && error) return { filas: [], cols: cols, error: error };
-    return { filas: filas, cols: cols };
+    RX_INF.diag = { svc: 'report/exec_report', enviado: enviado, error: err || '', ok: !err, cuando: Date.now() };
+    if (err) return { filas: [], error: err };
+    const n = rxInfExtrae(r);
+    return { filas: n.filas, cols: n.cols };
 }
 
-// Unidades que se pueden pedir a la plataforma. OJO: reportObjectId TIENE
-// que ser el id de un objeto concreto; con 0 el servidor responde "code 7"
-// (parametros invalidos), que es lo que pasaba al pedir la plantilla entera
-// de una vez. Ademas se descartan las unidades cuyo ultimo reporte es
-// anterior al rango: no pueden tener filas y no cuestan una llamada.
+
 function rxInfUnidades(rangoDesde) {
     const out = [];
     for (const u of (APP.unidades || [])) {
@@ -13768,14 +13671,27 @@ async function rxInfSondea(tpl) {
     const declarado = rxInfDeclarado(datos);
     let info = null;
     let err = '';
-    for (const obj of (secs.length ? secs.slice(0, 3).map((x) => x.id) : [rxInfUnidades(hasta - 30 * 24 * 3600).map((u) => u.id)[0] || 0])) {
-        const r = await rxInfEjecutaRemoto(tpl, obj, null, 300);
-        if (r.error) { err = r.error; continue; }
-        const n = (r.cols && r.cols.length) ? { cols: r.cols, filas: r.filas } : rxInfNormFilas(r.filas);
-        if (n.cols.length) {
-            info = { cols: n.cols, muestra: n.filas.slice(0, 12), filas: n.filas.length, horas: 0, fallo: '', estado: 'ok' };
-            break;
+    const objetos = secs.length ? secs.slice(0, 3).map((x) => x.id)
+        : [rxInfUnidades(hasta - 30 * 24 * 3600).map((u) => u.id)[0] || 0];
+    for (const obj of objetos) {
+        // Ventanas de mas reciente a mas ancha: el sondeo saca datos casi
+        // siempre y no depende del periodo que tenga guardado la plantilla.
+        for (const dias of [7, 30, 90]) {
+            const r = await rxInfEjecutaRemoto(tpl, obj, null, 300, hasta - dias * 86400, hasta);
+            if (r.error) { err = r.error; break; }
+            const n = (r.cols && r.cols.length && r.filas.length)
+                ? { cols: r.cols, filas: r.filas } : rxInfNormFilas(r.filas);
+            if (n.filas.length) {
+                info = { cols: n.cols, muestra: n.filas.slice(0, 12), filas: n.filas.length, horas: dias * 24, fallo: '', estado: 'ok' };
+                break;
+            }
+            if (r.cols && r.cols.length) {
+                // Hay columnas aunque no haya filas en esa ventana: se sigue
+                // probando una ventana mas ancha.
+                info = { cols: r.cols, muestra: [], filas: 0, horas: dias * 24, fallo: '', estado: 'ok' };
+            }
         }
+        if (info && info.filas) break;
     }
     if (!info) {
         const pista = rxInfPista(tpl);
@@ -14007,17 +13923,7 @@ function rxInfMapaHTML(v, W, H) {
 // plantilla (columnas de lat/lon) o una columna de geocerca que coincida con
 // alguna de las de la plataforma (entonces se dibuja su contorno). Si el
 // informe no trae ni una cosa ni la otra, el mapa desaparece en vez de
-// dejar un hueco vacio.
-function rxInfCoords(cols) {
-    const n = (cols || []).map(rxInfNombreCol);
-    let iLat = -1, iLon = -1;
-    n.forEach((c, i) => {
-        if (iLat < 0 && /^(LAT|LATITUD|LATITUDE|LATIT)$/.test(c)) iLat = i;
-        else if (iLon < 0 && /^(LON|LONG|LONGITUD|LONGITUDE|LNG|LNGITUD)$/.test(c)) iLon = i;
-    });
-    return { iLat: iLat, iLon: iLon };
-}
-// Geocerca de la plataforma a la que pertenece un nombre de la columna.
+// dejar un hueco vacio.// Geocerca de la plataforma a la que pertenece un nombre de la columna.
 function rxInfZonaDeNombre(nombre) {
     const n = norm(nombre || '');
     if (!n) return null;

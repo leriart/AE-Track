@@ -77,9 +77,12 @@ const stubs = [
     'function writeJSON(){}',
     'function abrirDialogo(o){ P_R.dialogos.push(o); }',
     'function remoteCall(m, p){ P_R.llamadas.push({ m: m, p: p }); if (m === "core/search_items") return Promise.resolve({ items: [{ id: 3, rep: { 1: { id: 11, n: "Resumen diario" } } }] });' +
-        ' if (P_R.lento && m === "report/get_report_status") return new Promise(function (r) { setTimeout(function () { r({ reportResult: { status: "done" } }); }, 60); });' +
-        ' if (m === "report/get_report_status") return Promise.resolve({ reportResult: { status: "done" } });' +
-        ' if (m === "report/select_result_rows") return Promise.resolve({ reportResult: { columns: [{ n: "Unidad" }, { n: "Geocerca" }], rows: [["105", "PATIO"]] } });' +
+        // La lectura es sincrona: exec_report ya trae las filas. "lento" lo
+        // hace esperar para poder ver el progreso en marcha.
+        ' if (m === "report/exec_report") {' +
+        '   var resp = { reportResult: { columns: [{ n: "Unidad" }, { n: "Geocerca" }], rows: [["105", "PATIO"]] } };' +
+        '   if (P_R.lento) return new Promise(function (r) { setTimeout(function () { r(resp); }, 80); });' +
+        '   return Promise.resolve(resp); }' +
         ' if (m === "report/get_report_data") return Promise.resolve({ 11: [{ id: "119", nm: "105" }] });' +
         ' return Promise.resolve({}); }',
     'const document = P_DOC;', 'const window = {};', 'const URL = { createObjectURL(){ return "blob:x"; }, revokeObjectURL(){} };',

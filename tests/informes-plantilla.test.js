@@ -51,7 +51,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfPlantillaInfo,rxInfObjetos,rxInfLecturas,rxInfTablasRes,rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
+    'rxInfPlantillaInfo,rxInfObjetos,rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -86,23 +86,16 @@ function remote(m, p) {
             }]
         }]);
     }
-    if (m === 'report/get_report_status') return Promise.resolve({ reportResult: { status: 'done' } });
-    if (m === 'report/apply_report_result') return Promise.resolve({});
-    if (m === 'report/select_result_rows') {
-        return Promise.resolve({ reportResult: {
-            columns: [{ n: 'Unidad' }, { n: 'Geocerca' }, { n: 'Km' }],
-            rows: [['105', 'PATIO', 12]]
-        } });
-    }
-    if (m === 'report/get_result') return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }], rows: [['999']] } });
+    // La lectura es SINCRONA: exec_report ya trae el resultado, y con la
+    // forma real de la plataforma (reportResult + reportLayer).
     if (m === 'report/exec_report') {
         return Promise.resolve({
-            reportResult: {
-                columns: [{ n: 'Unidad' }, { n: 'Fecha' }, { n: 'Km' }, { n: 'Minutos' }, { n: 'Conductor' }],
-                rows: [['105', '2026-03-10', 120.5, 90, 'Juan'], ['205', '2026-03-10', 80, 40, 'Ana']]
-            }
+            reportResult: { columns: [{ n: 'Unidad' }, { n: 'Geocerca' }, { n: 'Km' }], rows: [['105', 'PATIO', 12]] },
+            reportLayer: '[["205","CEDIS",8]]',
+            layerCount: 2
         });
     }
+    if (m === 'report/get_result') return Promise.resolve({});
     return Promise.resolve({});
 }
 
@@ -187,17 +180,23 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
     ok('ejecucion: el objeto va en el RECURSO y el secundario como texto',
         execs.every((c) => c.p.reportObjectId === 3 && typeof c.p.reportObjectSecId === 'string'),
         JSON.stringify(execs[0].p));
-    ok('ejecucion: ejecuta en segundo plano y sondea el estado',
-        execs.every((c) => c.p.remoteExec === 1 && c.p.interval.flags === 16777220) &&
-        calls.some((c) => c.m === 'report/get_report_status') &&
-        calls.some((c) => c.m === 'report/apply_report_result'),
+    ok('ejecucion: llama SINCRONO, con el intervalo elegido y sin remoteExec',
+        execs.every((c) => c.p.remoteExec == null && c.p.interval && c.p.interval.from > 0 &&
+            c.p.interval.to > c.p.interval.from && c.p.interval.flags === 0),
         JSON.stringify(execs[0].p.interval));
-    ok('ejecucion: lee las filas por rangos del resultado de la sesion',
-        calls.some((c) => c.m === 'report/select_result_rows' &&
-            c.p.config && c.p.config.type === 'range' && c.p.config.data.level === 0));
+    ok('ejecucion: el resultado viene en la propia respuesta (no hay que paginar)',
+        !calls.some((c) => c.m === 'report/select_result_rows') &&
+        !calls.some((c) => c.m === 'report/get_report_status'));
     ok('ejecucion: pasa recurso y plantilla', execs[0].p.reportResourceId === 3 && execs[0].p.reportTemplateId === 11);
     ok('ejecucion: sale con filas y columnas', r1.filas.length > 0 && r1.cols.length > 0,
         'filas=' + r1.filas.length + ' cols=' + JSON.stringify(r1.cols));
+    ok('ejecucion: el extractor encuentra las filas por capas y se queda con la mayor',
+        (function () {
+            const a = mod.rxInfExtrae({ reportResult: { columns: [{ n: 'U' }], rows: [['a'], ['b']] } });
+            const b = mod.rxInfExtrae({ reportLayer: '[[1,2],[3,4],[5,6]]', layerCount: 3 });
+            const c = mod.rxInfExtrae({ reportResult: { bands: [{ rows: [['x', 'y']] }] } });
+            return a.filas.length === 2 && b.filas.length === 3 && c.filas.length === 1 && c.filas[0][1] === 'y';
+        })());
     ok('ejecucion: mide el tiempo y no reporta fallos', r1.fallos === 0 && r1.ms >= 0);
 
     // Cache: la segunda vez no vuelve a pedir nada.
@@ -545,66 +544,6 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
         })());
 
 
-    // La plantilla guarda varias tablas y no todas se leen igual: se prueban
-    // varias formas y se sigue con la que responde.
-    ok('lectura: hay varias formas candidatas (tablas y niveles)',
-        mod.rxInfLecturas().length >= 6 && mod.rxInfLecturas()[0].t === 0);
-    ok('lectura: se leen las tablas 1 y 2 cuando la 0 no devuelve filas',
-        (async function () {
-            const soloTabla2 = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS, function (m, p) {
-                if (m === 'report/select_result_rows') {
-                    if (p.tableIndex === 2) return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }], rows: [['105']] } });
-                    return Promise.reject(new Error(m + ' -> code 5'));
-                }
-                if (m === 'report/get_report_status') return Promise.resolve({ reportResult: { status: 'done' } });
-                if (m === 'report/get_report_data') return Promise.resolve([]);
-                return Promise.resolve({});
-            }, APP);
-            const r = await soloTabla2.rxInfEjecutaRemoto({ rid: 3, id: 11, nombre: 'X' }, '119', null, 100);
-            return r.filas.length === 1 && r.filas[0][0] === '105';
-        })());
-
-
-    // Tablas del resultado: es lo que dice que tabla tiene datos y hasta que
-    // fila pedir (sin esto se pedia la tabla de dibujar o un rango inventado).
-    ok('tablas: lee nombre y filas de report/get_report_tables',
-        (function () {
-            const t = mod.rxInfTablasRes({ tables: [
-                { n: 'geofences', rows: 0 },
-                { n: 'geozone_stats', rows: 2 },
-                { n: 'geozone_units', rows: 8 }
-            ] });
-            return t.length === 3 && t[2].nombre === 'geozone_units' && t[2].filas === 8 && t[2].idx === 2;
-        })(), JSON.stringify(mod.rxInfTablasRes({ tables: [{ n: 'a', rows: 3 }] })));
-    ok('tablas: tambien acepta respuestas anidadas o con otros nombres',
-        (function () {
-            const a = mod.rxInfTablasRes({ reportResult: { bands: [{ name: 'Datos', count: 5 }] } });
-            const b = mod.rxInfTablasRes(null);
-            return a.length === 1 && a[0].filas === 5 && b.length === 0;
-        })());
-
-
-    // Una plantilla de geocercas se ejecuta una vez por zona: sin marcarlas
-    // se acota, y marcandolas se ejecuta solo lo marcado.
-    ok('objetos: sin marcar se limita el numero de zonas a ejecutar',
-        (function () {
-            const ahora = Math.floor(Date.now() / 1000);
-            const muchos = [];
-            for (let i = 0; i < 80; i++) muchos.push({ id: 1000 + i, n: 'Z' + i });
-            APP.zonas = muchos;
-            const tpl2 = { rid: 3, id: 12, nombre: 'GEOCERCA' };
-            return true;
-        })());
-    ok('objetos: marcando geocercas se ejecuta solo por esas',
-        (function () {
-            APP.zonas = [{ id: 119, n: 'PATIO' }, { id: 1820, n: 'CEDIS' }, { id: 99, n: 'OTRA' }];
-            const info = mod.rxInfPlantillaInfo([{ id: 12, n: 'GEOCERCA', ct: 'avl_geozone', tbl: [] }], 12);
-            const todas = mod.rxInfObjetos({ nombre: 'GEOCERCA' }, info);
-            APP.zonas = [];
-            return todas.length === 3 && todas[0].esZona === true;
-        })());
-
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
-    process.exit(fallos ? 1 : 0);
     process.exit(fallos ? 1 : 0);
 })();
