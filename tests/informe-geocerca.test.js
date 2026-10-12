@@ -73,12 +73,16 @@ const stubs = [
     'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
     // Stub fiel a load_interval: filtra por rango y corta a loadCount, asi se
     // puede probar la paginacion (meses de historial) sin red.
-    'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1;' +
+    'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1; H.porId = H.porId || {}; H.porId[p.itemId] = (H.porId[p.itemId]||0)+1;' +
+        ' if (H.fallarPorId && H.fallarPorId[p.itemId]) return Promise.reject(new Error(m + " -> code 1054"));' +
+        ' if (H.fallosPendientes && H.fallosPendientes[p.itemId] > 0){ H.fallosPendientes[p.itemId]--; return Promise.reject(new Error(m + " -> code 4 (timeout)")); }' +
         ' var msgs = ((H.msgsPorId||{})[p.itemId] || []).filter(function(mm){ return mm && mm.t >= (p.timeFrom||0) && mm.t <= (p.timeTo||2147483647); });' +
         ' if (p.loadCount && msgs.length > p.loadCount) msgs = msgs.slice(0, p.loadCount);' +
         ' if (!H.retardo) return Promise.resolve({ messages: msgs });' +
         ' return new Promise(function(r){ setTimeout(function(){ r({ messages: msgs }); }, H.retardo); }); }',
-    'function setTimeout(f, t){ return setTimeout_(f, t); }',
+    // setTimeout real (el stub va a global: dentro de new Function no existe
+    // el scope del modulo del test).
+    'function setTimeout(f, t){ return global.setTimeout(f, t); }',
     'function unitState(u){ const p=(u&&u.pos)||{}; const l=(u&&u.lmsg)||{}; let t=Number(p.t||l.t||0);' +
         ' if(!isFinite(t)||t<=0) t=0; else if(t>1e12) t=Math.round(t/1000);' +
         ' return {t:t, lat:(p.y!=null)?+p.y:null, lon:(p.x!=null)?+p.x:null, vel:+p.s||0, online:true}; }'
@@ -92,6 +96,8 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfZonaSel,rxGeoInfReune,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
     'rxGeoInfFetchMensajes,' +
     'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U,RX_GEO_HIST_MSGS,RX_GEO_HIST_PAGS,' +
+    'RX_GEO_HIST_PASO_D,rxGeoInfTrozoReset,rxGeoInfPrimerMensaje,rxGeoInfCargaTrozo,rxGeoInfTrozoKey,' +
+    'setHist:function(v){ _rxGeoHist = v; },' +
     'rxGeoInfParadasDePuntos,rxGeoInfChofer,rxGeoInfChoferDe,rxGeoInfChoferReset,rxGeoInfParam,rxGeoInfZonaCerca};';
 const mod = new Function('P', code)(H);
 
@@ -580,6 +586,7 @@ mod.rxGeoInfCacheReset();
     mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = ''; mod.RX_GEO.rango = 'hoy';
     mod.RX_GEO.unidades = 'sel';
     H.seleccion.clear(); H.seleccion.add('205');
+    mod.rxGeoInfTrozoReset(); mod.setHist({ key: '', t: 0, eventos: [] });
     H.peticiones = 0;
     const r3 = await mod.rxGeoInfEscanear(() => {}, null);
     ok('historial: respeta "solo las seleccionadas"',
@@ -595,6 +602,7 @@ mod.rxGeoInfCacheReset();
     H.msgsPorId = {};
     for (let k = 1; k <= 12; k++) { H.unidades.push({ id: 100 + k, nm: String(400 + k), pos: { y: 0, x: 0 } }); H.msgsPorId[100 + k] = []; }
     APP.unidades = H.unidades;
+    mod.rxGeoInfTrozoReset(); mod.setHist({ key: '', t: 0, eventos: [] });
     H.retardo = 40; H.peticiones = 0;
     mod.RX_GEO._histForzar = true;
     const t0 = Date.now();
@@ -630,10 +638,11 @@ mod.rxGeoInfCacheReset();
     // El escaneo completo tambien pagina y saca eventos de toda la traza
     // (rango distinto al de arriba para no caer en la cache del barrido).
     mod.RX_GEO.rango = '15d'; mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = '';
+    mod.rxGeoInfTrozoReset(); mod.setHist({ key: '', t: 0, eventos: [] });
     H.peticiones = 0;
     const rE = await mod.rxGeoInfEscanear(() => {}, null);
     ok('historial: el escaneo pagina en las unidades con mucho historial',
-        H.peticiones === 3 && rE.eventos.length > 0,
+        H.peticiones >= 3 && rE.eventos.length > 0,
         'peticiones=' + H.peticiones + ' eventos=' + rE.eventos.length);
 mod.RX_GEO.rango = 'hoy';
 
@@ -642,20 +651,84 @@ mod.RX_GEO.rango = 'hoy';
     // ninguna peticion y una flota grande se barre entera.
     ok('historial: el tope de unidades no recorta una flota real', mod.RX_GEO_HIST_MAX_U >= 2000,
         String(mod.RX_GEO_HIST_MAX_U));
-    mod.RX_GEO.rango = '7d';
-    H.unidades = [
+mod.RX_GEO.rango = '30d';
+H.unidades = [
         { id: 71, nm: '105', pos: { y: 0, x: 0, t: T - 3600 } },     // reporta ayer: se consulta
-        { id: 72, nm: '205', pos: { y: 0, x: 0, t: T - 86400 * 30 } }, // 30 dias: se salta
+        { id: 72, nm: '205', pos: { y: 0, x: 0, t: T - 86400 * 60 } }, // 60 dias: se salta
         { id: 73, nm: '305', pos: { y: 0, x: 0 } }                      // sin dato: se consulta
     ];
     APP.unidades = H.unidades;
     H.msgsPorId = { 71: msgs(11), 72: msgs(22), 73: [] };
+    mod.rxGeoInfTrozoReset(); mod.setHist({ key: '', t: 0, eventos: [] });
+    H.porId = {};
     H.peticiones = 0;
     const rD = await mod.rxGeoInfEscanear(() => {}, null);
     ok('historial: las unidades sin mensajes en el rango no se consultan',
-        H.peticiones === 2 && rD.sinDatos === 1 && rD.unidades === 2,
-        'peticiones=' + H.peticiones + ' sinDatos=' + rD.sinDatos + ' unidades=' + rD.unidades);
+        !H.porId[72] && H.porId[71] > 0 && rD.sinDatos === 1 && rD.unidades === 2,
+        'peticiones=' + H.peticiones + ' porId=' + JSON.stringify(H.porId) +
+        ' sinDatos=' + rD.sinDatos + ' unidades=' + rD.unidades);
 mod.RX_GEO.rango = 'hoy';
+
+    // Fallos de la plataforma: antes se comian en silencio y el informe
+    // salia con 0 unidades sin decir por que.
+    mod.rxGeoInfTrozoReset();
+    H.fallosPendientes = {};
+    H.fallarPorId = {};
+    H.unidades = [{ id: 91, nm: '105', pos: { y: 0, x: 0, t: T - 60 } }];
+    H.msgsPorId = { 91: msgs(11) };
+    H.fallosPendientes[91] = 2;   // los dos primeros intentos fallan
+    H.peticiones = 0;
+    APP.unidades = H.unidades;
+    mod.RX_GEO.rango = 'hoy'; mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = '';
+    mod.setHist({ key: '', t: 0, eventos: [] });
+    const rRe = await mod.rxGeoInfEscanear(() => {}, null);
+    ok('escaneo: reintenta si la plataforma falla y aun asi trae datos',
+        rRe.eventos.length > 0 && rRe.fallos === 0,
+        'eventos=' + rRe.eventos.length + ' fallos=' + rRe.fallos + ' peticiones=' + H.peticiones);
+    H.fallarPorId[92] = true;
+    H.unidades = [{ id: 91, nm: '105', pos: { y: 0, x: 0, t: T - 60 } },
+        { id: 92, nm: '205', pos: { y: 0, x: 0, t: T - 60 } }];
+    APP.unidades = H.unidades;
+    mod.setHist({ key: '', t: 0, eventos: [] });
+    H.peticiones = 0;
+    const rEr = await mod.rxGeoInfEscanear(() => {}, null);
+    ok('escaneo: si la unidad falla siempre, cuenta el fallo y guarda el error',
+        rEr.fallos === 1 && (rEr.errores || []).length === 1 && /load_interval/.test(rEr.errores[0]),
+        'fallos=' + rEr.fallos + ' errores=' + JSON.stringify(rEr.errores));
+    delete H.fallarPorId[92];
+    mod.rxGeoInfTrozoReset();
+
+    // Reanudar: el rango se parte en trozos de una semana y se cachean, asi
+    // la segunda pasada con el mismo rango no vuelve a pedir nada.
+    H.unidades = [{ id: 95, nm: '105', pos: { y: 0, x: 0, t: T - 60 } }];
+    H.msgsPorId = { 95: msgs(11) };
+    APP.unidades = H.unidades;
+    mod.RX_GEO.rango = '60d'; mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = '';
+    mod.rxGeoInfTrozoReset(); mod.setHist({ key: '', t: 0, eventos: [] });
+    H.peticiones = 0;
+    const r1b = await mod.rxGeoInfEscanear(() => {}, null);
+    const peticiones1 = H.peticiones;
+    mod.RX_GEO.listo = false;
+    mod.setHist({ key: '', t: 0, eventos: [] });
+    const r2b = await mod.rxGeoInfEscanear(() => {}, null);
+    ok('escaneo: el rango largo se parte en trozos cacheados (se puede continuar)',
+        peticiones1 > 1 && r2b.eventos.length === r1b.eventos.length && H.peticiones === peticiones1,
+        'peticiones=' + peticiones1 + ' -> ' + H.peticiones);
+    mod.rxGeoInfTrozoReset();
+
+    // Sondeo con "todo": en vez de barrer semanas vacias desde 1970, se
+    // pregunta el primer mensaje guardado (una peticion) y se arranca ahi.
+    H.unidades = [{ id: 96, nm: '105', pos: { y: 0, x: 0, t: T - 60 } }];
+    APP.unidades = H.unidades;
+    H.msgsPorId = { 96: [] };
+    H.peticiones = 0;
+    mod.RX_GEO.rango = 'todo'; mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = '';
+    mod.setHist({ key: '', t: 0, eventos: [] });
+    const rTo = await mod.rxGeoInfEscanear(() => {}, null);
+    ok('"todo": la unidad sin historial se descarta con UNA peticion de sondeo',
+        H.peticiones === 1 && rTo.unidades === 1 && rTo.eventos.length === 0,
+        'peticiones=' + H.peticiones + ' eventos=' + rTo.eventos.length);
+    mod.RX_GEO.rango = 'hoy';
 
     // Flota grande: se escanea ENTERA (el caso real de 700+ unidades), sin
     // recorte y en vivo (los resultados parciales se van publicando).
@@ -668,6 +741,7 @@ mod.RX_GEO.rango = 'hoy';
         H.msgsPorId[id] = (k % 2) ? msgs(11) : [];
     }
     APP.unidades = H.unidades;
+    mod.rxGeoInfTrozoReset(); mod.setHist({ key: '', t: 0, eventos: [] });
     H.peticiones = 0;
     let parcialesVistos = 0;
     const rG = await mod.rxGeoInfEscanear((h, t, eco, hall) => {
