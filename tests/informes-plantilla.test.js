@@ -38,6 +38,8 @@ const stubs = [
     'function rxGeoInfFechaMs(s, fin){ if (!s) return 0; const d = new Date(String(s) + "T00:00:00");',
     '  if (!isFinite(d.getTime())) return 0; if (fin) d.setHours(23, 59, 59, 999); return d.getTime(); }',
     'function rxGeoInfNombre(z){ return (z && (z.n || z.nombre)) || ""; }',
+    'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); return {id:u&&u.id,nombre:n,eco:m?m[1]:"",clave:m?m[1]:n}; }',
+    'function unitState(u){ const p=(u&&u.pos)||{}; return {t:Number(p.t||0),lat:p.y,lon:p.x,vel:0}; }',
     'function rxGeoInfAnillo(z){ return (z && z.puntos) ? z.puntos : []; }',
     'function rxGeoInfFechaTxt(ms){ return String(ms || 0); }',
     'function glocOrigen(z){ return { id: (z && z.app) ? "app" : "plat" }; }',
@@ -49,7 +51,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
+    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfUnidades,rxInfExplicaError,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -82,7 +84,7 @@ function remote(m, p) {
     return Promise.resolve({});
 }
 
-const APP = { zonas: [] };
+const APP = { zonas: [], unidades: [] };
 const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS, remote, APP);
 
 // ── Descubrimiento de plantillas ─────────────────────────────────────────
@@ -375,6 +377,46 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
             return v.filas.length === 2 && v.iZona < 0;
         })());
 
+
+    // ── Objetos reales: con reportObjectId 0 el servidor responde code 7 ──
+    ok('unidades: sin unidades cae al objeto 0 (unico modo de probar)',
+        mod.rxInfUnidades(0).length === 0);
+    ok('unidades: se descartan las que no reportan desde antes del rango',
+        (function () {
+            const ahora = Math.floor(Date.now() / 1000);
+            APP.unidades = [
+                { id: 11, nm: '105', pos: { t: ahora - 3600 } },
+                { id: 22, nm: '205', pos: { t: ahora - 86400 * 90 } }
+            ];
+            const u = mod.rxInfUnidades(ahora - 7 * 86400);
+            APP.unidades = [];
+            return u.length === 1 && u[0].id === 11;
+        })());
+    await (async () => {
+        const ahora = Math.floor(Date.now() / 1000);
+        APP.unidades = [{ id: 11, nm: '105', pos: { t: ahora - 600 } }, { id: 22, nm: '205', pos: { t: ahora - 600 } }];
+        mod.rxInfCacheLimpiar();
+        calls.length = 0;
+        const rU = await mod.rxInfCorre({ rid: 3, id: 11, nombre: 'Resumen diario' }, ahora - 7 * 86400, ahora, null, () => {}, null);
+        const execs = calls.filter((c) => c.m === 'report/exec_report');
+        APP.unidades = [];
+        ok('corre: pide un informe por unidad (reportObjectId real)',
+            execs.length === 2 && execs.every((c) => c.p.reportObjectId === 11 || c.p.reportObjectId === 22),
+            'llamadas=' + execs.length);
+        ok('corre: cuenta las unidades pedidas', rU.objetos === 2 && rU.filas.length === 4,
+            'objetos=' + rU.objetos + ' filas=' + rU.filas.length);
+    })();
+
+    // El traductor de codigos: "code 7" solo no dice nada.
+    ok('errores: traduce el codigo 7 (parametros invalidos)',
+        /reportObjectId/.test(mod.rxInfExplicaError('report/exec_report -> code 7')),
+        mod.rxInfExplicaError('report/exec_report -> code 7'));
+    ok('errores: traduce el 4 (peticion demasiado pesada) y el 2 (no existe)',
+        /periodo/.test(mod.rxInfExplicaError('code 4')) && /no existe/.test(mod.rxInfExplicaError('code 2')));
+    ok('errores: si no hay codigo devuelve el texto tal cual',
+        mod.rxInfExplicaError('fallo raro') === 'fallo raro');
+
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
+    process.exit(fallos ? 1 : 0);
     process.exit(fallos ? 1 : 0);
 })();
