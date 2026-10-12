@@ -13167,17 +13167,37 @@ function rxInfCacheKey(tpl, objId, desde, hasta) {
 // plataforma se traduce en un error: si persiste tras los reintentos, se
 // anota como fallo de ESE trozo y se sigue con los demas (un trozo roto
 // no puede tirar el informe entero).
+async function rxInfLimpiarInforme() {
+    // La plataforma guarda el ultimo informe ejecutado en la sesion y la
+    // pantalla lo va paginando con report/select_result_rows. Si se ejecuta
+    // otro sin liberar el anterior, el servidor responde "code 4" (error
+    // interno): por eso se limpia SIEMPRE antes de ejecutar.
+    try { await remoteCall('report/cleanup_result', {}); return true; } catch (_) { return false; }
+}
 async function rxInfEjecutar(tpl, objId, desde, hasta, token) {
     let err = '';
     for (let i = 0; i < 3; i++) {
         if (token && token.cancelado) return { filas: [], error: 'cancelado' };
         try {
+            await rxInfLimpiarInforme();
             const r = await remoteCall('report/exec_report', {
                 reportResourceId: tpl.rid, reportTemplateId: tpl.id,
                 reportObjectId: objId || 0, reportObjectSecId: 0,
                 interval: { from: desde, to: hasta, flags: 0 }
             });
-            return { filas: (r && r.reportResult) ? r.reportResult : (r || {}) };
+            let rr = (r && r.reportResult) ? r.reportResult : (r || {});
+            // Si la ejecucion no trae filas, se pregunta por el resultado que
+            // dejo en la sesion (es como lo lee la propia pantalla).
+            const vacio = !(Array.isArray(rr.rows) || Array.isArray(rr.stats));
+            if (vacio) {
+                try {
+                    const g = await remoteCall('report/get_result', {});
+                    const gr = (g && g.reportResult) ? g.reportResult : (g || {});
+                    if (gr.rows || gr.stats || gr.columns) rr = Object.assign({}, gr, { _cleanup: true });
+                } catch (_) { /* sin resultado aparte */ }
+            }
+            if (rr._cleanup) { try { await remoteCall('report/cleanup_result', {}); } catch (_) { /* noop */ } }
+            return { filas: rr };
         } catch (e) {
             err = (e && e.message) || String(e);
             await new Promise((x) => { try { setTimeout(x, 600 * (i + 1)); } catch (_) { x(); } });

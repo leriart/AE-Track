@@ -1,123 +1,160 @@
 /* ============================================================================
- * RONDO · SONDEO DE PLANTILLAS (v4) · espia(total)
+ * RONDO · PLANTILLAS (v5) · ejecutar, leer y paginar el resultado
  * ----------------------------------------------------------------------------
  * Pegalo en la consola (F12) de AE-Track con sesion iniciada. Solo LEE.
  *
- * Situacion: report/exec_report devuelve code 4 (error interno del servidor)
- * en las 11 combinaciones probadas, y code 7 con reportObjectId 0. O sea que
- * no es como lo llamamos, es que el servicio falla siempre.
+ * Lo que ya sabemos:
+ *   - exec_report con reportObjectId 0 -> code 7
+ *   - exec_report con objeto real       -> code 4   (error interno)
+ *   - la plataforma usa report/select_result_rows {tableIndex, config:{type:'range'}}
+ *     es decir: ejecuta UNA vez y despues pagina el resultado desde el servidor
+ *   - no hay servicios de estructura de plantillas (code 2)
  *
- * Este script NO prueba nada por su cuenta: se limita a APUNTAR todo lo que
- * hace la plataforma, para ver por donde calcula sus informes de verdad.
- * Vigila a la vez:
- *   - remoteCall (la API de Wialon)
- *   - fetch y XMLHttpRequest (por si AE-Track usa REST en vez de remoteCall)
- *   - ReportManager del SDK, si existe
+ * Sospecha fuerte: el code 4 es porque habia un resultado viejo sin limpiar.
+ * Este script hace, en orden y con lo que Capture la espia v4:
+ *   1. report/cleanup_result   (dejar la sesion limpia)
+ *   2. report/exec_report      (ejecutar con una unidad real)
+ *   3. report/get_result       (leer el resultado entero)
+ *   4. report/select_result_rows (paginar, con la forma capturada)
  *
- * USO:
- *   1. Pega esto.
- *   2. Abre el informe NATIVO "GEOCERCA" y pulsa Ejecutar/Generar.
- *   3. Vuelve a la consola y ejecuta:      __rondoSpyFin()
+ * Ademas deja la espia puesta: ejecuta el informe NATIVO y luego
+ * __rondoSpyFin() para copiar la llamada exacta de la pantalla.
  * ========================================================================== */
 (function () {
     const ventana = window;
-    const out = { remoteCall: [], fetch: [], xhr: [], reportManager: [], otros: [] };
-    const ver = (s) => (typeof s === 'string' ? s : String(s));
+    const out = { momento: new Date().toISOString(), pasos: [] };
+    const log = (t) => console.log('%c' + t, 'font-weight:700;color:#0af');
+    const ok = (t) => console.log('%cOK    ' + t, 'color:#0a0;font-weight:700');
+    const ko = (t) => console.log('%cFALLA ' + t, 'color:#a00;font-weight:700');
+    const call = (svc, params) => new Promise((res) => {
+        const R = wialon.core.Remote.getInstance();
+        R.remoteCall(svc, params || {}, (code, r) => res({ code: code, r: r || {} }));
+    });
+    const resumen = (rr) => {
+        const filas = Array.isArray(rr.rows) ? rr.rows : (Array.isArray(rr.stats) ? rr.stats : []);
+        return {
+            claves: Object.keys(rr || {}),
+            columnas: (rr.columns || []).map((c) => (c && (c.n || c.t)) || c),
+            nFilas: filas.length,
+            muestra: filas.slice(0, 3),
+            resto: Object.keys(rr || {}).filter((k) => k !== 'rows' && k !== 'stats')
+                .reduce((o, k) => { try { o[k] = rr[k]; } catch (_) { o[k] = '[ilegible]'; } return o; }, {})
+        };
+    };
 
-    // ── 1) remoteCall de Wialon ────────────────────────────────────────
+    // ── Espia (igual que v4) ──────────────────────────────────────────
+    const cap = [];
     try {
         const R = wialon.core.Remote.getInstance();
-        const origRC = R.remoteCall;
+        const orig = R.remoteCall;
         R.remoteCall = function (svc, params, cb) {
             try {
-                if (/report|informer|banda|geofence|geocerca/i.test(ver(svc)) ||
-                    (params && (params.reportTemplateId != null || params.reportObjectId != null))) {
-                    out.remoteCall.push({ svc: ver(svc), params: JSON.parse(JSON.stringify(params || {})) });
-                    console.log('%c[rc] ' + svc, 'color:#f60', params);
+                if (/report/i.test(String(svc))) {
+                    cap.push({ svc: String(svc), params: JSON.parse(JSON.stringify(params || {})) });
+                    console.log('%c[espia] ' + svc, 'color:#f60', params);
                 }
             } catch (_) { /* noop */ }
-            return origRC.call(R, svc, params, cb);
+            return orig.call(R, svc, params, cb);
         };
-        ventana.__rondoRC = origRC;
-    } catch (e) { console.warn('No se pudo espiar remoteCall:', e.message); }
+        ventana.__rondoRC = orig;
+    } catch (e) { console.warn(e.message); }
 
-    // ── 2) fetch ───────────────────────────────────────────────────────
-    try {
-        const origF = ventana.fetch;
-        ventana.fetch = function (url, opts) {
-            try {
-                const u = ver(url && url.url ? url.url : url);
-                if (/report|informer|export|stat|geofence|geocerca/i.test(u)) {
-                    const o = (opts && opts.body) ? (() => { try { return JSON.parse(opts.body); } catch (_) { return ver(opts.body).slice(0, 400); } })() : null;
-                    out.fetch.push({ url: u, metodo: (opts && opts.method) || 'GET', cuerpo: o });
-                    console.log('%c[fetch] ' + u, 'color:#fa0', o);
-                }
-            } catch (_) { /* noop */ }
-            return origF.apply(this, arguments);
-        };
-    } catch (e) { console.warn('No se pudo espiar fetch:', e.message); }
-
-    // ── 3) XMLHttpRequest ───────────────────────────────────────────────
-    try {
-        const origSend = XMLHttpRequest.prototype.send;
-        const origOpen = XMLHttpRequest.prototype.open;
-        XMLHttpRequest.prototype.open = function (m, u) {
-            this.__u = ver(u);
-            this.__m = m;
-            return origOpen.apply(this, arguments);
-        };
-        XMLHttpRequest.prototype.send = function (cuerpo) {
-            try {
-                if (/report|informer|export|stat|geofence|geocerca/i.test(this.__u || '')) {
-                    out.xhr.push({ url: this.__u, metodo: this.__m, cuerpo: ver(cuerpo).slice(0, 400) });
-                    console.log('%c[xhr] ' + this.__u, 'color:#fc0', cuerpo);
-                }
-            } catch (_) { /* noop */ }
-            return origSend.apply(this, arguments);
-        };
-    } catch (e) { console.warn('No se pudo espiar XHR:', e.message); }
-
-    // ── 4) ReportManager del SDK ────────────────────────────────────────
-    try {
-        const w = ventana.wialon;
-        ['ReportManager', 'Reports', 'Report'].forEach((k) => {
-            const m = w && w.core && w.core[k];
-            if (!m || typeof m !== 'object') return;
-            try {
-                if (typeof m.getInstance === 'function') {
-                    const inst = m.getInstance();
-                    Object.keys(inst || {}).forEach((fn) => {
-                        if (typeof inst[fn] !== 'function' || /constructor/i.test(fn)) return;
-                        const orig = inst[fn].bind(inst);
-                        inst[fn] = function () {
-                            out.reportManager.push({ manager: k, fn: fn, args: JSON.parse(JSON.stringify(Array.from(arguments).map((a) => {
-                                if (a == null) return a;
-                                if (typeof a === 'object') { try { return JSON.parse(JSON.stringify(a)); } catch (_) { return '[obj]'; } }
-                                return a;
-                            }))) });
-                            console.log('%c[rm] ' + k + '.' + fn, 'color:#af0', arguments[0]);
-                            return orig.apply(null, arguments);
-                        };
-                    });
-                }
-            } catch (e) { console.warn('No se pudo espiar ' + k + ':', e.message); }
+    (async () => {
+        // unidades + recurso + plantillas
+        const u = await call('core/search_items', {
+            spec: { itemsType: 'avl_unit', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
+            force: 1, flags: 1 | 1024, from: 0, to: 0
         });
-    } catch (e) { /* sin SDK */ }
+        const unidades = u.r.items || [];
+        const res = await call('core/search_items', {
+            spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
+            force: 1, flags: 1 | 8192, from: 0, to: 0
+        });
+        const tpls = [];
+        (res.r.items || []).forEach((x) => {
+            const rep = x.rep;
+            if (!rep || typeof rep !== 'object') return;
+            Object.keys(rep).forEach((k) => {
+                const t = rep[k];
+                if (t && t.id != null) tpls.push({ rid: x.id, id: t.id, nombre: t.n || ('Plantilla ' + t.id) });
+            });
+        });
+        const t = tpls.filter((x) => (x.nombre || '').toUpperCase().indexOf('GEOCERCA') >= 0)[0] || tpls[0];
+        const uid = (unidades[0] && unidades[0].id) || 0;
+        log('recurso=' + ((t && t.rid) || '?') + '  unidad=' + uid + ' (' + ((unidades[0] && unidades[0].nm) || '') + ')  plantilla=' + (t ? t.nombre + '#' + t.id : '?'));
+        if (!t) { ko('sin plantillas'); return; }
 
-    // ── Volcado ────────────────────────────────────────────────────────
-    ventana.__rondoSpy = out;
-    ventana.__rondoSpyFin = function () {
-        const n = out.remoteCall.length + out.fetch.length + out.xhr.length + out.reportManager.length;
-        console.log('%c=== CAPTURADO ===', 'font-weight:700;color:#f60');
-        console.log(JSON.stringify(out, null, 1));
+        const ahora = Math.floor(Date.now() / 1000);
+        const desde = ahora - 24 * 3600;
+
+        // 1) LIMPIAR la sesion (esto puede ser lo que quita el code 4)
+        const c1 = await call('report/cleanup_result', {});
+        out.pasos.push({ paso: 'cleanup_result', code: c1.code });
+        (c1.code === 0 ? ok : ko)('1) cleanup_result -> code ' + c1.code);
+
+        // 2) Ejecutar con la sesion limpia
+        const p = {
+            reportResourceId: t.rid, reportTemplateId: t.id,
+            reportObjectId: uid, reportObjectSecId: 0,
+            interval: { from: desde, to: ahora, flags: 0 }
+        };
+        const e = await call('report/exec_report', p);
+        out.pasos.push({ paso: 'exec_report', code: e.code, params: p, resultado: e.code === 0 ? resumen(e.r.reportResult || e.r) : null });
+        if (e.code === 0) {
+            ok('2) exec_report ENTRA tras limpiar -> ' + (out.pasos[1].resultado.nFilas) + ' fila(s)');
+            console.log(out.pasos[1].resultado);
+        } else {
+            ko('2) exec_report -> code ' + e.code);
+
+            // 2b) Si sigue fallando, probar el recurso como objeto y sin cleanup de por medio
+            for (const [n, pp] of [
+                ['recurso como objeto', Object.assign({}, p, { reportObjectId: t.rid })],
+                ['unidad + reportSrc', Object.assign({}, p, { reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0 } })],
+                ['sin reportObjectSecId', { reportResourceId: t.rid, reportTemplateId: t.id, reportObjectId: uid, interval: { from: desde, to: ahora, flags: 0 } }]
+            ]) {
+                await call('report/cleanup_result', {});
+                const r = await call('report/exec_report', pp);
+                out.pasos.push({ paso: 'exec_report ' + n, code: r.code, params: pp, resultado: r.code === 0 ? resumen(r.r.reportResult || r.r) : null });
+                (r.code === 0 ? ok : ko)('2b) ' + n + ' -> code ' + r.code);
+                if (r.code === 0) console.log(resumen(r.r.reportResult || r.r));
+            }
+        }
+
+        // 3) Leer el resultado que haya ahora mismo en la sesion
+        //    (puede ser el del informe nativo que tengas abierto)
+        const g = await call('report/get_result', {});
+        out.pasos.push({ paso: 'get_result', code: g.code, resultado: g.code === 0 ? resumen(g.r.reportResult || g.r) : null });
+        (g.code === 0 ? ok : ko)('3) get_result -> code ' + g.code +
+            (g.code === 0 ? (' | ' + out.pasos[out.pasos.length - 1].resultado.nFilas + ' fila(s)') : ''));
+        if (g.code === 0) console.log(out.pasos[out.pasos.length - 1].resultado);
+
+        // 4) Paginar con la forma que usa la plataforma
+        for (const cfg of [
+            { type: 'range', data: { from: 0, to: 50 } },
+            { type: 'range', data: { from: 0, to: 20 } },
+            { type: 'range', data: { offset: 0, limit: 20 } },
+            { type: 'all' }
+        ]) {
+            const s = await call('report/select_result_rows', { tableIndex: 0, config: cfg });
+            out.pasos.push({ paso: 'select_result_rows ' + JSON.stringify(cfg), code: s.code, resultado: s.code === 0 ? resumen(s.r.reportResult || s.r) : null });
+            (s.code === 0 ? ok : ko)('4) select_result_rows ' + JSON.stringify(cfg) + ' -> code ' + s.code +
+                (s.code === 0 ? (' | ' + out.pasos[out.pasos.length - 1].resultado.nFilas + ' fila(s)') : ''));
+        }
+
+        const txt = JSON.stringify(out, null, 1);
+        console.log('%c=== COPIA ESTO ===', 'font-weight:700;color:#f60');
+        console.log(txt);
         try {
-            navigator.clipboard.writeText(JSON.stringify(out, null, 1)).then(
-                () => console.log('%cCopiado (' + n + ' llamadas).', 'font-weight:700;color:#0a0'),
-                () => console.log('%cCopia el texto a mano.', 'font-weight:700;color:#f60'));
-        } catch (_) { console.log('Copia el texto a mano.'); }
-        return out;
-    };
-    console.log('%cESPIA ACTIVA. Abre el informe NATIVO "GEOCERCA", pulsa Ejecutar y luego __rondoSpyFin()',
-        'font-weight:700;color:#0af');
-    console.log('%cSi no captura nada, el informe nativo no usa la API: puede calcularse en el navegador. En ese caso __rondoSpyFin() lo dira.', 'color:#888');
+            navigator.clipboard.writeText(txt).then(() => log('Copiado.'), () => log('Copia el texto.'));
+        } catch (_) { log('Copia el texto.'); }
+        ventana.__rondoSpy = cap;
+        ventana.__rondoSpyFin = function () {
+            const o = { pasos: out.pasos, espia: cap };
+            const t2 = JSON.stringify(o, null, 1);
+            console.log(t2);
+            try { navigator.clipboard.writeText(t2).then(() => log('Copiado.'), () => log('Copia el texto.')); } catch (_) { /* noop */ }
+            return o;
+        };
+        log('Ahora ejecuta el informe NATIVO GEOCERCA y luego __rondoSpyFin()');
+    })();
 })();
