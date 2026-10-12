@@ -1582,6 +1582,39 @@
             "#rondo-dialog .rgi-tpl.activo{border-color:transparent;background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
             "#rondo-dialog .rgi-tpl.activo i{color:var(--rondo-accent-fg);opacity:.75}\n" +
             "#rondo-dialog .rgi-tpl:disabled{opacity:.55;cursor:not-allowed}\n" +
+            // Tarjeta con boton de ejecucion propio.
+            "#rondo-dialog .rgi-tpl{display:flex;align-items:stretch;gap:2px;padding:0;border-radius:8px;border:1px solid var(--rondo-border-soft);background:var(--rondo-bg);min-width:0;overflow:hidden}\n" +
+            "#rondo-dialog .rgi-tpl.activo{border-color:var(--rondo-accent);background:var(--rondo-accent-bg)}\n" +
+            "#rondo-dialog .rgi-tpl-sel{display:flex;flex-direction:column;align-items:flex-start;gap:1px;flex:1;min-width:0;padding:6px 4px 6px 9px;border:0;background:none;color:var(--rondo-fg);cursor:pointer;text-align:left}\n" +
+            "#rondo-dialog .rgi-tpl-run{flex:0 0 auto;border:0;border-left:1px solid var(--rondo-border-soft);background:none;color:var(--rondo-fg-mute);cursor:pointer;padding:0 9px;display:flex;align-items:center}\n" +
+            "#rondo-dialog .rgi-tpl-run:hover:not(:disabled){background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
+            "#rondo-dialog .rgi-tpl-run .rondo-usym{font-size:15px}\n" +
+            "#rondo-dialog .rgi-tipo{font:700 7.5px var(--rondo-font);font-style:normal;letter-spacing:.4px;text-transform:uppercase;padding:1px 5px;border-radius:6px;background:var(--rondo-bg-strong);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-tipo.t-vehiculos{color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-tipo.t-geocercas{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-tipo.t-mixto{color:var(--rondo-ok)}\n" +
+            // Bloque "que datos trae la plantilla".
+            "#rondo-dialog .rgi-sonda{display:flex;flex-direction:column;gap:6px;padding:8px 11px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:4px solid var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-sonda-t{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}\n" +
+            "#rondo-dialog .rgi-sonda-t b{font:700 12px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-sonda-t span{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-campos{display:flex;gap:4px;flex-wrap:wrap}\n" +
+            "#rondo-dialog .rgi-campo{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);font:600 10px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-dialog .rgi-campo i{font:600 8.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-campo.t-numero{border-color:rgba(var(--rondo-accent-rgb),.4);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-campo.t-fecha{border-color:rgba(var(--rondo-ok-rgb,67,160,71),.5)}\n" +
+            "#rondo-dialog .rgi-sonda-e{font:500 10px var(--rondo-font);color:var(--rondo-warn-fg)}\n" +
+            // Minimapa del informe.
+            "#rondo-dialog .rgi-mapa{position:relative;height:190px;border-radius:var(--rondo-radius-sm);overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-mapa .rondo-mm{border:0;border-radius:0}\n" +
+            "#rondo-dialog .rgi-mapa-ley{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:5px 8px;font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-top:0;border-radius:0 0 var(--rondo-radius-sm) var(--rondo-radius-sm)}\n" +
+            "#rondo-dialog .rgi-mapa-ley span{display:inline-flex;align-items:center;gap:4px}\n" +
+            "#rondo-dialog .rgi-mapa-ley i{width:9px;height:9px;border-radius:3px;display:inline-block}\n" +
+            // Cabecera ordenable de la tabla de resultados.
+            "#rondo-dialog .rgi-prev th.ord{cursor:pointer;user-select:none}\n" +
+            "#rondo-dialog .rgi-prev th.ord:hover{color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-prev th.ord.on{color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-zonas{max-height:96px;overflow:auto}\n" +
             // Tarjeta de geocerca de la app: distintivo violeta/acento.
             "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
             "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";
@@ -12932,8 +12965,14 @@ const RX_INF = {
     alcance: 'todas',    // 'todas' (reportObjectId 0) | 'sel' (por unidad)
     vista: 'filas',      // 'filas' (crudo) | 'unidad' (resumen agregado)
     q: '',               // filtro de texto sobre las filas
+    zonas: [],           // geocercas marcadas (plantillas de geocerca)
+    eco: '',             // filtro por unidad
+    orden: null,         // {col, dir} de la tabla de resultados
     // Resultado de la ultima ejecucion.
     cols: [], filas: [], meta: null,
+    // Lo que la plantilla trae: columnas y de que trata (unidades o
+    // geocercas). Se deduce ejecutandola una vez por una ventana corta.
+    sonda: null, _sondaKey: '',
     _buscando: false, _token: null
 };
 // ── Descubrimiento de plantillas ────────────────────────────────────────
@@ -13210,6 +13249,229 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
             Math.ceil((Math.max(1, (hasta - desde)) / (RX_INF_DIAS_TROZO * 86400))))
     };
 }
+// ── De que trata la plantilla ───────────────────────────────────────────
+// Deducido de lo que la plantilla DEVUELVE (sus columnas y sus valores),
+// que es lo unico fiable: dos plantillas pueden llamarse igual y traer
+// cosas distintas. Con eso la interfaz se adapta: si es de geocercas
+// ofrece filtrar por geocerca; si es de vehiculos, por unidad.
+function rxInfNombreCol(c) {
+    return norm(c).replace(/[^A-Z0-9]+/g, ' ').trim();
+}
+function rxInfClasifica(cols, filas) {
+    const n = (cols || []).map(rxInfNombreCol);
+    const zona = [], uni = [], fecha = [], otro = [];
+    n.forEach((c, i) => {
+        if (/(GEOCERCA|GEOFENCE|^ZONA|^ZONE|^ZONAS|UBICACION|ADDRESS|DIRECCION|SITIO|PREDIO)/.test(c)) zona.push(i);
+        else if (/(^UNIDAD|^UNIDADES|^ECO$|VEHICULO|VEHICLE|^IMM|PLACA|MATRICULA|CONDUCTOR|DRIVER|PILOTO|OPERADOR)/.test(c)) uni.push(i);
+        else if (/(FECHA|DATE|^HORA|^TIME|TIEMPO|FECHAHORA)/.test(c)) fecha.push(i);
+        else otro.push(i);
+    });
+    // Si el nombre no lo dice, se mira el contenido: una columna de texto
+    // cuyos valores coinciden con nombres de geocercas es de geocercas.
+    if (!zona.length) {
+        const nombres = {};
+        for (const z of (APP.zonas || [])) { const nm = rxGeoInfNombre(z); if (nm) nombres[norm(nm)] = 1; }
+        if (Object.keys(nombres).length) {
+            for (let i = 0; i < (filas || []).length && i < 30; i++) {
+                for (let j = 0; j < (filas[i] || []).length; j++) {
+                    const v = norm((filas[i] || [])[j]);
+                    if (v && nombres[v] && !zona.length) zona.push(j);
+                }
+            }
+        }
+    }
+    const tieneZ = zona.length > 0, tieneU = uni.length > 0;
+    const tipo = (tieneZ && tieneU) ? 'mixto' : (tieneZ ? 'geocercas' : (tieneU ? 'vehiculos' : 'otro'));
+    const ETIQUETA = { mixto: 'Veh\u00edculos y geocercas', geocercas: 'Geocercas', vehiculos: 'Veh\u00edculos', otro: 'Datos generales' };
+    // Campos con su tipo, para teachar que datos trae la plantilla.
+    const campos = [];
+    for (let i = 0; i < n.length; i++) {
+        const esNum = (filas || []).slice(0, 20).some((f) => rxInfNum((f || [])[i]) != null);
+        let t = 'texto';
+        if (fecha.indexOf(i) >= 0) t = 'fecha';
+        else if (esNum) t = 'numero';
+        campos.push({ i: i, n: cols[i], t: t });
+    }
+    return {
+        tipo: tipo, etiqueta: ETIQUETA[tipo],
+        iZona: zona[0] == null ? -1 : zona[0], iUni: uni[0] == null ? -1 : uni[0],
+        campos: campos
+    };
+}
+// Ejecuta la plantilla una vez por una ventana corta para saber que trae y
+// de que trata, sin tener que correr todo el periodo. Si en 24 h no hay
+// filas, prueba con 7 dias. El resultado se cachea por plantilla.
+async function rxInfSondea(tpl) {
+    if (!tpl) return null;
+    const key = 'sondeo|' + rxInfClave(tpl);
+    if (RX_INF.sonda && RX_INF._sondaKey === key) return RX_INF.sonda;
+    const c = rxInfCacheCargar();
+    if (c[key]) { RX_INF.sonda = c[key]; RX_INF._sondaKey = key; return c[key]; }
+    const hasta = Math.floor(Date.now() / 1000);
+    let info = null;
+    for (const horas of [24, 24 * 7]) {
+        const r = await rxInfEjecutar(tpl, 0, hasta - horas * 3600, hasta, null);
+        const n = rxInfNormFilas(r.filas);
+        if (n.cols.length && (n.filas.length || horas === 24 * 7)) {
+            info = {
+                cols: n.cols, muestra: n.filas.slice(0, 12), filas: n.filas.length,
+                horas: horas, fallo: r.error || ''
+            };
+            if (n.filas.length) break;
+        }
+    }
+    if (!info) info = { cols: [], muestra: [], filas: 0, horas: 0, fallo: 'sin datos en la ventana de sondeo' };
+    info.clase = rxInfClasifica(info.cols, info.muestra);
+    // Zonas y unidades que aparecen en la muestra: son los filtros que
+    // tienen sentido para esa plantilla.
+    info.zonas = [];
+    info.unidades = [];
+    if (info.clase.iZona >= 0) {
+        const set = {};
+        info.muestra.forEach((f) => { const v = String(f[info.clase.iZona] == null ? '' : f[info.clase.iZona]).trim(); if (v) set[v] = 1; });
+        info.zonas = Object.keys(set).sort();
+    }
+    if (info.clase.iUni >= 0) {
+        const set = {};
+        info.muestra.forEach((f) => { const v = String(f[info.clase.iUni] == null ? '' : f[info.clase.iUni]).trim(); if (v) set[v] = 1; });
+        info.unidades = Object.keys(set).sort();
+    }
+    RX_INF.sonda = info;
+    RX_INF._sondaKey = key;
+    rxInfCachePoner(key, info);
+    return info;
+}
+// Une las geocercas de la plataforma con las de la muestra, para poder
+// marcar las de Rondo que aparecen en el informe (y filtrar por ellas).
+function rxInfZonasDeSonda() {
+    const info = RX_INF.sonda || {};
+    const out = [];
+    const vistas = {};
+    for (const z of (info.zonas || [])) out.push({ n: z, app: false });
+    for (const z of (APP.zonas || [])) {
+        const nm = rxGeoInfNombre(z);
+        if (!nm) continue;
+        if (!vistas[nm] && (info.zonas || []).some((x) => norm(x) === norm(nm))) {
+            vistas[nm] = 1;
+            const org = (typeof glocOrigen === 'function') ? glocOrigen(z) : null;
+            out.push({ n: nm, app: !!(org && org.id === 'app') });
+        }
+    }
+    return out;
+}
+// ── Mini-mapa del informe ───────────────────────────────────────────────
+// Solo aparece si los datos se pueden situar: coordenadas en la propia
+// plantilla (columnas de lat/lon) o una columna de geocerca que coincida con
+// alguna de las de la plataforma (entonces se dibuja su contorno). Si el
+// informe no trae ni una cosa ni la otra, el mapa desaparece en vez de
+// dejar un hueco vacio.
+function rxInfCoords(cols) {
+    const n = (cols || []).map(rxInfNombreCol);
+    let iLat = -1, iLon = -1;
+    n.forEach((c, i) => {
+        if (iLat < 0 && /^(LAT|LATITUD|LATITUDE|LATIT|LAT Y|Y)$/.test(c)) iLat = i;
+        else if (iLon < 0 && /^(LON|LONG|LONGITUD|LONGITUDE|LNG|LON X|X)$/.test(c)) iLon = i;
+    });
+    return { iLat: iLat, iLon: iLon };
+}
+// Geocerca de la plataforma a la que pertenece un nombre de la columna.
+function rxInfZonaDeNombre(nombre) {
+    const n = norm(nombre || '');
+    if (!n) return null;
+    for (const z of (APP.zonas || [])) {
+        const nm = rxGeoInfNombre(z);
+        if (nm && norm(nm) === n) return z;
+    }
+    return null;
+}
+// Datos para pintar: anillos de las geocercas que salen y puntos de las
+// filas con coordenadas. Null si no hay nada que dibujar.
+function rxInfMapaDatos(v) {
+    const c = rxInfCoords(v.cols);
+    const lineas = [];
+    const marcas = [];
+    // Geocercas: se dibujan las de la plataforma que aparecen en los datos.
+    if (v.iZona >= 0) {
+        const vistas = {};
+        for (const f of (v.filas || [])) {
+            const nm = String(f[v.iZona] == null ? '' : f[v.iZona]).trim();
+            if (!nm || vistas[nm]) continue;
+            const z = rxInfZonaDeNombre(nm);
+            if (!z) continue;
+            vistas[nm] = 1;
+            const an = rxGeoInfAnillo(z);
+            if (an.length > 2) lineas.push({ pts: an, color: '#1565c0', width: 3, opacity: 0.9, glow: true });
+            if (lineas.length >= 8) break;
+        }
+    }
+    // Puntos: una fila por marca (con tope, que dibujar 40.000 es absurdo).
+    if (c.iLat >= 0 && c.iLon >= 0) {
+        for (const f of (v.filas || [])) {
+            if (marcas.length >= 400) break;
+            const la = Number(f[c.iLat]), lo = Number(f[c.iLon]);
+            if (!isFinite(la) || !isFinite(lo) || Math.abs(la) > 90 || Math.abs(lo) > 180) continue;
+            marcas.push({
+                lat: la, lon: lo, color: (v.iUni >= 0 && f[v.iUni]) ? '#e65100' : '#1565c0',
+                radio: 4, txt: (v.iUni >= 0 ? String(f[v.iUni]) : '')
+            });
+        }
+    }
+    if (!lineas.length && !marcas.length) return null;
+    return { lineas: lineas, marcas: marcas };
+}
+// El mapa del dialogo: se crea, se actualiza o se destruye segun haya datos.
+let _rxInfMapa = null;
+function rxInfPintaMapa(v) {
+    const cont = byId('rgi-mapa');
+    if (!cont) return;
+    const d = rxInfMapaDatos(v);
+    if (!d) {
+        if (_rxInfMapa) { try { _rxInfMapa.destruir(); } catch (_) { /* noop */ } _rxInfMapa = null; }
+        cont.style.display = 'none';
+        cont.innerHTML = '';
+        return;
+    }
+    cont.style.display = 'block';
+    const leyenda = '<div class="rgi-mapa-ley">' +
+        (d.lineas.length ? '<span><i style="background:#1565c0"></i>Geocerca</span>' : '') +
+        (d.marcas.length ? '<span><i style="background:#e65100"></i>Unidad</span>' : '') +
+        '<span class="muted">Mapa: OpenStreetMap</span></div>';
+    if (d.lineas.length && d.marcas.length) {
+        try {
+            if (!_rxInfMapa) _rxInfMapa = rxMiniMapa(cont, d);
+            else { _rxInfMapa.lineas = d.lineas; _rxInfMapa.marcas = d.marcas; }
+            _rxInfMapa.encuadrar();
+            cont.setAttribute('data-leyenda', '1');
+        } catch (e) {
+            if (APP.unlocked) console.warn('[Rondo] mapa informes', e && e.message);
+        }
+    } else {
+        // Sin marcas que situar, el mapa interactivo no aporta: se dibuja la
+        // version estatica (la misma que va al PDF).
+        if (_rxInfMapa) { try { _rxInfMapa.destruir(); } catch (_) { /* noop */ } _rxInfMapa = null; }
+        cont.innerHTML = rxMiniMapaHTML(d, 680, 190) + leyenda;
+    }
+}
+// Texto del mapa para el PDF (null si no hay nada que dibujar).
+function rxInfMapaHTML(v, W, H) {
+    const d = rxInfMapaDatos(v);
+    if (!d) return '';
+    return rxMiniMapaHTML(d, W || 660, H || 240);
+}
+// Ordena por una columna de la vista (numericas por valor, el resto por
+// texto). Se usa en la tabla y en las salidas, para que coincidan.
+function rxInfOrdena(filas, orden, cols) {
+    if (!orden || orden.col == null || orden.col < 0) return filas;
+    const c = orden.col, dir = (orden.dir < 0) ? -1 : 1;
+    return (filas || []).slice().sort((a, b) => {
+        const va = a[c], vb = b[c];
+        const na = rxInfNum(va), nb = rxInfNum(vb);
+        if (na != null && nb != null) return (na - nb) * dir;
+        const ta = norm(va), tb = norm(vb);
+        if (ta === tb) return 0;
+        return (ta < tb ? -1 : 1) * dir;
+    });
+}
 // ── Salidas (texto plano) ───────────────────────────────────────────────
 // CSV: se respeta el separador de la plataforma (coma) y se escapan las
 // celdas, igual que el resto de exportaciones de Rondo.
@@ -13257,7 +13519,8 @@ function rxInfHTML(t) {
         (t.meta.fallos ? kpi(t.meta.fallos, 'Trozos con error') : '') +
         '</div>' +
         '<p class="resumen">' + esc(t.resumen || '') + '</p>' +
-        '<h2 class="seccion">1. Tabla</h2>' + mas +
+        (t.mapa ? '<h2 class="seccion">1. Mapa</h2>' + t.mapa : '') +
+        '<h2 class="seccion">' + (t.mapa ? '2' : '1') + '. Tabla</h2>' + mas +
         rxInfTabla(cab, filas) +
         rxInfPie() + '</body></html>';
 }
@@ -13266,20 +13529,45 @@ function rxInfHTML(t) {
 // usan EXACTAMENTE lo mismo (mismo subconjunto de filas).
 function rxInfVista() {
     const tipos = rxInfCols(RX_INF.cols);
+    const clase = (RX_INF.sonda && RX_INF.sonda.clase) ? RX_INF.sonda.clase : null;
     let cols = RX_INF.cols || [];
     let filas = RX_INF.filas || [];
+    // Columna de geocerca: la que dijo el sondeo, o la que se deduce ahora.
+    const iZona = (clase && clase.iZona >= 0) ? clase.iZona : (function () {
+        for (let i = 0; i < cols.length; i++) if (/GEOCERCA|^ZONA|ZONE/.test(rxInfNombreCol(cols[i]))) return i;
+        return -1;
+    })();
+    const iUni = (clase && clase.iUni >= 0) ? clase.iUni : tipos.iUni;
+    // Filtro por geocerca (solo tiene sentido si la plantilla trae una).
+    let pre = filas;
+    if (iZona >= 0 && RX_INF.zonas && RX_INF.zonas.length) {
+        const set = {};
+        RX_INF.zonas.forEach((z) => { set[norm(z)] = 1; });
+        pre = pre.filter((f) => set[norm(f[iZona])]);
+    }
+    // Filtro por unidad.
+    if (iUni >= 0 && RX_INF.eco) {
+        const q = norm(RX_INF.eco);
+        pre = pre.filter((f) => norm(f[iUni]).indexOf(q) >= 0);
+    }
+    // Resumen por unidad: sobre lo ya filtrado.
     if (RX_INF.vista === 'unidad') {
-        const r = rxInfResumenUnidad(RX_INF.cols, filas, tipos);
+        const r = rxInfResumenUnidad(RX_INF.cols, pre, { iUni: iUni, iFec: tipos.iFec, num: tipos.num, txt: tipos.txt });
         cols = r.cols;
         filas = r.filas;
+        pre = filas;
     }
-    const filtradas = rxInfFiltra(filas, RX_INF.q, 8);
+    pre = rxInfFiltra(pre, RX_INF.q, 8);
+    pre = rxInfOrdena(pre, RX_INF.orden, cols);
     const unidades = {};
-    const iUni = (RX_INF.vista === 'unidad') ? 0 : tipos.iUni;
-    if (iUni >= 0) filtradas.forEach((f) => { unidades[String(f[iUni])] = 1; });
+    if (iUni >= 0) pre.forEach((f) => { unidades[String(f[iUni] == null ? '' : f[iUni])] = 1; });
+    const zonas = {};
+    if (iZona >= 0) pre.forEach((f) => { zonas[String(f[iZona] == null ? '' : f[iZona])] = 1; });
     return {
-        cols: cols, filas: filtradas, total: filas.length, tipos: tipos,
-        unidades: Object.keys(unidades).length, unidadCol: iUni,
+        cols: cols, filas: pre, total: filas.length, tipos: tipos, clase: clase,
+        iZona: iZona, iUni: iUni,
+        unidades: Object.keys(unidades).length, zonas: Object.keys(zonas).length,
+        colUni: (RX_INF.vista === 'unidad') ? 0 : iUni,
         meta: RX_INF.meta || { filas: 0, unidades: 0, trozos: 0, objetos: 0, ms: 0, fallos: 0 }
     };
 }
@@ -13287,27 +13575,58 @@ function rxInfResumenTexto(v) {
     const m = v.meta;
     const rango = (RX_INF.desde || '') + ' \u2192 ' + (RX_INF.hasta || '');
     return (RX_INF.tpl ? RX_INF.tpl.nombre : 'Sin plantilla') + ' \u00b7 ' + rango + ' \u00b7 ' +
-        v.total + ' fila(s) de ' + v.filas.length + ' mostrada(s), ' + v.unidades + ' unidad(es) \u00b7 ' +
+        v.total + ' fila(s) de ' + v.filas.length + ' mostrada(s)' +
+        (v.iUni >= 0 ? ', ' + v.unidades + ' unidad(es)' : '') +
+        (v.iZona >= 0 ? ', ' + v.zonas + ' geocerca(s)' : '') + ' \u00b7 ' +
         m.trozos + ' trozos \u00b7 ' + Math.round(m.ms / 1000) + ' s' +
         (m.cacheados ? ' \u00b7 ' + m.cacheados + ' ya estaban en cache' : '') +
         (m.fallos ? ' \u00b7 ' + m.fallos + ' trozo(s) con error' : '');
 }
-// Tabla de la vista previa: las celdas se escapan y los numeros se alinean.
+// Tabla de la vista previa: celdas escapadas, numeros alineados y
+// cabecera pulsable para ordenar (lo que se ve es lo que se exporta).
 function rxInfTablaHTML(cols, filas, max) {
-    const cab = (cols || []).slice(0, 14).map((c) => '<th>' + esc(c) + '</th>').join('');
+    const orden = RX_INF.orden;
+    const cab = (cols || []).slice(0, 14).map((c, i) => {
+        const act = orden && orden.col === i;
+        const flecha = act ? (orden.dir < 0 ? ' \u25be' : ' \u25b4') : '';
+        return '<th class="ord' + (act ? ' on' : '') + '" data-col="' + i + '" title="Ordenar por esta columna">' +
+            esc(c) + flecha + '</th>';
+    }).join('');
     const cuerpo = (filas || []).slice(0, max || 60).map((f) => {
         let out = '';
         for (let i = 0; i < Math.min((cols || []).length, 14); i++) {
             const v = f[i];
             const txt = (v == null || v === '') ? '-' : String(v);
-            const num = rxInfNum(v) != null && !isNaN(Number(String(txt).replace(/[^\d,.\-]/g, '')));
+            const num = rxInfNum(v) != null;
             out += '<td' + (num ? ' class="num"' : '') + '>' + esc(txt) + '</td>';
         }
         return '<tr>' + out + '</tr>';
     }).join('');
     return '<table><thead><tr>' + cab + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
 }
-
+// Bloque "que datos trae": los campos de la plantilla con su tipo y de que
+// trata (vehiculos, geocercas o mixto). Es la respuesta a la pregunta que
+// se hace uno al elegir una plantilla sin saber que trae.
+function rxInfCamposHTML(info) {
+    if (!info || !info.cols || !info.cols.length) return '';
+    const c = info.clase || {};
+    const ETQ = { geocercas: 'Geocercas', vehiculos: 'Veh\u00edculos', mixto: 'Veh\u00edculos y geocercas', otro: 'Datos generales' };
+    const ETQF = { texto: 'texto', numero: 'n\u00famero', fecha: 'fecha' };
+    const chips = (info.clase && info.clase.campos || []).slice(0, 14).map((f) =>
+        '<span class="rgi-campo t-' + f.t + '">' + esc(f.n) + '<i>' + ETQF[f.t] + '</i></span>').join('');
+    const extra = (info.clase && info.clase.campos && info.clase.campos.length > 14)
+        ? '<span class="rgi-campo">+' + (info.clase.campos.length - 14) + '</span>' : '';
+    const ej = info.filas
+        ? (info.filas + ' fila(s) en ' + (info.horas === 24 ? 'las \u00faltimas 24 h' : 'los \u00faltimos 7 d\u00edas'))
+        : '';
+    return '<div class="rgi-sonda">' +
+        '<div class="rgi-sonda-t"><b>' + esc(ETQ[c.tipo] || 'Datos') + '</b>' +
+        (info.cols.length ? '<span>' + info.cols.length + ' campo(s)' + (ej ? ' \u00b7 ' + ej : '') + '</span>' : '') +
+        '</div>' +
+        '<div class="rgi-campos">' + chips + extra + '</div>' +
+        (info.fallo ? '<div class="rgi-sonda-e">Sondeo sin datos: ' + esc(info.fallo) + '</div>' : '') +
+        '</div>';
+}
 /* ====================== INFORMES POR PLANTILLA: UI ====================== */
 // Pantalla completa: lista de plantillas (con buscador), periodo, alcance,
 // ejecucion por trozos con progreso y cancelacion, y los resultados con sus
@@ -13324,6 +13643,9 @@ function abrirInformesPlantilla(origen) {
         }
     }
     const html = '<div class="rgi-tool">' +
+        // El minimapa vive FUERA de la caja de datos: se actualiza sin
+        // repintar el formulario y aparece/desaparece segun los datos.
+        '<div class="rgi-mapa" id="rgi-mapa" style="display:none"></div>' +
         '<div class="rgi-carga" id="rgi-carga" style="display:none">' +
         '<span id="rgi-carga-t">Calculando\u2026</span>' +
         '<span class="rgi-barra"><i id="rgi-barra"></i></span>' +
@@ -13378,7 +13700,7 @@ function abrirInformesPlantilla(origen) {
                 const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.export + '</span>' +
                     '<div class="rgi-herot"><b>' + esc(tpl ? tpl.nombre : 'Informes de la plataforma') + '</b>' +
                     '<span>' + esc(tpl
-                        ? 'Ejecutada por report/exec_report, en trozos de ' + RX_INF_DIAS_TROZO + ' dias para no chocar con el limite de tiempo'
+                        ? 'Ejecutada por report/exec_report, en trozos de ' + RX_INF_DIAS_TROZO + ' d\u00edas para no chocar con el l\u00edmite de tiempo'
                         : 'Elige una plantilla de las que ya tienes en AE-Track') + '</span></div>' +
                     (tpl ? '<i class="rgi-ori">API</i>' : '') + '</div>';
                 // Plantillas, con buscador.
@@ -13388,24 +13710,59 @@ function abrirInformesPlantilla(origen) {
                     '<i id="rgi-busca-n">' + lista.length + '/' + plantillas.length + '</i></span>' +
                     '<button type="button" class="mini" id="rgi-tpl-cargar"' + dis + '>' +
                     '<span class="rondo-usym">' + UIS.refresh + '</span> Leer plantillas</button></div>';
+                // Tarjetas: eligen la plantilla y la ejecutan. El tipo (de
+                // vehiculos o de geocercas) sale del sondeo de cada una.
+                const tipoBadge = (t) => {
+                    const c = (RX_INF.sonda && RX_INF._sondaKey === 'sondeo|' + rxInfClave(t)) ? RX_INF.sonda.clase : null;
+                    if (!c) return '';
+                    const ETQ = { geocercas: 'geocercas', vehiculos: 'veh\u00edculos', mixto: 'mixto', otro: 'datos' };
+                    return '<em class="rgi-tipo t-' + c.tipo + '">' + ETQ[c.tipo] + '</em>';
+                };
                 const listaHtml = '<div class="rgi-tpls" id="rgi-lista">' + (plantillas.length
-                    ? lista.map((t) => '<button type="button" class="rgi-tpl' +
-                        (rxInfClave(t) === rxInfClave(tpl) ? ' activo' : '') + '" data-tpl="' + esc(rxInfClave(t)) + '"' + dis + '>' +
-                        '<b>' + esc(t.nombre) + '</b><i>#' + esc(t.id) + '</i></button>').join('')
+                    ? lista.map((t) => '<div class="rgi-tpl' + (rxInfClave(t) === rxInfClave(tpl) ? ' activo' : '') + '">' +
+                        '<button type="button" class="rgi-tpl-sel" data-tpl="' + esc(rxInfClave(t)) + '"' + dis + '>' +
+                        '<b>' + esc(t.nombre) + '</b><i>#' + esc(t.id) + '</i>' + tipoBadge(t) + '</button>' +
+                        '<button type="button" class="rgi-tpl-run" data-tplrun="' + esc(rxInfClave(t)) + '" title="Ejecutar esta plantilla"' + dis + '>' +
+                        '<span class="rondo-usym">' + UIS.play + '</span></button>' +
+                        '</div>').join('')
                     : '<p class="rgi-more">' + (plantillas.length === 0 && !RX_INF._cargadas
                         ? 'Pulsando "Leer plantillas" se listan las que hay definidas en la plataforma.'
                         : 'Sin plantillas con ese nombre.') + '</p>') + '</div>';
+                // Que datos trae la plantilla (sondeo) y de que trata.
+                const sonda = RX_INF.sonda || null;
+                const panelSonda = (sonda && tpl && RX_INF._sondaKey === 'sondeo|' + rxInfClave(tpl))
+                    ? rxInfCamposHTML(sonda) : '';
+                // Filtro por geocerca (solo si la plantilla trae geocercas).
+                let filaGeos = '';
+                if (sonda && tpl && RX_INF._sondaKey === 'sondeo|' + rxInfClave(tpl) && sonda.clase.iZona >= 0) {
+                    const zs = rxInfZonasDeSonda();
+                    filaGeos = '<div class="rgi-row"><span class="rgi-lb">Geocerca</span><div class="rgi-chips rgi-zonas">' +
+                        zs.map((z) => '<button type="button" class="rgi-chip' +
+                            (RX_INF.zonas.indexOf(z.n) >= 0 ? ' activo' : '') + '" data-zona="' + esc(z.n) + '"' +
+                            (z.app ? ' title="Creada en Rondo"' : '') + dis + '>' +
+                            esc(z.n) + (z.app ? ' \u00b7 app' : '') + '</button>').join('') +
+                        (zs.length > 12 ? '<button type="button" class="mini" id="rgi-geos-todas"' + dis + '>todas</button>' : '') +
+                        '</div></div>';
+                }
+                // Filtro por unidad (si la plantilla trae unidades).
+                let filaEco = '';
+                if (sonda && tpl && RX_INF._sondaKey === 'sondeo|' + rxInfClave(tpl) && sonda.clase.iUni >= 0) {
+                    filaEco = '<div class="rgi-row"><span class="rgi-lb">Unidad</span>' +
+                        '<span class="rgi-busca"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rgi-eco" class="filtro" placeholder="Filtrar por unidad\u2026" value="' + esc(RX_INF.eco || '') + '"' + dis + '>' +
+                        (sonda.unidades.length ? '<i>' + sonda.unidades.length + '</i>' : '') + '</span></div>';
+                }
                 // Periodo y alcance.
                 const chip = (act, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
                     '" data-i="rango" data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') + dis + '>' + esc(txt) + '</button>';
                 const filaPeriodo = '<div class="rgi-row"><span class="rgi-lb">Periodo</span><div class="rgi-chips">' +
                     chip(RX_INF.rango === 'hoy' && !RX_INF.desde, 'hoy', 'Hoy') +
-                    chip(RX_INF.rango === '7d' && !RX_INF.desde, '7d', '7 dias') +
-                    chip(RX_INF.rango === '30d' && !RX_INF.desde, '30d', '30 dias') +
+                    chip(RX_INF.rango === '7d' && !RX_INF.desde, '7d', '7 d\u00edas') +
+                    chip(RX_INF.rango === '30d' && !RX_INF.desde, '30d', '30 d\u00edas') +
                     chip(RX_INF.rango === 'mes' && !RX_INF.desde, 'mes', 'Mes actual') +
                     chip(RX_INF.rango === 'mes-1' && !RX_INF.desde, 'mes-1', 'Mes anterior') +
-                    chip(RX_INF.rango === '90d' && !RX_INF.desde, '90d', '90 dias') +
-                    chip(RX_INF.rango === 'ano' && !RX_INF.desde, 'ano', 'Este ano') +
+                    chip(RX_INF.rango === '90d' && !RX_INF.desde, '90d', '90 d\u00edas') +
+                    chip(RX_INF.rango === 'ano' && !RX_INF.desde, 'ano', 'Este a\u00f1o') + chip(RX_INF.rango === 'ano-1' && !RX_INF.desde, 'ano-1', 'A\u00f1o anterior') +
                     chip(RX_INF.rango === 'todo' && !RX_INF.desde, 'todo', 'Todo') +
                     '</div></div>' +
                     '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
@@ -13418,7 +13775,7 @@ function abrirInformesPlantilla(origen) {
                     '<button type="button" class="rgi-chip' + (RX_INF.alcance !== 'sel' ? ' activo' : '') + '" data-i="alcance" data-v="todas"' + dis + '>' +
                     'Toda la flota</button>' +
                     '<button type="button" class="rgi-chip' + (RX_INF.alcance === 'sel' ? ' activo' : '') + '" data-i="alcance" data-v="sel"' + dis +
-                    (nUn ? ' title="Solo las ' + nUn + ' seleccionadas"' : ' title="Ninguna unidad seleccionada"') + '>' +
+                    (nUn ? ' title="Solo las ' + nUn + ' seleccionadas"' : ' title="Ning\u00fan unidad seleccionada"') + '>' +
                     'Solo seleccionadas (' + nUn + ')</button>' +
                     '</div></div>';
                 // Ejecucion:估算 y boton (o cancelar).
@@ -13452,11 +13809,12 @@ function abrirInformesPlantilla(origen) {
                     '</div></div>';
                 const kpis = hay ? '<div class="rgi-kpis">' +
                     '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>Filas</span></div>' +
-                    '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' +
+                    (v.iUni >= 0 ? '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' : '') +
+                    (v.iZona >= 0 ? '<div class="rgi-kpi"><b>' + v.zonas + '</b><span>Geocercas</span></div>' : '') +
                     '<div class="rgi-kpi"><b>' + v.meta.trozos + '</b><span>Trozos</span></div>' +
                     '<div class="rgi-kpi"><b>' + Math.round(v.meta.ms / 1000) + ' s</b><span>Calculo</span></div>' +
                     (v.meta.cacheados ? '<div class="rgi-kpi"><b>' + v.meta.cacheados + '</b><span>En cache</span></div>' : '') +
-                    (v.meta.fallos ? '<div class="rgi-kpi"><b>' + v.meta.fallos + '</b><span>Con error</span></div>' : '') +
+                    (v.meta.fallos ? '<div class="rgi-kpi"><b>' + v.meta.fallos + '</b><span>Trozos con error</span></div>' : '') +
                     '</div>' : '';
                 const tabla = hay
                     ? '<div class="rgi-prev">' + rxInfTablaHTML(v.cols, v.filas, 60) +
@@ -13475,7 +13833,9 @@ function abrirInformesPlantilla(origen) {
                     '<button type="button" class="mini" id="rgi-cache-limpiar"' + dis + '>' +
                     '<span class="rondo-usym">' + UIS.clear + '</span> Vaciar resultados guardados</button></div>' : '';
                 return '<div class="rgi">' + hero +
-                    '<div class="rgi-cfg">' + filaTpl + listaHtml + filaPeriodo + '</div>' +
+                    '<div class="rgi-cfg">' + filaTpl + listaHtml + '</div>' +
+                    panelSonda +
+                    '<div class="rgi-cfg">' + filaPeriodo + filaGeos + filaEco + '</div>' +
                     (avisos.length ? '<div class="rgi-aviso">' + avisos.map(esc).join(' ') + '</div>' : '') +
                     barraEjec +
                     (hay ? '<div class="rgi-cfg">' + barraVista + '</div>' : '') +
@@ -13483,7 +13843,14 @@ function abrirInformesPlantilla(origen) {
                     salidas +
                     '</div>';
             };
-            const pinta = () => { const mio = ++pintaN; if (mio === pintaN) setHtml(box, cuerpo()); };
+            const pinta = () => {
+                const mio = ++pintaN;
+                if (mio !== pintaN) return;
+                const v = rxInfVista();
+                setHtml(box, cuerpo());
+                // El mapa se recalcula con lo que hay ahora (con filtros).
+                try { rxInfPintaMapa(v); } catch (_) { /* sin mapa */ }
+            };
             // Lee las fechas escritas antes de repintar o ejecutar: el `change`
             // puede no haber saltado todavia y el repintado las perderia.
             const leeFechas = () => {
@@ -13519,10 +13886,25 @@ function abrirInformesPlantilla(origen) {
                 pinta();
                 try { plantillas = await rxInfPlantillas(); } catch (_) { plantillas = []; }
                 RX_INF._cargadas = true;
-                if (!RX_INF.tpl && plantillas.length) RX_INF.tpl = plantillas[0];
+                if (!RX_INF.tpl && plantillas.length) {
+                    RX_INF.tpl = plantillas[0];
+                    RX_INF.sonda = null;
+                    RX_INF._sondaKey = '';
+                }
                 RX_INF._buscando = false;
                 if (carga) carga.style.display = 'none';
                 pinta();
+                if (RX_INF.tpl) sondea();
+            };
+            // Sondeo: una ejecucion corta para saber que datos trae la
+            // plantilla y si es de vehiculos o de geocercas.
+            const sondea = async () => {
+                if (!RX_INF.tpl || RX_INF._sondeando) return;
+                RX_INF._sondeando = true;
+                const t = RX_INF.tpl;
+                try { await rxInfSondea(t); } catch (_) { /* sin datos */ }
+                RX_INF._sondeando = false;
+                if (RX_INF.tpl && rxInfClave(RX_INF.tpl) === rxInfClave(t)) pinta();
             };
             const ejecutar = async () => {
                 leeFechas();
@@ -13556,6 +13938,27 @@ function abrirInformesPlantilla(origen) {
                 RX_INF.cols = res.cols || [];
                 RX_INF.filas = res.filas || [];
                 RX_INF.meta = { filas: RX_INF.filas.length, unidades: 0, trozos: res.trozos, objetos: res.objetos, ms: res.ms, fallos: res.fallos, errores: res.errores, cacheados: res.cacheados, lleno: res.lleno };
+                // Si no se sondeo antes, el resultado real sirve de sondeo:
+                // el panel de datos y el filtro de geocercas aparecen solos.
+                if (RX_INF.cols.length && RX_INF._sondaKey !== 'sondeo|' + rxInfClave(RX_INF.tpl)) {
+                    const m = RX_INF.filas.slice(0, 12);
+                    const info = {
+                        cols: RX_INF.cols, muestra: m, filas: RX_INF.filas.length, horas: 0, fallo: '',
+                        clase: rxInfClasifica(RX_INF.cols, m), zonas: [], unidades: []
+                    };
+                    if (info.clase.iZona >= 0) {
+                        const set = {};
+                        m.forEach((f) => { const v = String(f[info.clase.iZona] == null ? '' : f[info.clase.iZona]).trim(); if (v) set[v] = 1; });
+                        info.zonas = Object.keys(set).sort();
+                    }
+                    if (info.clase.iUni >= 0) {
+                        const set = {};
+                        m.forEach((f) => { const v = String(f[info.clase.iUni] == null ? '' : f[info.clase.iUni]).trim(); if (v) set[v] = 1; });
+                        info.unidades = Object.keys(set).sort();
+                    }
+                    RX_INF.sonda = info;
+                    RX_INF._sondaKey = 'sondeo|' + rxInfClave(RX_INF.tpl);
+                }
                 if (carga) carga.style.display = 'none';
                 pinta();
                 if (res.cancelado) advice('Informe cancelado', RX_INF.filas.length + ' fila(s) hasta donde llego (quedan guardadas).');
@@ -13571,7 +13974,7 @@ function abrirInformesPlantilla(origen) {
                     if (btn.id === 'rgi-cache-limpiar') {
                         rxInfCacheLimpiar();
                         RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
-                        adviceOk('Resultados guardados vaciados', 'La proxima ejecucion los vuelve a calcular.');
+                        adviceOk('Resultados guardados vaciados', 'La pr\u00f3xima ejecuci\u00f3n los vuelve a calcular.');
                         pinta();
                         return;
                     }
@@ -13586,10 +13989,11 @@ function abrirInformesPlantilla(origen) {
                         if (btn.id === 'rgi-pdf') {
                             rxImprimirHTML(rxInfHTML({
                                 titulo: titulo, subtitulo: sub, cols: v.cols, filas: v.filas,
+                                mapa: rxInfMapaHTML(v, 660, 240),
                                 meta: Object.assign({}, v.meta, { unidades: v.unidades }),
                                 resumen: rxInfResumenTexto(v)
                             }));
-                            advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
+                            advice('Reporte listo', 'Elige "Guardar como PDF" en el di\u00e1logo de impresi\u00f3n.');
                             return;
                         }
                         if (btn.id === 'rgi-csv') {
@@ -13614,14 +14018,57 @@ function abrirInformesPlantilla(origen) {
                         return;
                     }
                 }
-                // Plantillas de la lista.
+                // Ejecutar una plantilla concreta desde su tarjeta.
+                const rb = ev.target.closest && ev.target.closest('[data-tplrun]');
+                if (rb && box.contains(rb)) {
+                    const t = rxInfTplDeClave(rb.dataset.tplrun);
+                    if (t) { RX_INF.tpl = { rid: t.rid, id: t.id, nombre: (plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0] || t).nombre }; ejecuta(); }
+                    return;
+                }
+                // Elegir plantilla: se sondea para saber que datos trae (si
+                // sigue sin saberse de esa plantilla).
                 const tb = ev.target.closest && ev.target.closest('[data-tpl]');
                 if (tb && box.contains(tb)) {
                     if (RX_INF._buscando) return;
-                    RX_INF.tpl = rxInfTplDeClave(tb.dataset.tpl) || RX_INF.tpl;
-                    // Cambiar de plantilla invalida lo calculado.
-                    RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
+                    const t = rxInfTplDeClave(tb.dataset.tpl);
+                    if (t) {
+                        const real = plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0];
+                        RX_INF.tpl = real || t;
+                        // Cambiar de plantilla invalida lo calculado y los
+                        // filtros que dependian de sus columnas.
+                        RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
+                        RX_INF.zonas = []; RX_INF.eco = ''; RX_INF.orden = null;
+                        RX_INF.sonda = null;
+                    }
                     pinta();
+                    if (t && RX_INF._sondaKey !== 'sondeo|' + rxInfClave(t)) sondea();
+                    return;
+                }
+                // Marcar geocercas (plantillas que las traen).
+                const zb = ev.target.closest && ev.target.closest('[data-zona]');
+                if (zb && box.contains(zb)) {
+                    if (RX_INF._buscando) return;
+                    const z = zb.dataset.zona;
+                    const i = RX_INF.zonas.indexOf(z);
+                    if (i >= 0) RX_INF.zonas.splice(i, 1); else RX_INF.zonas.push(z);
+                    pinta();
+                    return;
+                }
+                if (ev.target.closest && ev.target.closest('#rgi-geos-todas')) {
+                    if (RX_INF._buscando) return;
+                    RX_INF.zonas = rxInfZonasDeSonda().map((z) => z.n);
+                    pinta();
+                    return;
+                }
+                // Ordenar por cabecera de la tabla de resultados.
+                const th = ev.target.closest && ev.target.closest('th.ord');
+                if (th && box.contains(th)) {
+                    const c = Number(th.dataset.col);
+                    if (isFinite(c)) {
+                        if (RX_INF.orden && RX_INF.orden.col === c) RX_INF.orden.dir = -RX_INF.orden.dir;
+                        else RX_INF.orden = { col: c, dir: 1 };
+                        pinta();
+                    }
                     return;
                 }
                 const b = ev.target.closest && ev.target.closest('[data-i]');
@@ -13649,6 +14096,20 @@ function abrirInformesPlantilla(origen) {
                     if (n) n.textContent = listaTpl().length + '/' + plantillas.length;
                     return;
                 }
+                if (t.id === 'rgi-eco') {
+                    RX_INF.eco = t.value || '';
+                    const dyn = byId('rgi-dyn');
+                    if (dyn) {
+                        const v = rxInfVista();
+                        dyn.innerHTML = '<div class="rgi-kpis">' +
+                            '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>Filas</span></div>' +
+                            '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' +
+                            (v.iZona >= 0 ? '<div class="rgi-kpi"><b>' + v.zonas + '</b><span>Geocercas</span></div>' : '') +
+                            '</div><p class="rgi-res">' + esc(rxInfResumenTexto(v)) + '</p>' +
+                            '<div class="rgi-prev">' + rxInfTablaHTML(v.cols, v.filas, 60) + '</div>';
+                    }
+                    return;
+                }
                 if (t.id === 'rgi-q') {
                     RX_INF.q = t.value || '';
                     const dyn = byId('rgi-dyn');
@@ -13657,6 +14118,7 @@ function abrirInformesPlantilla(origen) {
                         dyn.innerHTML = '<div class="rgi-kpis">' +
                             '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>Filas</span></div>' +
                             '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' +
+                            (v.iZona >= 0 ? '<div class="rgi-kpi"><b>' + v.zonas + '</b><span>Geocercas</span></div>' : '') +
                             '</div><p class="rgi-res">' + esc(rxInfResumenTexto(v)) + '</p>' +
                             '<div class="rgi-prev">' + rxInfTablaHTML(v.cols, v.filas, 60) + '</div>';
                     }

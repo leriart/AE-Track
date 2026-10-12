@@ -21,6 +21,7 @@ if (ini < 0 || fin < 0) {
 const LS = { infplant: 'rondo.api.infplant' };
 const store = {};
 const stubs = [
+    'const APP = P_APP;',
     'const LS = P_LS;',
     'function readJSON(k, f){ const v = P_STORE[k]; return (v === undefined) ? f : v; }',
     'function writeJSON(k, v){ P_STORE[k] = v; }',
@@ -36,6 +37,10 @@ const stubs = [
     '  return out; }',
     'function rxGeoInfFechaMs(s, fin){ if (!s) return 0; const d = new Date(String(s) + "T00:00:00");',
     '  if (!isFinite(d.getTime())) return 0; if (fin) d.setHours(23, 59, 59, 999); return d.getTime(); }',
+    'function rxGeoInfNombre(z){ return (z && (z.n || z.nombre)) || ""; }',
+    'function rxGeoInfAnillo(z){ return (z && z.puntos) ? z.puntos : []; }',
+    'function rxGeoInfFechaTxt(ms){ return String(ms || 0); }',
+    'function glocOrigen(z){ return { id: (z && z.app) ? "app" : "plat" }; }',
     'function rxGeoInfYield(){ return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } }); }',
     'function remoteCall(m, p){ return P_REMOTE(m, p); }'
 ].join('\n');
@@ -43,7 +48,8 @@ const stubs = [
 const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
-    'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista};';
+    'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
+    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -76,7 +82,8 @@ function remote(m, p) {
     return Promise.resolve({});
 }
 
-const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', code)(store, LS, remote);
+const APP = { zonas: [] };
+const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS, remote, APP);
 
 // ── Descubrimiento de plantillas ─────────────────────────────────────────
 (async function () {
@@ -90,7 +97,7 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', code)(store, LS, remote)
         tpls.map((t) => t.nombre).join('|') === 'Kilometraje mensual|Paradas por unidad|Resumen diario',
         tpls.map((t) => t.nombre).join('|'));
     ok('plantillas: sin permiso no rompe', (function () {
-        const sinPermiso = new Function('P_STORE', 'P_LS', 'P_REMOTE', code)(store, LS, function () { return Promise.reject(new Error('code 8')); });
+        const sinPermiso = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS, function () { return Promise.reject(new Error('code 8')); }, APP);
         return true;
     })());
 
@@ -195,13 +202,13 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', code)(store, LS, remote)
 
     // Un trozo que falla no tira el informe entero.
     mod.rxInfCacheLimpiar();
-    const conFallo = new Function('P_STORE', 'P_LS', 'P_REMOTE', code)(store, LS, function (m, p) {
+    const conFallo = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS, function (m, p) {
         if (m === 'report/exec_report' && p.interval.from > ahora - 8 * 86400) return Promise.reject(new Error(m + ' -> code 1054'));
         if (m === 'report/exec_report') {
             return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }], rows: [['105']] } });
         }
         return Promise.resolve({});
-    });
+    }, APP);
     const rF = await conFallo.rxInfCorre(tpl, ahora - 21 * 86400, ahora, null, () => {}, null);
     ok('fallos: un trozo con error se anota y el resto sigue',
         rF.fallos === 1 && rF.filas.length > 0 && /1054/.test((rF.errores || [])[0] || ''),
@@ -240,6 +247,133 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', code)(store, LS, remote)
         v3.filas.length === 1 && v3.filas[0][0] === '205', JSON.stringify(v3.filas));
     mod.RX_INF.q = '';
     mod.RX_INF.vista = 'filas';
+
+
+    // ── De que trata la plantilla (lo deduce de sus columnas) ────────────
+    ok('clase: de vehiculos cuando trae unidad/conductor',
+        (function () {
+            const c = mod.rxInfClasifica(['Unidad', 'Fecha', 'Km', 'Conductor'], [['105', 'x', 1, 'Juan']]);
+            return c.tipo === 'vehiculos' && c.iUni === 0 && c.iZona < 0;
+        })(), JSON.stringify(mod.rxInfClasifica(['Unidad', 'Km'], [['105', 1]]).tipo));
+    ok('clase: de geocercas cuando trae zona/geocerca',
+        (function () {
+            const c = mod.rxInfClasifica(['Geocerca', 'Entradas'], [['PATIO', 3]]);
+            return c.tipo === 'geocercas' && c.iZona === 0;
+        })());
+    ok('clase: mixta cuando trae las dos cosas',
+        mod.rxInfClasifica(['Unidad', 'Geocerca'], [['105', 'PATIO']]).tipo === 'mixto');
+    ok('clase: sin pistas es "datos generales"',
+        mod.rxInfClasifica(['Precio', 'Cantidad'], [[1, 2]]).tipo === 'otro');
+    ok('clase: si los valores coinciden con geocercas de la plataforma, la columna es de geocerca',
+        (function () {
+            APP.zonas = [{ n: 'PATIO' }, { n: 'CEDIS' }];
+            const c = mod.rxInfClasifica(['Lugar', 'Visitas'], [['PATIO', 3], ['CEDIS', 1], ['OTRO', 2]]);
+            APP.zonas = [];
+            return c.iZona === 0 && (c.tipo === 'geocercas' || c.tipo === 'mixto');
+        })(), JSON.stringify(mod.rxInfClasifica(['Lugar'], [['PATIO']]).iZona));
+    ok('clase: los campos llevan su tipo (numero, fecha, texto)',
+        (function () {
+            const c = mod.rxInfClasifica(['Unidad', 'Fecha', 'Km'], [['105', '2026-03-10', 12]]);
+            return c.campos.length === 3 && c.campos[2].t === 'numero' && c.campos[1].t === 'fecha';
+        })());
+    ok('clase: la etiqueta sale en espanol con acentuacion',
+        mod.rxInfClasifica(['Unidad'], [['1']]).etiqueta === 'Veh\u00edculos' &&
+        mod.rxInfClasifica(['Geocerca'], [['PATIO']]).etiqueta === 'Geocercas',
+        mod.rxInfClasifica(['Unidad'], [['1']]).etiqueta);
+
+    // ── Sondeo: ejecutar una vez para saber que trae la plantilla ───────
+    mod.rxInfCacheLimpiar();
+    mod.RX_INF.sonda = null; mod.RX_INF._sondaKey = '';
+    const s1 = await mod.rxInfSondea(tpl);
+    ok('sondeo: ejecuta la plantilla y guarda sus columnas',
+        s1.cols.length === 5 && s1.muestra.length === 2 && s1.clase, JSON.stringify(Object.keys(s1)));
+    ok('sondeo: dice de que trata la plantilla', s1.clase.tipo === 'vehiculos' && s1.etiquetaOK === undefined);
+    ok('sondeo: lista las unidades que aparecen',
+        s1.unidades.length === 2 && s1.unidades.indexOf('105') >= 0, JSON.stringify(s1.unidades));
+    ok('sondeo: se cachea (no se vuelve a ejecutar)',
+        (function () {
+            const antes = calls.length;
+            return mod.rxInfSondea(tpl) && calls.length === antes;
+        })());
+
+    // ── Coordenadas y minimapa ───────────────────────────────────────────
+    ok('mapa: detecta columnas de lat/lon', (function () {
+        const c = mod.rxInfCoords(['Unidad', 'Latitud', 'Longitud']);
+        return c.iLat === 1 && c.iLon === 2;
+    })(), JSON.stringify(mod.rxInfCoords(['Unidad', 'Latitud', 'Longitud'])));
+    ok('mapa: sin coordenadas no las inventa', mod.rxInfCoords(['Unidad', 'Km']).iLat < 0);
+    ok('mapa: sin coordenadas ni geocercas no hay mapa',
+        mod.rxInfMapaDatos({ cols: ['Unidad', 'Km'], filas: [['105', 3]], iZona: -1 }) === null);
+    ok('mapa: con coordenadas dibuja marcas', (function () {
+        const d = mod.rxInfMapaDatos({ cols: ['Unidad', 'Lat', 'Lon'], filas: [['105', 19.4, -99.1], ['205', 19.5, -99.2]], iZona: -1 });
+        return d && d.marcas.length === 2 && d.lineas.length === 0;
+    })());
+    ok('mapa: descarta coordenadas invalidas',
+        (function () {
+            const d = mod.rxInfMapaDatos({ cols: ['Lat', 'Lon'], filas: [[999, 0], [19.4, -99.1]], iZona: -1 });
+            return d.marcas.length === 1;
+        })());
+    ok('mapa: con columna de geocerca dibuja el contorno de la plataforma', (function () {
+        APP.zonas = [{ n: 'PATIO', puntos: [{ lat: 1, lon: 2 }, { lat: 1, lon: 3 }, { lat: 2, lon: 3 }] }];
+        const d = mod.rxInfMapaDatos({ cols: ['Geocerca'], filas: [['PATIO'], ['OTRA']], iZona: 0 });
+        APP.zonas = [];
+        return d && d.lineas.length === 1 && d.lineas[0].pts.length === 3;
+    })(), JSON.stringify(mod.rxInfMapaDatos({ cols: ['Geocerca'], filas: [['PATIO']], iZona: 0 })));
+    ok('mapa: el bloque de datos lleva los campos con su tipo',
+        /campo/.test(mod.rxInfCamposHTML({ cols: ['Unidad', 'Km'], clase: mod.rxInfClasifica(['Unidad', 'Km'], [['105', 1]]), filas: 2, horas: 24 })) &&
+        /número|numero/.test(mod.rxInfCamposHTML({ cols: ['Unidad', 'Km'], clase: mod.rxInfClasifica(['Unidad', 'Km'], [['105', 1]]), filas: 2, horas: 24 })));
+    ok('mapa: sin datos no pinta el bloque', mod.rxInfCamposHTML({ cols: [] }) === '');
+
+    // ── Orden y filtros ──────────────────────────────────────────────────
+    ok('orden: por numero, ascendente y descendente',
+        (function () {
+            const f = [['105', 300], ['205', 100], ['305', 200]];
+            const asc = mod.rxInfOrdena(f, { col: 1, dir: 1 }).map((x) => x[1]);
+            const desc = mod.rxInfOrdena(f, { col: 1, dir: -1 }).map((x) => x[1]);
+            return asc.join(',') === '100,200,300' && desc.join(',') === '300,200,100';
+        })());
+    ok('orden: por texto cuando no es numero',
+        mod.rxInfOrdena([['b'], ['a']], { col: 0, dir: 1 }).map((x) => x[0]).join('') === 'ab');
+    ok('orden: sin orden devuelve lo mismo', mod.rxInfOrdena([['2'], ['1']], null).map((x) => x[0]).join('') === '21');
+    ok('filtro: por geocerca cuando la plantilla trae esa columna',
+        (function () {
+            mod.RX_INF.sonda = { clase: mod.rxInfClasifica(['Geocerca', 'Unidad'], [['PATIO', '105']]) };
+            mod.RX_INF.cols = ['Geocerca', 'Unidad', 'Km'];
+            mod.RX_INF.filas = [['PATIO', '105', 1], ['CEDIS', '205', 2], ['PATIO', '205', 3]];
+            mod.RX_INF.zonas = ['PATIO'];
+            mod.RX_INF.eco = '';
+            mod.RX_INF.vista = 'filas';
+            mod.RX_INF.orden = null;
+            mod.RX_INF.q = '';
+            mod.RX_INF.meta = { filas: 3, unidades: 0, trozos: 1, objetos: 0, ms: 0, fallos: 0 };
+            const v = mod.rxInfVista();
+            return v.filas.length === 2 && v.zonas === 1 && v.unidades === 2;
+        })(), JSON.stringify(mod.rxInfVista().filas));
+    ok('filtro: por unidad encima del de geocerca',
+        (function () {
+            mod.RX_INF.eco = '205';
+            const v = mod.rxInfVista();
+            mod.RX_INF.eco = '';
+            return v.filas.length === 1 && v.filas[0][1] === '205';
+        })());
+    ok('filtro: el resumen por unidad respeta los filtros', (function () {
+        mod.RX_INF.vista = 'unidad';
+        mod.RX_INF.zonas = ['CEDIS'];
+        const v = mod.rxInfVista();
+        mod.RX_INF.vista = 'filas';
+        mod.RX_INF.zonas = [];
+        return v.filas.length === 1 && v.filas[0][0] === '205';
+    })(), JSON.stringify(mod.rxInfVista().filas));
+    ok('filtro: sin columna de geocerca no filtra por ella',
+        (function () {
+            mod.RX_INF.sonda = null;
+            mod.RX_INF.cols = ['Unidad', 'Km'];
+            mod.RX_INF.filas = [['105', 1], ['205', 2]];
+            mod.RX_INF.zonas = ['PATIO'];
+            const v = mod.rxInfVista();
+            mod.RX_INF.zonas = [];
+            return v.filas.length === 2 && v.iZona < 0;
+        })());
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

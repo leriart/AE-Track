@@ -1581,6 +1581,39 @@
             "#rondo-dialog .rgi-tpl.activo{border-color:transparent;background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
             "#rondo-dialog .rgi-tpl.activo i{color:var(--rondo-accent-fg);opacity:.75}\n" +
             "#rondo-dialog .rgi-tpl:disabled{opacity:.55;cursor:not-allowed}\n" +
+            // Tarjeta con boton de ejecucion propio.
+            "#rondo-dialog .rgi-tpl{display:flex;align-items:stretch;gap:2px;padding:0;border-radius:8px;border:1px solid var(--rondo-border-soft);background:var(--rondo-bg);min-width:0;overflow:hidden}\n" +
+            "#rondo-dialog .rgi-tpl.activo{border-color:var(--rondo-accent);background:var(--rondo-accent-bg)}\n" +
+            "#rondo-dialog .rgi-tpl-sel{display:flex;flex-direction:column;align-items:flex-start;gap:1px;flex:1;min-width:0;padding:6px 4px 6px 9px;border:0;background:none;color:var(--rondo-fg);cursor:pointer;text-align:left}\n" +
+            "#rondo-dialog .rgi-tpl-run{flex:0 0 auto;border:0;border-left:1px solid var(--rondo-border-soft);background:none;color:var(--rondo-fg-mute);cursor:pointer;padding:0 9px;display:flex;align-items:center}\n" +
+            "#rondo-dialog .rgi-tpl-run:hover:not(:disabled){background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
+            "#rondo-dialog .rgi-tpl-run .rondo-usym{font-size:15px}\n" +
+            "#rondo-dialog .rgi-tipo{font:700 7.5px var(--rondo-font);font-style:normal;letter-spacing:.4px;text-transform:uppercase;padding:1px 5px;border-radius:6px;background:var(--rondo-bg-strong);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-tipo.t-vehiculos{color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-tipo.t-geocercas{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-tipo.t-mixto{color:var(--rondo-ok)}\n" +
+            // Bloque "que datos trae la plantilla".
+            "#rondo-dialog .rgi-sonda{display:flex;flex-direction:column;gap:6px;padding:8px 11px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-left:4px solid var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-sonda-t{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}\n" +
+            "#rondo-dialog .rgi-sonda-t b{font:700 12px var(--rondo-font);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-sonda-t span{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-campos{display:flex;gap:4px;flex-wrap:wrap}\n" +
+            "#rondo-dialog .rgi-campo{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);font:600 10px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-dialog .rgi-campo i{font:600 8.5px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-campo.t-numero{border-color:rgba(var(--rondo-accent-rgb),.4);color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-campo.t-fecha{border-color:rgba(var(--rondo-ok-rgb,67,160,71),.5)}\n" +
+            "#rondo-dialog .rgi-sonda-e{font:500 10px var(--rondo-font);color:var(--rondo-warn-fg)}\n" +
+            // Minimapa del informe.
+            "#rondo-dialog .rgi-mapa{position:relative;height:190px;border-radius:var(--rondo-radius-sm);overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft)}\n" +
+            "#rondo-dialog .rgi-mapa .rondo-mm{border:0;border-radius:0}\n" +
+            "#rondo-dialog .rgi-mapa-ley{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:5px 8px;font:500 9.5px var(--rondo-font);color:var(--rondo-fg-mute);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);border-top:0;border-radius:0 0 var(--rondo-radius-sm) var(--rondo-radius-sm)}\n" +
+            "#rondo-dialog .rgi-mapa-ley span{display:inline-flex;align-items:center;gap:4px}\n" +
+            "#rondo-dialog .rgi-mapa-ley i{width:9px;height:9px;border-radius:3px;display:inline-block}\n" +
+            // Cabecera ordenable de la tabla de resultados.
+            "#rondo-dialog .rgi-prev th.ord{cursor:pointer;user-select:none}\n" +
+            "#rondo-dialog .rgi-prev th.ord:hover{color:var(--rondo-fg)}\n" +
+            "#rondo-dialog .rgi-prev th.ord.on{color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rgi-zonas{max-height:96px;overflow:auto}\n" +
             // Tarjeta de geocerca de la app: distintivo violeta/acento.
             "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
             "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";
