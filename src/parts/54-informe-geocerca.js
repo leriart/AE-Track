@@ -14,11 +14,16 @@
  * poder probarlo aislado en tests/informe-geocerca.test.js.
  */
 const RX_GEO_FUENTES = Object.freeze(['historial', 'rastreo', 'bitacora', 'viajes', 'replay']);
-// Limites del escaneo del historial de la plataforma (una peticion por
-// unidad, como hace el Replay). Con flotas enormes se acota para que el
-// informe no tarde una eternidad.
+// Limites del escaneo del historial de la plataforma (el mismo endpoint que
+// el Replay, paginando por unidad hasta agotar el rango). Con flotas enormes
+// se acota para que el informe no tarde una eternidad.
 const RX_GEO_HIST_MAX_U = 150;
-const RX_GEO_HIST_MSGS = 3000;
+// Mensajes por peticion (load_interval devuelve como maximo esto por llamada).
+const RX_GEO_HIST_MSGS = 5000;
+// Trozos maximos por unidad: el historial se descarga paginando (meses o
+// todo lo que la API guarde) y este tope evita que una unidad con años de
+// GPS frene el barrido de toda la flota.
+const RX_GEO_HIST_PAGS = 30;
 // Peticiones simultaneas al escanear el historial. En serie, 150 unidades
 // tardan una eternidad; con un pool de 6 va varias veces mas rapido sin
 // castigar al servidor de la plataforma.
@@ -27,7 +32,7 @@ const RX_GEO_HIST_CONC = 6;
 // umbral del Replay porque aqui la traza se toma en vivo, con puntos cada
 // pocos segundos: esperar 15 min seria exigir demasiado.
 const RX_GEO_PARADA_MIN = 2;
-const RX_GEO_RANGOS = Object.freeze(['hoy', '24h', '7d', '15d', '30d', 'todo']);
+const RX_GEO_RANGOS = Object.freeze(['hoy', '24h', '7d', '15d', '30d', '60d', '90d', 'todo']);
 const RX_GEO_TIPOS = Object.freeze({
     entra: 'Entrada',
     sale: 'Salida',
@@ -146,6 +151,8 @@ function rxGeoInfDesde(rango, ahora) {
     if (rango === '7d') return n - 7 * 24 * 3600 * 1000;
     if (rango === '15d') return n - 15 * 24 * 3600 * 1000;
     if (rango === '30d') return n - 30 * 24 * 3600 * 1000;
+    if (rango === '60d') return n - 60 * 24 * 3600 * 1000;
+    if (rango === '90d') return n - 90 * 24 * 3600 * 1000;
     return 0;
 }
 // Agrega los eventos por unidad. modo 'cruces' ordena por cruces,
@@ -360,8 +367,11 @@ function rxGeoInfChofer(o) {
     const flds = o.flds || o.campos || o.props || null;
     if (flds && typeof flds === 'object') {
         for (const k of Object.keys(flds)) {
-            if (!RX_GEO_CHOFER_RE.test(norm(k))) continue;
             const v = flds[k];
+            // En Wialon `flds` va indexado por ID NUMERICO: el nombre del
+            // campo ("Conductor") viaja en v.n. Se prueban los dos.
+            const nombre = (v && typeof v === 'object' && v.n) ? v.n : k;
+            if (!RX_GEO_CHOFER_RE.test(norm(nombre))) continue;
             const s = (v && typeof v === 'object') ? (v.v != null ? v.v : v.n) : v;
             const t = String(s == null ? '' : s).trim();
             if (t && !RX_GEO_CHOFER_VACIO.test(t)) return t;
@@ -602,21 +612,50 @@ function rxGeoInfDeHistorial() {
     return _rxGeoHist.eventos;
 }
 // Rango en segundos (el que espera load_interval). Sin rango explicito se
-// toman las ultimas 24 h; "Todo" se acota a 7 dias para no barrer años.
+// toman las ultimas 24 h; "Todo" va SIN inicio (0): la plataforma responde
+// con todo el historial que tenga guardado de la unidad.
 function rxGeoInfRangoS() {
     const ahora = Math.floor(Date.now() / 1000);
-    let d = RX_GEO.desde ? Math.floor(rxGeoInfFechaMs(RX_GEO.desde, false) / 1000) : Math.floor(rxGeoInfDesde(RX_GEO.rango) / 1000);
+    let d = RX_GEO.desde ? Math.floor(rxGeoInfFechaMs(RX_GEO.desde, false) / 1000)
+        : (RX_GEO.rango === 'todo' ? 0 : Math.floor(rxGeoInfDesde(RX_GEO.rango) / 1000));
     let h = RX_GEO.hasta ? Math.floor(rxGeoInfFechaMs(RX_GEO.hasta, true) / 1000) : ahora;
-    if (!d) d = ahora - 7 * 24 * 3600;
+    if (!d && RX_GEO.rango !== 'todo') d = ahora - 7 * 24 * 3600;
     if (!h || h > ahora) h = ahora;
     return { desde: d, hasta: h };
+}
+// Descarga el historial de una unidad POR TROZOS: load_interval devuelve
+// como maximo `loadCount` mensajes por llamada (~1 dia de GPS), asi que se
+// repite avanzando el inicio al ultimo mensaje recibido hasta que el
+// servidor responde menos de un trozo (fin real) o se llega al tope de
+// seguridad. Asi se cubren meses o todo el historico sin pedir de mas a las
+// unidades con pocos datos (salen en la primera llamada).
+async function rxGeoInfFetchMensajes(uid, desde, hasta, token) {
+    const msgs = [];
+    let t0 = desde;
+    for (let pag = 0; pag < RX_GEO_HIST_PAGS; pag++) {
+        if (token && token.cancelado) break;
+        const r = await remoteCall('messages/load_interval', {
+            itemId: uid, timeFrom: t0, timeTo: hasta,
+            flags: 1, flagsMask: 1, loadCount: RX_GEO_HIST_MSGS
+        });
+        const parte = (r && r.messages) || [];
+        if (!parte.length) break;
+        let ult = 0;
+        for (const m of parte) { const t = Number(m && m.t) || 0; if (t > ult) ult = t; }
+        msgs.push.apply(msgs, parte);
+        if (parte.length < RX_GEO_HIST_MSGS || !ult || ult <= t0) break;
+        t0 = ult + 1;
+    }
+    return { msgs: msgs, truncado: msgs.length >= RX_GEO_HIST_MSGS * RX_GEO_HIST_PAGS };
 }
 // Escanea el historial de la flota. `onProg(hechas, total, eco)` actualiza la
 // barra; `token` permite cancelar (al cerrar el dialogo o cambiar opciones).
 async function rxGeoInfEscanear(onProg, token) {
     const cfg = { desde: RX_GEO.desde, hasta: RX_GEO.hasta, rango: RX_GEO.rango, zona: RX_GEO.zona, unidades: RX_GEO.unidades };
     const key = rxGeoInfHistKey();
-    const ya = (_rxGeoHist.key === key && (Date.now() - _rxGeoHist.t) < 120000);
+    // Cache de 10 min: el historico pasado no cambia, y regenerar un reporte
+    // (para el PDF o el CSV) no debe volver a barrer la flota.
+    const ya = (_rxGeoHist.key === key && (Date.now() - _rxGeoHist.t) < 600000);
     if (ya) return _rxGeoHist;
     const rango = rxGeoInfRangoS();
     const lista = [];
@@ -641,7 +680,7 @@ async function rxGeoInfEscanear(onProg, token) {
     });
     const encontrados = [];
     const total = lista.length;
-    let hechas = 0, idx = 0;
+    let hechas = 0, idx = 0, truncMsgs = false;
     // Pool de peticiones en paralelo: cada obrero toma la siguiente unidad
     // libre hasta agotarlas. Es la diferencia entre minutos y segundos.
     const obreros = Math.max(1, Math.min(RX_GEO_HIST_CONC, total || 1));
@@ -650,11 +689,9 @@ async function rxGeoInfEscanear(onProg, token) {
             if (token && token.cancelado) return;
             const it = lista[idx++];
             try {
-                const r = await remoteCall('messages/load_interval', {
-                    itemId: it.u.id, timeFrom: rango.desde, timeTo: rango.hasta,
-                    flags: 1, flagsMask: 1, loadCount: RX_GEO_HIST_MSGS
-                });
-                const evs = rxGeoInfDeMensajes((r && r.messages) || [], it.info.eco || it.clave, 'historial');
+                const res = await rxGeoInfFetchMensajes(it.u.id, rango.desde, rango.hasta, token);
+                if (res.truncado) truncMsgs = true;
+                const evs = rxGeoInfDeMensajes(res.msgs, it.info.eco || it.clave, 'historial');
                 // Chofer: si la unidad ya trae el campo personalizado se usa
                 // directo; si hubo eventos y no lo trae, se consulta por API
                 // (una peticion, cacheada 30 min) y se anota por unidad/dia.
@@ -681,7 +718,7 @@ async function rxGeoInfEscanear(onProg, token) {
     if (token && token.cancelado) return { eventos: [], truncado: false, unidades: 0, cancelado: true };
     _rxGeoHist = {
         key: key, t: Date.now(), eventos: encontrados,
-        truncado: lista.length >= RX_GEO_HIST_MAX_U, unidades: total
+        truncado: lista.length >= RX_GEO_HIST_MAX_U, truncMsgs: truncMsgs, unidades: total
     };
     return _rxGeoHist;
 }
@@ -790,7 +827,9 @@ function rxGeoInfResumen(d) {
         : (d.rango === '24h' ? 'ultimas 24 h'
             : (d.rango === '7d' ? 'ultimos 7 dias'
                 : (d.rango === '15d' ? 'ultimos 15 dias'
-                    : (d.rango === '30d' ? 'ultimos 30 dias' : 'todo el historico')))));
+                    : (d.rango === '30d' ? 'ultimos 30 dias'
+                        : (d.rango === '60d' ? 'ultimos 60 dias'
+                            : (d.rango === '90d' ? 'ultimos 90 dias' : 'todo el historico')))))));
     return fuenteTxt + ' \u00b7 ' + rangoTxt + (d.zona ? (' \u00b7 geocerca ' + d.zona) : '') +
         ': ' + t.unidades + ' unidad(es), ' + t.cruces + ' cruce(s) y ' + t.paradas +
         ' parada(s) con ' + t.min + ' min quieto' + (t.motor ? (' (' + t.motor + ' con motor apagado)') : '') + '.';
@@ -974,6 +1013,22 @@ function rxGeoInfNombreArchivo(d, ext) {
     return 'rondo_geocerca_' + geo + (d.modo === 'paradas' ? 'paradas_' : 'cruces_') +
         new Date().toISOString().slice(0, 10) + ext;
 }
+// Sincroniza las fechas del estado con lo que hay escrito en los campos.
+// Hace falta en dos sitios: al pulsar "Generar reporte" o una salida, el
+// input puede tener una fecha elegida cuyo evento `change` aun no salto (el
+// clic le quita el foco despues), y sin esto el repintado la perdia.
+function rxGeoInfLeeFechas() {
+    const dEl = byId('rgi-desde');
+    const hEl = byId('rgi-hasta');
+    if (dEl) RX_GEO.desde = dEl.value || '';
+    if (hEl) RX_GEO.hasta = hEl.value || '';
+    // Si el operador se equivoca de orden, se corrige solo.
+    if (RX_GEO.desde && RX_GEO.hasta && RX_GEO.desde > RX_GEO.hasta) {
+        const tmp = RX_GEO.desde;
+        RX_GEO.desde = RX_GEO.hasta;
+        RX_GEO.hasta = tmp;
+    }
+}
 // Dialogo: que informe, de que geocerca, de que periodo, con que datos, un
 // mapa con la geocerca y las unidades, y las tres salidas.
 function abrirInformeGeocerca(origen) {
@@ -1085,7 +1140,9 @@ function abrirInformeGeocerca(origen) {
             chip(RX_GEO.rango === '7d' && !RX_GEO.desde, 'data-rgi="rango"', '7d', '7 d\u00edas') +
             chip(RX_GEO.rango === '15d' && !RX_GEO.desde, 'data-rgi="rango"', '15d', '15 d\u00edas') +
             chip(RX_GEO.rango === '30d' && !RX_GEO.desde, 'data-rgi="rango"', '30d', '30 d\u00edas') +
-            chip(RX_GEO.rango === 'todo' && !RX_GEO.desde, 'data-rgi="rango"', 'todo', 'Todo') +
+            chip(RX_GEO.rango === '60d' && !RX_GEO.desde, 'data-rgi="rango"', '60d', '60 d\u00edas') +
+            chip(RX_GEO.rango === '90d' && !RX_GEO.desde, 'data-rgi="rango"', '90d', '90 d\u00edas') +
+            chip(RX_GEO.rango === 'todo' && !RX_GEO.desde, 'data-rgi="rango"', 'todo', 'Todo', 'Todo el historial que guarde la plataforma (puede tardar)') +
             '</div></div>' +
             '<div class="rgi-row"><span class="rgi-lb">D\u00edas</span>' +
             '<span class="rgi-rango">' +
@@ -1122,6 +1179,11 @@ function abrirInformeGeocerca(origen) {
                   'Para rastrear <b>toda la flota</b> en el rango elegido, usa el historial de la plataforma.' +
                   '<button type="button" class="mini" data-rgi="fuente" data-v="historial">' +
                   '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar en la plataforma</button></div>'
+                : '') +
+            ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey() && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs))
+                ? '<div class="rgi-aviso">El barrido se acoto: ' +
+                  (_rxGeoHist.truncado ? 'la flota supera ' + RX_GEO_HIST_MAX_U + ' unidades' : 'alguna unidad tiene mas historial del tope de seguridad') +
+                  '. Afina el periodo o la geocerca para verlo completo.</div>'
                 : '') +
             '<div class="rgi-prev">' + (d.unidades.filas.length
                 ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
@@ -1168,6 +1230,9 @@ function abrirInformeGeocerca(origen) {
             const pinta = async (generar) => {
                 const mio = ++pintaN;
                 if (generar) {
+                    // Respeta la fecha que el operador acaba de escribir
+                    // aunque su `change` no haya saltado todavia.
+                    rxGeoInfLeeFechas();
                     setProg(6, 'Reuniendo datos\u2026');
                     await rxGeoInfYield();
                     if (RX_GEO.fuente === 'historial') {
@@ -1202,12 +1267,13 @@ function abrirInformeGeocerca(origen) {
                 if (btn && box.contains(btn)) {
                     if (btn.id === 'rgi-generar') { pinta(true); return; }
                     if (btn.id === 'rgi-pdf') {
+                        rxGeoInfLeeFechas();
                         rxImprimirHTML(rxGeoInfHTML(rxGeoInfReune()));
                         advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
                         return;
                     }
-                    if (btn.id === 'rgi-csv') { rxGeoInfCSV(rxGeoInfReune()); return; }
-                    if (btn.id === 'rgi-md') { rxGeoInfMD(rxGeoInfReune()); return; }
+                    if (btn.id === 'rgi-csv') { rxGeoInfLeeFechas(); rxGeoInfCSV(rxGeoInfReune()); return; }
+                    if (btn.id === 'rgi-md') { rxGeoInfLeeFechas(); rxGeoInfMD(rxGeoInfReune()); return; }
                 }
                 const b = ev.target.closest && ev.target.closest('[data-rgi]');
                 if (!b || !box.contains(b)) return;
@@ -1249,14 +1315,10 @@ function abrirInformeGeocerca(origen) {
                     return;
                 }
                 if (t.id === 'rgi-desde' || t.id === 'rgi-hasta') {
-                    RX_GEO.desde = t.value || '';
-                    RX_GEO.hasta = (byId('rgi-hasta') ? byId('rgi-hasta').value : '') || '';
-                    // Si el operador se equivoca de orden, se corrige solo.
-                    if (RX_GEO.desde && RX_GEO.hasta && RX_GEO.desde > RX_GEO.hasta) {
-                        const tmp = RX_GEO.desde;
-                        RX_GEO.desde = RX_GEO.hasta;
-                        RX_GEO.hasta = tmp;
-                    }
+                    // Se leen LOS DOS campos: antes se asignaba el valor del
+                    // campo tocado a `desde`, y cambiar el dia final movia o
+                    // borraba el inicial.
+                    rxGeoInfLeeFechas();
                     RX_GEO.listo = false;
                     pinta(false);
                     return;

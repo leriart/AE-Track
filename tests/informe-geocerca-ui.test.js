@@ -222,6 +222,30 @@ function clickEn(id, extra) {
     ok('con Plataforma, generar consulta el historial', R.peticiones > p3,
         'peticiones nuevas=' + (R.peticiones - p3));
 
+    // 6) Regresion: cambiar el dia FINAL movia el valor al campo inicial
+    //    (el handler asignaba t.value a RX_GEO.desde siempre).
+    mod.RX_GEO.desde = '2026-02-01';
+    mod.RX_GEO.hasta = '';
+    nodos['rgi-desde'] = fakeEl('rgi-desde'); nodos['rgi-desde'].value = '2026-02-01';
+    nodos['rgi-hasta'] = fakeEl('rgi-hasta'); nodos['rgi-hasta'].value = '2026-02-10';
+    for (const h of (nodos['rgi-box'].handlers.change || [])) h({ target: nodos['rgi-hasta'] });
+    await esperar(); await esperar();
+    ok('cambiar el dia final conserva el inicial',
+        mod.RX_GEO.desde === '2026-02-01' && mod.RX_GEO.hasta === '2026-02-10',
+        mod.RX_GEO.desde + ' -> ' + mod.RX_GEO.hasta);
+
+    // 7) Regresion: "Generar reporte" respetaba solo lo ya confirmado con
+    //    `change`; una fecha recien escrita se perdia en el repintado.
+    mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = ''; mod.RX_GEO.rango = 'hoy';
+    mod.RX_GEO.fuente = 'bitacora';
+    nodos['rgi-desde'].value = '2026-02-03';
+    nodos['rgi-hasta'].value = '2026-02-05';
+    clickEn('rgi-generar');
+    await esperar(); await esperar(); await esperar();
+    ok('generar no reinicia la fecha recien escrita',
+        mod.RX_GEO.desde === '2026-02-03' && mod.RX_GEO.hasta === '2026-02-05',
+        mod.RX_GEO.desde + ' -> ' + mod.RX_GEO.hasta);
+
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
 })();

@@ -71,7 +71,11 @@ const stubs = [
         ' return (lon>=b.min_x-dl&&lon<=b.max_x+dl&&lat>=b.min_y-da&&lat<=b.max_y+da); }',
     'function rxFechaHora(t){ return t ? new Date(t).toISOString().slice(0,16).replace("T"," ") : "-"; }',
     'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/); const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
-    'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1; var msgs = (H.msgsPorId||{})[p.itemId] || [];' +
+    // Stub fiel a load_interval: filtra por rango y corta a loadCount, asi se
+    // puede probar la paginacion (meses de historial) sin red.
+    'function remoteCall(m, p){ H.peticiones = (H.peticiones||0) + 1;' +
+        ' var msgs = ((H.msgsPorId||{})[p.itemId] || []).filter(function(mm){ return mm && mm.t >= (p.timeFrom||0) && mm.t <= (p.timeTo||2147483647); });' +
+        ' if (p.loadCount && msgs.length > p.loadCount) msgs = msgs.slice(0, p.loadCount);' +
         ' if (!H.retardo) return Promise.resolve({ messages: msgs });' +
         ' return new Promise(function(r){ setTimeout(function(){ r({ messages: msgs }); }, H.retardo); }); }',
     'function setTimeout(f, t){ return setTimeout_(f, t); }',
@@ -84,7 +88,8 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxGeoInfDeBitacora,rxGeoInfDeViajes,rxGeoInfDeReplay,rxGeoInfDeRastreo,rxGeoInfDeHistorial,rxGeoInfDeMensajes,' +
     'rxGeoInfEscanear,rxGeoInfRangoS,rxGeoInfHistKey,rxGeoInfEventos,rxGeoInfFuentesDisponibles,rxGeoInfCacheReset,' +
     'rxGeoInfNombre,rxGeoInfZonaDe,rxGeoInfZonaSel,rxGeoInfReune,rxGeoInfCabeceras,rxGeoInfCeldasPlanas,rxGeoInfCeldasHTML,' +
-    'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U,' +
+    'rxGeoInfFetchMensajes,' +
+    'RX_GEO,RX_GEO_FUENTES,RX_GEO_RANGOS,RX_GEO_TIPOS,RX_GEO_HIST_MAX_U,RX_GEO_HIST_MSGS,RX_GEO_HIST_PAGS,' +
     'rxGeoInfParadasDePuntos,rxGeoInfChofer,rxGeoInfChoferDe,rxGeoInfChoferReset,rxGeoInfParam,rxGeoInfZonaCerca};';
 const mod = new Function('P', code)(H);
 
@@ -178,6 +183,10 @@ ok('rango: 24 h y 7 d restan dias', mod.rxGeoInfDesde('24h', AHORA) === AHORA - 
 ok('rango: todo = sin limite', mod.rxGeoInfDesde('todo', AHORA) === 0);
 ok('rango: 15 y 30 dias', mod.rxGeoInfDesde('15d', AHORA) === AHORA - 15 * 24 * 3600 * 1000 &&
     mod.rxGeoInfDesde('30d', AHORA) === AHORA - 30 * 24 * 3600 * 1000);
+ok('rango: 60 y 90 dias (meses atras)', mod.rxGeoInfDesde('60d', AHORA) === AHORA - 60 * 24 * 3600 * 1000 &&
+    mod.rxGeoInfDesde('90d', AHORA) === AHORA - 90 * 24 * 3600 * 1000);
+ok('rango: el catalogo incluye 60d y 90d',
+    mod.RX_GEO_RANGOS.indexOf('60d') >= 0 && mod.RX_GEO_RANGOS.indexOf('90d') >= 0);
 // Rango de dias escrito a mano (el selector de fechas del dialogo).
 // Fechas locales (el selector usa yyyy-mm-dd en hora local).
 const D = (iso) => { const p = String(iso).split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]).getTime(); };
@@ -189,6 +198,13 @@ ok('fecha: inicio a las 00:00 y fin al final del dia', (function () {
 ok('fecha: texto dd/mm/aaaa', mod.rxGeoInfFechaTxt(D('2026-03-10')) === '10/03/2026',
     mod.rxGeoInfFechaTxt(D('2026-03-10')));
 ok('fecha: vacio o invalido da 0', mod.rxGeoInfFechaMs('', true) === 0 && mod.rxGeoInfFechaMs('no-es-fecha', false) === 0);
+ok('rango: "todo" pide TODO el historial de la API (sin fecha de inicio)', (function () {
+    const bD = mod.RX_GEO.desde, bH = mod.RX_GEO.hasta, bR = mod.RX_GEO.rango;
+    mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = ''; mod.RX_GEO.rango = 'todo';
+    const r = mod.rxGeoInfRangoS();
+    mod.RX_GEO.desde = bD; mod.RX_GEO.hasta = bH; mod.RX_GEO.rango = bR;
+    return r.desde === 0 && r.hasta > 0 && r.hasta <= Math.floor(Date.now() / 1000);
+})());
 ok('filtro: incluye el dia final completo', (function () {
     const ev = [{ zona: 'P', tipo: 'entra', eco: '1', ts: D('2026-03-12') + 20 * 3600000 },
         { zona: 'P', tipo: 'entra', eco: '1', ts: D('2026-03-14') }];
@@ -224,6 +240,12 @@ mod.rxGeoInfChoferReset();
 ok('chofer: se lee del campo personalizado (conductor/chofer)',
     mod.rxGeoInfChofer({ flds: { conductor: { n: 'conductor', v: 'Juan Perez' } } }) === 'Juan Perez' &&
     mod.rxGeoInfChofer({ flds: { Chofer: 'Maria Lopez' } }) === 'Maria Lopez');
+// Regresion: en Wialon `flds` va indexado por id numerico y el nombre del
+// campo viaja en v.n; antes se comparaba el regex con la clave y jamas
+// coincidia, asi que ningun informe sacaba chofer.
+ok('chofer: flds con clave numerica (formato real de Wialon)',
+    mod.rxGeoInfChofer({ flds: { 7: { id: 7, n: 'Conductor', v: 'Ana Gil' } } }) === 'Ana Gil' &&
+    mod.rxGeoInfChofer({ flds: { 3: { id: 3, n: 'Placas', v: 'ABC-123' }, 9: { id: 9, n: 'Operador', v: 'Luis Mora' } } }) === 'Luis Mora');
 ok('chofer: tambien de un campo directo',
     mod.rxGeoInfChofer({ chofer: 'Ana Ruiz' }) === 'Ana Ruiz' && mod.rxGeoInfChofer({ driver: { n: 'Luis' } }) === 'Luis');
 ok('chofer: valores vacios o "sin asignar" no cuentan',
@@ -530,6 +552,39 @@ mod.rxGeoInfCacheReset();
     ok('historial: escanea en paralelo (pool de peticiones)',
         H.peticiones === 12 && ms < 260, 'peticiones=' + H.peticiones + ' ms=' + ms);
     H.retardo = 0;
+
+    // Paginacion: una unidad con mas mensajes que un trozo se descarga en
+    // varias llamadas (asi se cubren meses o todo el historico). Se prueban
+    // 2 trozos llenos + uno parcial.
+    H.unidades = [{ id: 55, nm: '105', pos: { y: 0, x: 0 } }];
+    APP.unidades = H.unidades;
+    const N_MSGS = mod.RX_GEO_HIST_MSGS * 2 + 700;
+    const T0 = Math.floor(Date.now() / 1000) - N_MSGS * 60;
+    const muchos = [];
+    for (let k = 0; k < N_MSGS; k++) {
+        const dentro = (k % 20 < 10);
+        muchos.push({ t: T0 + k * 60, pos: { y: dentro ? 0 : 0.02, x: 0, s: dentro ? 0 : 40 } });
+    }
+    H.msgsPorId = { 55: muchos };
+    H.peticiones = 0;
+    const rP = await mod.rxGeoInfFetchMensajes(55, 0, Math.floor(Date.now() / 1000), null);
+    ok('historial: pagina hasta agotar el rango (trozos de loadCount)',
+        rP.msgs.length === N_MSGS && H.peticiones === 3,
+        'msgs=' + rP.msgs.length + ' peticiones=' + H.peticiones);
+    ok('historial: sin duplicados entre trozos', (function () {
+        for (let i = 1; i < rP.msgs.length; i++) if (rP.msgs[i].t <= rP.msgs[i - 1].t) return false;
+        return true;
+    })());
+    ok('historial: no marca truncado cuando cabe en el tope', rP.truncado === false);
+    // El escaneo completo tambien pagina y saca eventos de toda la traza
+    // (rango distinto al de arriba para no caer en la cache del barrido).
+    mod.RX_GEO.rango = '15d'; mod.RX_GEO.desde = ''; mod.RX_GEO.hasta = '';
+    H.peticiones = 0;
+    const rE = await mod.rxGeoInfEscanear(() => {}, null);
+    ok('historial: el escaneo pagina en las unidades con mucho historial',
+        H.peticiones === 3 && rE.eventos.length > 0,
+        'peticiones=' + H.peticiones + ' eventos=' + rE.eventos.length);
+    mod.RX_GEO.rango = 'hoy';
 
 
     // ── Celdas para las salidas ─────────────────────────────────────────────
