@@ -125,6 +125,13 @@ function clickEn(id) {
     };
     for (const h of (box.handlers.click || [])) h(ev);
 }
+// Click sobre una opcion (chip), que repinta sin relanzar el sondeo.
+function chipEn(que, v) {
+    const el = { dataset: { i: que, v: v }, contains: () => true };
+    const box = byId('rgi-box');
+    const ev = { target: { closest: (sel) => (sel === '[data-i]' ? el : null) } };
+    for (const h of (box.handlers.click || [])) h(ev);
+}
 
 (async function () {
     // 1) Regresion: el dialogo se pinta (antes se abria en blanco).
@@ -214,6 +221,32 @@ function clickEn(id) {
     ok('al terminar guarda el numero de unidades en el resumen',
         mod.RX_INF.meta && mod.RX_INF.meta.unidades >= 1,
         JSON.stringify(mod.RX_INF.meta));
+
+
+    // 7) La pantalla ensena que declara la plantilla: sus columnas y los
+    //    filtros con los que viene guardada.
+    mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
+    mod.RX_INF._sondaKey = 'sondeo|3:12';
+    mod.RX_INF.sonda = {
+        estado: 'ok', cols: ['Unidad', 'Hora de entrada'], muestra: [['105', 'x']], filas: 1, horas: 24,
+        zonas: [], unidades: ['105'], objetos: 2,
+        declaracion: {
+            nombre: 'GEOCERCA', tipoObj: 'avl_geozone', esGeo: true, esUnidad: false,
+            columnas: ['Unidad', 'Hora de entrada', 'Hora de salida', 'Duracion en'],
+            params: [{ tabla: 'Unidades', k: 'units', v: '27418488' }], tablas: []
+        }
+    };
+    chipEn('vista', 'filas');
+    await new Promise((r) => setTimeout(r, 30));
+    const h3 = byId('rgi-box').innerHTML;
+    ok('el panel dice a que esta atada la plantilla',
+        /Geocercas \(declarado por la plantilla\)/.test(h3), h3.slice(0, 200));
+    ok('el panel ensena las columnas que trae la plantilla',
+        /Lo que trae la plantilla/.test(h3) && /Hora de entrada/.test(h3) && /Duracion en/.test(h3));
+    ok('el panel ensena los filtros con los que viene guardada',
+        /Filtros guardados/.test(h3) && /units: 27418488/.test(h3));
+    ok('la plantilla de geocercas ofrece el filtro de geocerca',
+        /id="rgi-zona-busca"/.test(h3) || /data-zona/.test(h3));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

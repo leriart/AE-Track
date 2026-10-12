@@ -376,6 +376,80 @@ function rxInfSecundarios(datos) {
     recorrer(datos, 0);
     return out;
 }
+// ── Que declara la plantilla (report/get_report_data) ───────────────────
+// La respuesta es una lista de plantillas con su estructura de tablas:
+//   ct        tipo de objeto al que esta atada (avl_geozone, avl_unit...)
+//   tbl[].cl  etiquetas de las columnas (lo que vera el operador)
+//   tbl[].c   claves internas de esas columnas
+//   tbl[].p   parametros con los que la plantilla esta guardada (sus
+//             FILTROS: {"units":"27418488"})
+//   filter_order  filtros que admite la tabla
+// Con esto la pantalla puede decir que datos ocupa la plantilla y sobre que
+// objetos se puede ejecutar, en vez de deducirlo a ojo.
+function rxInfPlantillaInfo(datos, tplId) {
+    const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+    const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+    if (!t) return null;
+    const tablas = (t.tbl || []).map((tb) => {
+        let claves = [], etiquetas = [], params = null;
+        try { claves = JSON.parse(tb.c || '[]'); } catch (_) { claves = []; }
+        try { etiquetas = JSON.parse(tb.cl || '[]'); } catch (_) { etiquetas = []; }
+        try { params = JSON.parse(tb.p || 'null'); } catch (_) { params = null; }
+        return {
+            n: tb.n || '', l: tb.l || '',
+            claves: Array.isArray(claves) ? claves : [],
+            etiquetas: Array.isArray(etiquetas) ? etiquetas : [],
+            params: (params && typeof params === 'object') ? params : null,
+            filtros: Array.isArray(tb.filter_order) ? tb.filter_order : []
+        };
+    });
+    const ct = String(t.ct || '');
+    return {
+        nombre: t.n || '', tipoObj: ct,
+        esGeo: /geozone|geofence/i.test(ct), esUnidad: /unit/i.test(ct),
+        tablas: tablas,
+        // Columnas que el operador vera: union de las de todas las tablas,
+        // en el orden en que aparecen (las de la tabla principal primero).
+        columnas: (function () {
+            const out = [];
+            for (const tb of tablas) {
+                for (let i = 0; i < tb.etiquetas.length; i++) {
+                    const c = tb.etiquetas[i] || tb.claves[i];
+                    if (c && out.indexOf(c) < 0) out.push(c);
+                }
+            }
+            return out;
+        })(),
+        // Filtros con los que la plantilla viene guardada (lo que hay que
+        // cambiar en la plataforma para que traiga otros datos).
+        params: (function () {
+            const out = [];
+            for (const tb of tablas) {
+                if (!tb.params) continue;
+                for (const k of Object.keys(tb.params)) out.push({ tabla: tb.l || tb.n, k: k, v: tb.params[k] });
+            }
+            return out;
+        })(),
+        actualizado: (t.bsfl && t.bsfl.mt) ? t.bsfl.mt : 0
+    };
+}
+// Objetos sobre los que se puede ejecutar la plantilla. Si esta atada a
+// geocercas se usan las geocercas de la plataforma (sus ids son los que
+// espera el reportObjectSecId); si es de unidades, la flota.
+function rxInfObjetos(tpl, info) {
+    const esGeo = info ? info.esGeo : (rxInfPista(tpl) === 'geocercas');
+    if (esGeo) {
+        const out = [];
+        for (const z of (APP.zonas || [])) {
+            if (!z || z.id == null) continue;
+            const nm = rxGeoInfNombre(z);
+            if (nm) out.push({ id: String(z.id), eco: nm, esZona: true });
+        }
+        return out;
+    }
+    return rxInfUnidades(0);
+}
+
 // Ejecuta la plantilla como lo hace la plataforma y devuelve sus filas.
 async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
     await rxInfLimpiarInforme();
@@ -476,10 +550,10 @@ function rxInfUnidades(rangoDesde) {
         let t = 0;
         try { t = (typeof unitState === 'function' ? (unitState(u).t || 0) : 0); } catch (_) { t = 0; }
         if (t > 0 && rangoDesde > 0 && t < rangoDesde) continue;
-        out.push({ id: u.id, eco: (info && (info.eco || info.clave)) || String(u.id) });
+        out.push({ id: String(u.id), eco: (info && (info.eco || info.clave)) || String(u.id) });
     }
-    // Mas recientes primero: si hay que parar por tiempo, se han visto antes
-    // las unidades que mas_rows pueden traer.
+    // Mas recientes primero: si hay que parar por tiempo, ya se han visto las
+    // unidades que mas filas pueden traer.
     out.sort((a, b) => (b.t || 0) - (a.t || 0));
     return out;
 }
@@ -500,8 +574,9 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
         // (reportObjectSecId); salen de report/get_report_data. Si no
         // responde, se usa la flota como aproximacion.
         const datos = await rxInfDatosPlantilla(tpl);
-        const secs = rxInfSecundarios(datos);
-        if (secs.length) { objs = secs; modo = 'secundarios'; }
+        const info = rxInfPlantillaInfo(datos, tpl.id);
+        const secs = rxInfObjetos(tpl, info);
+        if (secs.length) { objs = secs; modo = (info && info.esGeo) ? 'geocercas' : 'secundarios'; }
         else {
             const todas = rxInfUnidades(desde);
             objs = todas.length ? todas : [{ id: 0, eco: '' }];
@@ -673,9 +748,9 @@ async function rxInfSondea(tpl) {
     // Primero lo barato: que objetos y que datos declara la plantilla.
     // despues una ejecucion real, que es lo que de verdad dice si trae filas.
     const datos = await rxInfDatosPlantilla(tpl);
-    const secs = rxInfSecundarios(datos);
+    const RI = rxInfPlantillaInfo(datos, tpl.id);
+    const secs = rxInfObjetos(tpl, RI);
     const declarado = rxInfDeclarado(datos);
-    let info = null;
     let err = '';
     for (const obj of (secs.length ? secs.slice(0, 3).map((x) => x.id) : [rxInfUnidades(hasta - 30 * 24 * 3600).map((u) => u.id)[0] || 0])) {
         const r = await rxInfEjecutaRemoto(tpl, obj, null, 300);
@@ -694,7 +769,12 @@ async function rxInfSondea(tpl) {
                     ? 'sin filas en el sondeo. Si la plantilla pide una geocerca concreta, elijela abajo y ejecuta el periodo completo.'
                     : 'sin filas en el sondeo. Puede que la plantilla pida filtros que no se pueden enviar por API.'));
     }
+    // Si la plantilla declara sus columnas y no hemos sacado ninguna del
+    // resultado, se usan las suyas: asi la pantalla nunca dice "sin datos"
+    // cuando en realidad la plantilla SÍ tiene columnas.
+    if (!info.cols.length && RI && RI.columnas.length) info.cols = RI.columnas.slice();
     info.clase = rxInfClasifica(info.cols, info.muestra);
+    info.declaracion = RI || null;
     // Zonas y unidades que aparecen en la muestra: son los filtros que
     // tienen sentido para esa plantilla.
     info.zonas = [];
@@ -1252,7 +1332,10 @@ function abrirInformesPlantilla(origen) {
                 let panelSonda = '';
                 if (tpl) {
                     const ETQ = { geocercas: 'Geocercas', vehiculos: 'Veh\u00edculos', mixto: 'Veh\u00edculos y geocercas', otro: 'Datos generales' };
-                    const titulo = clase0 ? ETQ[clase0.tipo] : (pista === 'geocercas' ? 'Geocercas (por el nombre)' : 'Datos de la plantilla');
+                    const decl = sonda && sonda.declaracion ? sonda.declaracion : null;
+                    const titulo = clase0 ? ETQ[clase0.tipo]
+                        : (decl && decl.esGeo ? 'Geocercas (declarado por la plantilla)'
+                            : (pista === 'geocercas' ? 'Geocercas (por el nombre)' : 'Datos de la plantilla'));
                     const estado = !sonda ? 'Pendiente' : (sonda.estado === 'ok' ? ''
                         : (sonda.estado === 'vacio' ? 'Sin datos en el sondeo' : (sonda.estado === 'error' ? 'Error' : 'Sondeando\u2026')));
                     let detalle = '';
@@ -1269,6 +1352,16 @@ function abrirInformesPlantilla(origen) {
                         '</div>' +
                         (sonda && sonda.estado === 'ok' && sonda.clase ? rxInfCamposHTML(sonda) : '') +
                         (sonda && sonda.msg ? '<div class="rgi-sonda-e">' + esc(sonda.msg) + '</div>' : '') +
+                        (sonda && sonda.declaracion && sonda.declaracion.columnas.length
+                            ? '<div class="rgi-campos"><span class="rgi-campo t-texto">Lo que trae la plantilla</span>' +
+                              sonda.declaracion.columnas.map((c) => '<span class="rgi-campo">' + esc(c) + '</span>').join('') +
+                              '</div>' : '') +
+                        (sonda && sonda.declaracion && sonda.declaracion.params.length
+                            ? '<div class="rgi-campos"><span class="rgi-campo t-numero">Filtros guardados</span>' +
+                              sonda.declaracion.params.map((x) => '<span class="rgi-campo">' + esc(x.k) + ': ' + esc(x.v) + '</span>').join('') +
+                              (sonda.declaracion.columnas.length ? '' :
+                                  '<span class="rgi-campo">cambialos en la plataforma</span>') +
+                              '</div>' : '') +
                         (tpl && (sonda && sonda.declarado && sonda.declarado.objetos.length)
                             ? '<div class="rgi-campos"><span class="rgi-campo">' + sonda.declarado.objetos.length +
                               ' objeto(s) que admite la plantilla</span>' +
