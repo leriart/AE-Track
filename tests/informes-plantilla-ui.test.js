@@ -199,7 +199,9 @@ function clickEn(id) {
         /id="rgi-cancel"/.test(enCurso) && /Cancelar/.test(enCurso));
     ok('mientras calcula la barra de arriba tambien se muestra',
         byId('rgi-carga').style.display === 'flex');
-    await new Promise((r) => setTimeout(r, 200));
+    // Los informes van de uno en uno (el servidor no admite paralelismo), asi
+    // que se espera a que termine la tanda.
+    for (let i = 0; i < 40 && mod.RX_INF._buscando; i++) await new Promise((r) => setTimeout(r, 50));
     R.lento = false;
     ok('al terminar el progreso desaparece y quedan los resultados',
         !/id="rgi-prog"/.test(byId('rgi-box').innerHTML) &&
