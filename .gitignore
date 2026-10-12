@@ -6,3 +6,6 @@ node_modules/
 CodigoWialon.txt
 STS/
 rondo-estilos-plataforma.json
+
+# Logs de la plataforma pegados en docs/ al depurar (no van al repo)
+docs/*.log
