@@ -1490,6 +1490,10 @@
             "#rondo-dialog .rgi-cfg{display:flex;flex-direction:column;gap:7px;padding:9px 11px;border-radius:var(--rondo-radius-sm);background:var(--rondo-bg-soft);border:1px solid var(--rondo-border-soft);min-width:0}\n" +
             "#rondo-dialog .rgi-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}\n" +
             "#rondo-dialog .rgi-lb{flex:0 0 74px;font:700 9.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-mute)}\n" +
+            // Cabecera de paso: numero en circulo + titulo.
+            "#rondo-dialog .rgi-paso-c{display:flex;align-items:center;gap:7px;margin-bottom:1px}\n" +
+            "#rondo-dialog .rgi-paso-c i{flex:0 0 auto;width:17px;height:17px;border-radius:999px;background:var(--rondo-accent-grad);color:var(--rondo-accent-fg);font:700 10px var(--rondo-font);font-style:normal;display:flex;align-items:center;justify-content:center}\n" +
+            "#rondo-dialog .rgi-paso-c b{font:700 10.5px var(--rondo-font);text-transform:uppercase;letter-spacing:.4px;color:var(--rondo-fg-dim)}\n" +
             "#rondo-dialog .rgi-chips{display:flex;gap:4px;flex-wrap:wrap;flex:1;min-width:0}\n" +
             "#rondo-dialog .rgi select{flex:1;min-width:180px;max-width:100%;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:6px;padding:5px 8px;font:500 12px var(--rondo-font)}\n" +
             "#rondo-dialog .rgi select:focus{outline:none;border-color:var(--rondo-accent-2);box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.28)}\n" +
