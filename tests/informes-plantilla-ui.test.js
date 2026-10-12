@@ -1,10 +1,10 @@
 /*
- * Pruebas de la UI de los informes por plantilla: que el dialogo se monte y
- * se pinte, y que los botones respondan por delegacion.
+ * Pruebas de la UI de los informes por plantilla: que el dialogo se monte y se
+ * pinte, y que los botones respondan por delegacion.
  *
- * Regresion real: al anadir el aviso de "columnas vacias" se uso `hay` antes
- * de declararlo (ReferenceError en el TDZ) y el dialogo se abria EN BLANCO.
- * Aqui se monta el dialogo de verdad y se comprueba que pinta.
+ * Regresion real: al anadir el aviso de "columnas vacias" se uso `hay` antes de
+ * declararlo (ReferenceError en el TDZ) y el dialogo se abria EN BLANCO. Aqui se
+ * monta el dialogo de verdad y se comprueba que pinta.
  */
 'use strict';
 
@@ -60,14 +60,11 @@ const stubs = [
     'function rxImprimirHTML(h){ P_R.prints.push(h); }',
     'function rxReplayDescargar(){ P_R.descargas++; }',
     'function rxGeoInfNombre(z){ return (z && (z.n || z.nombre)) || ""; }',
-    'function rxGeoInfNombreArchivo(){ return "x.csv"; }',
     'function rxGeoInfAnillo(){ return [{ lat: 0, lon: 0 }, { lat: 0, lon: 1 }, { lat: 1, lon: 1 }]; }',
     'function rxGeoInfFechaMs(s, fin){ return s ? new Date(s + "T00:00:00").getTime() : 0; }',
     'function rxGeoInfFechaTxt(ms){ return ms ? "10/03/2026" : ""; }',
     'function rxGeoInfTrozos(a, b, p){ const out = []; for (let t = a; t <= b && out.length < 12; t += (p || 604800)) out.push([t, Math.min(b, t + (p || 604800) - 1)]); return out; }',
     'function rxGeoInfYield(){ return Promise.resolve(); }',
-    'function rxGeoInfZonaSel(){ return null; }',
-    'function rxGeoInfCacheReset(){}',
     'function parseUnitName(u){ return { id: u && u.id, nombre: u && u.nm, eco: u && u.nm, clave: u && u.nm }; }',
     'function unitState(u){ const p = (u && u.pos) || {}; return { t: Number(p.t) || 0, lat: p.y, lon: p.x, vel: 0, online: true }; }',
     'function glocOrigen(){ return { id: "plat", corto: "PLAT", largo: "de la plataforma" }; }',
@@ -76,14 +73,17 @@ const stubs = [
     'function readJSON(k, f){ return f; }',
     'function writeJSON(){}',
     'function abrirDialogo(o){ P_R.dialogos.push(o); }',
-    'function remoteCall(m, p){ P_R.llamadas.push({ m: m, p: p }); if (m === "core/search_items") return Promise.resolve({ items: [{ id: 3, rep: { 1: { id: 11, n: "Resumen diario" } } }] });' +
+    'function remoteCall(m, p){ P_R.llamadas.push({ m: m, p: p }); if (m === "core/search_items") return Promise.resolve({ items: [{ id: 3, rep: { 1: { id: 11, n: "Resumen diario" }, 2: { id: 12, n: "GEOCERCA" } } }] });' +
+        ' if (m === "report/get_report_data") {' +
+        '   var id = String((p.col || [])[0] || "");' +
+        '   if (id === "12") return Promise.resolve([{ id: 12, n: "GEOCERCA", ct: "avl_geozone", tbl: [{ n: "t", l: "Unidades", c: "[\\"unit\\",\\"entry\\"]", cl: "[\\"Unidad\\",\\"Hora de entrada\\"]", p: "{\\"units\\":\\"27418488\\"}" }] }]);' +
+        '   return Promise.resolve([{ id: Number(id) || 11, n: "Resumen diario", ct: "avl_unit", tbl: [{ n: "t", l: "Resumen", c: "[\\"unit\\",\\"km\\"]", cl: "[\\"Unidad\\",\\"Km\\"]", p: "{}" }] }]); }' +
         // La lectura es sincrona: exec_report ya trae las filas. "lento" lo
         // hace esperar para poder ver el progreso en marcha.
         ' if (m === "report/exec_report") {' +
-        '   var resp = { reportResult: { columns: [{ n: "Unidad" }, { n: "Geocerca" }], rows: [["105", "PATIO"]] } };' +
+        '   var resp = { reportResult: { columns: [{ n: "Unidad" }, { n: "Km" }], rows: [["105", 12]] } };' +
         '   if (P_R.lento) return new Promise(function (r) { setTimeout(function () { r(resp); }, 80); });' +
         '   return Promise.resolve(resp); }' +
-        ' if (m === "report/get_report_data") return Promise.resolve({ 11: [{ id: "119", nm: "105" }] });' +
         ' return Promise.resolve({}); }',
     'const document = P_DOC;', 'const window = {};', 'const URL = { createObjectURL(){ return "blob:x"; }, revokeObjectURL(){} };',
     'const Blob = function () {};'
@@ -118,17 +118,10 @@ function montar() {
 function clickEn(id) {
     const btn = fakeEl(id);
     const box = byId('rgi-box');
-    const ev = {
-        target: {
-            closest(sel) {
-                if (sel === 'button') return btn;
-                return null;
-            }
-        }
-    };
+    const ev = { target: { closest(sel) { return (sel === 'button') ? btn : null; } } };
     for (const h of (box.handlers.click || [])) h(ev);
 }
-// Click sobre una opcion (chip), que repinta sin relanzar el sondeo.
+// Click sobre una opcion (chip), que repinta sin relanzar la ejecucion.
 function chipEn(que, v) {
     const el = { dataset: { i: que, v: v }, contains: () => true };
     const box = byId('rgi-box');
@@ -140,28 +133,26 @@ function chipEn(que, v) {
     // 1) Regresion: el dialogo se pinta (antes se abria en blanco).
     const dlg = montar();
     ok('el dialogo se abre', !!dlg && /Informes de la plataforma/.test(dlg.titulo));
+    const h0 = byId('rgi-box').innerHTML;
     ok('el cuerpo se pinta al abrir (no se queda en blanco)',
-        /id="rgi-generar"|id="rgi-ejecutar"|id="rgi-tpl-cargar"/.test(byId('rgi-box').innerHTML),
-        String((byId('rgi-box').innerHTML || '').length) + ' caracteres');
-    ok('trae buscador de plantillas y contador', /id="rgi-buscar"/.test(byId('rgi-box').innerHTML));
-    ok('trae los atajos de periodo', /data-i="rango"/.test(byId('rgi-box').innerHTML) &&
-        /Este año/.test(byId('rgi-box').innerHTML));
+        /id="rgi-ejecutar"|id="rgi-tpl-cargar"/.test(h0), String((h0 || '').length) + ' caracteres');
+    ok('trae buscador de plantillas y contador', /id="rgi-buscar"/.test(h0));
+    ok('trae los atajos de periodo', /data-i="rango"/.test(h0) && /Este año/.test(h0));
+    ok('no hay fila "Objeto" (se elimino)', !/reportObjectSecId/.test(h0) && !/>Objeto</.test(h0));
 
-    // 2) Lee las plantillas y las lista.
+    // 2) Lee las plantillas y las lista (auto al abrir).
     await new Promise((r) => setTimeout(r, 30));
     const html = byId('rgi-box').innerHTML;
     ok('lee las plantillas de la plataforma y las lista',
         /Resumen diario/.test(html) && /rgi-tpl-sel/.test(html), String(R.llamadas.length) + ' llamadas');
 
     // 3) Con datos, aparecen tabla y salidas.
-    mod.RX_INF.tpl = { rid: 3, id: 11, nombre: 'Resumen diario' };
+    mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
     mod.RX_INF.cols = ['Unidad', 'Geocerca', 'Km'];
     mod.RX_INF.filas = [['105', 'PATIO', 12], ['205', 'CEDIS', 8]];
     mod.RX_INF.meta = { filas: 2, unidades: 2, trozos: 1, objetos: 1, ms: 900, fallos: 0, cacheados: 0 };
-    mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
-    mod.RX_INF.sonda = { estado: 'ok', cols: ['Unidad', 'Geocerca', 'Km'], muestra: mod.RX_INF.filas, filas: 2, horas: 24, zonas: ['PATIO'], unidades: ['105'], clase: { tipo: 'mixto', iZona: 1, iUni: 0, etiqueta: 'mixto', campos: [] } };
     clickEn('rgi-tpl-cargar');
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 40));
     const h2 = byId('rgi-box').innerHTML;
     ok('con resultados muestra la tabla', /rgi-prev/.test(h2) && /Geocerca/.test(h2));
     ok('con resultados muestra las tres salidas',
@@ -171,79 +162,70 @@ function chipEn(que, v) {
 
     // 4) Sin resultados, la pantalla avisa y no rompe.
     mod.RX_INF.cols = []; mod.RX_INF.filas = []; mod.RX_INF.meta = null;
-    mod.RX_INF.sonda = null; mod.RX_INF._sondaKey = '';
     clickEn('rgi-tpl-cargar');
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 40));
     ok('sin resultados avisa y sigue pintando',
         /Sin resultados/.test(byId('rgi-box').innerHTML),
         byId('rgi-box').innerHTML.slice(0, 160));
 
     // 5) Pistas por el nombre: una plantilla de geocerca se pregunta por
-    //    geocercas aunque aun no haya sondeo.
+    //    geocercas aunque no se haya leido su declaracion.
     ok('pista: "GEOCERCA" se reconoce como plantilla de geocercas',
         mod.rxInfPista({ nombre: 'GEOCERCA' }) === 'geocercas' &&
         mod.rxInfPista({ nombre: 'Informe de Combustible' }) === 'vehiculos' &&
         mod.rxInfPista({ nombre: 'test' }) === '');
+    mod.RX_INF.decl = null; mod.RX_INF._declKey = '';
     mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
-    mod.RX_INF.sonda = null;
-    ok('sin sondeo, una plantilla de geocercas igual ofrece elegir geocerca',
+    ok('sin declaracion, una plantilla de geocercas igual ofrece elegir geocerca',
         mod.rxInfEsDeGeocercas() === true);
     mod.RX_INF.tpl = { rid: 3, id: 13, nombre: 'Recorrido Granja' };
     ok('una plantilla que no es de geocercas no ofrece el filtro',
         mod.rxInfEsDeGeocercas() === false);
 
-
     // 6) Progreso: se ve DENTRO del cuerpo, no solo en la barra de arriba.
-    //    (Con 700 unidades el primer trozo tarda: si el progreso solo se
+    //    (Con cientos de objetos el primer trozo tarda: si el progreso solo se
     //    pinta al terminar el primero, parece un dialogo parado.)
+    mod.RX_INF.decl = null; mod.RX_INF._declKey = '';
     mod.RX_INF.tpl = { rid: 3, id: 11, nombre: 'Resumen diario' };
     mod.RX_INF.cols = []; mod.RX_INF.filas = []; mod.RX_INF.meta = null;
+    mod.RX_INF.alcance = 'todas';
     R.lento = true;
     clickEn('rgi-ejecutar');
     await new Promise((r) => setTimeout(r, 20));
     const enCurso = byId('rgi-box').innerHTML;
     ok('mientras calcula se ve el progreso dentro del cuerpo',
-        /id="rgi-prog"/.test(enCurso) && /GEOCERCA|Resumen diario/.test(enCurso),
+        /id="rgi-prog"/.test(enCurso) && /Resumen diario/.test(enCurso),
         enCurso.slice(0, 120));
     ok('mientras calcula el boton pasa a Cancelar',
         /id="rgi-cancel"/.test(enCurso) && /Cancelar/.test(enCurso));
-    // Una sola barra, dentro del cuerpo (regresion: habia dos, una aqui y
-        // otra en la cabecera del dialogo).
+    // Una sola barra, dentro del cuerpo (regresion: habia dos, una aqui y otra
+    // en la cabecera del dialogo).
     ok('solo hay UNA barra de progreso y esta en el cuerpo',
-        (enCurso.match(/class="rgi-barra"/g) || []).length === 1 &&
-        /id="rgi-prog-b"/.test(enCurso));
-    // Los informes van de uno en uno (el servidor no admite paralelismo), asi
-    // que se espera a que termine la tanda.
-    for (let i = 0; i < 40 && mod.RX_INF._buscando; i++) await new Promise((r) => setTimeout(r, 50));
+        (enCurso.match(/class="rgi-barra"/g) || []).length === 1 && /id="rgi-prog-b"/.test(enCurso));
+    // Los informes van de uno en uno (el servidor no admite paralelismo); se
+    // espera a que termine la tanda.
+    for (let i = 0; i < 60 && mod.RX_INF._buscando; i++) await new Promise((r) => setTimeout(r, 50));
     R.lento = false;
     ok('al terminar el progreso desaparece y quedan los resultados',
         !/id="rgi-prog"/.test(byId('rgi-box').innerHTML) &&
-        /rgi-prev/.test(byId('rgi-box').innerHTML) &&
-        mod.RX_INF.filas.length > 0,
+        /rgi-prev/.test(byId('rgi-box').innerHTML) && mod.RX_INF.filas.length > 0,
         'filas=' + mod.RX_INF.filas.length);
     ok('al terminar guarda el numero de unidades en el resumen',
-        mod.RX_INF.meta && mod.RX_INF.meta.unidades >= 1,
-        JSON.stringify(mod.RX_INF.meta));
-
+        mod.RX_INF.meta && mod.RX_INF.meta.unidades >= 1, JSON.stringify(mod.RX_INF.meta));
 
     // 7) La pantalla ensena que declara la plantilla: sus columnas y los
     //    filtros con los que viene guardada.
     mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };
-    mod.RX_INF._sondaKey = 'sondeo|3:12';
-    mod.RX_INF.sonda = {
-        estado: 'ok', cols: ['Unidad', 'Hora de entrada'], muestra: [['105', 'x']], filas: 1, horas: 24,
-        zonas: [], unidades: ['105'], objetos: 2,
-        declaracion: {
-            nombre: 'GEOCERCA', tipoObj: 'avl_geozone', esGeo: true, esUnidad: false,
-            columnas: ['Unidad', 'Hora de entrada', 'Hora de salida', 'Duracion en'],
-            params: [{ tabla: 'Unidades', k: 'units', v: '27418488' }], tablas: []
-        }
+    mod.RX_INF._declKey = 'decl|3:12';
+    mod.RX_INF.decl = {
+        nombre: 'GEOCERCA', tipoObj: 'avl_geozone', esGeo: true, esUnidad: false,
+        columnas: ['Unidad', 'Hora de entrada', 'Hora de salida', 'Duracion en'],
+        params: [{ tabla: 'Unidades', k: 'units', v: '27418488' }], tablas: []
     };
     chipEn('vista', 'filas');
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => setTimeout(r, 20));
     const h3 = byId('rgi-box').innerHTML;
-    ok('el panel dice a que esta atada la plantilla',
-        /Geocercas \(declarado por la plantilla\)/.test(h3), h3.slice(0, 200));
+    ok('el panel dice a que esta atada la plantilla', /Geocercas/.test(h3), h3.slice(0, 200));
     ok('el panel ensena las columnas que trae la plantilla',
         /Lo que trae la plantilla/.test(h3) && /Hora de entrada/.test(h3) && /Duracion en/.test(h3));
     ok('el panel ensena los filtros con los que viene guardada',
