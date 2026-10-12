@@ -79,7 +79,9 @@ const stubs = [
         ' if (!H.retardo) return Promise.resolve({ messages: msgs });' +
         ' return new Promise(function(r){ setTimeout(function(){ r({ messages: msgs }); }, H.retardo); }); }',
     'function setTimeout(f, t){ return setTimeout_(f, t); }',
-    'function unitState(u){ const p=(u&&u.pos)||{}; return {lat:(p.y!=null)?+p.y:null,lon:(p.x!=null)?+p.x:null,vel:+p.s||0,online:true}; }'
+    'function unitState(u){ const p=(u&&u.pos)||{}; const l=(u&&u.lmsg)||{}; let t=Number(p.t||l.t||0);' +
+        ' if(!isFinite(t)||t<=0) t=0; else if(t>1e12) t=Math.round(t/1000);' +
+        ' return {t:t, lat:(p.y!=null)?+p.y:null, lon:(p.x!=null)?+p.x:null, vel:+p.s||0, online:true}; }'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
@@ -584,6 +586,26 @@ mod.rxGeoInfCacheReset();
     ok('historial: el escaneo pagina en las unidades con mucho historial',
         H.peticiones === 3 && rE.eventos.length > 0,
         'peticiones=' + H.peticiones + ' eventos=' + rE.eventos.length);
+mod.RX_GEO.rango = 'hoy';
+
+    // Descarte por "no reporta desde el inicio del rango": la plataforma
+    // trae la hora del ultimo reporte, asi que esas unidades no cuestan
+    // ninguna peticion y el tope de 400 no recorta flotas grandes.
+    ok('historial: tope de unidades ampliado a 400', mod.RX_GEO_HIST_MAX_U === 400,
+        String(mod.RX_GEO_HIST_MAX_U));
+    mod.RX_GEO.rango = '7d';
+    H.unidades = [
+        { id: 71, nm: '105', pos: { y: 0, x: 0, t: T - 3600 } },     // reporta ayer: se consulta
+        { id: 72, nm: '205', pos: { y: 0, x: 0, t: T - 86400 * 30 } }, // 30 dias: se salta
+        { id: 73, nm: '305', pos: { y: 0, x: 0 } }                      // sin dato: se consulta
+    ];
+    APP.unidades = H.unidades;
+    H.msgsPorId = { 71: msgs(11), 72: msgs(22), 73: [] };
+    H.peticiones = 0;
+    const rD = await mod.rxGeoInfEscanear(() => {}, null);
+    ok('historial: las unidades sin mensajes en el rango no se consultan',
+        H.peticiones === 2 && rD.sinDatos === 1 && rD.unidades === 2,
+        'peticiones=' + H.peticiones + ' sinDatos=' + rD.sinDatos + ' unidades=' + rD.unidades);
     mod.RX_GEO.rango = 'hoy';
 
 
