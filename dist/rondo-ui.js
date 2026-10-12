@@ -13400,6 +13400,25 @@ function rxInfObjetos(tpl, info) {
     return rxInfUnidades(0);
 }
 
+// Tablas del resultado (report/get_report_tables): nombre y numero de filas
+// de cada una. Es lo que usa la propia pantalla para saber que tabla leer y
+// hasta que fila, en vez de ir a ciegas.
+function rxInfTablasRes(r) {
+    const out = [];
+    const walk = (x, d) => {
+        if (!x || typeof x !== 'object' || d > 4) return;
+        if (Array.isArray(x)) { x.slice(0, 60).forEach((y) => walk(y, d + 1)); return; }
+        const nombre = x.n || x.name || x.l || x.title;
+        const filas = (x.rows != null) ? x.rows : ((x.rowCount != null) ? x.rowCount : ((x.rc != null) ? x.rc : x.count));
+        if (nombre != null && filas != null && !/^\d+$/.test(String(nombre))) {
+            out.push({ nombre: String(nombre), filas: Number(filas) || 0 });
+        }
+        Object.keys(x).forEach((k) => walk(x[k], d + 1));
+    };
+    walk(r, 0);
+    out.forEach((t, i) => { t.idx = i; });
+    return out;
+}
 // Ejecuta la plantilla como lo hace la plataforma y devuelve sus filas.
 async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
     await rxInfLimpiarInforme();
@@ -13466,6 +13485,12 @@ async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
         await rxInfEspera(350);
     }
     try { await remoteCall('report/apply_report_result', {}); } catch (_) { /* noop */ }
+    // Que tablas tiene el resultado y cuantas filas cada una. La pantalla usa
+    // esto para pedir la tabla de datos (no la de dibujar) y el rango justo.
+    let tablas = [];
+    try { tablas = rxInfTablasRes(await remoteCall('report/get_report_tables', {})); } catch (_) { tablas = []; }
+    const conFilas = tablas.filter((t) => t.filas > 0);
+    const orden = (conFilas.length ? conFilas : tablas).map((t) => t.idx);
     // La plantilla guarda VARIAS tablas (geofences, geozone_stats,
     // geozone_units...) y no todas se leen igual: la de dibujo no devuelve
     // filas y alguna exige otro 'level'. Se prueban las formas conocidas y
@@ -13474,10 +13499,17 @@ async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
     let cols = [];
     const pagina = 200;
     let error = '';
-    for (const lectura of rxInfLecturas()) {
+    const lecturas = [];
+    for (const idx of orden) {
+        const t = tablas[idx];
+        const tope = (t && t.filas > 0) ? (t.filas - 1) : 199;
+        lecturas.push({ t: idx, c: { type: 'range', data: { from: 0, to: Math.min(tope, 199), level: 0, unitInfo: 1 } }, tope: tope });
+    }
+    for (const lectura of (lecturas.length ? lecturas : rxInfLecturas())) {
         const intento = [];
         let ok = false;
-        for (let desde = 0; desde < (limiteFilas || 2000); desde += pagina) {
+        const fin = Math.min(limiteFilas || 2000, (lectura.tope != null ? lectura.tope + 1 : (limiteFilas || 2000)));
+        for (let desde = 0; desde < fin; desde += pagina) {
             let r = null;
             try {
                 r = await remoteCall('report/select_result_rows', {
@@ -13732,11 +13764,25 @@ async function rxInfSondea(tpl) {
     }
     if (!info) {
         const pista = rxInfPista(tpl);
-        return rxInfSondaVacia('vacio',
+        // Aunque no se pueda ejecutar, lo que la plantilla DECLARA ya lo
+        // sabemos (tipo, columnas, filtros): se guarda igual, para que el
+        // panel lo ensene y no haga falta el objeto a mano.
+        const v = rxInfSondaVacia('vacio',
             err ? rxInfExplicaError(err)
                 : (pista === 'geocercas'
                     ? 'sin filas en el sondeo. Si la plantilla pide una geocerca concreta, elijela abajo y ejecuta el periodo completo.'
                     : 'sin filas en el sondeo. Puede que la plantilla pida filtros que no se pueden enviar por API.'));
+        if (RI) {
+            v.declaracion = RI;
+            v.clase = rxInfClasifica(RI.columnas.slice(), []);
+            v.zonas = [];
+            v.unidades = [];
+            v.objetos = secs.length;
+            v.declarado = declarado;
+            RX_INF.sonda = v;
+            RX_INF._sondaKey = key;
+        }
+        return v;
     }
     // Si la plantilla declara sus columnas y no hemos sacado ninguna del
     // resultado, se usan las suyas: asi la pantalla nunca dice "sin datos"
