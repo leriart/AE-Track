@@ -311,6 +311,25 @@ async function rxInfEjecutar(tpl, objId, desde, hasta, token) {
 // secId es texto, la ejecucion es asincrona (remoteExec) con sondeo de
 // estado, y las filas se leen por rangos del resultado de la sesion.
 const RX_INF_FLAGS_REMOTO = 16777220;
+// Formas de leer el resultado, de la mas probable a la menos. La ultima
+// ganadora se recuerda para no repetir el tanteo en cada trozo.
+let _rxInfLecturaOk = -1;
+function rxInfLecturas() {
+    const todas = [
+        { t: 0, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 1 } } },
+        { t: 1, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 1 } } },
+        { t: 2, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 1 } } },
+        { t: 0, c: { type: 'range', data: { from: 0, to: 199 } } },
+        { t: 0, c: { type: 'range', data: { from: 0, to: 199, level: 0, unitInfo: 0 } } },
+        { t: 0, c: { type: 'range', data: { from: 0, to: 199, level: 1, unitInfo: 1 } } },
+        { t: 1, c: { type: 'range', data: { from: 0, to: 199 } } },
+        { t: 0, c: { type: 'all' } }
+    ];
+    if (_rxInfLecturaOk >= 0 && todas[_rxInfLecturaOk]) {
+        return [todas[_rxInfLecturaOk]].concat(todas.filter((_, i) => i !== _rxInfLecturaOk));
+    }
+    return todas;
+}
 function rxInfEspera(ms) {
     return new Promise((r) => { try { setTimeout(r, ms); } catch (_) { r(); } });
 }
@@ -516,23 +535,41 @@ async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
         await rxInfEspera(350);
     }
     try { await remoteCall('report/apply_report_result', {}); } catch (_) { /* noop */ }
+    // La plantilla guarda VARIAS tablas (geofences, geozone_stats,
+    // geozone_units...) y no todas se leen igual: la de dibujo no devuelve
+    // filas y alguna exige otro 'level'. Se prueban las formas conocidas y
+    // se sigue con la primera que responda.
     const filas = [];
     let cols = [];
     const pagina = 200;
-    for (let desde = 0; desde < (limiteFilas || 2000); desde += pagina) {
-        let r = null;
-        try {
-            r = await remoteCall('report/select_result_rows', {
-                tableIndex: 0,
-                config: { type: 'range', data: { from: desde, to: desde + pagina - 1, level: 0, unitInfo: 1 } }
-            });
-        } catch (e) { return { filas: filas, cols: cols, error: ((e && e.message) || String(e)) }; }
-        const n = rxInfExtrae(r);
-        if (n.cols.length && !cols.length) cols = n.cols;
-        if (!n.filas.length) break;
-        for (const f of n.filas) filas.push(f);
-        if (n.filas.length < pagina) break;
+    let error = '';
+    for (const lectura of rxInfLecturas()) {
+        const intento = [];
+        let ok = false;
+        for (let desde = 0; desde < (limiteFilas || 2000); desde += pagina) {
+            let r = null;
+            try {
+                r = await remoteCall('report/select_result_rows', {
+                    tableIndex: lectura.t,
+                    config: Object.assign({}, lectura.c, {
+                        data: Object.assign({}, lectura.c.data, (desde ? { from: desde, to: desde + pagina - 1 } : {}))
+                    })
+                });
+            } catch (e) { error = (e && e.message) || String(e); break; }
+            const n = rxInfExtrae(r);
+            if (n.cols.length && !cols.length) cols = n.cols;
+            if (!n.filas.length) break;
+            for (const f of n.filas) intento.push(f);
+            if (n.filas.length < pagina) break;
+        }
+        if (intento.length) {
+            for (const f of intento) filas.push(f);
+            ok = true;
+            break;
+        }
+        if (!error) error = 'la plataforma no devolvio filas';
     }
+    if (!filas.length && error) return { filas: [], cols: cols, error: error };
     return { filas: filas, cols: cols };
 }
 
@@ -655,7 +692,7 @@ function rxInfExplicaError(msg) {
     const T = {
         '2': 'el servicio no existe en esta version de la plataforma (code 2)',
         '4': 'la peticion es demasiado pesada para el servidor (code 4): acorta el periodo',
-        '5': 'sin permiso para ejecutar esa plantilla (code 5)',
+        '5': 'la plataforma niega el acceso (code 5): la sesion no puede ejecutar ese informe o leer sus tablas',
         '7': 'parametros invalidos (code 7): normalmente que reportObjectId no sea un objeto real, o que la plantilla pida un filtro que no se le esta mandando',
         '8': 'objeto o recurso no encontrado (code 8): la plantilla puede haberse borrado',
         '10': 'sin acceso a los datos (code 10)',
@@ -1420,7 +1457,11 @@ function abrirInformesPlantilla(origen) {
                 // Objeto secundario: lo que la plataforma pide de verdad.
                 // Se autocompleta con lo que declara la plantilla y se puede
                 // escribir a mano (util cuando el listado no cuadra).
-                const filaSec = '<div class="rgi-row"><span class="rgi-lb">Objeto</span>' +
+                // La fila del objeto solo se ensena cuando aporta: si la
+                // plantilla no dijo sobre que se ejecuta (o el operador pulso
+                // "avanzado"). Lo normal es que Rondo ya lo sepa.
+                const filaSec = (!sonda || !sonda.declaracion || RX_INF._verObjeto)
+                    ? '<div class="rgi-row"><span class="rgi-lb">Objeto</span>' +
                     '<span class="rgi-busca"><span class="rondo-usym">' + UIS.pin + '</span>' +
                     '<input type="text" id="rgi-sec" class="filtro" placeholder="reportObjectSecId" value="' + esc(RX_INF.secId || '') + '"' + dis + '>' +
                     (sonda && sonda.objetos ? '<i>' + sonda.objetos + ' declarados</i>' : '') + '</span>' +
@@ -1428,7 +1469,13 @@ function abrirInformesPlantilla(origen) {
                     '<span class="rondo-usym">' + UIS.play + '</span> Probar</button>' +
                     (sonda && sonda.objetos
                         ? '<button type="button" class="mini" id="rgi-sec-lista"' + dis + '>ver declarados</button>' : '') +
-                    '</span></div>';
+                    (RX_INF._verObjeto ? '<button type="button" class="mini" id="rgi-sec-ocultar"' + dis + '>ocultar</button>' : '') +
+                    '</span></div>'
+                    : '<div class="rgi-row"><span class="rgi-lb">Objeto</span>' +
+                      '<span class="rgi-gen-hint">La plantilla dice sobre que se ejecuta: ' +
+                      esc((sonda && sonda.declaracion && sonda.declaracion.esGeo) ? 'sus geocercas'
+                          : ((sonda && sonda.objetos) ? (sonda.objetos + ' objeto(s)') : 'la flota')) +
+                      '. <button type="button" class="mini" id="rgi-sec-ver"' + dis + '>elegirlo a mano</button></span></div>';
                 const filaPeriodo = '<div class="rgi-row"><span class="rgi-lb">Periodo</span><div class="rgi-chips">' +
                     chip(RX_INF.rango === 'hoy' && !RX_INF.desde, 'hoy', 'Hoy') +
                     chip(RX_INF.rango === '7d' && !RX_INF.desde, '7d', '7 d\u00edas') +
@@ -1714,6 +1761,8 @@ function abrirInformesPlantilla(origen) {
                     }
                     if (btn.id === 'rgi-tpl-cargar') { await cargarTpl(); return; }
                     if (btn.id === 'rgi-sonda') { sondea(true); return; }
+                    if (btn.id === 'rgi-sec-ver') { RX_INF._verObjeto = 1; pinta(); return; }
+                    if (btn.id === 'rgi-sec-ocultar') { RX_INF._verObjeto = 0; pinta(); return; }
                     if (btn.id === 'rgi-sec-lista') {
                         const objs = ((RX_INF.sonda && RX_INF.sonda.declarado && RX_INF.sonda.declarado.objetos) || []);
                         advice('Objetos declarados', objs.slice(0, 20).map((o) => o.eco).join(', ') || 'ninguno');
