@@ -197,8 +197,11 @@ function clickEn(id) {
         enCurso.slice(0, 120));
     ok('mientras calcula el boton pasa a Cancelar',
         /id="rgi-cancel"/.test(enCurso) && /Cancelar/.test(enCurso));
-    ok('mientras calcula la barra de arriba tambien se muestra',
-        byId('rgi-carga').style.display === 'flex');
+    // Una sola barra, dentro del cuerpo (regresion: habia dos, una aqui y
+        // otra en la cabecera del dialogo).
+    ok('solo hay UNA barra de progreso y esta en el cuerpo',
+        (enCurso.match(/class="rgi-barra"/g) || []).length === 1 &&
+        /id="rgi-prog-b"/.test(enCurso));
     // Los informes van de uno en uno (el servidor no admite paralelismo), asi
     // que se espera a que termine la tanda.
     for (let i = 0; i < 40 && mod.RX_INF._buscando; i++) await new Promise((r) => setTimeout(r, 50));
