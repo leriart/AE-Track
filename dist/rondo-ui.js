@@ -11165,7 +11165,10 @@ const RX_GEO_FUENTES = Object.freeze(['historial', 'rastreo', 'bitacora', 'viaje
 // Limites del escaneo del historial de la plataforma (el mismo endpoint que
 // el Replay, paginando por unidad hasta agotar el rango). Con flotas enormes
 // se acota para que el informe no tarde una eternidad.
-const RX_GEO_HIST_MAX_U = 150;
+// Tope de unidades por barrido. Con el descarte por "no reporta desde el
+// inicio del rango" (abajo) las flotas grandes ya no se recortan: esto solo
+// protege de una lista absurda (miles de unidades vivas a la vez).
+const RX_GEO_HIST_MAX_U = 400;
 // Mensajes por peticion (load_interval devuelve como maximo esto por llamada).
 const RX_GEO_HIST_MSGS = 5000;
 // Trozos maximos por unidad: el historial se descarga paginando (meses o
@@ -11808,13 +11811,21 @@ async function rxGeoInfEscanear(onProg, token) {
     const rango = rxGeoInfRangoS();
     const lista = [];
     const sel = APP.seleccion;
+    let sinDatos = 0;
     for (const u of (APP.unidades || [])) {
         let info = null;
         try { info = parseUnitName(u); } catch (_) { continue; }
         if (!info || u.id == null) continue;
         const clave = info.eco || info.placa || String(info.id);
         if (RX_GEO.unidades === 'sel' && !(sel && (sel.has(clave) || sel.has(info.eco)))) continue;
-        lista.push({ u: u, info: info, clave: clave, t: (() => { try { return unitState(u).t || 0; } catch (_) { return 0; } })() });
+        const t = (() => { try { return unitState(u).t || 0; } catch (_) { return 0; } })();
+        // La plataforma ya trae la hora del ULTIMO reporte de cada unidad
+        // (flag 0x400 en fetchUnits). Si es anterior al inicio del rango, esa
+        // unidad no tiene ni un mensaje en el periodo: se descarta SIN gastar
+        // una peticion, y asi el tope de unidades deja de apretar a flotas
+        // grandes con mucha flota apagada o aparcada.
+        if (t > 0 && rango.desde > 0 && t < rango.desde) { sinDatos++; continue; }
+        lista.push({ u: u, info: info, clave: clave, t: t });
         if (lista.length >= RX_GEO_HIST_MAX_U) break;
     }
     // Ordena por interes: las de la lista vigilada primero y, dentro de
@@ -11866,7 +11877,8 @@ async function rxGeoInfEscanear(onProg, token) {
     if (token && token.cancelado) return { eventos: [], truncado: false, unidades: 0, cancelado: true };
     _rxGeoHist = {
         key: key, t: Date.now(), eventos: encontrados,
-        truncado: lista.length >= RX_GEO_HIST_MAX_U, truncMsgs: truncMsgs, unidades: total
+        truncado: lista.length >= RX_GEO_HIST_MAX_U, truncMsgs: truncMsgs,
+        sinDatos: sinDatos, unidades: total
     };
     return _rxGeoHist;
 }
@@ -12328,10 +12340,15 @@ function abrirInformeGeocerca(origen) {
                   '<button type="button" class="mini" data-rgi="fuente" data-v="historial">' +
                   '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar en la plataforma</button></div>'
                 : '') +
-            ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey() && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs))
-                ? '<div class="rgi-aviso">El barrido se acoto: ' +
-                  (_rxGeoHist.truncado ? 'la flota supera ' + RX_GEO_HIST_MAX_U + ' unidades' : 'alguna unidad tiene mas historial del tope de seguridad') +
-                  '. Afina el periodo o la geocerca para verlo completo.</div>'
+            ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey() && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs || _rxGeoHist.sinDatos))
+                ? '<div class="rgi-aviso">' + (_rxGeoHist.sinDatos
+                    ? (_rxGeoHist.sinDatos + ' unidad(es) no reportaron en el periodo: se saltan sin consultar. ')
+                    : '') +
+                  (_rxGeoHist.truncado
+                      ? 'Se escanearon ' + RX_GEO_HIST_MAX_U + ' unidades de ' + ((APP.unidades || []).length) + '. '
+                      : '') +
+                  (_rxGeoHist.truncMsgs ? 'Alguna unidad tiene mas historial del tope de seguridad. ' : '') +
+                  'Acorta el periodo o elige una geocerca para verlo completo.</div>'
                 : '') +
             '<div class="rgi-prev">' + (d.unidades.filas.length
                 ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
