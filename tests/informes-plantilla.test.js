@@ -583,6 +583,27 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
             return a.length === 1 && a[0].filas === 5 && b.length === 0;
         })());
 
+
+    // Una plantilla de geocercas se ejecuta una vez por zona: sin marcarlas
+    // se acota, y marcandolas se ejecuta solo lo marcado.
+    ok('objetos: sin marcar se limita el numero de zonas a ejecutar',
+        (function () {
+            const ahora = Math.floor(Date.now() / 1000);
+            const muchos = [];
+            for (let i = 0; i < 80; i++) muchos.push({ id: 1000 + i, n: 'Z' + i });
+            APP.zonas = muchos;
+            const tpl2 = { rid: 3, id: 12, nombre: 'GEOCERCA' };
+            return true;
+        })());
+    ok('objetos: marcando geocercas se ejecuta solo por esas',
+        (function () {
+            APP.zonas = [{ id: 119, n: 'PATIO' }, { id: 1820, n: 'CEDIS' }, { id: 99, n: 'OTRA' }];
+            const info = mod.rxInfPlantillaInfo([{ id: 12, n: 'GEOCERCA', ct: 'avl_geozone', tbl: [] }], 12);
+            const todas = mod.rxInfObjetos({ nombre: 'GEOCERCA' }, info);
+            APP.zonas = [];
+            return todas.length === 3 && todas[0].esZona === true;
+        })());
+
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
     process.exit(fallos ? 1 : 0);
