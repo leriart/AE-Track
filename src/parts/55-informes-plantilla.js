@@ -469,7 +469,9 @@ function rxInfObjetos(tpl, info) {
         for (const z of (APP.zonas || [])) {
             if (!z || z.id == null) continue;
             const nm = rxGeoInfNombre(z);
-            if (nm) out.push({ id: String(z.id), eco: nm, esZona: true });
+            let org = null;
+            try { org = (typeof glocOrigen === 'function') ? glocOrigen(z) : null; } catch (_) { org = null; }
+            if (nm) out.push({ id: String(z.id), eco: nm, esZona: true, app: !!(org && org.id === 'app') });
         }
         return out;
     }
@@ -546,6 +548,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     let objs = unidades;
     let modo = '';
     let recortado = false;
+    let sinPlataforma = false;
     if (!objs) {
         // Los objetos secundarios son los que la plataforma pide de verdad
         // (reportObjectSecId). En una plantilla de geocercas son las
@@ -562,6 +565,11 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
             const filtradas = secs.filter((o) => set[norm(o.eco)]);
             if (filtradas.length) secs = filtradas;
         }
+        // Una geocerca dibujada en Rondo no existe en la plataforma: no se
+        // puede ejecutar un informe por ella (la lista la marca como 'app').
+        const antes = secs.length;
+        secs = secs.filter((o) => !o.app);
+        if (!secs.length && antes) sinPlataforma = true;
         if (secs.length > RX_INF_MAX_OBJETOS) { secs = secs.slice(0, RX_INF_MAX_OBJETOS); recortado = true; }
         if (secs.length) { objs = secs; modo = (info && info.esGeo) ? 'geocercas' : 'secundarios'; }
         else {
@@ -627,6 +635,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     return {
         cols: cols, filas: filas, trozos: trozos.length, hechos: hechos,
         objetos: objs.length, asked: total, alcance: modo, modos: modos, recortado: recortado,
+        sinPlataforma: sinPlataforma,
         fallos: fallos, errores: errores, cacheados: cacheados, lleno: cheio,
         bloqueado: parity,
         cancelado: !!(token && token.cancelado), ms: Date.now() - t0
@@ -1473,31 +1482,34 @@ function abrirInformesPlantilla(origen) {
                 // Si ya hay resultados, la pantalla muestra avisos sobre ellos.
                 const hay = (RX_INF.cols || []).length > 0;
                 const avisos = [];
-                if (RX_INF.alcance === 'sel' && !nUn) avisos.push('No hay unidades seleccionadas: usa "Toda la flota" o selecciona unidades en la lista.');
+                if (RX_INF.alcance === 'sel' && !nUn) avisos.push(esc('No hay unidades seleccionadas: usa "Toda la flota" o selecciona unidades en la lista.'));
                 if (RX_INF.rango === 'todo' && rangoS.desde > 0 && ((Date.now() / 1000 - rangoS.desde) > 400 * 86400)) {
-                    avisos.push('"Todo" puede abarcar mas de lo que la plataforma guarda; por eso se trocea y se avisa al terminar.');
+                    avisos.push(esc('"Todo" puede abarcar mas de lo que la plataforma guarda; por eso se trocea y se avisa al terminar.'));
                 }
-                if (RX_INF.meta && RX_INF.meta.fallos) avisos.push(RX_INF.meta.fallos + ' trozo(s) fallaron: ' + ((RX_INF.meta.errores || [])[0] || 'error desconocido'));
+                if (RX_INF.meta && RX_INF.meta.fallos) avisos.push(esc(RX_INF.meta.fallos + ' trozo(s) fallaron: ' + ((RX_INF.meta.errores || [])[0] || 'error desconocido')));
+                if (RX_INF.meta && RX_INF.meta.sinPlataforma) {
+                    avisos.push(esc('Las geocercas marcadas se dibujaron en Rondo y no existen en la plataforma: elige geocercas de la plataforma para ejecutar el informe.'));
+                }
                 if (RX_INF.meta && RX_INF.meta.recortado) {
-                    avisos.push('Se ejecutaron ' + RX_INF_MAX_OBJETOS + ' objetos como maximo. Marca en el filtro de geocercas las que te interesen para ajustarlo.');
+                    avisos.push(esc('Se ejecutaron ' + RX_INF_MAX_OBJETOS + ' objetos como maximo. Marca en el filtro de geocercas las que te interesen para ajustarlo.'));
                 }
                 if (RX_INF.meta && RX_INF.meta.bloqueado) {
-                    avisos.push('La plataforma esta rechazando la ejecucion (' + RX_INF.meta.fallos +
-                        ' trozos seguidos con el mismo error). Se ha parado en vez de repetirlo 30 veces: revisa el detalle.');
+                    avisos.push(esc('La plataforma esta rechazando la ejecucion (' + RX_INF.meta.fallos +
+                        ' trozos seguidos con el mismo error). Se ha parado en vez de repetirlo 30 veces.'));
                 }
                 if (RX_INF.diag && RX_INF.diag.error) {
-                    avisos.push('Ultimo intento: ' + (RX_INF.diag.enviado
+                    avisos.push('Ultimo intento: ' + esc(RX_INF.diag.enviado
                         ? ('plantilla ' + RX_INF.diag.enviado.reportTemplateId + ', objeto ' + RX_INF.diag.enviado.reportObjectId +
                             ', secundario "' + RX_INF.diag.enviado.reportObjectSecId + '"')
                         : 'sin datos') + ' \u00b7 ' +
-                        '<button type="button" class="mini" id="rgi-diag"' + dis + '>ver detalle</button>');
+                        '<button type="button" class="mini" id="rgi-diag">ver detalle</button>');
                 }
-                if (RX_INF.meta && RX_INF.meta.lleno) avisos.push('Se alcanzo el tope de ' + Math.round(RX_INF_MAX_FILAS / 1000) + 'k filas: acorta el periodo.');
+                if (RX_INF.meta && RX_INF.meta.lleno) avisos.push(esc('Se alcanzo el tope de ' + Math.round(RX_INF_MAX_FILAS / 1000) + 'k filas: acorta el periodo.'));
                 if (hay) {
                     const vacias = rxInfColumnasVacias(v.cols, v.filas);
                     if (vacias.length && vacias.length < v.cols.length) {
-                        avisos.push('Columnas sin datos: ' + vacias.slice(0, 4).join(', ') +
-                            '. Suele ser que a la plantilla le falta un filtro que solo puedes poner en la plataforma.');
+                        avisos.push(esc('Columnas sin datos: ' + vacias.slice(0, 4).join(', ') +
+                            '. Suele ser que a la plantilla le falta un filtro que solo puedes poner en la plataforma.'));
                     }
                 }
                 const ejecutar = busy
@@ -1556,7 +1568,7 @@ function abrirInformesPlantilla(origen) {
                     panelSonda +
                     prog +
                     '<div class="rgi-cfg">' + filaPeriodo + filaSec + filaGeos + filaEco + '</div>' +
-                    (avisos.length ? '<div class="rgi-aviso">' + avisos.map(esc).join(' ') + '</div>' : '') +
+                    (avisos.length ? '<div class="rgi-aviso">' + avisos.join(' ') + '</div>' : '') +
                     barraEjec +
                     (hay ? '<div class="rgi-cfg">' + barraVista + '</div>' : '') +
                     '<div id="rgi-dyn">' + kpis + resumen + tabla + '</div>' +

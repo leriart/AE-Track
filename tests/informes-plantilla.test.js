@@ -544,6 +544,21 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
         })());
 
 
+
+    // Una geocerca dibujada en Rondo no existe en la plataforma: no vale
+    // como objeto de informe y hay que avisar, no fallar en bucle.
+    ok('objetos: las geocercas de Rondo quedan fuera de la ejecucion',
+        (function () {
+            APP.zonas = [
+                { id: 119, n: 'PLAT' },
+                { id: 3, n: 'DE RONDO', app: true }
+            ];
+            const info = mod.rxInfPlantillaInfo([{ id: 12, n: 'GEOCERCA', ct: 'avl_geozone', tbl: [] }], 12);
+            const o = mod.rxInfObjetos({ nombre: 'GEOCERCA' }, info);
+            APP.zonas = [];
+            return o.length === 2 && o[0].app !== true && o[1].app === true;
+        })());
+
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
 })();
