@@ -11175,6 +11175,14 @@ const RX_GEO_HIST_MSGS = 5000;
 // todo lo que la API guarde) y este tope evita que una unidad con años de
 // GPS frene el barrido de toda la flota.
 const RX_GEO_HIST_PAGS = 30;
+// Dias por trozo del rango. El rango se parte en semanas y cada trozo se
+// cachea: un corte a mitad no tira el trabajo hecho y la siguiente pasada
+// continua solo por lo que falta.
+const RX_GEO_HIST_PASO_D = 7;
+// Presupuesto de mensajes por barrido. Flota grande x periodo largo puede
+// pedir cientos de miles de mensajes; al llegar al tope se para guardando
+// lo que ya hay y se avisa (con la cache, pulsar otra vez continua).
+const RX_GEO_HIST_MAX_MSG = 400000;
 // Peticiones simultaneas al escanear el historial. En serie, una flota de
 // varios cientos tardaria una eternidad; con un pool de 10 va muy rapido sin
 // castigar al servidor de la plataforma.
@@ -11824,8 +11832,56 @@ async function rxGeoInfFetchMensajes(uid, desde, hasta, token) {
     }
     return { msgs: msgs, truncado: msgs.length >= RX_GEO_HIST_MSGS * RX_GEO_HIST_PAGS };
 }
-// Escanea el historial de la flota. `onProg(hechas, total, eco)` actualiza la
-// barra; `token` permite cancelar (al cerrar el dialogo o cambiar opciones).
+// Una peticion con reintentos: un fallo puntual (o la plataforma ocupada con
+// 700 unidades) no debe dejar una unidad sin datos en silencio.
+async function rxGeoInfCargaTrozo(uid, desde, hasta, token) {
+    let err = '';
+    for (let i = 0; i < 3; i++) {
+        if (token && token.cancelado) return { msgs: [], error: 'cancelado' };
+        try { return await rxGeoInfFetchMensajes(uid, desde, hasta, token); }
+        catch (e) {
+            err = (e && e.message) || String(e);
+            await new Promise((r) => { try { setTimeout(r, 500 * (i + 1)); } catch (_) { r(); } });
+        }
+    }
+    return { msgs: [], error: err };
+}
+// ── Trozos cacheados: el rango se parte en semanas ─────────────────────
+// Un trozo = (unidad, semana, umbrales). Con lo que hay en cache NO se vuelve
+// a pedir: un corte a mitad de un rango largo no tira el trabajo hecho y la
+// siguiente pasada sigue donde se quedo. Solo se guardan EVENTOS (pocos),
+// nunca los mensajes crudos, asi que la memoria se aguanta.
+const _rxGeoTrozo = new Map();     // uid|desde|params -> eventos del trozo
+const _rxGeoPrimero = new Map();   // uid -> primer mensaje guardado (0 = ninguno)
+function rxGeoInfTrozoKey(uid, desde) {
+    return uid + '|' + desde + '|' + rxGeoInfParam('pMin', 2, 0.5, 240) + '|' +
+        rxGeoInfParam('pVel', 3, 0, 80) + '|' + rxGeoInfParam('pMargen', 60, 0, 2000) + '|' +
+        rxGeoInfParam('pHueco', RX_GEO_HUECO_MIN, 0, 240);
+}
+function rxGeoInfTrozoReset() {
+    _rxGeoTrozo.clear();
+    _rxGeoPrimero.clear();
+}
+// Primer mensaje que la plataforma guarda de la unidad (0 = no guarda
+// ninguno). UNA peticion: sin ella, pedir "todo" obligaba a preguntar semana
+// a semana desde 1970 a cada unidad de la flota.
+async function rxGeoInfPrimerMensaje(uid) {
+    if (_rxGeoPrimero.has(uid)) return _rxGeoPrimero.get(uid);
+    let t0 = 0;
+    try {
+        const r = await remoteCall('messages/load_interval', {
+            itemId: uid, timeFrom: 0, timeTo: Math.floor(Date.now() / 1000) + 3600,
+            flags: 1, flagsMask: 1, loadCount: 1
+        });
+        const ms = (r && r.messages) || [];
+        t0 = ms.length ? (Number(ms[0].t) || 0) : 0;
+    } catch (_) { t0 = 0; }
+    _rxGeoPrimero.set(uid, t0);
+    return t0;
+}
+// Escanea el historial de la flota. `onProg(hechas, total, eco, hallados, msgs)`
+// actualiza la barra; `token` permite cancelar (al cerrar el dialogo o cambiar
+// opciones).
 async function rxGeoInfEscanear(onProg, token) {
     const cfg = { desde: RX_GEO.desde, hasta: RX_GEO.hasta, rango: RX_GEO.rango, zona: RX_GEO.zona, unidades: RX_GEO.unidades };
     const key = rxGeoInfHistKey();
@@ -11864,7 +11920,9 @@ async function rxGeoInfEscanear(onProg, token) {
     });
     const encontrados = [];
     const total = lista.length;
-    let hechas = 0, idx = 0, truncMsgs = false;
+    let hechas = 0, idx = 0, truncMsgs = false, msgsLeidos = 0;
+    let fallos = 0, sinPresupuesto = false, desdeDatos = 0;
+    const errores = [];
     // Se publica el resultado a medias (vacio al principio) para que el
     // dialogo pueda ir pintando lo que ya ha salido: con una flota grande el
     // barrido tarda, y el operador ve resultados en vez de una espera en seco.
@@ -11875,27 +11933,74 @@ async function rxGeoInfEscanear(onProg, token) {
     const obrero = async () => {
         while (idx < total) {
             if (token && token.cancelado) return;
+            // Presupuesto: con flota grande y periodos largos la cola podia
+            // crecer sin fin. Se para guardando lo hecho y la cache por
+            // semanas deja continuar en la siguiente pasada.
+            if (msgsLeidos >= RX_GEO_HIST_MAX_MSG) { sinPresupuesto = true; return; }
             const it = lista[idx++];
+            const eco = it.info.eco || it.clave;
             try {
-                const res = await rxGeoInfFetchMensajes(it.u.id, rango.desde, rango.hasta, token);
-                if (res.truncado) truncMsgs = true;
-                const evs = rxGeoInfDeMensajes(res.msgs, it.info.eco || it.clave, 'historial');
+                // Inicio real de los datos de la unidad. Con "todo" (rango sin
+                // fecha) se pregunta por el primer mensaje guardado: sin eso
+                // habria que barrer semanas vacias desde 1970.
+                let ini = rango.desde;
+                if (ini <= 0) {
+                    const p = await rxGeoInfPrimerMensaje(it.u.id);
+                    if (!(p > 0)) { sinDatos++; continue; }
+                    ini = p;
+                    if (!desdeDatos || p < desdeDatos) desdeDatos = p;
+                }
+                // El rango se recorre en trozos de una semana: cada uno se
+                // cachea, asi el corte no tira el trabajo hecho. El avance es
+                // t1 + 1 (no t0 + paso) para no dejar un trozo final de un
+                // segundo cuando el rango es multiplo exacto del paso.
+                const paso = RX_GEO_HIST_PASO_D * 86400;
+                const eventos = [];
+                let t0 = ini;
+                while (t0 <= rango.hasta) {
+                    if (token && token.cancelado) return;
+                    if (msgsLeidos >= RX_GEO_HIST_MAX_MSG) { sinPresupuesto = true; break; }
+                    const t1 = Math.min(rango.hasta, t0 + paso - 1);
+                    const tkey = rxGeoInfTrozoKey(it.u.id, t0);
+                    let evs = _rxGeoTrozo.get(tkey);
+                    if (!evs) {
+                        const r = await rxGeoInfCargaTrozo(it.u.id, t0, t1, token);
+                        msgsLeidos += r.msgs.length;
+                        if (r.error && r.error !== 'cancelado') {
+                            fallos++;
+                            if (errores.length < 5) errores.push(eco + ': ' + r.error);
+                        }
+                        if (r.truncado) truncMsgs = true;
+                        evs = rxGeoInfDeMensajes(r.msgs, eco, 'historial');
+                        _rxGeoTrozo.set(tkey, evs);
+                    }
+                    if (evs.length) eventos.push.apply(eventos, evs);
+                    if (t1 >= rango.hasta) break;
+                    t0 = t1 + 1;
+                }
                 // Chofer: si la unidad ya trae el campo personalizado se usa
                 // directo; si hubo eventos y no lo trae, se consulta por API
-                // (una peticion, cacheada 30 min) y se anota por unidad/dia.
+                // (una peticion, cacheada 30 min) y se anota por unidad.
                 let ch = rxGeoInfChofer(it.u) || _rxGeoChofer[it.clave] || '';
-                if (!ch && evs.length && typeof iaFetchUnidadProps === 'function') {
+                if (!ch && eventos.length && typeof iaFetchUnidadProps === 'function') {
                     try { ch = rxGeoInfChofer(await iaFetchUnidadProps(it.u.id, it.info.nombre)); } catch (_) { /* noop */ }
                 }
                 if (ch) {
                     _rxGeoChofer[it.clave] = ch;
-                    for (const e of evs) e.chofer = ch;
+                    for (const e of eventos) e.chofer = ch;
                 }
-                for (const e of evs) encontrados.push(e);
-            } catch (_) { /* unidad sin historial o sin permiso: se salta */ }
+                for (const e of eventos) encontrados.push(e);
+            } catch (e) {
+                // Cualquier fallo unexpected se cuenta y se muestra: un
+                // informe vacio sin explicacion es lo que hacia pensar que el
+                // reporte no funcionaba.
+                fallos++;
+                if (errores.length < 5) errores.push(eco + ': ' + ((e && e.message) || e));
+            }
             hechas++;
-            // La barra muestra el avance y cuantos eventos van saliendo.
-            if (onProg) onProg(hechas, total, it.info.eco || it.clave, encontrados.length);
+            // La barra muestra el avance, cuantos eventos van saliendo y el
+            // volumen leido (util para saber si el rango es enorme).
+            if (onProg) onProg(hechas, total, eco, encontrados.length, msgsLeidos);
             // Cede el hilo para que la interfaz y el mapa se refresquen.
             await rxGeoInfYield();
         }
@@ -11907,7 +12012,11 @@ async function rxGeoInfEscanear(onProg, token) {
     _rxGeoHist = {
         key: key, t: Date.now(), eventos: encontrados,
         truncado: lista.length >= RX_GEO_HIST_MAX_U, truncMsgs: truncMsgs,
-        sinDatos: sinDatos, unidades: total, parcial: false
+        sinDatos: sinDatos, unidades: total, parcial: false,
+        // Volumen leido, fallos y la fecha real mas antigua con datos: lo que
+        // el dialogo muestra para que un informe vacio se entienda.
+        mensajes: msgsLeidos, fallos: fallos, errores: errores,
+        presupuesto: sinPresupuesto, desdeDatos: desdeDatos
     };
     return _rxGeoHist;
 }
@@ -12370,15 +12479,31 @@ function abrirInformeGeocerca(origen) {
                   '<button type="button" class="mini" data-rgi="fuente" data-v="historial">' +
                   '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar en la plataforma</button></div>'
                 : '') +
-            ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey() && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs || _rxGeoHist.sinDatos))
-                ? '<div class="rgi-aviso">' + (_rxGeoHist.sinDatos
-                    ? (_rxGeoHist.sinDatos + ' unidad(es) no reportaron en el periodo: se saltan sin consultar. ')
-                    : '') +
+            ((RX_GEO.fuente === 'historial' && _rxGeoHist.key === rxGeoInfHistKey()
+                && (_rxGeoHist.truncado || _rxGeoHist.truncMsgs || _rxGeoHist.sinDatos
+                    || _rxGeoHist.fallos || _rxGeoHist.presupuesto || _rxGeoHist.desdeDatos))
+                ? '<div class="rgi-aviso">' +
+                  (_rxGeoHist.fallos
+                      ? ('<b>' + _rxGeoHist.fallos + ' unidad(es) fallaron al consultar</b> (' +
+                          ((_rxGeoHist.errores || [])[0] || 'error desconocido') +
+                          (_rxGeoHist.errores && _rxGeoHist.errores.length > 1
+                              ? ' y ' + (_rxGeoHist.errores.length - 1) + ' mas' : '') + '). ')
+                      : '') +
+                  (_rxGeoHist.presupuesto
+                      ? ('Se leyo el tope de ' + Math.round(RX_GEO_HIST_MAX_MSG / 1000) + 'k mensajes y se paro. ' +
+                          'Vuelve a pulsar "Generar reporte": continua donde se quedo (lo ya leido esta cacheado). ')
+                      : '') +
+                  (_rxGeoHist.sinDatos
+                      ? (_rxGeoHist.sinDatos + ' unidad(es) no reportaron en el periodo: se saltan sin consultar. ')
+                      : '') +
                   (_rxGeoHist.truncado
                       ? 'Se escanearon ' + RX_GEO_HIST_MAX_U + ' unidades de ' + ((APP.unidades || []).length) + '. '
                       : '') +
                   (_rxGeoHist.truncMsgs ? 'Alguna unidad tiene mas historial del tope de seguridad. ' : '') +
-                  'Acorta el periodo o elige una geocerca para verlo completo.</div>'
+                  (_rxGeoHist.desdeDatos
+                      ? ('Datos desde el ' + rxGeoInfFechaTxt(_rxGeoHist.desdeDatos * 1000) + '. ')
+                      : '') +
+                  '</div>'
                 : '') +
             '<div class="rgi-prev">' + (d.unidades.filas.length
                 ? rxInfTabla(rxGeoInfCabeceras(d.modo), d.unidades.filas.slice(0, 12)
@@ -12438,11 +12563,12 @@ function abrirInformeGeocerca(origen) {
                         // en seco. Se limita a uno cada ~800 ms.
                         let ultimoPintado = 0;
                         try {
-                            await rxGeoInfEscanear((hechas, total, eco, hallados) => {
+                            await rxGeoInfEscanear((hechas, total, eco, hallados, leidos) => {
                                 setProg(6 + Math.round((hechas / Math.max(1, total)) * 80),
                                     'Consultando ' + hechas + '/' + total +
                                     (eco ? ' \u00b7 ' + eco : '') +
-                                    (hallados ? ' \u00b7 ' + hallados + ' evento(s)' : ''));
+                                    (hallados ? ' \u00b7 ' + hallados + ' evento(s)' : '') +
+                                    (leidos ? ' \u00b7 ' + Math.round(leidos / 1000) + 'k mensajes' : ''));
                                 const ahora = Date.now();
                                 if (mio === pintaN && (ahora - ultimoPintado) > 800) {
                                     ultimoPintado = ahora;

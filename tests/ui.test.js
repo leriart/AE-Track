@@ -766,6 +766,19 @@ ok('historial: peticiones en paralelo con pool',
     /await Promise\.all\(tareas\)/.test(src));
 ok('historial: la flota entera se escanea (tope solo de seguridad) y sin datos se saltan',
     /const RX_GEO_HIST_MAX_U = 5000/.test(src) && /rango\.desde > 0 && t < rango\.desde\) \{ sinDatos\+\+; continue; \}/.test(src));
+ok('escaneo: los fallos de la plataforma se reintentan y se muestran',
+    /const RX_GEO_HIST_MAX_MSG = 400000/.test(src) &&
+    /async function rxGeoInfCargaTrozo\(uid, desde, hasta, token\)/.test(src) &&
+    /fallos: fallos, errores: errores/.test(src) &&
+    /unidad\(es\) fallaron al consultar/.test(src));
+ok('escaneo: reanuda por trozos cacheados (no se pierde el trabajo al cortar)',
+    /const _rxGeoTrozo = new Map\(\)/.test(src) && /while \(t0 <= rango\.hasta\)/.test(src) &&
+    /_rxGeoTrozo\.set\(tkey, evs\)/.test(src) && /RX_GEO_HIST_PASO_D \* 86400/.test(src));
+ok('escaneo: con "todo" arranca donde la plataforma guarda el primer mensaje',
+    /async function rxGeoInfPrimerMensaje\(uid\)/.test(src) && /loadCount: 1/.test(src) &&
+    /Datos desde el /.test(src));
+ok('escaneo: el progreso dice cuantas unidades van y cuanto se ha leido',
+    /Math\.round\(leidos \/ 1000\) \+ 'k mensajes'/.test(src));
 ok('historial: resultados en vivo mientras escanea',
     /parcial: true/.test(src) && /ultimoPintado/.test(src) &&
     /if \(mio === pintaN && \(ahora - ultimoPintado\) > 800\)/.test(src));
