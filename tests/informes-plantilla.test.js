@@ -51,7 +51,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfPlantillaInfo,rxInfObjetos,rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
+    'rxInfPlantillaInfo,rxInfObjetos,rxInfLecturas,rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -542,6 +542,26 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
             const o = mod.rxInfObjetos({ nombre: 'Recorrido' }, mod.rxInfPlantillaInfo([{ id: 1, ct: 'avl_unit', tbl: [] }], 1));
             APP.unidades = [];
             return o.length === 1 && o[0].id === '11';
+        })());
+
+
+    // La plantilla guarda varias tablas y no todas se leen igual: se prueban
+    // varias formas y se sigue con la que responde.
+    ok('lectura: hay varias formas candidatas (tablas y niveles)',
+        mod.rxInfLecturas().length >= 6 && mod.rxInfLecturas()[0].t === 0);
+    ok('lectura: se leen las tablas 1 y 2 cuando la 0 no devuelve filas',
+        (async function () {
+            const soloTabla2 = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS, function (m, p) {
+                if (m === 'report/select_result_rows') {
+                    if (p.tableIndex === 2) return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }], rows: [['105']] } });
+                    return Promise.reject(new Error(m + ' -> code 5'));
+                }
+                if (m === 'report/get_report_status') return Promise.resolve({ reportResult: { status: 'done' } });
+                if (m === 'report/get_report_data') return Promise.resolve([]);
+                return Promise.resolve({});
+            }, APP);
+            const r = await soloTabla2.rxInfEjecutaRemoto({ rid: 3, id: 11, nombre: 'X' }, '119', null, 100);
+            return r.filas.length === 1 && r.filas[0][0] === '105';
         })());
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
