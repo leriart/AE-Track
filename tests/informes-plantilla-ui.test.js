@@ -76,7 +76,12 @@ const stubs = [
     'function readJSON(k, f){ return f; }',
     'function writeJSON(){}',
     'function abrirDialogo(o){ P_R.dialogos.push(o); }',
-    'function remoteCall(m, p){ P_R.llamadas.push({ m: m, p: p }); if (m === "core/search_items") return Promise.resolve({ items: [{ id: 3, rep: { 1: { id: 11, n: "Resumen diario" } } }] }); return Promise.resolve({}); }',
+    'function remoteCall(m, p){ P_R.llamadas.push({ m: m, p: p }); if (m === "core/search_items") return Promise.resolve({ items: [{ id: 3, rep: { 1: { id: 11, n: "Resumen diario" } } }] });' +
+        ' if (P_R.lento && m === "report/get_report_status") return new Promise(function (r) { setTimeout(function () { r({ reportResult: { status: "done" } }); }, 60); });' +
+        ' if (m === "report/get_report_status") return Promise.resolve({ reportResult: { status: "done" } });' +
+        ' if (m === "report/select_result_rows") return Promise.resolve({ reportResult: { columns: [{ n: "Unidad" }, { n: "Geocerca" }], rows: [["105", "PATIO"]] } });' +
+        ' if (m === "report/get_report_data") return Promise.resolve({ 11: [{ id: "119", nm: "105" }] });' +
+        ' return Promise.resolve({}); }',
     'const document = P_DOC;', 'const window = {};', 'const URL = { createObjectURL(){ return "blob:x"; }, revokeObjectURL(){} };',
     'const Blob = function () {};'
 ].join('\n');
@@ -176,6 +181,34 @@ function clickEn(id) {
     mod.RX_INF.tpl = { rid: 3, id: 13, nombre: 'Recorrido Granja' };
     ok('una plantilla que no es de geocercas no ofrece el filtro',
         mod.rxInfEsDeGeocercas() === false);
+
+
+    // 6) Progreso: se ve DENTRO del cuerpo, no solo en la barra de arriba.
+    //    (Con 700 unidades el primer trozo tarda: si el progreso solo se
+    //    pinta al terminar el primero, parece un dialogo parado.)
+    mod.RX_INF.tpl = { rid: 3, id: 11, nombre: 'Resumen diario' };
+    mod.RX_INF.cols = []; mod.RX_INF.filas = []; mod.RX_INF.meta = null;
+    R.lento = true;
+    clickEn('rgi-ejecutar');
+    await new Promise((r) => setTimeout(r, 20));
+    const enCurso = byId('rgi-box').innerHTML;
+    ok('mientras calcula se ve el progreso dentro del cuerpo',
+        /id="rgi-prog"/.test(enCurso) && /GEOCERCA|Resumen diario/.test(enCurso),
+        enCurso.slice(0, 120));
+    ok('mientras calcula el boton pasa a Cancelar',
+        /id="rgi-cancel"/.test(enCurso) && /Cancelar/.test(enCurso));
+    ok('mientras calcula la barra de arriba tambien se muestra',
+        byId('rgi-carga').style.display === 'flex');
+    await new Promise((r) => setTimeout(r, 200));
+    R.lento = false;
+    ok('al terminar el progreso desaparece y quedan los resultados',
+        !/id="rgi-prog"/.test(byId('rgi-box').innerHTML) &&
+        /rgi-prev/.test(byId('rgi-box').innerHTML) &&
+        mod.RX_INF.filas.length > 0,
+        'filas=' + mod.RX_INF.filas.length);
+    ok('al terminar guarda el numero de unidades en el resumen',
+        mod.RX_INF.meta && mod.RX_INF.meta.unidades >= 1,
+        JSON.stringify(mod.RX_INF.meta));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
