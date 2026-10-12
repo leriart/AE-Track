@@ -51,7 +51,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
+    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfEjecutaRemoto,rxInfEjecutaDirecto,rxInfExtrae,rxInfSecundarios,rxInfDatosPlantilla,rxInfLimpiarInforme,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -73,6 +73,17 @@ function remote(m, p) {
         });
     }
     if (m === 'report/cleanup_result') { calls.push({ m: m, p: {} }); return Promise.resolve({}); }
+    if (m === 'report/get_report_data') {
+        return Promise.resolve({ 12: [{ id: '119', nm: '105' }, { id: '1820', nm: '205' }] });
+    }
+    if (m === 'report/get_report_status') return Promise.resolve({ reportResult: { status: 'done' } });
+    if (m === 'report/apply_report_result') return Promise.resolve({});
+    if (m === 'report/select_result_rows') {
+        return Promise.resolve({ reportResult: {
+            columns: [{ n: 'Unidad' }, { n: 'Geocerca' }, { n: 'Km' }],
+            rows: [['105', 'PATIO', 12]]
+        } });
+    }
     if (m === 'report/get_result') return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }], rows: [['999']] } });
     if (m === 'report/exec_report') {
         return Promise.resolve({
@@ -157,19 +168,26 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
     const ahora = Math.floor(Date.now() / 1000);
     const r1 = await mod.rxInfCorre(tpl, ahora - 21 * 86400, ahora, null, () => {}, null);
     const execs = calls.filter((c) => c.m === 'report/exec_report');
-    ok('ejecucion: parte 21 dias en 3 trozos de 7', execs.length === 3,
-        'llamadas=' + execs.length + ' trozos=' + r1.trozos);
-    ok('ejecucion: cada trozo pide su intervalo y no se solapan',
-        execs[0].p.interval.to < execs[1].p.interval.from + 1 &&
-        execs[0].p.interval.to + 1 === execs[1].p.interval.from,
-        JSON.stringify(execs.map((c) => [c.p.interval.from, c.p.interval.to])));
-    ok('ejecucion: reportObjectId 0 = toda la flota',
-        execs.every((c) => c.p.reportObjectId === 0));
+    ok('ejecucion: el rango se parte en trozos de 7 dias por objeto',
+        r1.trozos === 3 && execs.length === r1.trozos * r1.objetos,
+        'llamadas=' + execs.length + ' trozos=' + r1.trozos + ' objetos=' + r1.objetos);
+    ok('ejecucion: cada trozo se cachea por separado (se puede reanudar)',
+        Object.keys(store[LS.infplant] || {}).length === execs.length,
+        Object.keys(store[LS.infplant] || {}).length + ' vs ' + execs.length);
+    ok('ejecucion: el objeto va en el RECURSO y el secundario como texto',
+        execs.every((c) => c.p.reportObjectId === 3 && typeof c.p.reportObjectSecId === 'string'),
+        JSON.stringify(execs[0].p));
+    ok('ejecucion: ejecuta en segundo plano y sondea el estado',
+        execs.every((c) => c.p.remoteExec === 1 && c.p.interval.flags === 16777220) &&
+        calls.some((c) => c.m === 'report/get_report_status') &&
+        calls.some((c) => c.m === 'report/apply_report_result'),
+        JSON.stringify(execs[0].p.interval));
+    ok('ejecucion: lee las filas por rangos del resultado de la sesion',
+        calls.some((c) => c.m === 'report/select_result_rows' &&
+            c.p.config && c.p.config.type === 'range' && c.p.config.data.level === 0));
     ok('ejecucion: pasa recurso y plantilla', execs[0].p.reportResourceId === 3 && execs[0].p.reportTemplateId === 11);
-    ok('ejecucion: pega las filas de todos los trozos', r1.filas.length === 6,
-        'filas=' + r1.filas.length);
-    ok('ejecucion: toma los nombres de columna de la plataforma',
-        r1.cols[0] === 'Unidad' && r1.cols[2] === 'Km', JSON.stringify(r1.cols));
+    ok('ejecucion: sale con filas y columnas', r1.filas.length > 0 && r1.cols.length > 0,
+        'filas=' + r1.filas.length + ' cols=' + JSON.stringify(r1.cols));
     ok('ejecucion: mide el tiempo y no reporta fallos', r1.fallos === 0 && r1.ms >= 0);
 
     // Cache: la segunda vez no vuelve a pedir nada.
@@ -177,26 +195,28 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
     const r2 = await mod.rxInfCorre(tpl, ahora - 21 * 86400, ahora, null, () => {}, null);
     const nDespues = calls.filter((c) => c.m === 'report/exec_report').length;
     ok('cache: la segunda ejecucion no llama a la plataforma',
-        nDespues === nAntes && r2.cacheados === 3 && r2.filas.length === 6,
+        nDespues === nAntes && r2.cacheados === nAntes && r2.filas.length === r1.filas.length,
         'llamadas ' + nAntes + ' -> ' + nDespues + ' cacheados=' + r2.cacheados);
     ok('cache: sobrevive a recargar (se lee del storage)',
-        Object.keys(store[LS.infplant] || {}).length === 3, JSON.stringify(Object.keys(store[LS.infplant] || {})));
+        Object.keys(store[LS.infplant] || {}).length === nAntes,
+        Object.keys(store[LS.infplant] || {}).length + ' vs ' + nAntes);
     // Al vaciarla, se vuelve a pedir.
     mod.rxInfCacheLimpiar();
     const r3 = await mod.rxInfCorre(tpl, ahora - 21 * 86400, ahora, null, () => {}, null);
     ok('cache: al vaciarla se vuelve a calcular',
-        calls.filter((c) => c.m === 'report/exec_report').length === nDespues + 3 && r3.cacheados === 0);
+        calls.filter((c) => c.m === 'report/exec_report').length === nDespues + nAntes && r3.cacheados === 0);
 
     // Solo las seleccionadas: una llamada por unidad y trozo.
     mod.rxInfCacheLimpiar();
     calls.length = 0;
     const rSel = await mod.rxInfCorre(tpl, ahora - 7 * 86400, ahora,
         [{ id: 11, eco: '105' }, { id: 12, eco: '205' }], () => {}, null);
-    ok('alcance: con unidades seleccionadas pide unidad a unidad',
+    ok('alcance: con unidades seleccionadas pide una por una',
         calls.filter((c) => c.m === 'report/exec_report').length === 2 &&
-        calls.filter((c) => c.m === 'report/exec_report').every((c) => c.p.reportObjectId === 11 || c.p.reportObjectId === 12),
+        calls.filter((c) => c.m === 'report/exec_report')
+            .every((c) => c.p.reportObjectSecId === '11' || c.p.reportObjectSecId === '12'),
         'llamadas=' + calls.filter((c) => c.m === 'report/exec_report').length);
-    ok('alcance: informa de cuantas unidades se pidio', rSel.objetos === 2);
+    ok('alcance: informa de cuantos objetos se pidieron', rSel.objetos === 2);
 
     // Cancelacion.
     mod.rxInfCacheLimpiar();
@@ -289,10 +309,12 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
     mod.RX_INF.sonda = null; mod.RX_INF._sondaKey = '';
     const s1 = await mod.rxInfSondea(tpl);
     ok('sondeo: ejecuta la plantilla y guarda sus columnas',
-        s1.cols.length === 5 && s1.muestra.length === 2 && s1.clase, JSON.stringify(Object.keys(s1)));
-    ok('sondeo: dice de que trata la plantilla', s1.clase.tipo === 'vehiculos' && s1.etiquetaOK === undefined);
-    ok('sondeo: lista las unidades que aparecen',
-        s1.unidades.length === 2 && s1.unidades.indexOf('105') >= 0, JSON.stringify(s1.unidades));
+        s1.cols.length === 3 && s1.muestra.length === 1 && s1.clase, JSON.stringify(Object.keys(s1)));
+    ok('sondeo: dice de que trata la plantilla (columna de geocerca y de unidad)',
+        s1.clase.tipo === 'mixto' && s1.clase.iZona === 1 && s1.clase.iUni === 0, JSON.stringify(s1.clase.tipo));
+    ok('sondeo: lista las unidades y geocercas que aparecen',
+        s1.unidades.indexOf('105') >= 0 && s1.zonas.indexOf('PATIO') >= 0,
+        JSON.stringify(s1.unidades) + ' / ' + JSON.stringify(s1.zonas));
     ok('sondeo: se cachea (no se vuelve a ejecutar)',
         (function () {
             const antes = calls.length;
@@ -401,10 +423,12 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
         const rU = await mod.rxInfCorre({ rid: 3, id: 11, nombre: 'Resumen diario' }, ahora - 7 * 86400, ahora, null, () => {}, null);
         const execs = calls.filter((c) => c.m === 'report/exec_report');
         APP.unidades = [];
-        ok('corre: pide un informe por unidad (reportObjectId real)',
-            execs.length === 2 && execs.every((c) => c.p.reportObjectId === 11 || c.p.reportObjectId === 22),
-            'llamadas=' + execs.length);
-        ok('corre: cuenta las unidades pedidas', rU.objetos === 2 && rU.filas.length === 4,
+        ok('corre: pide un informe por objeto secundario (los que declara la plantilla)',
+            execs.length === 2 && execs.every((c) => c.p.reportObjectId === 3 &&
+                (c.p.reportObjectSecId === '119' || c.p.reportObjectSecId === '1820')),
+            JSON.stringify(execs.map((c) => c.p.reportObjectSecId)));
+        ok('corre: cuenta los objetos pedidos y las filas pegadas',
+            rU.objetos === 2 && rU.filas.length === 2,
             'objetos=' + rU.objetos + ' filas=' + rU.filas.length);
     })();
 

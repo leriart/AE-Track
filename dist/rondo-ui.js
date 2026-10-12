@@ -13174,37 +13174,179 @@ async function rxInfLimpiarInforme() {
     // interno): por eso se limpia SIEMPRE antes de ejecutar.
     try { await remoteCall('report/cleanup_result', {}); return true; } catch (_) { return false; }
 }
-async function rxInfEjecutar(tpl, objId, desde, hasta, token) {
+// Llamada directa con el periodo ELEGIDO por el operador. Es el camino de
+// antes (mismo intervalo para todos), que ahora se intenta DESPUES del
+// nativo: limpia la sesion primero, que era justo lo que devolvia code 4.
+async function rxInfEjecutaDirecto(tpl, objId, desde, hasta, token) {
     let err = '';
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 2; i++) {
         if (token && token.cancelado) return { filas: [], error: 'cancelado' };
         try {
             await rxInfLimpiarInforme();
             const r = await remoteCall('report/exec_report', {
                 reportResourceId: tpl.rid, reportTemplateId: tpl.id,
-                reportObjectId: objId || 0, reportObjectSecId: 0,
+                reportObjectId: tpl.rid, reportObjectSecId: String(objId),
                 interval: { from: desde, to: hasta, flags: 0 }
             });
-            let rr = (r && r.reportResult) ? r.reportResult : (r || {});
-            // Si la ejecucion no trae filas, se pregunta por el resultado que
-            // dejo en la sesion (es como lo lee la propia pantalla).
-            const vacio = !(Array.isArray(rr.rows) || Array.isArray(rr.stats));
-            if (vacio) {
-                try {
-                    const g = await remoteCall('report/get_result', {});
-                    const gr = (g && g.reportResult) ? g.reportResult : (g || {});
-                    if (gr.rows || gr.stats || gr.columns) rr = Object.assign({}, gr, { _cleanup: true });
-                } catch (_) { /* sin resultado aparte */ }
-            }
-            if (rr._cleanup) { try { await remoteCall('report/cleanup_result', {}); } catch (_) { /* noop */ } }
-            return { filas: rr };
+            const n = rxInfExtrae(r);
+            if (n.filas.length || n.cols.length) return { filas: n.filas, cols: n.cols };
+            try {
+                const g = await remoteCall('report/get_result', {});
+                const n2 = rxInfExtrae(g);
+                if (n2.filas.length || n2.cols.length) return { filas: n2.filas, cols: n2.cols };
+            } catch (_) { /* sin resultado aparte */ }
+            return { filas: [], cols: [] };
         } catch (e) {
             err = (e && e.message) || String(e);
-            await new Promise((x) => { try { setTimeout(x, 600 * (i + 1)); } catch (_) { x(); } });
+            await rxInfEspera(600 * (i + 1));
         }
     }
     return { filas: [], error: err };
 }
+// Primero el protocolo nativo de la pantalla (el que se sabe que funciona);
+// si no trae nada, el directo con el periodo elegido. `modo` deja constancia
+// de cual sirvio, para poder avisar de que periodo se esta usando.
+async function rxInfEjecutar(tpl, objId, desde, hasta, token) {
+    let r = null, err = '';
+    try {
+        r = await rxInfEjecutaRemoto(tpl, objId, token, 2000);
+        if (r.error) err = r.error;
+        if (!r.error && (r.filas.length || (r.cols && r.cols.length))) return { filas: r.filas, cols: r.cols, modo: 'plantilla' };
+        if (r.error === 'cancelado') return { filas: [], error: 'cancelado' };
+    } catch (e) { err = (e && e.message) || String(e); }
+    const d = await rxInfEjecutaDirecto(tpl, objId, desde, hasta, token);
+    if (d.error) return { filas: [], error: d.error || err };
+    const ok = (d.filas.length || (d.cols && d.cols.length));
+    return { filas: d.filas, cols: d.cols, modo: ok ? 'elegido' : 'nada' };
+}
+
+// ── Protocolo real de la plataforma (capturado de su propia pantalla) ───
+//   report/cleanup_result
+//   report/exec_report { reportResourceId, reportTemplateId, reportTemplate:null,
+//                        reportObjectId:<recurso>, reportObjectSecId:"<secId>",
+//                        interval:{flags:16777220, from:0, to:1}, remoteExec:1 }
+//   report/get_report_status   (en bucle, hasta que acaba)
+//   report/apply_report_result
+//   report/select_result_rows  { tableIndex:0, config:{type:'range',
+//                          data:{from,to,level:0,unitInfo:1}} }
+// Los intentos anteriores fallaban porque: el objeto va en el RECURSO, el
+// secId es texto, la ejecucion es asincrona (remoteExec) con sondeo de
+// estado, y las filas se leen por rangos del resultado de la sesion.
+const RX_INF_FLAGS_REMOTO = 16777220;
+function rxInfEspera(ms) {
+    return new Promise((r) => { try { setTimeout(r, ms); } catch (_) { r(); } });
+}
+function rxInfLimpiarInforme() {
+    // El informe ejecutado queda guardado en la sesion; sin liberarlo, la
+    // siguiente ejecucion responde "code 4".
+    try { return remoteCall('report/cleanup_result', {}).then(() => true).catch(() => false); } catch (_) { return false; }
+}
+// Recorre lo que devuelve un servicio buscando la lista de filas y sus
+// columnas: cada uno las anida de forma distinta (reportResult, rows, table,
+// report...). Asi el nucleo no depende de la forma exacta.
+function rxInfExtrae(r) {
+    const vistos = new Set();
+    const cola = [r];
+    while (cola.length) {
+        const x = cola.shift();
+        if (!x || typeof x !== 'object' || vistos.has(x)) continue;
+        vistos.add(x);
+        if (Array.isArray(x)) {
+            if (x.length && Array.isArray(x[0])) return { cols: [], filas: x };
+            continue;
+        }
+        const filas = x.rows || x.stats || x.data || x.result;
+        const cols = x.columns || x.cols || x.fields || x.header;
+        if (Array.isArray(filas) && filas.length) {
+            const cl = Array.isArray(cols) ? cols.map((c) => String((c && (c.n || c.t || c.name)) || c))
+                : (typeof cols === 'string' ? cols.split(/[,;|]/).map((c) => c.trim()) : []);
+            return {
+                cols: cl,
+                filas: filas.map((f) => (Array.isArray(f) ? f : (f && typeof f === 'object' ? Object.keys(f).map((k) => f[k]) : [f])))
+            };
+        }
+        Object.keys(x).forEach((k) => { if (typeof x[k] === 'object' && x[k]) cola.push(x[k]); });
+    }
+    return { cols: [], filas: [] };
+}
+// Que objetos secondary admite la plantilla y que datos declara. Es la via
+// barata para saber que trae sin ejecutar nada.
+async function rxInfDatosPlantilla(tpl) {
+    try { return await remoteCall('report/get_report_data', { itemId: tpl.rid, col: [String(tpl.id)], flags: 0 }); }
+    catch (_) { return null; }
+}
+function rxInfSecundarios(datos) {
+    const out = [];
+    const vistos = {};
+    const meter = (id, eco) => {
+        if (id == null || id === '' || (typeof id === 'object')) return;
+        const k = String(id);
+        if (vistos[k]) return;
+        vistos[k] = 1;
+        out.push({ id: k, eco: eco || k });
+    };
+    const recorrer = (x, prof) => {
+        if (!x || typeof x !== 'object' || prof > 3) return;
+        if (Array.isArray(x)) { x.slice(0, 400).forEach((y) => recorrer(y, prof + 1)); return; }
+        const id = (x.id != null) ? x.id : ((x.sec != null) ? x.sec : ((x.sid != null) ? x.sid : null));
+        if (id != null) {
+            const nm = x.n || x.nm || x.name || (x.u && (x.u.nm || x.u.n)) || '';
+            meter(id, String(nm || id));
+        }
+        Object.keys(x).forEach((k) => { if (k !== 'id') recorrer(x[k], prof + 1); });
+    };
+    recorrer(datos, 0);
+    return out;
+}
+// Ejecuta la plantilla como lo hace la plataforma y devuelve sus filas.
+async function rxInfEjecutaRemoto(tpl, secId, token, limiteFilas) {
+    await rxInfLimpiarInforme();
+    try {
+        await remoteCall('report/exec_report', {
+            reportResourceId: tpl.rid, reportTemplateId: tpl.id, reportTemplate: null,
+            reportObjectId: tpl.rid, reportObjectSecId: String(secId),
+            interval: { flags: RX_INF_FLAGS_REMOTO, from: 0, to: 1 },
+            remoteExec: 1
+        });
+    } catch (e) { return { filas: [], error: (e && e.message) || String(e) }; }
+    // Con remoteExec el calculo va por detras: se sondea el estado.
+    const t0 = Date.now();
+    for (let i = 0; i < 150; i++) {
+        if (token && token.cancelado) return { filas: [], error: 'cancelado' };
+        let st = null;
+        try { st = await remoteCall('report/get_report_status', {}); } catch (_) { st = null; }
+        const s = (st && (st.reportResult || st.result)) ? (st.reportResult || st.result) : (st || {});
+        const txt = norm((s && (s.status || s.state)) || '');
+        const listo = /LISTO|FIN|DONE|COMPLET|READY/.test(txt) ||
+            (s && (s.done === true || s.isDone === true || s.finished === true)) ||
+            (s && s.progress != null && Number(s.progress) >= 100);
+        const fallo = /ERROR|FALL|FAIL/.test(txt);
+        if (fallo) return { filas: [], error: 'la plataforma no pudo calcular el informe (estado ' + (txt || 'error') + ')' };
+        if (listo) break;
+        if ((Date.now() - t0) > 150000) return { filas: [], error: 'tiempo de espera agotado' };
+        await rxInfEspera(400);
+    }
+    try { await remoteCall('report/apply_report_result', {}); } catch (_) { /* noop */ }
+    const filas = [];
+    let cols = [];
+    const pagina = 200;
+    for (let desde = 0; desde < (limiteFilas || 2000); desde += pagina) {
+        let r = null;
+        try {
+            r = await remoteCall('report/select_result_rows', {
+                tableIndex: 0,
+                config: { type: 'range', data: { from: desde, to: desde + pagina - 1, level: 0, unitInfo: 1 } }
+            });
+        } catch (e) { return { filas: filas, cols: cols, error: ((e && e.message) || String(e)) }; }
+        const n = rxInfExtrae(r);
+        if (n.cols.length && !cols.length) cols = n.cols;
+        if (!n.filas.length) break;
+        for (const f of n.filas) filas.push(f);
+        if (n.filas.length < pagina) break;
+    }
+    return { filas: filas, cols: cols };
+}
+
 // Unidades que se pueden pedir a la plataforma. OJO: reportObjectId TIENE
 // que ser el id de un objeto concreto; con 0 el servidor responde "code 7"
 // (parametros invalidos), que es lo que pasaba al pedir la plantilla entera
@@ -13237,12 +13379,20 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     rxInfCacheCargar();
     const trozos = rxGeoInfTrozos(desde, hasta, RX_INF_DIAS_TROZO * 86400).slice(0, RX_INF_MAX_TROZOS);
     let objs = unidades;
+    let modo = '';
     if (!objs) {
-        const todas = rxInfUnidades(desde);
-        // Sin unidades (o sin permiso para verlas) se prueba con 0, que es
-        // lo unico que queda: si el servidor lo rechaza, se avisa claro.
-        objs = todas.length ? todas : [{ id: 0, eco: '' }];
-    }
+        // Los objetos secundarios son los que la plataforma pide de verdad
+        // (reportObjectSecId); salen de report/get_report_data. Si no
+        // responde, se usa la flota como aproximacion.
+        const datos = await rxInfDatosPlantilla(tpl);
+        const secs = rxInfSecundarios(datos);
+        if (secs.length) { objs = secs; modo = 'secundarios'; }
+        else {
+            const todas = rxInfUnidades(desde);
+            objs = todas.length ? todas : [{ id: 0, eco: '' }];
+            modo = 'flota';
+        }
+    } else modo = 'seleccion';
     const trabajos = [];
     for (const u of objs) {
         for (const t of trozos) trabajos.push({ obj: u.id, desde: t[0], hasta: t[1], eco: u.eco });
@@ -13252,6 +13402,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     const errores = [];
     let cols = [];
     let hechos = 0, fallos = 0, cacheados = 0, cheio = false, idx = 0;
+    const modos = {};
     const obrero = async () => {
         while (true) {
             if (cheio || (token && token.cancelado)) return;
@@ -13269,7 +13420,8 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
                     fallos++;
                     if (errores.length < 5) errores.push((w.eco ? (w.eco + ': ') : '') + rxInfExplicaError(r.error));
                 } else {
-                    const n = rxInfNormFilas(r.filas);
+                    if (r.modo && r.modo !== 'nada') modos[r.modo] = (modos[r.modo] || 0) + 1;
+                    const n = (r.cols && r.cols.length) ? { cols: r.cols, filas: r.filas } : rxInfNormFilas(r.filas);
                     if (n.cols.length && !cols.length) cols = n.cols;
                     for (const f of n.filas) filas.push(f);
                     if (filas.length < RX_INF_MAX_FILAS) rxInfCachePoner(k, { c: cols, f: n.filas });
@@ -13289,7 +13441,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     rxInfCacheGuardar(true);
     return {
         cols: cols, filas: filas, trozos: trozos.length, hechos: hechos,
-        objetos: objs.length, asked: total,
+        objetos: objs.length, asked: total, alcance: modo, modos: modos,
         fallos: fallos, errores: errores, cacheados: cacheados, lleno: cheio,
         cancelado: !!(token && token.cancelado), ms: Date.now() - t0
     };
@@ -13389,28 +13541,22 @@ async function rxInfSondea(tpl) {
     const c = rxInfCacheCargar();
     if (c[key]) { RX_INF.sonda = c[key]; RX_INF._sondaKey = key; return c[key]; }
     const hasta = Math.floor(Date.now() / 1000);
-    // El sondeo va con una unidad real: con reportObjectId 0 el servidor
-    // responde "code 7" (parametros invalidos).
-    const us = rxInfUnidades(hasta - 30 * 24 * 3600);
-    const objetos = us.length ? us.slice(0, 3).map((u) => u.id) : [0];
+    // Primero lo barato: que objetos y que datos declara la plantilla.
+    // despues una ejecucion real, que es lo que de verdad dice si trae filas.
+    const datos = await rxInfDatosPlantilla(tpl);
+    const secs = rxInfSecundarios(datos);
     let info = null;
     let err = '';
-    for (const horas of [24, 24 * 7, 24 * 30]) {
-        let r = null;
-        for (const obj of objetos) {
-            r = await rxInfEjecutar(tpl, obj, hasta - horas * 3600, hasta, null);
-            if (!r.error) break;
-        }
+    for (const obj of (secs.length ? secs.slice(0, 3).map((x) => x.id) : [rxInfUnidades(hasta - 30 * 24 * 3600).map((u) => u.id)[0] || 0])) {
+        const r = await rxInfEjecutaRemoto(tpl, obj, null, 300);
         if (r.error) { err = r.error; continue; }
-        const n = rxInfNormFilas(r.filas);
+        const n = (r.cols && r.cols.length) ? { cols: r.cols, filas: r.filas } : rxInfNormFilas(r.filas);
         if (n.cols.length) {
-            info = { cols: n.cols, muestra: n.filas.slice(0, 12), filas: n.filas.length, horas: horas, fallo: '', estado: 'ok' };
-            if (n.filas.length) break;
+            info = { cols: n.cols, muestra: n.filas.slice(0, 12), filas: n.filas.length, horas: 0, fallo: '', estado: 'ok' };
+            break;
         }
     }
     if (!info) {
-        // Sin columnas: puede ser que la plantilla no devuelva nada todavia
-        // o que necesite filtros que la plataforma no expone por API.
         const pista = rxInfPista(tpl);
         return rxInfSondaVacia('vacio',
             err ? rxInfExplicaError(err)
@@ -13423,6 +13569,7 @@ async function rxInfSondea(tpl) {
     // tienen sentido para esa plantilla.
     info.zonas = [];
     info.unidades = [];
+    info.objetos = secs.length;
     if (info.clase.iZona >= 0) {
         const set = {};
         info.muestra.forEach((f) => { const v = String(f[info.clase.iZona] == null ? '' : f[info.clase.iZona]).trim(); if (v) set[v] = 1; });

@@ -135,7 +135,7 @@ commitear, asi que la doc no se desfasa sola.
   node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
   node scripts/test-all.mjs
   ```
-  Las 23 suites (~1962 checks) deben quedar en verde. Si añades logica nueva,
+  Las 23 suites (~1963 checks) deben quedar en verde. Si añades logica nueva,
   añade o amplia una suite.
 - La version se calcula **automaticamente** al hacer push a `main` (workflow
   Release, segun commits convencionales). No cambies `@version` a mano: usa
@@ -194,7 +194,7 @@ node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
 node scripts/test-all.mjs
 ```
 
-- **23 suites, ~1962 checks**. Ninguna usa red ni navegador: las suites extraen
+- **23 suites, ~1963 checks**. Ninguna usa red ni navegador: las suites extraen
   funciones del bundle con stubs de DOM/localStorage.
 - `tests/_source.js` reconstruye `build/rondo.bundle.js` solo si `src/`,
   `VERSION` o `build.mjs` estan mas nuevos, y expone `src` a cada suite.
