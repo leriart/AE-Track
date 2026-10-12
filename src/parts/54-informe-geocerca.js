@@ -44,11 +44,6 @@ const RX_GEO_HIST_SEGUNDOS = 150;
 // asi que se guardan todos; los que traen eventos se guardan hasta que se
 // llene el presupuesto.
 const RX_GEO_TROZOS_MAX = 2500000;
-// Dias por trozo al ejecutar un reporte nativo por API (report/exec_report).
-const RX_GEO_REP_DIAS = 7;
-// Tope de trozos por reporte nativo, para que un "todo" de años no se
-// quede horas calculando en segundo plano.
-const RX_GEO_REP_MAX_TROZOS = 60;
 // Peticiones simultaneas al escanear el historial. En serie, una flota de
 // varios cientos tardaria una eternidad; con un pool de 10 va muy rapido sin
 // castigar al servidor de la plataforma.
@@ -356,124 +351,6 @@ function rxGeoInfTrozos(desde, hasta, paso) {
     }
     return out;
 }
-// ── Fuente reportes de la plataforma (API por trozos) ───────────────────
-// Las plantillas de informe que el operador ya tiene en AE-Track (con sus
-// filtros) se ejecutan por report/exec_report, pero POR TROZOS de periodo:
-// una sola llamada con 714 unidades y meses de datos revienta con el limite
-// de tiempo de la plataforma ("El tiempo de ejecucion ha superado el
-// limite"). Troceando y pegando los resultados no hay limite practico.
-async function rxGeoInfPlantillas() {
-    const out = [];
-    try {
-        const r = await remoteCall('core/search_items', {
-            spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
-            force: 1, flags: 1 | 8192, from: 0, to: 0
-        });
-        (r.items || []).forEach((res) => {
-            const rep = res && res.rep;
-            if (!rep || typeof rep !== 'object') return;
-            Object.keys(rep).forEach((k) => {
-                const t = rep[k];
-                if (t && t.id != null) out.push({ rid: (res.id != null ? res.id : null), id: t.id, nombre: t.n || ('Reporte ' + t.id) });
-            });
-        });
-    } catch (_) { /* sin acceso a plantillas */ }
-    out.sort((a, b) => String(a.nombre).localeCompare(String(b.nombre), 'es'));
-    return out;
-}
-// Normaliza una respuesta de exec_report: columnas + filas planas.
-function rxGeoInfFilasReporte(rr) {
-    if (!rr || typeof rr !== 'object') return { cols: [], filas: [] };
-    let filas = rr.rows;
-    if (!Array.isArray(filas)) filas = (Array.isArray(rr.stats) ? rr.stats : []);
-    if (!filas.length) return { cols: [], filas: [] };
-    const plano = filas.map((f) => (Array.isArray(f) ? f.map((x) => (x && typeof x === 'object' ? (x.v != null ? x.v : x.n) : x))
-        : (typeof f === 'object' ? Object.keys(f).map((k) => f[k]) : [f])));
-    const cols = (Array.isArray(rr.columns) && rr.columns.length)
-        ? rr.columns.map((c, i) => String((c && (c.n || c.t)) || ('Columna ' + (i + 1))))
-        : (plano[0] || []).map((_, i) => 'Columna ' + (i + 1));
-    return { cols: cols, filas: plano };
-}
-// Ejecuta una plantilla por trozos de periodo y une los resultados.
-// `onProg(hechas, total)` alimenta la barra; `token` cancela.
-async function rxGeoInfEjecutarReporte(tpl, desde, hasta, onProg, token) {
-    const cols = [];
-    const filas = [];
-    let hechas = 0;
-    const trozos = rxGeoInfTrozos(desde, hasta, RX_GEO_REP_DIAS * 86400);
-    for (let i = 0; i < trozos.length; i++) {
-        if (token && token.cancelado) break;
-        let r = null;
-        for (let intento = 0; intento < 3 && !r; intento++) {
-            if (token && token.cancelado) break;
-            try {
-                r = await remoteCall('report/exec_report', {
-                    reportResourceId: tpl.rid, reportTemplateId: tpl.id,
-                    reportObjectId: 0, reportObjectSecId: 0,
-                    interval: { from: trozos[i][0], to: trozos[i][1], flags: 0 }
-                });
-            } catch (e) {
-                r = null;
-                await new Promise((x) => { try { setTimeout(x, 600 * (intento + 1)); } catch (_) { x(); } });
-            }
-        }
-        if (r) {
-            const n = rxGeoInfFilasReporte(r.reportResult || r);
-            if (n.cols.length && !cols.length) n.cols.forEach((c, k) => { cols[k] = c; });
-            for (const f of n.filas) filas.push(f);
-        }
-        try { await remoteCall('report/cleanup_result', {}); } catch (_) { /* noop */ }
-        hechas++;
-        if (onProg) onProg(hechas, trozos.length, filas.length);
-        if (hechas >= RX_GEO_REP_MAX_TROZOS) break;
-        await rxGeoInfYield();
-    }
-    return { cols: cols, filas: filas, trozos: trozos.length, hechas: hechas, cancelado: !!(token && token.cancelado) };
-}
-function rxGeoInfNombreReporte(tpl, ext) {
-    const nm = String((tpl && tpl.nombre) || 'reporte').replace(/[^\w\-]+/g, '_').slice(0, 40);
-    return 'rondo_' + nm + '_' + new Date().toISOString().slice(0, 10) + ext;
-}
-// Estado del ultimo reporte ejecutado por la via de plantillas.
-let _rxGeoRep = { tpl: null, cols: [], filas: [], t: 0 };
-function rxGeoInfRepReset() { _rxGeoRep = { tpl: null, cols: [], filas: [], t: 0 }; }
-function rxGeoInfRepSet(v) { _rxGeoRep = v || _rxGeoRep; }
-// Indice de la fila por la columna "unidad"/"eco", para agrupar sin depender
-// del idioma del informe. -1 si el informe no trae esa columna.
-function rxGeoInfRepColUnidad(cols) {
-    for (let i = 0; i < (cols || []).length; i++) {
-        if (/^(unidad|eco|vehiculo|vehicle|object|name|nombre|imm|hostname)$/i.test(norm(cols[i]).trim())) return i;
-    }
-    return -1;
-}
-// Un reporte nativo -> una tabla por unidad en el informe (asi se puede
-// comparar con el resto de fuentes y exportar en la misma salida).
-function rxGeoInfDeReporte() {
-    const out = [];
-    const ci = rxGeoInfRepColUnidad(_rxGeoRep.cols);
-    const cols = (_rxGeoRep.cols || []).map((c) => norm(c).trim());
-    const idx = {};
-    cols.forEach((c, i) => { if (idx[c] == null) idx[c] = i; });
-    const chs = ['chofer', 'conductor', 'driver'].map(norm);
-    const idxCh = chs.map((k) => {
-        for (let i = 0; i < cols.length; i++) if (cols[i] === k || cols[i].indexOf(k) >= 0) return i;
-        return -1;
-    });
-    const idxKm = [];
-    cols.forEach((c, i) => { if (/km|kilometr|distancia/i.test(c)) idxKm.push(i); });
-    const idxMin = [];
-    cols.forEach((c, i) => { if (/min|duracion|tiempo/i.test(c)) idxMin.push(i); });
-    for (const f of (_rxGeoRep.filas || [])) {
-        const eco = (ci >= 0 && f[ci] != null) ? String(f[ci]).trim() : '';
-        let km = 0, min = 0, ch = '';
-        for (const i of idxKm) km += (Number(String(f[i]).replace(/[^\d,.\-]/g, '').replace(',', '.')) || 0);
-        for (const i of idxMin) min += (Number(String(f[i]).replace(/[^\d,.\-]/g, '').replace(',', '.')) || 0);
-        for (const i of idxCh) { if (i >= 0 && f[i] != null && String(f[i]).trim()) { ch = String(f[i]).trim(); break; } }
-        out.push({ zona: RX_GEO.zona || 'Reporte de la plataforma', tipo: 'reporte', eco: eco, clave: eco, ts: 0, min: Math.round(min), chofer: ch, km: Math.round(km), titulo: 'Reporte', detalle: '', fuente: 'reporte' });
-    }
-    return out;
-}
-function rxGeoInfDePlantilla() { return _rxGeoRep; }
 // Estado de la consulta (fuente, periodo, geocerca, modo y alcance del
 // rastreo). Vive aqui, con los lectores, porque el alcance tambien cambia
 // lo que devuelve el rastreo.
@@ -1520,9 +1397,6 @@ function abrirInformeGeocerca(origen) {
     if (RX_GEO._token) RX_GEO._token.cancelado = true;
     RX_GEO._token = { cancelado: false };
 const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Avisos', viajes: 'Viajes analizados', replay: 'Recorrido cargado' };
-    // Plantillas de informe de la plataforma (se llenan al abrir o al pulsar
-    // "Buscar plantillas").
-    let plantillas = RX_GEO._plantillas || [];
     const cuerpo = (d, fuentes, selZ, generarPend) => {
         const chip = (act, attr, v, txt, titulo) => '<button type="button" class="rgi-chip' + (act ? ' activo' : '') +
             '" ' + attr + ' data-v="' + esc(v) + '"' + (titulo ? ' title="' + esc(titulo) + '"' : '') +
@@ -1616,22 +1490,6 @@ const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Aviso
             fuentes.map((f) => chip(RX_GEO.fuente === f.k, 'data-rgi="fuente"', f.k,
                 ETIQUETA[f.k] + ' \u00b7 ' + f.n, ETIQUETA[f.k])).join('') +
             '</div></div>' +
-            // Reportes de la plataforma: se ejecutan por API y POR TROZOS, que
-            // es la via de sacar periodos largos sin el limite de tiempo del
-            // informe nativo.
-            '<div class="rgi-row rgi-row-tpl"><span class="rgi-lb">Plantilla</span>' +
-            '<span class="rgi-rango">' +
-            '<select id="rgi-tpl" class="filtro"' + rxGeoInfBloq() + '>' +
-            (plantillas.length
-                ? plantillas.map((t) => '<option value="' + esc(t.rid + ':' + t.id) + '">' + esc(t.nombre) + '</option>').join('')
-                : '<option value="">Sin plantillas en la plataforma</option>') +
-            '</select>' +
-            '<button type="button" class="mini" id="rgi-tpl-run"' + rxGeoInfBloq() + '>' +
-            '<span class="rondo-usym">' + UIS.play + '</span> Ejecutar por API</button>' +
-            (plantillas.length ? '' :
-                '<button type="button" class="mini" id="rgi-tpl-load"' + rxGeoInfBloq() + '>' +
-                '<span class="rondo-usym">' + UIS.refresh + '</span> Buscar plantillas</button>') +
-            '</span></div>' +
             // Lo ya consultado se guarda en este navegador: permite continuar
             // en varias pasadas y no repetir la misma semana.
             '<div class="rgi-row"><span class="rgi-lb"></span>' +
@@ -1751,8 +1609,6 @@ const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Aviso
                     }
                     if (btn.id === 'rgi-csv') { rxGeoInfLeeFechas(); rxGeoInfCSV(rxGeoInfReune()); return; }
                     if (btn.id === 'rgi-md') { rxGeoInfLeeFechas(); rxGeoInfMD(rxGeoInfReune()); return; }
-                    // Plantilla de la plataforma por report/exec_report, por
-                    // trozos (sin limite de tiempo).
                     // Vaciar lo ya consultado: el siguiente barrido empieza de cero.
                     if (btn.id === 'rgi-trozos-limpiar') {
                         rxGeoInfTrozoReset();
@@ -1760,49 +1616,6 @@ const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Aviso
                         rxGeoInfCacheReset();
                         adviceOk('Historial vaciado', 'El proximo informe consultara todo de nuevo.');
                         await pinta(false);
-                        return;
-                    }
-                    if (btn.id === 'rgi-tpl-load') {
-                        setProg(20, 'Buscando plantillas\u2026');
-                        try {
-                            plantillas = await rxGeoInfPlantillas();
-                            RX_GEO._plantillas = plantillas;
-                        } catch (_) { plantillas = []; }
-                        RX_GEO._buscando = false;
-                        await pinta(false);
-                        return;
-                    }
-                    if (btn.id === 'rgi-tpl-run') {
-                        const sel = byId('rgi-tpl');
-                        const v = (sel && sel.value) || '';
-                        if (!v) { adviceWarn('Sin plantilla', 'Elige una plantilla de informe.'); return; }
-                        const tpl = { rid: v.split(':')[0], id: v.split(':')[1], nombre: (sel.selectedOptions && sel.selectedOptions[0] ? sel.selectedOptions[0].textContent : v) };
-                        if (rxGeoInfBuscando()) return;
-                        rxGeoInfLeeFechas();
-                        RX_GEO._buscando = true;
-                        RX_GEO._token = { cancelado: false };
-                        const dt = box.querySelector('#rgi-dyn');
-                        if (dt) dt.innerHTML = '<div class="rgi-aviso">Ejecutando <b>' + esc(tpl.nombre) +
-                            '</b> por trozos de ' + RX_GEO_REP_DIAS + ' dias\u2026</div>';
-                        setProg(10, 'Ejecutando plantilla\u2026');
-                        const r = await rxGeoInfRangoS();
-                        let res;
-                        try {
-                            res = await rxGeoInfEjecutarReporte(tpl, r.desde, r.hasta, (hechas, total, filas) => {
-                                setProg(10 + Math.round((hechas / Math.max(1, total)) * 80),
-                                    'Trozo ' + hechas + '/' + total + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
-                            }, RX_GEO._token);
-                        } catch (e) { res = { cols: [], filas: [], trozos: 0, hechas: 0, error: (e && e.message) || e }; }
-                        RX_GEO._buscando = false;
-                        rxGeoInfRepSet({ tpl: tpl, cols: res.cols, filas: res.filas, t: Date.now() });
-                        if (carga) carga.style.display = 'none';
-                        await pinta(false);
-                        advice(res.filas.length
-                            ? 'Reporte generado'
-                            : 'Sin filas',
-                            res.filas.length + ' fila(s) de ' + tpl.nombre +
-                            (res.cancelado ? ' (cancelado)' : '') +
-                            (res.error ? ' \u00b7 ' + res.error : ''));
                         return;
                     }
                 }
@@ -1876,16 +1689,6 @@ const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Aviso
             // (las fuentes locales son instantaneas). Con "Plataforma" se
             // espera al boton para no barrer la flota sin querer.
             pinta(RX_GEO.fuente !== 'historial');
-            // Las plantillas de informe se piden una vez por apertura y en
-            // segundo plano: si no hay ninguna, sale el boton para buscarlas.
-            if (!plantillas.length) {
-                rxGeoInfPlantillas().then((lst) => {
-                    plantillas = lst || [];
-                    RX_GEO._plantillas = plantillas;
-                    if (!plantillas.length) return;
-                    try { pinta(false); } catch (_) { /* noop */ }
-                }).catch(() => { /* sin acceso a plantillas */ });
-            }
         },
         onOk: () => { /* las salidas se eligen en la barra de acciones */ }
     });

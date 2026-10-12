@@ -13,7 +13,10 @@
 const { ARCHIVO, src } = require('./_source.js');
 
 const ini = src.indexOf('/* ====================== INFORME POR GEOCERCA: NUCLEO');
-const fin = src.lastIndexOf('\n}})();') + 2;
+// El fragmento 54 va seguido por el de informes por plantilla (55): el corte
+// se hace en su cabecera para no arrastrarlo.
+const finSig = src.indexOf('/* ====================== INFORMES POR PLANTILLA (API)', ini);
+const fin = (finSig > 0) ? finSig : src.lastIndexOf('\n})();') + 4;
 if (ini < 0 || fin < 0) {
     console.error('No se encontro el bloque del informe por geocerca en ' + ARCHIVO);
     process.exit(1);

@@ -589,7 +589,11 @@
         // semana. Con una flota grande el barrido no cabe en una pasada, asi
         // que lo ya consultado se guarda: al recargar o al volver a generar
         // se continua solo por lo que falta en vez de empezar de cero.
-        geoinf: 'rondo.api.geoinf'
+        geoinf: 'rondo.api.geoinf',
+        // Resultados de los informes por plantilla: filas ya calculadas por
+        // la plataforma, por trozo. Permite repetir un informe largo sin
+        // volver a pedirle lo mismo al servidor.
+        infplant: 'rondo.api.infplant'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.

@@ -937,7 +937,7 @@
         if (pdf) pdf.addEventListener('click', () => exportReplayPDF());
         // v6.15: informe por geocerca (abre con las fechas de este recorrido).
         const informeGeo = byId('rondo-replay-informe-geo');
-        if (informeGeo) informeGeo.addEventListener('click', () => abrirInformeGeocerca('replay'));
+        if (informeGeo) informeGeo.addEventListener('click', () => abrirInformesPlantilla('replay'));
         // Rangos rapidos.
         document.querySelectorAll('#rondo-wrap-replay .rondo-replay-quick button[data-rango]').forEach((b) => {
             b.addEventListener('click', () => {
