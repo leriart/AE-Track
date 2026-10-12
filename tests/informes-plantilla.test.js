@@ -63,6 +63,7 @@ function ok(nombre, cond, extra) {
 const calls = [];
 let umbral1004 = 0;   // si un intervalo supera esto, la plataforma da code 1004
 let soloObjeto = null; // si se fija, solo ese reportObjectId devuelve filas
+let soloDef = false;   // si se activa, solo la plantilla propia (sin filtros) devuelve filas
 function remote(m, p) {
     calls.push({ m: m, p: p });
     if (m === 'core/search_items') {
@@ -91,9 +92,14 @@ function remote(m, p) {
         if (umbral1004 && (p.interval.to - p.interval.from) > umbral1004) {
             return Promise.reject(new Error('report/exec_report -> code 1004'));
         }
+        // Si soloDef esta activo, solo la plantilla PROPIA (reportTemplateId 0
+        // con reportTemplate) devuelve filas; el resto da parametros invalidos.
+        if (soloDef && p.reportTemplateId !== 0) {
+            return Promise.reject(new Error('report/exec_report -> code 4'));
+        }
         // Si soloObjeto esta fijado, solo ese item devuelve filas (sirve para
         // comprobar que el motor prueba modelos hasta dar con el bueno).
-        if (soloObjeto != null && String(p.reportObjectId) !== String(soloObjeto)) {
+        if (!soloDef && soloObjeto != null && String(p.reportObjectId) !== String(soloObjeto)) {
             return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }, { n: 'Km' }], rows: [] } });
         }
         return Promise.resolve({
@@ -205,6 +211,20 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('geocercas: si el informe entero sale vacio, usa la unidad guardada en la plantilla',
         rg2.filas.length > 0 && execs().some((c) => String(c.p.reportObjectId) === '27418488' && c.p.reportObjectSecId === '0'),
         JSON.stringify(execs().map((c) => [c.p.reportObjectId, c.p.reportObjectSecId])));
+
+    // 8c) Ningun modelo normal vale (todos code 4): se ejecuta la plantilla
+    //     PROPIA sin sus filtros guardados (reportTemplateId 0 + el template
+    //     con "units" quitado).
+    mod.rxInfCacheLimpiar();
+    calls.length = 0;
+    soloDef = true;
+    const rg3 = await mod.rxInfCorre(tplG, t0, t0 + 7 * unDia - 1, null, null, null);
+    soloDef = false;
+    const conDef = execs().filter((c) => c.p.reportTemplateId === 0 && c.p.reportTemplate);
+    const pDef = conDef.length ? JSON.parse(conDef[0].p.reportTemplate.tbl[0].p) : {};
+    ok('geocercas: si ningun modelo vale, ejecuta la plantilla sin filtros',
+        rg3.filas.length > 0 && conDef.length > 0 && pDef.units === undefined,
+        JSON.stringify({ filas: rg3.filas.length, def: conDef.length, p: pDef }));
 
     // 9) Particion adaptativa ante el code 1004 (intervalo demasiado grande).
     umbral1004 = 7 * unDia;
