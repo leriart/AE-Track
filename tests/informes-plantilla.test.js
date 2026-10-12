@@ -62,6 +62,7 @@ function ok(nombre, cond, extra) {
 
 const calls = [];
 let umbral1004 = 0;   // si un intervalo supera esto, la plataforma da code 1004
+let soloObjeto = null; // si se fija, solo ese reportObjectId devuelve filas
 function remote(m, p) {
     calls.push({ m: m, p: p });
     if (m === 'core/search_items') {
@@ -89,6 +90,11 @@ function remote(m, p) {
     if (m === 'report/exec_report') {
         if (umbral1004 && (p.interval.to - p.interval.from) > umbral1004) {
             return Promise.reject(new Error('report/exec_report -> code 1004'));
+        }
+        // Si soloObjeto esta fijado, solo ese item devuelve filas (sirve para
+        // comprobar que el motor prueba modelos hasta dar con el bueno).
+        if (soloObjeto != null && String(p.reportObjectId) !== String(soloObjeto)) {
+            return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }, { n: 'Km' }], rows: [] } });
         }
         return Promise.resolve({
             reportResult: { columns: [{ n: 'Unidad' }, { n: 'Km' }], rows: [['105', 1], ['205', 2]] }
@@ -174,18 +180,31 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     await mod.rxInfCorre(tplU, t0, t0 + 14 * unDia - 1, null, null, null);
     ok('cache: repetir el informe no repite llamadas', execs().length === 0);
 
-    // 8) Plantilla de geocercas: una ejecucion por zona, con el recurso dueño.
+    // 8) Plantilla de geocercas: se prueban los modelos de objeto y se usa el
+    //    que devuelve filas (secId de geocerca NO vale: la doc dice que es
+    //    driver/trailer).
     mod.rxInfCacheLimpiar();
     calls.length = 0;
     mod.RX_INF.zonas = ['PATIO'];
     const tplG = { rid: 3, id: 12, nombre: 'GEOCERCA' };
     const rg = await mod.rxInfCorre(tplG, t0, t0 + 7 * unDia - 1, null, null, null);
-    ok('geocercas: se ejecuta solo por la zona marcada',
-        rg.objetos === 1 && rg.alcance === 'geocercas' && execs().length === 1, 'objetos=' + rg.objetos);
-    ok('geocercas: usa el recurso dueño de la zona como reportObjectId',
-        execs()[0].p.reportObjectId === 27414156 && execs()[0].p.reportObjectSecId === '119',
+    ok('geocercas: un solo objeto y filas pegadas',
+        rg.objetos === 1 && rg.alcance === 'geocercas' && rg.filas.length > 0, 'objetos=' + rg.objetos);
+    ok('geocercas: el primer modelo probado es el informe entero (recurso + 0)',
+        execs()[0].p.reportObjectId === 3 && execs()[0].p.reportObjectSecId === '0',
         JSON.stringify(execs()[0].p));
     mod.RX_INF.zonas = [];
+
+    // 8b) El informe entero viene vacio, pero la plantilla trae guardada una
+    //     unidad (units): se acaba usando ESA unidad como reportObjectId.
+    mod.rxInfCacheLimpiar();
+    calls.length = 0;
+    soloObjeto = '27418488';
+    const rg2 = await mod.rxInfCorre(tplG, t0, t0 + 7 * unDia - 1, null, null, null);
+    soloObjeto = null;
+    ok('geocercas: si el informe entero sale vacio, usa la unidad guardada en la plantilla',
+        rg2.filas.length > 0 && execs().some((c) => String(c.p.reportObjectId) === '27418488' && c.p.reportObjectSecId === '0'),
+        JSON.stringify(execs().map((c) => [c.p.reportObjectId, c.p.reportObjectSecId])));
 
     // 9) Particion adaptativa ante el code 1004 (intervalo demasiado grande).
     umbral1004 = 7 * unDia;

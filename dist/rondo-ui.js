@@ -13484,6 +13484,64 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof) {
     }
     return { filas: [], error: err };
 }
+// Modelos de objeto que puede esperar la plantilla. La plataforma NO dice
+// sobre que item se ejecuta un informe por geocercas (reportObjectSecId es
+// driver/trailer/grupos, NO la geocerca), asi que se listan los candidatos y
+// se prueba cual devuelve filas.
+function rxInfCandidatos(tpl, info) {
+    const out = [];
+    const visto = {};
+    const meter = (rid, id, eco) => {
+        if (rid == null) return;
+        const k = String(rid) + '|' + String(id);
+        if (visto[k]) return;
+        visto[k] = 1;
+        out.push({ rid: rid, id: String(id == null ? '0' : id), eco: eco || '' });
+    };
+    // 1) El recurso de la plantilla sin secundario: el informe entero.
+    meter(tpl.rid, '0', 'informe');
+    // 2) Los items que la plantilla trae guardados en sus filtros (lo normal:
+    //    "units" con el id de una unidad).
+    (info && info.params ? info.params : []).forEach((p) => {
+        if (!/unit|unidad|object|obj|group|grupo/i.test(String((p && p.k) || ''))) return;
+        String(p && p.v != null ? p.v : '').split(/[,;\s]+/).forEach((v) => {
+            if (/^\d+$/.test(v) && v !== '0') meter(v, '0', 'plantilla ' + p.k);
+        });
+    });
+    // 3) Las geocercas marcadas (recurso dueño + id de la zona), por si esta
+    //    plantilla si quiere el id de geocerca.
+    const zs = rxInfZonasPlataforma();
+    const marcadas = (RX_INF.zonas || []);
+    let usar = zs;
+    if (zs.length && marcadas.length) {
+        const set = {};
+        marcadas.forEach((z) => { set[norm(z)] = 1; });
+        const f = zs.filter((o) => set[norm(o.eco)]);
+        if (f.length) usar = f;
+    }
+    usar.slice(0, 3).forEach((z) => meter((z.rid != null ? z.rid : tpl.rid), z.id, z.eco));
+    // 4) La primera unidad de la flota.
+    const us = rxInfUnidades(0);
+    if (us.length) meter(us[0].id, '0', us[0].eco);
+    return out;
+}
+async function rxInfEligeObjeto(tpl, info, desde, hasta, token) {
+    const cands = rxInfCandidatos(tpl, info);
+    // Ventana corta (los ultimos 7 dias del rango): basta para saber si hay
+    // datos y no gasta en un informe enorme.
+    const h = hasta, d = Math.max(desde, hasta - (RX_INF_DIAS_TROZO * 86400));
+    for (const c of cands) {
+        if (token && token.cancelado) break;
+        const r = await rxInfEjecuta(tpl, c, d, h, token, 0);
+        if (!r.error && (r.filas || []).length) {
+            rxInfLog('modelo elegido (objeto ' + c.rid + '/' + c.id + (c.eco ? ' ' + c.eco : '') + ')',
+                { reportObjectId: c.rid, reportObjectSecId: c.id }, '');
+            return c;
+        }
+    }
+    rxInfLog('ningun modelo devolvio filas; se usa el informe entero', { reportObjectId: tpl.rid, reportObjectSecId: '0' }, '');
+    return cands[0];
+}
 // ── Ejecucion por trozos ────────────────────────────────────────────────
 // Ejecuta la plantilla por objeto y por trozos de periodo, y pega los
 // resultados. Objeto x trozo, de uno en uno y cacheado: ninguna peticion crece
@@ -13503,18 +13561,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
         const info = rxInfPlantillaInfo(datos, tpl.id);
         const esGeo = info ? info.esGeo : (rxInfPista(tpl) === 'geocercas');
         if (esGeo) {
-            objs = rxInfZonasPlataforma();
-            // Se respeta lo que el operador haya marcado en el filtro y, si no
-            // marco nada, se acota con un tope (antes lanzaba cientos de
-            // trozos sin avisar).
-            const marcadas = (RX_INF.zonas || []);
-            if (objs.length && marcadas.length) {
-                const set = {};
-                marcadas.forEach((z) => { set[norm(z)] = 1; });
-                const filtradas = objs.filter((o) => set[norm(o.eco)]);
-                if (filtradas.length) objs = filtradas;
-            }
-            if (objs.length > RX_INF_MAX_OBJETOS) { objs = objs.slice(0, RX_INF_MAX_OBJETOS); recortado = true; }
+            objs = [await rxInfEligeObjeto(tpl, info, desde, hasta, token)];
             modo = 'geocercas';
         } else {
             objs = rxInfUnidades(desde).map((u) => ({ id: u.id, eco: u.eco, rid: tpl.rid }));
@@ -14070,8 +14117,8 @@ function abrirInformesPlantilla(origen) {
                             '" data-zona="' + esc(z) + '"' + dis + '>' + esc(z) + '</button>').join('') + '</div></div>' +
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc(marcadas
-                            ? ('Se ejecutar\u00e1 solo por las ' + marcadas + ' geocerca(s) marcada(s).')
-                            : ('Sin marcar, se ejecuta por todas las geocercas de la plataforma (m\u00e1ximo ' + RX_INF_MAX_OBJETOS + '). Marca las que te interesen para acotarlo.')) +
+                            ? ('Las filas se filtrar\u00e1n por las ' + marcadas + ' geocerca(s) marcada(s).')
+                            : 'Sin marcar, salen todas las geocercas que traiga el informe.') +
                         '</span></div>');
                 } else {
                     paso3 = paso(3, 'Alcance', '<div class="rgi-row"><span class="rgi-lb">Unidades</span><div class="rgi-chips">' +
