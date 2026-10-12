@@ -1603,6 +1603,9 @@
             "#rondo-dialog .rgi-campo.t-numero{border-color:rgba(var(--rondo-accent-rgb),.4);color:var(--rondo-fg)}\n" +
             "#rondo-dialog .rgi-campo.t-fecha{border-color:rgba(var(--rondo-ok-rgb,67,160,71),.5)}\n" +
             "#rondo-dialog .rgi-sonda-e{font:500 10px var(--rondo-font);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rgi-sonda.pend{border-left-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rgi-sonda-t .mini{margin-left:auto;padding:3px 9px;background:var(--rondo-bg);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10px var(--rondo-font)}\n" +
+            "#rondo-dialog .rgi-sonda-t .mini:hover:not(:disabled){color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
             // Minimapa del informe.
             "#rondo-dialog .rgi-mapa{position:relative;height:190px;border-radius:var(--rondo-radius-sm);overflow:hidden;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft)}\n" +
             "#rondo-dialog .rgi-mapa .rondo-mm{border:0;border-radius:0}\n" +
