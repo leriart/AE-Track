@@ -49,7 +49,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML};';
+    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
