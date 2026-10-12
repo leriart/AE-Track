@@ -1267,7 +1267,21 @@ function abrirInformesPlantilla(origen) {
                 if (!hay && RX_INF.meta && RX_INF.diag && RX_INF.diag.enviado && !RX_INF.diag.error) {
                     avisos.push(esc('La plataforma ejecut\u00f3 la plantilla pero no devolvi\u00f3 filas (objeto ' +
                         RX_INF.diag.enviado.reportObjectId + ', secundario "' + RX_INF.diag.enviado.reportObjectSecId +
-                        '"). Prueba otro periodo, otra geocerca, o mira la consola del navegador (F12), entrada [Rondo informe].'));
+                        '"). Prueba otro periodo u otra geocerca.'));
+                }
+                // Los modelos que se probaron y que contesto la plataforma a
+                // cada uno: sin esto, un informe vacio no se puede diagnosticar.
+                if (!hay && RX_INF.intentos && RX_INF.intentos.length) {
+                    const vista = {};
+                    const lista = [];
+                    RX_INF.intentos.forEach((it) => {
+                        const k = it.objeto + '/' + it.secundario;
+                        if (vista[k]) return;
+                        vista[k] = 1;
+                        const cod = (String(it.error || '').match(/code \d+/) || [])[0];
+                        lista.push(k + ' \u2192 ' + (it.error ? (cod || 'error') : (it.filas + ' fila(s)')));
+                    });
+                    avisos.push('Modelos probados: ' + esc(lista.slice(0, 10).join(' \u00b7 ')));
                 }
                 // Boton generar / cancelar.
                 const r = rangoS();
