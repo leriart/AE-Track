@@ -656,9 +656,10 @@ ok('la lista muestra nombre y tamano de cada geocerca', /function glocListaHTML\
 ok('RONDO_DOC menciona las geocercas de la app', /Geocercas de la app/.test(src));
 ok('manual lista las geocercas de la app', /Geocercas de la app/.test(require('fs').readFileSync(require('path').join(__dirname, '..', 'MANUAL.md'), 'utf8')));
 // v6.15: informe por geocerca (cruces y paradas dentro).
-ok('boton de informe por geocerca en la barra', /id="rondo-informe-geo"/.test(src) &&
-    /Informe por geocerca: cruces/.test(src));
-ok('el boton abre el dialogo del informe', /informeGeo\.addEventListener\('click', abrirInformeGeocerca\)/.test(src));
+ok('boton de informes en la barra', /id="rondo-informe-geo"/.test(src) &&
+    /Informes de la plataforma: ejecuta una plantilla por API/.test(src));
+ok('el boton abre el dialogo de informes por plantilla',
+    /informeGeo\.addEventListener\('click', \(\) => abrirInformesPlantilla\(\)\)/.test(src));
 ok('dialogo: informe de cruces o de paradas',
     /'data-rgi="modo"', 'cruces', 'Cruces por unidad'/.test(src) &&
     /'data-rgi="modo"', 'paradas', 'Paradas dentro'/.test(src) &&
@@ -674,10 +675,10 @@ ok('al elegir un atajo se borra el rango escrito',
 ok('el filtro de fechas incluye el dia final', /if \(hastaMs && e\.ts && e\.ts > hastaMs\) continue;/.test(src));
 ok('corige el rango si desde es posterior a hasta', /RX_GEO\.desde > RX_GEO\.hasta/.test(src));
 ok('boton de informe en la pestana Replay', /id="rondo-replay-informe-geo"/.test(src) &&
-    /Informe geocerca<\/button>/.test(src));
+    /Informe<\/button>/.test(src));
 ok('desde Replay el informe toma las fechas del recorrido',
-    /informeGeo\.addEventListener\('click', \(\) => abrirInformeGeocerca\('replay'\)\)/.test(src) &&
-    /RX_GEO\.desde = String\(r\.fecha\)/.test(src));
+    /informeGeo\.addEventListener\('click', \(\) => abrirInformesPlantilla\('replay'\)\)/.test(src) &&
+    /RX_INF\.desde = String\(r\.fecha\)/.test(src));
 ok('dialogo: selector de geocerca', /id="rgi-zona"/.test(src) && /Todas las geocercas/.test(src));
 ok('dialogo: tres fuentes de datos', /data-rgi="fuente"/.test(src) &&
     /bitacora: 'Avisos'/.test(src) && /viajes: 'Viajes analizados'/.test(src));
@@ -782,10 +783,11 @@ ok('informe: mientras barre no se puede volver a generar ni cambiar opciones',
 ok('informe: el repintado en vivo solo rehace la zona de datos (no el select de geocercas)',
     /<div id="rgi-dyn">/.test(src) && /function rxGeoInfCuerpoDyn\(d, generarPend\)/.test(src) &&
     /dyn\.innerHTML = rxGeoInfCuerpoDyn\(rxGeoInfReune\(\), true\)/.test(src));
-ok('informe: ejecuta las plantillas de la plataforma por API y por trozos',
-    /async function rxGeoInfPlantillas\(\)/.test(src) && /id="rgi-tpl-run"/.test(src) &&
-    /id="rgi-tpl-load"/.test(src) && /report\/exec_report/.test(src) &&
-    /rxGeoInfEjecutarReporte\(tpl, r\.desde, r\.hasta/.test(src) && /report\/cleanup_result/.test(src));
+ok('informes: ejecuta la plantilla elegida por API y por trozos',
+    /async function rxInfPlantillas\(\)/.test(src) && /id="rgi-ejecutar"/.test(src) &&
+    /id="rgi-cancel"/.test(src) && /report\/exec_report/.test(src) &&
+    /async function rxInfCorre\(tpl, desde, hasta, unidades, onProg, token\)/.test(src) &&
+    /data-i="vista"/.test(src) && /rxInfResumenUnidad/.test(src));
 ok('escaneo: con "todo" arranca donde la plataforma guarda el primer mensaje',
     /async function rxGeoInfPrimerMensaje\(uid\)/.test(src) && /loadCount: 1/.test(src) &&
     /Datos desde el /.test(src));

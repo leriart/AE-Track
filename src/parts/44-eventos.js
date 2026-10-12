@@ -142,7 +142,7 @@
         const informeMd = byId('rondo-informe-md');
         if (informeMd) informeMd.addEventListener('click', exportInforme);
         const informeGeo = byId('rondo-informe-geo');
-        if (informeGeo) informeGeo.addEventListener('click', abrirInformeGeocerca);
+        if (informeGeo) informeGeo.addEventListener('click', () => abrirInformesPlantilla());
         const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {
