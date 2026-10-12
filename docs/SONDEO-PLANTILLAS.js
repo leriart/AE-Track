@@ -1,157 +1,149 @@
 /* ============================================================================
- * RONDO · SONDEO DE PLANTILLAS DE INFORME (v2)
+ * RONDO · SONDEO DE PLANTILLAS (v3) · como se llama de verdad a exec_report
  * ----------------------------------------------------------------------------
- * Pegalo entero en la consola del navegador (F12), dentro de AE-Track con la
- * sesion iniciada, y dale a Enter. Solo LEE: no crea ni modifica nada.
+ * Pegalo en la consola (F12) dentro de AE-Track con sesion iniciada.
+ * Solo LEE: no crea ni modifica nada.
  *
- * La v1 enseño que report/exec_report con reportObjectId 0 responde
- * "code 7" en esta plataforma. Esta v2 comprueba que pasando el id de una
- * unidad REAL la llamada entra, y si entra, vuelca:
- *   - que servicios de estructura existen en esta version
- *   - que devuelve exec_report: columnas, filas y todo lo que viene en
- *     reportResult sin las filas (summary, reportSpec, banda, objeto...)
- *   - los campos que salen vacios (los filtros que le faltan a la plantilla)
- * Al final imprime un JSON para copiar y pegar.
+ * Lo que sabemos ya:
+ *   - reportObjectId 0            -> code 7 (parametros invalidos)
+ *   - reportObjectId = id unidad  -> code 4 (error interno del servidor)
+ *   - no hay ningun servicio de estructura de plantillas (code 2 en todos)
+ *
+ * Esta v3 hace DOS cosas:
+ *
+ *   FASE A (automatica) - prueba una matriz de combinaciones resource/unidad
+ *   en reportObjectId, reportObjectSecId, reportSrc/reportDst e interval, y
+ *   te dice cual entra.
+ *
+ *   FASE B (manual)      - se CUELA en remoteCall y apunta todas las llamadas
+ *   que hace la propia pantalla de la plataforma. Abre el informe nativo
+ *   "GEOCERCA", dale a Ejecutar, y luego ejecuta en la consola:
+ *
+ *         __rondoSpyFin()
+ *
+ *   Con eso sale la llamada exacta (servicio + parametros) que usa tu
+ *   plataforma, y Rondo puede copiarla tal cual.
  * ========================================================================== */
-(async () => {
+(function () {
     const R = wialon.core.Remote.getInstance();
-    const call = (svc, params) => new Promise((res, rej) => {
-        R.remoteCall(svc, params, (code, result) => code ? rej(new Error(code + '')) : res(result || {}));
+    const orig = R.remoteCall;
+    const call = (svc, params) => new Promise((res) => {
+        orig.call(R, svc, params, (code, result) => res({ code: code, r: result || {} }));
     });
     const log = (t) => console.log('%c' + t, 'font-weight:700;color:#0af');
-    const salida = { momento: new Date().toISOString(), llamadaValida: null, plantillas: [] };
+    const ok = (t) => console.log('%cOK   ' + t, 'color:#0a0;font-weight:700');
+    const ko = (t) => console.log('%cFALLA ' + t, 'color:#a00');
 
-    // 1) Unidades (el objeto que hay que pasarle al informe)
-    log('1. Leyendo unidades...');
-    let unidades = [];
-    try {
-        const r = await call('core/search_items', {
+    // ───────────────────────── FASE B: espia (se instala ya) ─────────────
+    const capturadas = [];
+    R.remoteCall = function (svc, params, cb) {
+        try {
+            if (/report/i.test(String(svc)) || (params && (params.reportTemplateId != null))) {
+                capturadas.push({
+                    svc: String(svc),
+                    params: JSON.parse(JSON.stringify(params || {}))
+                });
+                console.log('%c[espia] ' + svc, 'color:#f60', params);
+            }
+        } catch (_) { /* noop */ }
+        return orig.call(R, svc, params, cb);
+    };
+    window.__rondoSpy = capturadas;
+    window.__rondoSpyFin = function () {
+        R.remoteCall = orig;   // se desconecta la espia
+        console.log('%c=== LLAMADAS CAPTURADAS ===', 'font-weight:700;color:#f60');
+        console.log(JSON.stringify(capturadas, null, 1));
+        try {
+            navigator.clipboard.writeText(JSON.stringify(capturadas, null, 1)).then(
+                () => log('Copiado al portapapeles.'),
+                () => log('Copia el texto de arriba a mano.'));
+        } catch (_) { log('Copia el texto de arriba a mano.'); }
+        log('Espia desconectada (' + capturadas.length + ' llamada(s)).');
+        return capturadas;
+    };
+    log('ESPIA ACTIVA: abre el informe nativo GEOCERCA, pulsa Ejecutar y luego __rondoSpyFin()');
+
+    // ───────────────────────── FASE A: matriz de llamadas ────────────────
+    (async () => {
+        log('FASE A: probando combinaciones de parametros...');
+        let unidades = [], rid = null, tpls = [];
+        const u = await call('core/search_items', {
             spec: { itemsType: 'avl_unit', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
             force: 1, flags: 1 | 1024, from: 0, to: 0
         });
-        unidades = (r.items || []).slice(0, 5).map((u) => ({ id: u.id, nm: u.nm || u.n || '' }));
-    } catch (e) { console.error('No se pudieron leer las unidades:', e.message); }
-    log('   -> ' + unidades.length + ' unidad(es) de prueba: ' +
-        unidades.map((u) => u.id + '=' + u.nm).join(', '));
-
-    // 2) Plantillas
-    let tpls = [];
-    try {
-        const r = await call('core/search_items', {
+        unidades = u.r.items || [];
+        const res = await call('core/search_items', {
             spec: { itemsType: 'avl_resource', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
             force: 1, flags: 1 | 8192, from: 0, to: 0
         });
-        (r.items || []).forEach((res) => {
-            const rep = res && res.rep;
+        (res.r.items || []).forEach((x) => {
+            rid = (x.id != null) ? x.id : rid;
+            const rep = x.rep;
             if (!rep || typeof rep !== 'object') return;
             Object.keys(rep).forEach((k) => {
                 const t = rep[k];
-                if (t && t.id != null) tpls.push({ rid: res.id, id: t.id, nombre: t.n || ('Plantilla ' + t.id) });
+                if (t && t.id != null) tpls.push({ rid: x.id, id: t.id, nombre: t.n || ('Plantilla ' + t.id) });
             });
         });
-    } catch (e) { console.error('No se pudieron leer las plantillas:', e.message); return; }
-    log('   -> ' + tpls.length + ' plantilla(s)');
+        const t = tpls.filter((x) => (x.nombre || '').toUpperCase().indexOf('GEOCERCA') >= 0)[0] || tpls[0];
+        const uid = (unidades[0] && unidades[0].id) || 0;
+        log('   recurso=' + rid + '  unidad=' + uid + ' (' + ((unidades[0] && unidades[0].nm) || '') + ')  plantilla=' + (t ? t.nombre + '#' + t.id : 'ninguna'));
+        if (!t) return;
 
-    // 3) La plantilla que nos interesa (cambia el id si hace falta)
-    const ELEGIDA = 'GEOCERCA';
-    const t = tpls.filter((x) => (x.nombre || '').toUpperCase().indexOf(ELEGIDA) >= 0)[0] || tpls[0];
-    if (!t) { console.error('No hay plantillas.'); return; }
-    log('3. Probando la llamada con "' + t.nombre + '" (#' + t.id + ')...');
-
-    // 3a) Cuatro variantes, para saber cual acepta el servidor. La que
-    //     funcione es la que usara Rondo.
-    const ahora = Math.floor(Date.now() / 1000);
-    const desde = ahora - 24 * 3600;
-    const uid = unidades.length ? unidades[0].id : 0;
-    const variantes = [
-        ['objeto real + interval', {
-            reportResourceId: t.rid, reportTemplateId: t.id,
-            reportObjectId: uid, reportObjectSecId: 0,
-            interval: { from: desde, to: ahora, flags: 0 }
-        }],
-        ['objeto 0 + interval', {
-            reportResourceId: t.rid, reportTemplateId: t.id,
-            reportObjectId: 0, reportObjectSecId: 0,
-            interval: { from: desde, to: ahora, flags: 0 }
-        }],
-        ['objeto real + reportSrc/reportDst', {
-            reportResourceId: t.rid, reportTemplateId: t.id,
-            reportObjectId: uid, reportObjectSecId: 0,
-            reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: uid },
-            reportDst: { type: 'json', fields: [] },
-            interval: { from: desde, to: ahora, flags: 0 }
-        }],
-        ['objeto real + interval sin flags', {
-            reportResourceId: t.rid, reportTemplateId: t.id,
-            reportObjectId: uid, reportObjectSecId: 0,
-            interval: { from: desde, to: ahora }
-        }]
-    ];
-    const resultados = [];
-    for (const [nombre, params] of variantes) {
-        try {
+        const ahora = Math.floor(Date.now() / 1000);
+        const desde = ahora - 24 * 3600;
+        const iv = { from: desde, to: ahora, flags: 0 };
+        const base = { reportResourceId: t.rid, reportTemplateId: t.id };
+        const combos = [
+            ['recurso / 0', Object.assign({}, base, { reportObjectId: rid, reportObjectSecId: 0, interval: iv })],
+            ['recurso / unidad', Object.assign({}, base, { reportObjectId: rid, reportObjectSecId: uid, interval: iv })],
+            ['unidad / recurso', Object.assign({}, base, { reportObjectId: uid, reportObjectSecId: rid, interval: iv })],
+            ['recurso / 0 + reportSrc', Object.assign({}, base, {
+                reportObjectId: rid, reportObjectSecId: 0, interval: iv,
+                reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: rid, reportObjectSecId: 0 }
+            })],
+            ['recurso / unidad + reportSrc', Object.assign({}, base, {
+                reportObjectId: rid, reportObjectSecId: uid, interval: iv,
+                reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: rid, reportObjectSecId: uid }
+            })],
+            ['recurso / unidad + reportDst', Object.assign({}, base, {
+                reportObjectId: rid, reportObjectSecId: uid, interval: iv,
+                reportDst: { type: 'json', fields: [] }
+            })],
+            ['recurso / unidad + reportSrc + reportDst', Object.assign({}, base, {
+                reportObjectId: rid, reportObjectSecId: uid, interval: iv,
+                reportSrc: { reportFilter: '', reportLimit: 0, reportOffset: 0, reportObjectId: rid, reportObjectSecId: uid },
+                reportDst: { type: 'json', fields: [] }
+            })],
+            ['recurso / unidad, interval sin flags', Object.assign({}, base, {
+                reportObjectId: rid, reportObjectSecId: uid, interval: { from: desde, to: ahora }
+            })],
+            ['recurso / unidad, sin interval', Object.assign({}, base, {
+                reportObjectId: rid, reportObjectSecId: uid
+            })],
+            ['recurso solo', Object.assign({}, base, { reportObjectId: rid })],
+            ['unidad solo', Object.assign({}, base, { reportObjectId: uid })]
+        ];
+        const resA = [];
+        for (const [nombre, params] of combos) {
             const r = await call('report/exec_report', params);
-            const rr = (r && r.reportResult) ? r.reportResult : (r || {});
+            const rr = (r.r && r.r.reportResult) ? r.r.reportResult : (r.r || {});
             const filas = Array.isArray(rr.rows) ? rr.rows : (Array.isArray(rr.stats) ? rr.stats : []);
-            const res = {
-                variante: nombre, ok: true,
-                clavesRaiz: Object.keys(r || {}),
-                clavesResultado: Object.keys(rr || {}),
-                columnas: (rr.columns || []).map((c) => (c && (c.n || c.t)) || c),
-                nFilas: filas.length,
-                muestra: filas.slice(0, 3),
-                resto: Object.keys(rr || {}).filter((k) => k !== 'rows' && k !== 'stats')
-                    .reduce((o, k) => { try { o[k] = rr[k]; } catch (_) { o[k] = '[ilegible]'; } return o; }, {})
-            };
-            resultados.push(res);
-            console.log('%cOK: ' + nombre, 'color:#0a0;font-weight:700', res);
-            if (!salida.llamadaValida) salida.llamadaValida = { variante: nombre, params: Object.keys(params) };
-        } catch (e) {
-            resultados.push({ variante: nombre, ok: false, error: 'code ' + e.message });
-            console.log('%cFALLA: ' + nombre + ' (code ' + e.message + ')', 'color:#a00');
-        }
-        try { await call('report/cleanup_result', {}); } catch (_) { /* noop */ }
-    }
-
-    // 4) Con la variante que funciono, Todas las plantillas: que traen y que
-    //    columnas salen vacias (eso suele ser el filtro que les falta).
-    const buena = resultados.find((r) => r.ok);
-    if (buena) {
-        log('4. Volcando TODAS las plantillas con la variante "' + buena.variante + '"...');
-        for (const x of tpls) {
-            const info = { id: x.id, nombre: x.nombre, ok: false };
-            try {
-                const r = await call('report/exec_report', {
-                    reportResourceId: x.rid, reportTemplateId: x.id,
-                    reportObjectId: uid, reportObjectSecId: 0,
-                    interval: { from: desde, to: ahora, flags: 0 }
-                });
-                const rr = (r && r.reportResult) ? r.reportResult : (r || {});
-                const filas = Array.isArray(rr.rows) ? rr.rows : (Array.isArray(rr.stats) ? rr.stats : []);
-                const cols = (rr.columns || []).map((c) => (c && (c.n || c.t)) || c);
-                const planas = filas.map((f) => (Array.isArray(f) ? f : Object.keys(f || {}).map((k) => f[k])));
-                info.ok = true;
-                info.columnas = cols;
-                info.nFilas = filas.length;
-                info.muestra = planas.slice(0, 3);
-                info.columnasVacias = cols.filter((c, i) => !planas.some((f) => f[i] != null && String(f[i]).trim() !== ''));
-                info.clavesResultado = Object.keys(rr || {});
-                info.resto = Object.keys(rr || {}).filter((k) => k !== 'rows' && k !== 'stats')
-                    .reduce((o, k) => { try { o[k] = rr[k]; } catch (_) { o[k] = '[ilegible]'; } return o; }, {});
-            } catch (e) { info.error = 'code ' + e.message; }
+            if (r.code === 0) {
+                ok(nombre + '  -> ' + filas.length + ' fila(s), claves: ' + Object.keys(rr).join(','));
+                resA.push({ nombre: nombre, params: params, ok: true, claves: Object.keys(rr), columnas: (rr.columns || []).map((c) => (c && (c.n || c.t)) || c), filas: filas.slice(0, 3) });
+            } else {
+                ko(nombre + '  -> code ' + r.code);
+                resA.push({ nombre: nombre, ok: false, code: r.code });
+            }
             try { await call('report/cleanup_result', {}); } catch (_) { /* noop */ }
-            salida.plantillas.push(info);
         }
-    }
-
-    salida.variantes = resultados.map((r) => (r.ok ? (r.variante + ': OK') : (r.variante + ': ' + r.error)));
-    const txt = JSON.stringify(salida, null, 1);
-    console.log('%c=== COPIA ESTO Y PEGAMELO ===', 'font-weight:700;color:#f60');
-    console.log(txt);
-    try {
-        navigator.clipboard.writeText(txt).then(
-            () => log('Copiado al portapapeles.'),
-            () => log('Copia el texto de arriba a mano.'));
-    } catch (_) { log('Copia el texto de arriba a mano.'); }
-    log('Fin: ' + salida.variantes.join(' | '));
+        log('=== FASE A terminada ===');
+        const txt = JSON.stringify({ faseA: resA, capturadas: capturadas }, null, 1);
+        console.log(txt);
+        try {
+            navigator.clipboard.writeText(txt).then(() => log('Copiado.'), () => log('Copia el texto.'));
+        } catch (_) { log('Copia el texto.'); }
+        log('Recuerda: despues de ejecutar el informe nativo, llama a __rondoSpyFin()');
+    })();
 })();
