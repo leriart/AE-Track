@@ -64,6 +64,7 @@ const calls = [];
 let umbral1004 = 0;   // si un intervalo supera esto, la plataforma da code 1004
 let soloObjeto = null; // si se fija, solo ese reportObjectId devuelve filas
 let soloDef = false;   // si se activa, solo la plantilla propia (sin filtros) devuelve filas
+let tablaReal = false; // exec_report responde con TABLAS y el contenido va en get_result_rows
 function remote(m, p) {
     calls.push({ m: m, p: p });
     if (m === 'core/search_items') {
@@ -102,9 +103,22 @@ function remote(m, p) {
         if (!soloDef && soloObjeto != null && String(p.reportObjectId) !== String(soloObjeto)) {
             return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }, { n: 'Km' }], rows: [] } });
         }
+        if (tablaReal) {
+            return Promise.resolve({
+                reportResult: { tables: [{ name: 't', label: 'Resumen', rows: 2, header: ['Unidad', 'Km'] }] }
+            });
+        }
         return Promise.resolve({
             reportResult: { columns: [{ n: 'Unidad' }, { n: 'Km' }], rows: [['105', 1], ['205', 2]] }
         });
+    }
+    // El contenido de la tabla se pide aparte, como en la plataforma real.
+    if (m === 'report/get_result_rows') {
+        if (!tablaReal) return Promise.resolve([]);
+        return Promise.resolve([
+            { n: 0, c: [{ t: '105' }, { t: '1', v: 1 }] },
+            { n: 1, c: [{ t: '205' }, { t: '2', v: 2 }] }
+        ]);
     }
     return Promise.resolve({});
 }
@@ -185,6 +199,17 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     calls.length = 0;
     await mod.rxInfCorre(tplU, t0, t0 + 14 * unDia - 1, null, null, null);
     ok('cache: repetir el informe no repite llamadas', execs().length === 0);
+
+    // 7b) exec_report NO trae las filas: vienen de report/get_result_rows.
+    mod.rxInfCacheLimpiar();
+    calls.length = 0;
+    tablaReal = true;
+    const rt = await mod.rxInfCorre(tplU, t0, t0 + 7 * unDia - 1, null, null, null);
+    tablaReal = false;
+    ok('filas: pide el contenido con report/get_result_rows',
+        rt.filas.length === 4 && rt.cols[0] === 'Unidad' && rt.filas[0][1] === '1' &&
+        calls.some((c) => c.m === 'report/get_result_rows'),
+        JSON.stringify({ filas: rt.filas.length, cols: rt.cols, pide: calls.some((c) => c.m === 'report/get_result_rows') }));
 
     // 8) Plantilla de geocercas: se prueban los modelos de objeto y se usa el
     //    que devuelve filas (secId de geocerca NO vale: la doc dice que es
