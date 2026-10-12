@@ -105,7 +105,7 @@ function remote(m, p) {
         }
         if (tablaReal) {
             return Promise.resolve({
-                reportResult: { tables: [{ name: 't', label: 'Resumen', rows: 2, header: ['Unidad', 'Km'] }] }
+                reportResult: { tables: [{ name: 'geozone_units', label: 'Unidades', rows: 2, columns: 4, header: ['Unidad', 'Hora de entrada', 'Hora de salida', 'Duración en'], header_type: ['unit_name', 'time_begin', 'time_end', 'duration_in'] }] }
             });
         }
         return Promise.resolve({
@@ -116,8 +116,8 @@ function remote(m, p) {
     if (m === 'report/get_result_rows') {
         if (!tablaReal) return Promise.resolve([]);
         return Promise.resolve([
-            { n: 0, c: [{ t: '', v: 7 }, { t: '1', v: 1 }] },
-            { n: 1, c: [{ t: '', v: 7 }, { t: '2', v: 2 }] }
+            { n: 0, d: 0, c: ['CDOS.4286 - JY21236', { t: '14.09.2026 15:13:41', v: 1789420421, u: 7 }, { t: '14.09.2026 15:21:42', v: 1789420902, u: 7 }, '0:08:01'] },
+            { n: 1, d: 0, c: ['CDOS.4286 - JY21236', { t: '15.09.2026 11:16:15', v: 1789492575, u: 7 }, { t: '15.09.2026 11:26:09', v: 1789493169, u: 7 }, '0:09:54'] }
         ]);
     }
     return Promise.resolve({});
@@ -207,10 +207,14 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     const rt = await mod.rxInfCorre(tplU, t0, t0 + 7 * unDia - 1, null, null, null);
     tablaReal = false;
     ok('filas: pide el contenido con report/get_result_rows',
-        rt.filas.length === 4 && rt.cols[0] === 'Unidad' && rt.filas[0][1] === '1' &&
-        rt.filas[0][0] === '105' &&
+        rt.filas.length === 4 && rt.cols[0] === 'Unidad' && rt.cols[3] === 'Duración en' &&
+        rt.filas[0][0] === 'CDOS.4286 - JY21236' && rt.filas[0][3] === '0:08:01' &&
         calls.some((c) => c.m === 'report/get_result_rows'),
-        JSON.stringify({ filas: rt.filas.length, cols: rt.cols, pide: calls.some((c) => c.m === 'report/get_result_rows') }));
+        JSON.stringify({ filas: rt.filas.length, cols: rt.cols, r0: rt.filas[0] }));
+    ok('filas: la celda de texto plano no se pierde', mod.rxInfNum('0:08:01') === 481);
+    const rDur = mod.rxInfResumenUnidad(['Unidad', 'Duración en'], [['105', '0:08:01'], ['105', '0:01:59']], mod.rxInfCols(['Unidad', 'Duración en']));
+    ok('resumen: las duraciones se suman y se pintan como duracion',
+        rDur.filas[0][2] === '0:10:00', JSON.stringify(rDur.filas));
 
     // 8) Plantilla de geocercas: se prueban los modelos de objeto y se usa el
     //    que devuelve filas (secId de geocerca NO vale: la doc dice que es
