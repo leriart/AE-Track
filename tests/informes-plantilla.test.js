@@ -52,7 +52,8 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfCols,rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecuta,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,' +
     'rxInfPlantillaInfo,rxInfZonasPlataforma,rxInfUnidades,rxInfExplicaError,rxInfOrdena,rxInfPista,' +
-    'rxInfEsDeGeocercas,rxInfClasifica,rxInfColumnasVacias,rxInfZonaDeFila,rxInfDatosPlantilla,rxInfZonasDisponibles};';
+    'rxInfEsDeGeocercas,rxInfClasifica,rxInfColumnasVacias,rxInfZonaDeFila,rxInfDatosPlantilla,rxInfZonasDisponibles,' +
+    'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -105,7 +106,10 @@ function remote(m, p) {
         }
         if (tablaReal) {
             return Promise.resolve({
-                reportResult: { tables: [{ name: 'geozone_units', label: 'Unidades', rows: 2, columns: 4, header: ['Unidad', 'Hora de entrada', 'Hora de salida', 'Duración en'], header_type: ['unit_name', 'time_begin', 'time_end', 'duration_in'] }] }
+                reportResult: { tables: [
+                    { name: 'geozone_units', label: 'Unidades', rows: 2, columns: 4, header: ['Unidad', 'Hora de entrada', 'Hora de salida', 'Duración en'], header_type: ['unit_name', 'time_begin', 'time_end', 'duration_in'] },
+                    { name: 'fuel', label: 'Consumo', rows: 1, columns: 2, header: ['Unidad', 'Consumo'] }
+                ] }
             });
         }
         return Promise.resolve({
@@ -115,6 +119,9 @@ function remote(m, p) {
     // El contenido de la tabla se pide aparte, como en la plataforma real.
     if (m === 'report/get_result_rows') {
         if (!tablaReal) return Promise.resolve([]);
+        if (p.tableIndex === 1) {
+            return Promise.resolve([{ n: 0, d: 0, c: ['CDOS.4286 - JY21236', '12,5 l'] }]);
+        }
         return Promise.resolve([
             { n: 0, d: 0, c: ['CDOS.4286 - JY21236', { t: '14.09.2026 15:13:41', v: 1789420421, u: 7 }, { t: '14.09.2026 15:21:42', v: 1789420902, u: 7 }, '0:08:01'] },
             { n: 1, d: 0, c: ['CDOS.4286 - JY21236', { t: '15.09.2026 11:16:15', v: 1789492575, u: 7 }, { t: '15.09.2026 11:26:09', v: 1789493169, u: 7 }, '0:09:54'] }
@@ -215,6 +222,55 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     const rDur = mod.rxInfResumenUnidad(['Unidad', 'Duración en'], [['105', '0:08:01'], ['105', '0:01:59']], mod.rxInfCols(['Unidad', 'Duración en']));
     ok('resumen: las duraciones se suman y se pintan como duracion',
         rDur.filas[0][2] === '0:10:00', JSON.stringify(rDur.filas));
+
+    // 7c) Varias tablas: la principal y el consumo salen como pestanas.
+    mod.rxInfCacheLimpiar();
+    calls.length = 0;
+    tablaReal = true;
+    const rMul = await mod.rxInfCorre(tplU, t0, t0 + 7 * unDia - 1, null, null, null);
+    tablaReal = false;
+    ok('tablas: se leen todas las tablas del informe (consumo incluida)',
+        rMul.tablas.length === 2 && rMul.tablas[1].label === 'Consumo' &&
+        rMul.tablas[1].cols[1] === 'Consumo' && rMul.tablas[1].filas.length === 2,
+        JSON.stringify(rMul.tablas.map((t) => [t.label, t.filas.length])));
+    ok('tablas: la activa es la que mas filas tiene', rMul.filas.length === 4, 'filas=' + rMul.filas.length);
+
+    // 7d) Filtros de la plantilla: se listan los utiles y se aplican.
+    const infoF = {
+        tablas: [{ filtros: ['units', 'geozones', 'address_format'] }],
+        params: [{ k: 'us_units', v: '0' }, { k: 'units', v: '27418488' }]
+    };
+    const ksF = mod.rxInfFiltrosDe(infoF);
+    ok('filtros: lista los utiles y descarta los ajustes de formato',
+        ksF.join(',') === 'units,geozones', ksF.join(','));
+    ok('filtros: el valor puesto a mano manda sobre el guardado',
+        mod.rxInfFiltroValor(infoF, 'units') === '27418488');
+    mod.RX_INF.filtros = { units: '105' };
+    ok('filtros: un nombre de unidad se resuelve a su id',
+        mod.rxInfFiltroResuelve('units', '105') === '7', mod.rxInfFiltroResuelve('units', '105'));
+    const defF = mod.rxInfDefFiltros([{ id: 12, n: 'G', tbl: [{ n: 't', l: 'x', c: '[]', cl: '[]', p: '{"units":"27418488","otros":"k"}' }] }], 12, { units: '', geozones: '119' });
+    const pF = JSON.parse(defF.tbl[0].p);
+    ok('filtros: vacio quita el guardado y el nuevo se aplica',
+        pF.units === undefined && pF.geozones === '119' && pF.otros === 'k', JSON.stringify(pF));
+    mod.rxInfCacheLimpiar();
+    calls.length = 0;
+    await mod.rxInfCorre(tplU, t0, t0 + 7 * unDia - 1, null, null, null);
+    const conDefF = execs().filter((c) => c.p.reportTemplateId === 0 && c.p.reportTemplate);
+    ok('filtros: se mandan como definicion propia (reportTemplate)',
+        conDefF.length > 0 && JSON.parse(conDefF[0].p.reportTemplate.tbl[0].p).units === '7',
+        JSON.stringify(conDefF[0] && JSON.parse(conDefF[0].p.reportTemplate.tbl[0].p)));
+    mod.RX_INF.filtros = {};
+
+    // 7e) Columnas tipo Excel: ocultar y recortar.
+    mod.RX_INF.colsOcultas = {};
+    const visTodas = mod.rxInfVisibles(['a', 'b', 'c']).join(',');
+    mod.RX_INF.colsOcultas = { 1: 1 };
+    const visUna = mod.rxInfVisibles(['a', 'b', 'c']).join(',');
+    const recC = mod.rxInfRecortaVisible(['a', 'b', 'c'], [['x', 'y', 'z']]);
+    mod.RX_INF.colsOcultas = {};
+    ok('columnas: se pueden ocultar y el recorte las quita',
+        visTodas === '0,1,2' && visUna === '0,2' &&
+        recC.cols.join(',') === 'a,c' && recC.filas[0].join(',') === 'x,z');
 
     // 8) Plantilla de geocercas: se prueban los modelos de objeto y se usa el
     //    que devuelve filas (secId de geocerca NO vale: la doc dice que es

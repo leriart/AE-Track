@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '7.14.2-dev.92';
+    const VER = '7.14.3-dev.1';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -593,7 +593,11 @@
         // Resultados de los informes por plantilla: filas ya calculadas por
         // la plataforma, por trozo. Permite repetir un informe largo sin
         // volver a pedirle lo mismo al servidor.
-        infplant: 'rondo.api.infplant'
+        infplant: 'rondo.api.infplant',
+        // V8.0: filtros de cada plantilla de informe elegidos por el
+        // operador (units, geozones...), para no tener que volver a
+        // teclearlos cada vez.
+        infplantfilt: 'rondo.api.infplantfilt'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.

@@ -135,7 +135,7 @@ commitear, asi que la doc no se desfasa sola.
   node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
   node scripts/test-all.mjs
   ```
-  Las 24 suites (~1938 checks) deben quedar en verde. Si añades logica nueva,
+  Las 24 suites (~1949 checks) deben quedar en verde. Si añades logica nueva,
   añade o amplia una suite.
 - La version se calcula **automaticamente** al hacer push a `main` (workflow
   Release, segun commits convencionales). No cambies `@version` a mano: usa
@@ -174,7 +174,7 @@ commitear, asi que la doc no se desfasa sola.
 - Claves **persistentes** en `LS` (localStorage, `rondo.api.*`): `cfg`, `watch`,
   `memo`, `dismissed`, `hist`, `geo`, `barra`, `panelsize`, `seleccion`, `kpi`,
   `nmolestar`, `limites`, `perfiles`, `rutas`, `odometro`, `riesgo`,
-  `municipios`, etc.
+  `municipios`, `infplant`, `infplantfilt`, etc.
 - Claves **por pestaña** en `SS` (sessionStorage, `rondo.api.s.*`): `watch`,
   `memo`, `hist`, `geo`, `planes`, `viajes`, `iaCache`, etc. `readSession*`
   migra automaticamente desde la clave global la primera vez.
@@ -194,7 +194,7 @@ node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
 node scripts/test-all.mjs
 ```
 
-- **24 suites, ~1938 checks**. Ninguna usa red ni navegador: las suites extraen
+- **24 suites, ~1949 checks**. Ninguna usa red ni navegador: las suites extraen
   funciones del bundle con stubs de DOM/localStorage.
 - `tests/_source.js` reconstruye `build/rondo.bundle.js` solo si `src/`,
   `VERSION` o `build.mjs` estan mas nuevos, y expone `src` a cada suite.
