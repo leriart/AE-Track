@@ -13241,7 +13241,7 @@ function rxInfCacheLimpiar() {
 function rxInfCacheKey(tpl, o, desde, hasta) {
     const rid = (o && o.rid != null) ? o.rid : '';
     const id = (o && o.id != null) ? o.id : (o != null ? o : 0);
-    return rxInfClave(tpl) + '|' + rid + '|' + id + '|' + desde + '|' + hasta;
+    return rxInfClave(tpl) + '|' + rid + '|' + id + '|' + ((o && o.def) ? 'd|' : '') + desde + '|' + hasta;
 }
 // ── Que declara la plantilla (report/get_report_data) ───────────────────
 // La respuesta es una lista de plantillas con su estructura de tablas:
@@ -13455,12 +13455,15 @@ function rxInfExplicaError(msg) {
 // por pesado (1004), se limpia y se reintenta; si aun asi falla, y el trozo
 // abarca mas de un dia, se PARTE por la mitad y se pegan las dos mitades. Asi
 // un intervalo grande nunca tira el informe entero.
-async function rxInfEjecuta(tpl, o, desde, hasta, token, prof) {
+async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
     if (token && token.cancelado) return { filas: [], error: 'cancelado' };
     const rid = (o && o.rid != null) ? o.rid : tpl.rid;
     const secId = (o && o.id != null) ? String(o.id) : '0';
+    const d = def || (o && o.def) || null;
     const enviado = {
-        reportResourceId: tpl.rid, reportTemplateId: tpl.id, reportTemplate: null,
+        reportResourceId: tpl.rid,
+        reportTemplateId: d ? 0 : tpl.id,
+        reportTemplate: d || null,
         reportObjectId: rid, reportObjectSecId: secId,
         interval: { from: desde, to: hasta, flags: 0 }
     };
@@ -13490,9 +13493,9 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof) {
     // Particion adaptativa: el trozo abarcaba de mas, se parte en dos.
     if (/1004/.test(err) && (hasta - desde) > 86400 && (prof || 0) < 4) {
         const medio = desde + Math.floor((hasta - desde) / 2);
-        const a = await rxInfEjecuta(tpl, o, desde, medio, token, (prof || 0) + 1);
+        const a = await rxInfEjecuta(tpl, o, desde, medio, token, (prof || 0) + 1, d);
         if (token && token.cancelado) return { filas: (a.filas || []), cols: a.cols, error: 'cancelado' };
-        const b = await rxInfEjecuta(tpl, o, medio + 1, hasta, token, (prof || 0) + 1);
+        const b = await rxInfEjecuta(tpl, o, medio + 1, hasta, token, (prof || 0) + 1, d);
         const filas = (a.filas || []).concat(b.filas || []);
         const errores = [a.error, b.error].filter(Boolean);
         return { filas: filas, cols: (a.cols && a.cols.length ? a.cols : b.cols), error: errores.length ? errores[0] : '' };
@@ -13508,18 +13511,41 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof) {
 //   3) los items guardados en los filtros de la plantilla (units)
 //   4) una geocerca de la plataforma (para detectar el modelo por geocerca)
 //   5) la primera unidad de la flota
-function rxInfCandidatos(tpl, info) {
+// Definicion propia de la plantilla (reportTemplateId 0 + reportTemplate) con
+// los filtros de unidad/objeto quitados. Es lo que hace el operador en la
+// plataforma cuando el informe guardado viene atado a una unidad concreta que
+// no tiene datos: la plantilla se ejecuta "para todo". Devuelve null si no se
+// puede construir.
+function rxInfDefSinUnidades(datos, tplId) {
+    try {
+        const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+        const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+        if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
+        const def = JSON.parse(JSON.stringify(t));
+        def.id = 0;
+        def.tbl.forEach((tb) => {
+            let p = {};
+            try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
+            Object.keys(p).forEach((k) => {
+                if (/^(units?|unidades|objects?|objetos|unit_groups?|groups?)$/i.test(k)) delete p[k];
+            });
+            tb.p = JSON.stringify(p);
+        });
+        return def;
+    } catch (_) { return null; }
+}
+function rxInfCandidatos(tpl, info, datos) {
     const out = [];
     const visto = {};
-    const meter = (rid, id, eco, esZona) => {
+    const meter = (rid, id, eco, esZona, def) => {
         if (rid == null) return;
-        const k = String(rid) + '|' + String(id);
+        const k = String(rid) + '|' + String(id) + (def ? '|d' : '');
         if (visto[k]) return;
         visto[k] = 1;
-        out.push({ rid: rid, id: String(id == null ? '0' : id), eco: eco || '', esZona: !!esZona });
+        out.push({ rid: rid, id: String(id == null ? '0' : id), eco: eco || '', esZona: !!esZona, def: def || null });
     };
     const zs = rxInfZonasPlataforma();
-    const mkZona = (z) => meter((z.rid != null ? z.rid : tpl.rid), z.id, z.eco, true);
+    const mkZona = (z, def) => meter((z.rid != null ? z.rid : tpl.rid), z.id, z.eco + (def ? ' (sin filtro)' : ''), true, def);
     const marcadas = (RX_INF.zonas || []);
     let usar = zs;
     if (zs.length && marcadas.length) {
@@ -13528,38 +13554,52 @@ function rxInfCandidatos(tpl, info) {
         const f = zs.filter((o) => set[norm(o.eco)]);
         if (f.length) usar = f;
     }
+    const prueba = usar.slice(0, marcadas.length ? 2 : 1);
     // 1) Las geocercas a ejecutar (marcadas o las primeras de la plataforma).
-    usar.slice(0, marcadas.length ? 3 : 2).forEach(mkZona);
+    prueba.forEach((z) => mkZona(z, null));
     // 2) El recurso de la plantilla sin secundario: el informe entero.
     meter(tpl.rid, '0', 'informe');
     // 3) Los items guardados en los filtros de la plantilla (lo normal:
     //    "units" con el id de una unidad).
+    const items = [];
     (info && info.params ? info.params : []).forEach((p) => {
         if (!/unit|unidad|object|obj|group|grupo/i.test(String((p && p.k) || ''))) return;
         String(p && p.v != null ? p.v : '').split(/[,;\s]+/).forEach((v) => {
-            if (/^\d+$/.test(v) && v !== '0') meter(v, '0', 'plantilla ' + p.k);
+            if (/^\d+$/.test(v) && v !== '0' && items.indexOf(v) < 0) items.push(v);
         });
     });
+    items.slice(0, 2).forEach((v) => meter(v, '0', 'plantilla units'));
     // 4) La primera unidad de la flota.
     const us = rxInfUnidades(0);
     if (us.length) meter(us[0].id, '0', us[0].eco);
+    // 5) Item + geocerca: la unidad que pisa la zona.
+    const unidadesPrueba = items.slice(0, 1).concat(us.length ? [us[0].id] : []);
+    unidadesPrueba.slice(0, 2).forEach((uid) => prueba.forEach((z) => meter(uid, z.id, z.eco + ' + u' + uid)));
+    // 6) La plantilla SIN sus filtros guardados (definicion propia). Es la
+    //    carta que hace que un informe atado a una unidad sin datos vuelva a
+    //    traer lo de todas.
+    const def = rxInfDefSinUnidades(datos, tpl.id);
+    if (def) {
+        prueba.forEach((z) => mkZona(z, def));
+        meter(tpl.rid, '0', 'informe (sin filtro)', false, def);
+    }
     return out;
 }
 // Devuelve la lista de objetos con la que ejecutar el informe. Prueba los
-// candidatos con una ventana corta y se queda con el MODELO aceptado por la
-// plataforma (el primero que responde sin error). Si el modelo bueno es por
-// geocerca, se ejecuta por todas las geocercas (marcadas o acotadas).
-async function rxInfModelo(tpl, info, desde, hasta, token) {
-    const cands = rxInfCandidatos(tpl, info);
+// candidatos con una ventana corta y se queda con el MODELO que trae filas
+// (y, si ninguno trae, con el primero ACEPTADO por la plataforma: code 0 con
+// cero filas es valido; code 4/7 es un modelo invalido).
+async function rxInfModelo(tpl, info, datos, desde, hasta, token) {
+    const cands = rxInfCandidatos(tpl, info, datos);
     const h = hasta, d = Math.max(desde, hasta - (RX_INF_DIAS_TROZO * 86400));
     let primeroOk = null, conFilas = null;
     for (const c of cands) {
         if (token && token.cancelado) break;
-        const r = await rxInfEjecuta(tpl, c, d, h, token, 0);
+        const r = await rxInfEjecuta(tpl, c, d, h, token, 0, c.def);
         const n = (r.filas || []).length;
         rxInfLog('modelo ' + (c.eco || (c.rid + '/' + c.id)) + ' -> ' +
             (r.error ? rxInfExplicaError(r.error) : (n + ' fila(s)')),
-            { reportObjectId: c.rid, reportObjectSecId: c.id }, r.error || '');
+            { reportObjectId: c.rid, reportObjectSecId: c.id, reportTemplateId: c.def ? 0 : tpl.id }, r.error || '');
         if (!r.error) {
             if (!primeroOk) primeroOk = c;
             if (n && !conFilas) conFilas = c;
@@ -13579,9 +13619,11 @@ async function rxInfModelo(tpl, info, desde, hasta, token) {
         }
         if (zs.length > RX_INF_MAX_OBJETOS) zs = zs.slice(0, RX_INF_MAX_OBJETOS);
         if (!zs.length) zs = [elegido];
+        zs.forEach((z) => { z.def = elegido.def || null; });
         rxInfLog('modelo por geocerca: ' + zs.length + ' geocerca(s)', { reportObjectId: tpl.rid, reportObjectSecId: 'varias' }, '');
         return zs;
     }
+    if (elegido.def) elegido.eco = (elegido.eco || 'informe') + ' (sin filtro)';
     rxInfLog('modelo por item: ' + (elegido.eco || (elegido.rid + '/' + elegido.id)),
         { reportObjectId: elegido.rid, reportObjectSecId: elegido.id }, '');
     return [elegido];
@@ -13606,7 +13648,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
         const info = rxInfPlantillaInfo(datos, tpl.id);
         const esGeo = info ? info.esGeo : (rxInfPista(tpl) === 'geocercas');
         if (esGeo) {
-            objs = await rxInfModelo(tpl, info, desde, hasta, token);
+            objs = await rxInfModelo(tpl, info, datos, desde, hasta, token);
             modo = 'geocercas';
         } else {
             objs = rxInfUnidades(desde).map((u) => ({ id: u.id, eco: u.eco, rid: tpl.rid }));
@@ -13640,7 +13682,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
                 if (enCache.c) cols = enCache.c;
                 for (const f of enCache.f) filas.push(f);
             } else {
-                const r = await rxInfEjecuta(tpl, w.obj, w.desde, w.hasta, token, 0);
+                const r = await rxInfEjecuta(tpl, w.obj, w.desde, w.hasta, token, 0, w.obj.def);
                 if (r.error && r.error !== 'cancelado') {
                     fallos++;
                     if (errores.length < 5) errores.push((w.obj.eco ? (w.obj.eco + ': ') : '') + rxInfExplicaError(r.error));
