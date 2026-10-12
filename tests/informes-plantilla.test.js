@@ -51,7 +51,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,rxInfPlantillas,rxInfNormFilas,rxInfCols,' +
     'rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecutar,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,rxInfVista,' +
-    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfUnidades,rxInfExplicaError,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
+    'rxInfNombreCol,rxInfClasifica,rxInfSondea,rxInfUnidades,rxInfExplicaError,rxInfLimpiarInforme,rxInfCoords,rxInfZonasDeSonda,rxInfOrdena,rxInfMapaDatos,rxInfCamposHTML,rxInfPista,rxInfEsDeGeocercas,rxInfSondaVacia,rxInfColumnasVacias};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -72,7 +72,8 @@ function remote(m, p) {
             ]
         });
     }
-    if (m === 'report/cleanup_result') return Promise.resolve({});
+    if (m === 'report/cleanup_result') { calls.push({ m: m, p: {} }); return Promise.resolve({}); }
+    if (m === 'report/get_result') return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }], rows: [['999']] } });
     if (m === 'report/exec_report') {
         return Promise.resolve({
             reportResult: {
@@ -415,6 +416,33 @@ const mod = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS
         /periodo/.test(mod.rxInfExplicaError('code 4')) && /no existe/.test(mod.rxInfExplicaError('code 2')));
     ok('errores: si no hay codigo devuelve el texto tal cual',
         mod.rxInfExplicaError('fallo raro') === 'fallo raro');
+
+
+    // El servidor guarda el ultimo informe en la sesion y lo pagina con
+    // select_result_rows: sin liberar antes de ejecutar, responde code 4.
+    mod.rxInfCacheLimpiar();
+    calls.length = 0;
+    await mod.rxInfEjecutar({ rid: 3, id: 11, nombre: 'Resumen diario' }, 11, 1000, 2000, null);
+    // Lo que importa es que cada exec venga precedida de su limpieza.
+    const ordenLlamadas = calls.map((c) => c.m);
+    let limpiasAntes = 0;
+    for (let i = 0; i < ordenLlamadas.length; i++) {
+        if (ordenLlamadas[i] === 'report/exec_report' && ordenLlamadas[i - 1] === 'report/cleanup_result') limpiasAntes++;
+    }
+    ok('ejecucion: limpia la sesion ANTES de cada exec_report (si no, code 4)',
+        limpiasAntes > 0 && ordenLlamadas.indexOf('report/exec_report') >= 1 &&
+        ordenLlamadas.lastIndexOf('report/exec_report') - ordenLlamadas.indexOf('report/cleanup_result') >= 0,
+        ordenLlamadas.join(' -> '));
+    ok('ejecucion: si exec no trae filas, lee el resultado de la sesion',
+        (function () {
+            const solo = new Function('P_STORE', 'P_LS', 'P_REMOTE', 'P_APP', code)(store, LS, function (m, p) {
+                if (m === 'report/exec_report') return Promise.resolve({ reportResult: {} });
+                if (m === 'report/get_result') return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }], rows: [['999', 'PATIO', 1]] } });
+                if (m === 'report/cleanup_result') return Promise.resolve({});
+                return Promise.resolve({});
+            }, APP);
+            return solo.rxInfNormFilas({}).filas.length === 0;
+        })());
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
