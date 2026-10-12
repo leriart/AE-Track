@@ -13456,6 +13456,17 @@ function rxInfExplicaError(msg) {
 // contenido se pide aparte con report/get_result_rows, que responde un array
 // de filas { n, i1, i2, t1, t2, d, c:[ {t:texto, v:numero, y:lat, x:lon} ] }.
 // Esto es lo que hacia que un informe lleno se viera como "sin filas".
+// Una celda de fila: texto si lo trae, si no el valor numerico, si no las
+// coordenadas. OJO: las celdas de columnas de item (Unidad) traen `t: ""` y el
+// dato en `v` (el id): hay que preferir el texto NO vacio.
+function rxInfCelda(cel) {
+    if (cel == null) return '';
+    if (cel.t != null && String(cel.t) !== '') return cel.t;
+    if (cel.v != null) return cel.v;
+    if (cel.y != null && cel.x != null) return cel.y + ',' + cel.x;
+    if (cel.t != null) return cel.t;
+    return '';
+}
 async function rxInfFilasDeTabla(idx, total, token) {
     const filas = [];
     const tope = Math.min(Number(total) || 0, RX_INF_MAX_FILAS);
@@ -13473,13 +13484,7 @@ async function rxInfFilasDeTabla(idx, total, token) {
         for (const o of arr) {
             if (!o) continue;
             const c = Array.isArray(o.c) ? o.c : [];
-            filas.push(c.map((cel) => {
-                if (cel == null) return '';
-                if (cel.t != null) return cel.t;
-                if (cel.v != null) return cel.v;
-                if (cel.y != null && cel.x != null) return cel.y + ',' + cel.x;
-                return '';
-            }));
+            filas.push(c.map(rxInfCelda));
         }
         if (arr.length < (j - i + 1)) break;
     }
@@ -13507,6 +13512,27 @@ async function rxInfLeeResultado(r, token) {
         return null;
     }
     const cols = ((tablas[mejor] && tablas[mejor].header) || []).map((c) => String(c == null ? '' : c));
+    // Las columnas de item (Unidad) a veces llegan como id numerico: se
+    // traduce al eco de la flota para que la tabla se lea.
+    const iUni = (function () {
+        for (let k = 0; k < cols.length; k++) {
+            if (/^(UNIDAD|UNIDADES|ECO|VEHICULO|VEHICLE|IMM|NAME|NOMBRE|OBJECT|OBJETO)/.test(rxInfNombreCol(cols[k]))) return k;
+        }
+        return -1;
+    })();
+    if (iUni >= 0) {
+        const id2eco = {};
+        (APP.unidades || []).forEach((u) => {
+            if (!u || u.id == null) return;
+            let info = null;
+            try { info = parseUnitName(u); } catch (_) { info = null; }
+            id2eco[String(u.id)] = (info && (info.eco || info.clave)) || u.nm || String(u.id);
+        });
+        leidas.filas.forEach((f) => {
+            const v = String(f[iUni] == null ? '' : f[iUni]);
+            if (id2eco[v]) f[iUni] = id2eco[v];
+        });
+    }
     RX_INF.diag = Object.assign({}, RX_INF.diag, { tabla: mejor, tablaFilas: max, tablaCols: cols.length });
     return { filas: leidas.filas, cols: cols };
 }
