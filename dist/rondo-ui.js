@@ -14008,6 +14008,24 @@ function rxInfDefSinUnidades(datos, tplId) {
         return def;
     } catch (_) { return null; }
 }
+// Definicion propia con SOLO las tablas pedidas (por nombre interno). Sirve
+// para ejecutar una plantilla pesada (viajes + paradas + chart + stats) con
+// unicamente la tabla que interesa: en combustible, `unit_thefts` (Descargas).
+// Sin esto la plataforma calcula todo el informe por unidad (lento) y la tabla
+// activa acababa siendo la de consumo por viajes.
+function rxInfDefSoloTablas(datos, tplId, nombres) {
+    try {
+        const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+        const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+        if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
+        const keep = (nombres && nombres.length) ? nombres : ['unit_thefts'];
+        const def = JSON.parse(JSON.stringify(t));
+        def.id = 0;
+        rxInfDefSinBind(def);
+        def.tbl = def.tbl.filter((tb) => keep.indexOf(tb.n) >= 0);
+        return def.tbl.length ? def : null;
+    } catch (_) { return null; }
+}
 function rxInfCandidatos(tpl, info, datos, defBase) {
     const out = [];
     const visto = {};
@@ -14121,7 +14139,7 @@ function rxInfAcumulaTablas(acum, tablas) {
 // (de ahi que ninguna reviente con el limite de tiempo) y repetir el informe
 // no vuelve a preguntar lo mismo.
 //   onProg(hechos, total, filas, eco)
-async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
+async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar, defFijo) {
     const t0 = Date.now();
     RX_INF.intentos = [];
     rxInfCacheCargar();
@@ -14130,6 +14148,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
     if (unidades && unidades.length) {
         objs = unidades.map((u) => ({ id: String(u.id), sec: '0', eco: u.eco }));
         modo = 'seleccion';
+        if (defFijo) objs.forEach((o) => { o.def = defFijo; });
     } else {
         const datos = await rxInfDatosPlantilla(tpl);
         const info = rxInfPlantillaInfo(datos, tpl.id);
@@ -14139,11 +14158,11 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
         const esGeo = (forzar === 'flota') ? false : (info ? info.esGeo : (rxInfPista(tpl) === 'geocercas'));
         // Filtros elegidos por el operador (units, geozones...): van como
         // definicion propia para TODOS los objetos.
-        let defBase = rxInfDefFiltros(datos, tpl.id, rxInfFiltrosEfectivos());
+        let defBase = defFijo || rxInfDefFiltros(datos, tpl.id, rxInfFiltrosEfectivos());
         // Al forzar flota se quitan los filtros de unidad/objeto guardados: el
         // informe se ejecuta unidad por unidad y un filtro atado a otra unidad
         // solo provoca errores.
-        if (forzar === 'flota' && !defBase) defBase = rxInfDefSinUnidades(datos, tpl.id);
+        if (!defBase && forzar === 'flota') defBase = rxInfDefSinUnidades(datos, tpl.id);
         if (esGeo) {
             objs = await rxInfModelo(tpl, info, datos, desde, hasta, token, defBase);
             modo = 'geocercas';
@@ -15707,19 +15726,26 @@ function abrirInformesPlantilla(origen) {
                 try {
                     if (esFuel && rxFuelUsaPlataforma()) {
                         // Descargas detectadas por la plataforma: se ejecuta SU
-                        // plantilla de combustible (nivel de combustible /
-                        // descargado) con el mismo motor de informes, forzando
-                        // el modelo POR UNIDAD (su tabla de nivel es por unidad).
+                        // plantilla de combustible, pero SOLO con la tabla de
+                        // descargas (`unit_thefts`) y forzando el modelo POR
+                        // UNIDAD. Asi el informe es ligero (no calcula viajes,
+                        // paradas ni graficas) y la tabla activa es la de
+                        // descargas, no la de consumo por viaje.
                         const desc = RX_INF.fuel._desc;
                         RX_INF.zonas = []; RX_INF.eco = ''; RX_INF.filtros = {};
+                        let defThefts = null;
+                        try {
+                            const datos = await rxInfDatosPlantilla(desc.tpl);
+                            defThefts = rxInfDefSoloTablas(datos, desc.tpl.id, ['unit_thefts']);
+                        } catch (_) { defThefts = null; }
                         res = await rxInfCorre(desc.tpl, r.desde, r.hasta, (RX_INF.alcance === 'sel' ? (sel || []) : null), (h, t, filas, eco) => {
                             RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
                             setProg(RX_INF.prog.pct,
                                 'Plataforma \u00b7 ' + desc.tpl.nombre + ' \u00b7 ' + h + '/' + t +
-                                (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
+                                (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' descarga(s)' : ''));
                             const dyn = byId('rgi-dyn');
                             if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
-                        }, RX_INF._token, 'flota');
+                        }, RX_INF._token, 'flota', defThefts);
                         RX_INF.fuelPlat = desc.tpl.nombre;
                     } else if (esFuel) {
                         const base = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);

@@ -786,7 +786,7 @@ ok('informe: el repintado en vivo solo rehace la zona de datos (no el select de 
 ok('informes: ejecuta la plantilla elegida por API y por trozos',
     /async function rxInfPlantillas\(\)/.test(src) && /id="rgi-ejecutar"/.test(src) &&
     /id="rgi-cancel"/.test(src) && /report\/exec_report/.test(src) &&
-    /async function rxInfCorre\(tpl, desde, hasta, unidades, onProg, token(, forzar)?\)/.test(src) &&
+    /async function rxInfCorre\(tpl, desde, hasta, unidades, onProg, token(, forzar)?(, defFijo)?\)/.test(src) &&
     /data-i="vista"/.test(src) && /rxInfResumenUnidad/.test(src));
 // V8.1: acceso oculto a los informes de la plataforma (5 clics en el logo).
 ok('informes: el boton arranca oculto y se revela con el gesto',
@@ -822,8 +822,9 @@ ok('informes: filtro anti-picos y agrupacion de perdidas (datos coherentes)',
     /return rxFuelAgrupa\(out, o\)/.test(src));
 ok('informes: fuente plataforma (descargas del informe nativo)',
     /function rxFuelTablaDescarga/.test(src) && /function rxFuelTplDescarga/.test(src) &&
+    /function rxInfDefSoloTablas/.test(src) && /rxInfDefSoloTablas\(datos, desc\.tpl\.id, \['unit_thefts'\]\)/.test(src) &&
     /data-fuelsrc=/.test(src) && /fSrc\('plataforma'/.test(src) && /fSrc\('sensor'/.test(src) &&
-    /rxInfCorre\(desc\.tpl, r\.desde, r\.hasta/.test(src) && /RX_INF\._token, 'flota'\)/.test(src) &&
+    /rxInfCorre\(desc\.tpl, r\.desde, r\.hasta/.test(src) && /RX_INF\._token, 'flota', defThefts\)/.test(src) &&
     /if \(info\.esGeo\) continue;/.test(src) && /forzar === 'flota'/.test(src));
 ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
     /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
