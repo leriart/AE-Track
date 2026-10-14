@@ -820,6 +820,10 @@ ok('informes: catalogo de sensores y clave manual para detectar el nivel',
 ok('informes: filtro anti-picos y agrupacion de perdidas (datos coherentes)',
     /function rxFuelLimpia/.test(src) && /function rxFuelAgrupa/.test(src) &&
     /return rxFuelAgrupa\(out, o\)/.test(src));
+ok('informes: fuente plataforma (descargas del informe nativo)',
+    /function rxFuelTablaDescarga/.test(src) && /function rxFuelTplDescarga/.test(src) &&
+    /data-fuelsrc=/.test(src) && /fSrc\('plataforma'/.test(src) && /fSrc\('sensor'/.test(src) &&
+    /rxInfCorre\(desc\.tpl, r\.desde, r\.hasta/.test(src));
 ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
     /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
     /RX_INF\.fuelSinSensor/.test(src));
