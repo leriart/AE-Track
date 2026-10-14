@@ -804,7 +804,7 @@ ok('informes: la plantilla integrada de combustible encabeza la lista',
 ok('informes: el reporte de combustible detecta 10 L en 1-2 min con la unidad parada',
     /function rxFuelDetecta\(msgs, opts\)/.test(src) && /function rxFuelCorre\(unidades, desde, hasta, opts, onProg, token\)/.test(src) &&
     /id="rgi-fuel-litros"/.test(src) && /id="rgi-fuel-min"/.test(src) && /data-fuelmotor=/.test(src) &&
-    /messages\/load_interval/.test(src) && /flags: 1, flagsMask: 1/.test(src));
+    /messages\/load_interval/.test(src) && /flags: 0, flagsMask: 0xFF00/.test(src));
 ok('informes: filtro por marca de sensor y anti-rebote',
     /id="rgi-fuel-marca"/.test(src) && /function rxFuelFiltraMarca/.test(src) &&
     /rxFuelFiltraMarca\(base, RX_INF\.fuel\.marca\)/.test(src) &&
@@ -813,6 +813,10 @@ ok('informes: diagnostico de sensores defectuosos/alterados',
     /function rxFuelMetricas/.test(src) && /function rxFuelVeredicto/.test(src) &&
     /id="rgi-fuel-km"/.test(src) && /id="rgi-fuel-l100"/.test(src) &&
     /sensoresFallo/.test(src) && /'Sensores'/.test(src));
+ok('informes: catalogo de sensores y clave manual para detectar el nivel',
+    /function rxFuelCatalogo/.test(src) && /function rxFuelClaves/.test(src) &&
+    /flags: 1 \| 4096/.test(src) && /id="rgi-fuel-sensor"/.test(src) &&
+    /rxFuelParamsVistos/.test(src));
 ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
     /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
     /RX_INF\.fuelSinSensor/.test(src));

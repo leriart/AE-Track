@@ -61,7 +61,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
     'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
-    'rxFuelMetricas,rxFuelVeredicto};';
+    'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -383,6 +383,18 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         mod.rxFuelNivel({ params: { fuel: 42 } }, {}) === 42);
     ok('combustible: mapea el id numerico con el catalogo de sensores',
         mod.rxFuelNivel({ params: { 5: '37.5' } }, { 5: 'Nivel de combustible' }) === 37.5);
+    // Catalogo real de Wialon (seq -> {id, n, p}): identifica el sensor de
+    // combustible y acepta como clave su id o su parametro.
+    const sensCat = { '1': { id: 7, n: 'Nivel de combustible', p: 'fuel1' }, '2': { id: 8, n: 'Temperatura' } };
+    const clavesCat = mod.rxFuelClaves(sensCat);
+    ok('combustible: el catalogo define las claves del sensor de combustible',
+        clavesCat['fuel1'] === 1 && clavesCat['7'] === 1 && clavesCat['1'] === 1 &&
+        clavesCat['8'] === undefined && clavesCat['Temperatura'] === undefined);
+    ok('combustible: reconoce el nivel por el parametro del catalogo',
+        mod.rxFuelNivel({ params: { fuel1: 30 } }, sensCat, clavesCat) === 30 &&
+        mod.rxFuelNivel({ params: { 7: 22 } }, sensCat, clavesCat) === 22);
+    ok('combustible: lista las claves de parametro vistas (diagnostico)',
+        mod.rxFuelParamsVistos([{ params: { rpm: 1 } }, { params: { temp: 2, rpm: 3 } }]).join(',') === 'rpm,temp');
     ok('combustible: sin sensor de nivel devuelve null',
         mod.rxFuelNivel({ params: { temp: 12 } }, {}) === null);
     ok('combustible: motor encendido/apagado',
@@ -446,6 +458,16 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         rsf.sinSensor === 1 && rsf.conSensor === 0 &&
         rsf.tablas.length === 1 && rsf.tablas[0].label === 'Sensores',
         JSON.stringify({ sin: rsf.sinSensor, con: rsf.conSensor, tablas: rsf.tablas.map((t) => t.label) }));
+    // Clave manual: funciona aunque el sensor tenga un nombre raro.
+    fuelMsgs = [
+        { t: base, pos: { y: 19.4, x: -99.1, s: 0 }, params: { nivel_x: 80 } },
+        { t: base + 60, pos: { y: 19.4, x: -99.1, s: 0 }, params: { nivel_x: 65 } }
+    ];
+    const rov = await mod.rxFuelCorre([{ id: 7, eco: '105', u: { id: 7, nm: '105' } }], base - 100, base + 3600,
+        { litros: 10, min: 2, sensor: 'nivel_x' }, null, null);
+    ok('combustible: la clave manual de sensor fuerza la lectura del nivel',
+        rov.conSensor === 1 && rov.sinSensor === 0, JSON.stringify({ con: rov.conSensor }));
+    fuelMsgs = null;
     ok('combustible: la plantilla integrada se reconoce y el respaldo busca por nombre',
         mod.rxFuelEsTpl(mod.RX_FUEL_TPL) === true &&
         !!mod.rxFuelTplCombustible([{ nombre: 'Consumo de combustible' }, { nombre: 'Otro' }]));
