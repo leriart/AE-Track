@@ -62,6 +62,7 @@ const RX_INF = {
         vel: 3,          // km/h: por debajo, la unidad esta detenida
         motor: 'todos',  // 'todos' | 'on' (encendido) | 'off' (apagado)
         marca: '(SC)',   // solo unidades cuyo nombre contenga esta marca
+        sensor: '',      // clave/nombre exacto del parametro de nivel (override)
         km: 20,          // km recorridos para juzgar un sensor (calibracion)
         l100: 1          // consumo minimo esperado (L/100 km); 0 = no revisar
     },
@@ -1587,7 +1588,7 @@ const RX_FUEL_PAGS = 30;        // paginas por unidad
 const RX_FUEL_MAX_EV = 5000;    // tope de eventos acumulados
 // Nombres tipicos del sensor de nivel de combustible (se busca tambien en el
 // catalogo de sensores de la unidad cuando el parametro llega como id).
-const RX_FUEL_RE = /(COMBUSTIBLE|FUEL|DIESEL|GASOLINA|GASOLINE|NIVEL|TANQUE|TANK|LEVEL|LITROS?|LITERS?|LITRES?)/;
+const RX_FUEL_RE = /(COMBUSTIBLE|FUEL|DIESEL|GASOLINA|GASOLINE|NIVEL|TANQUE|TANK|LEVEL|LITROS?|LITERS?|LITRES?|FSC|LLS|FLS|VOLUMEN|CAPACIDAD|FLEETVIEW|CANBUS|SENSOR\s*DE\s*COMBUSTIBLE)/;
 // Nombres de sensor de motor (una copia local: la de Replay vive en otro
 // fragmento y este nucleo debe poder probarse aislado).
 const RX_FUEL_MOTOR_KEYS = ['engine', 'ignition', 'acc', 'motor', 'encendido', 'engineoperation', 'ignicion'];
@@ -1605,30 +1606,95 @@ function rxFuelNum(v) {
     const n = Number(String(v).replace(',', '.'));
     return isFinite(n) ? n : null;
 }
-// Catalogo de sensores de la unidad: id -> nombre. Wialon lo publica en
-// `sens` cuando se pide con los flags adecuados; si no esta, se devuelve {}.
+// Catalogo de sensores de una unidad. Wialon lo publica en `sens` (flag
+// 0x1000) y puede llegar como objeto o como JSON serializado. Se normaliza a
+// mapa id -> nombre para poder traducir las claves de los parametros.
 function rxFuelSensores(u) {
     const out = {};
-    const sens = u && (u.sens || u.sensors);
+    let sens = u && (u.sens || u.sensors);
+    if (typeof sens === 'string') { try { sens = JSON.parse(sens); } catch (_) { sens = null; } }
     if (sens && typeof sens === 'object') {
-        Object.keys(sens).forEach((id) => {
-            const s = sens[id];
+        Object.keys(sens).forEach((k) => {
+            const s = sens[k];
             const n = (s && (s.n || s.name)) || '';
-            if (n) out[String(id)] = String(n);
+            if (n) out[String(k)] = String(n);
         });
     }
     return out;
 }
-// Nombre del parametro: si la clave es un id numerico y hay catalogo, se
-// traduce al nombre del sensor.
+// Catalogo de sensores de TODA la flota (id de unidad -> sens). Se pide una
+// sola vez por sesion; es la via para identificar el sensor de combustible
+// cuando el parametro del mensaje llega con una clave que no es el nombre.
+let _rxFuelCat = null;
+async function rxFuelCatalogo() {
+    if (_rxFuelCat) return _rxFuelCat;
+    const out = {};
+    try {
+        const r = await remoteCall('core/search_items', {
+            spec: { itemsType: 'avl_unit', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
+            force: 1, flags: 1 | 4096, from: 0, to: 0
+        });
+        (r.items || []).forEach((it) => {
+            if (!it || it.id == null) return;
+            let sens = it.sens;
+            if (typeof sens === 'string') { try { sens = JSON.parse(sens); } catch (_) { sens = null; } }
+            if (sens && typeof sens === 'object' && Object.keys(sens).length) out[String(it.id)] = sens;
+        });
+    } catch (_) { /* sin permiso o servicio distinto: se seguira por nombre */ }
+    _rxFuelCat = out;
+    return out;
+}
+// Claves posibles del parametro de combustible segun el catalogo de sensores:
+// el numero de secuencia, el id del sensor, su nombre y su parametro. Asi una
+// clave numerica ("7") o rara ("FSC") se reconoce como nivel de combustible.
+function rxFuelClaves(sens) {
+    const claves = {};
+    if (!sens || typeof sens !== 'object') return claves;
+    Object.keys(sens).forEach((seq) => {
+        const s = sens[seq];
+        if (!s || typeof s !== 'object') return;
+        const texto = norm([s.n, s.name, s.d, s.p, s.t].filter(Boolean).join(' '));
+        if (!RX_FUEL_RE.test(texto)) return;
+        [seq, s.id, s.n, s.name, s.p].forEach((k) => {
+            const t = String(k == null ? '' : k).trim();
+            if (t) claves[t] = 1;
+        });
+    });
+    return claves;
+}
+// Nombre del parametro: se busca en el catalogo por secuencia, id o parametro
+// para poder aplicar el patron de nombres al sensor real.
 function rxFuelNombre(k, sens) {
     const s = String(k == null ? '' : k);
-    return (/^\d+$/.test(s) && sens && sens[s]) ? sens[s] : s;
+    if (!sens || typeof sens !== 'object') return s;
+    const directo = sens[s];
+    if (directo != null) {
+        if (typeof directo === 'string') return directo;
+        return String((directo.n || directo.name || directo.d) || s);
+    }
+    for (const seq of Object.keys(sens)) {
+        const x = sens[seq];
+        if (!x) continue;
+        if (typeof x === 'string') { if (seq === s) return x; continue; }
+        if (String(x.id) === s || String(x.p) === s || String(x.n) === s) {
+            return String((x.n || x.name || x.d) || s);
+        }
+    }
+    return s;
 }
-// Nivel de combustible de un mensaje (null si no trae sensor de nivel).
-function rxFuelNivel(m, sens) {
+// Nivel de combustible de un mensaje (null si no trae sensor de nivel). Se
+// prueba primero por las claves exactas del catalogo (sensor de combustible)
+// y despues por el nombre del parametro.
+function rxFuelNivel(m, sens, claves) {
     const p = (m && (m.params || m.p)) || null;
     if (!p || typeof p !== 'object') return null;
+    if (claves) {
+        for (const k of Object.keys(p)) {
+            if (!claves[k]) continue;
+            const v = rxFuelNum(p[k]);
+            if (v != null) return v;
+        }
+    }
     for (const k of Object.keys(p)) {
         if (!RX_FUEL_RE.test(norm(rxFuelNombre(k, sens)))) continue;
         const v = rxFuelNum(p[k]);
@@ -1655,7 +1721,7 @@ function rxFuelMotor(m, sens) {
     return null;
 }
 // Una muestra del historial: tiempo, posicion, velocidad, nivel y motor.
-function rxFuelMsg(m, sens) {
+function rxFuelMsg(m, sens, claves) {
     if (!m || !m.pos) return null;
     const t = Number(m.t) || 0;
     if (!t) return null;
@@ -1663,8 +1729,19 @@ function rxFuelMsg(m, sens) {
         t: t, lat: (m.pos.y != null && isFinite(+m.pos.y)) ? +m.pos.y : null,
         lon: (m.pos.x != null && isFinite(+m.pos.x)) ? +m.pos.x : null,
         s: Number(m.pos.s) || 0,
-        fuel: rxFuelNivel(m, sens), motor: rxFuelMotor(m, sens)
+        fuel: rxFuelNivel(m, sens, claves), motor: rxFuelMotor(m, sens)
     };
+}
+// Claves de parametro vistas en los mensajes (para el diagnostico cuando no
+// se reconoce el sensor de combustible).
+function rxFuelParamsVistos(msgs, max) {
+    const out = [];
+    (msgs || []).forEach((m) => {
+        const p = (m && (m.params || m.p)) || null;
+        if (!p || typeof p !== 'object') return;
+        Object.keys(p).forEach((k) => { if (out.indexOf(k) < 0 && out.length < (max || 8)) out.push(k); });
+    });
+    return out;
 }
 // ── Deteccion (pura) ────────────────────────────────────────────────────
 // Algoritmo de REFERENCIA + anti-rebote (mejor que "ventana fija por pares"):
@@ -1733,9 +1810,10 @@ async function rxFuelFetch(uid, desde, hasta, token) {
         if (token && token.cancelado) break;
         const r = await remoteCall('messages/load_interval', {
             itemId: uid, timeFrom: t0, timeTo: hasta,
-            // Mismo flags que usa el Replay (probado con esta instalacion):
-            // cada mensaje trae posicion y parametros de sensores.
-            flags: 1, flagsMask: 1, loadCount: RX_FUEL_MSGS
+            // flagsMask 0xFF00 + flags 0 = "todos los mensajes con datos"
+            // (incluye la posicion y los parametros p de los sensores, que con
+            // el filtro de posicion se quedaban fuera).
+            flags: 0, flagsMask: 0xFF00, loadCount: RX_FUEL_MSGS
         });
         const parte = (r && r.messages) || [];
         if (!parte.length) break;
@@ -1821,10 +1899,25 @@ async function rxFuelCorre(unidades, desde, hasta, opts, onProg, token) {
     const errores = [];
     let conSensor = 0, sinSensor = 0, hechas = 0, fallos = 0;
     const fecha = rxFuelFecha;
+    // Catalogo de sensores de la flota: se pide una sola vez y sirve para
+    // reconocer el sensor de combustible aunque el parametro del mensaje
+    // llegue con una clave que no sea el nombre.
+    let cat = {};
+    try { cat = await rxFuelCatalogo(); } catch (_) { cat = {}; }
     for (const u of lista) {
         if (token && token.cancelado) break;
         const raw = u.u || u;
-        const sens = rxFuelSensores(raw);
+        // Catalogo de sensores: el de la flota si esta, si no el de la unidad.
+        let sens = (cat[String(u.id)] && typeof cat[String(u.id)] === 'object') ? cat[String(u.id)] : null;
+        if (!sens) {
+            let rs = raw && (raw.sens || raw.sensors);
+            if (typeof rs === 'string') { try { rs = JSON.parse(rs); } catch (_) { rs = null; } }
+            if (rs && typeof rs === 'object') sens = rs;
+        }
+        const claves = rxFuelClaves(sens);
+        // Clave manual: si el operador sabe como se llama el parametro del
+        // nivel (el diagnostico lo muestra), se reconoce sin mas.
+        if (opts && opts.sensor) claves[String(opts.sensor)] = 1;
         let msgs = [];
         try { msgs = await rxFuelFetch(u.id, desde, hasta, token); }
         catch (err) {
@@ -1834,11 +1927,18 @@ async function rxFuelCorre(unidades, desde, hasta, opts, onProg, token) {
             continue;
         }
         const muestras = [];
-        for (const m of msgs) { const x = rxFuelMsg(m, sens); if (x) muestras.push(x); }
+        for (const m of msgs) { const x = rxFuelMsg(m, sens, claves); if (x) muestras.push(x); }
         if (muestras.some((m) => m.fuel != null)) conSensor++; else sinSensor++;
         // Diagnostico del sensor: distancia vs nivel (defectuoso/alterado).
         const met = rxFuelMetricas(muestras);
         const ver = rxFuelVeredicto(met, opts);
+        // Sin nivel: se listan las claves de parametro vistas para poder
+        // calibrar (si el sensor se llama distinto).
+        let detalle = ver.detalle;
+        if (!met.n) {
+            const pv = rxFuelParamsVistos(msgs, 6);
+            if (pv.length) detalle = 'sin nivel; params: ' + pv.join(', ');
+        }
         if (ver.malo) fallos++;
         sensores.push([
             u.eco || String(u.id),
@@ -1847,7 +1947,7 @@ async function rxFuelCorre(unidades, desde, hasta, opts, onProg, token) {
             (met.l100 == null ? '-' : rxInfFmt(met.l100)),
             met.n,
             ver.estado,
-            ver.detalle
+            detalle
         ]);
         const evs = rxFuelDetecta(muestras, opts);
         for (const e of evs) {
@@ -2176,7 +2276,8 @@ function abrirInformesPlantilla(origen) {
                         '<span class="rgi-busca" style="flex:0 0 auto"><span class="rondo-usym">' + UIS.filter + '</span>' +
                         '<input type="text" id="rgi-fuel-marca" class="filtro" style="min-width:96px" placeholder="(SC)" value="' + esc(RX_INF.fuel.marca || '') + '" title="Solo se revisan unidades cuyo nombre contenga esta marca" ' + dis + '>' +
                         '<i>' + esc(String(nUnMarca)) + '/' + esc(String(nBase)) + '</i></span>' +
-                        '<span class="rgi-gen-hint">' + esc('Solo se barren las unidades marcadas con el sensor (ej. "(SC)"). Vacio = todas.') + '</span></div>' +
+                        '<span class="rgi-num">clave <input type="text" id="rgi-fuel-sensor" style="width:96px" placeholder="auto" value="' + esc(RX_INF.fuel.sensor || '') + '" title="Clave o nombre exacto del parametro de nivel (si la autodeteccion falla)" ' + dis + '></span>' +
+                        '<span class="rgi-gen-hint">' + esc('Solo se barren las unidades marcadas (ej. "(SC)"). "clave" fuerza el parametro de nivel si el sensor tiene otro nombre.') + '</span></div>' +
                         '<div class="rgi-row"><span class="rgi-lb">Calibrar</span>' +
                         '<span class="rgi-num">defectuoso si recorre <input type="number" min="1" max="2000" step="1" id="rgi-fuel-km" value="' + esc(String(RX_INF.fuel.km)) + '"' + dis + '> km sin bajar</span>' +
                         '<span class="rgi-num">consumo min <input type="number" min="0" max="100" step="0.1" id="rgi-fuel-l100" value="' + esc(String(RX_INF.fuel.l100)) + '"' + dis + '> L/100km</span></div>' +
@@ -2751,6 +2852,7 @@ function abrirInformesPlantilla(origen) {
                 if (t.id === 'rgi-fuel-vel') { RX_INF.fuel.vel = clamp(Number(t.value) || 0, 0, 40); return; }
                 if (t.id === 'rgi-fuel-km') { RX_INF.fuel.km = clamp(Number(t.value) || RX_INF.fuel.km, 1, 2000); return; }
                 if (t.id === 'rgi-fuel-l100') { RX_INF.fuel.l100 = clamp(Number(t.value) || 0, 0, 100); return; }
+                if (t.id === 'rgi-fuel-sensor') { RX_INF.fuel.sensor = t.value || ''; return; }
                 if (t.id === 'rgi-fuel-marca') {
                     RX_INF.fuel.marca = t.value || '';
                     // Solo se repinta el contador, para no perder el foco.
