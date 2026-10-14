@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '7.14.3-dev.95';
+    const VER = '7.14.3-dev.96';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -1185,9 +1185,12 @@
         });
     }
     async function fetchUnits() {
+        // flags: base(1) + ultimo mensaje/posicion(1024) + sensores(4096). Los
+        // sensores son necesarios para poder identificar el de combustible por
+        // su nombre/tipo a partir de los parametros de los mensajes.
         const r = await remoteCall('core/search_items', {
             spec: { itemsType: 'avl_unit', propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
-            force: 1, flags: 1 | 1024, from: 0, to: 0
+            force: 1, flags: 1 | 1024 | 4096, from: 0, to: 0
         });
         return r.items || [];
     }
