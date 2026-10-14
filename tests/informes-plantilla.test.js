@@ -59,7 +59,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS,' +
     'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
-    'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL};';
+    'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -406,6 +406,18 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
             { t: base, s: 0, fuel: 100, motor: false },
             { t: base + 180, s: 0, fuel: 85, motor: false }
         ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
+    ok('combustible: un pico momentaneo del sensor (rebote) se descarta',
+        mod.rxFuelDetecta([
+            { t: base, s: 0, fuel: 100, motor: false },
+            { t: base + 60, s: 0, fuel: 88, motor: false },
+            { t: base + 120, s: 0, fuel: 99, motor: false }
+        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
+    ok('combustible: una fuga sostenida se parte en perdidas de la ventana',
+        mod.rxFuelDetecta([
+            { t: base, s: 0, fuel: 100, motor: false },
+            { t: base + 60, s: 0, fuel: 89, motor: false },
+            { t: base + 120, s: 0, fuel: 79, motor: false }
+        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 2);
     ok('combustible: si la unidad se movio no cuenta',
         mod.rxFuelDetecta([
             { t: base, s: 0, fuel: 100, motor: false },
@@ -430,6 +442,13 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('combustible: la plantilla integrada se reconoce y el respaldo busca por nombre',
         mod.rxFuelEsTpl(mod.RX_FUEL_TPL) === true &&
         !!mod.rxFuelTplCombustible([{ nombre: 'Consumo de combustible' }, { nombre: 'Otro' }]));
+    ok('combustible: el filtro por marca (sensor) selecciona solo las "(SC)"',
+        mod.rxFuelTieneMarca({ eco: '105', u: { nm: 'CDOS.105 (SC)' } }, '(SC)') === true &&
+        mod.rxFuelTieneMarca({ eco: '205', u: { nm: 'CDOS.205' } }, '(SC)') === false &&
+        mod.rxFuelTieneMarca({ eco: '205', u: { nm: 'CDOS.205' } }, '') === true &&
+        mod.rxFuelFiltraMarca([
+            { eco: 'a', u: { nm: 'A (SC)' } }, { eco: 'b', u: { nm: 'B' } }
+        ], '(SC)').length === 1);
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

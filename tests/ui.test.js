@@ -805,6 +805,10 @@ ok('informes: el reporte de combustible detecta 10 L en 1-2 min con la unidad pa
     /function rxFuelDetecta\(msgs, opts\)/.test(src) && /function rxFuelCorre\(unidades, desde, hasta, opts, onProg, token\)/.test(src) &&
     /id="rgi-fuel-litros"/.test(src) && /id="rgi-fuel-min"/.test(src) && /data-fuelmotor=/.test(src) &&
     /messages\/load_interval/.test(src) && /flags: 1, flagsMask: 1/.test(src));
+ok('informes: filtro por marca de sensor y anti-rebote',
+    /id="rgi-fuel-marca"/.test(src) && /function rxFuelFiltraMarca/.test(src) &&
+    /rxFuelFiltraMarca\(base, RX_INF\.fuel\.marca\)/.test(src) &&
+    /Anti-rebote/.test(src) && /marca: '\(SC\)'/.test(src));
 ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
     /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
     /RX_INF\.fuelSinSensor/.test(src));
