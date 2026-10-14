@@ -61,7 +61,9 @@ const RX_INF = {
         min: 2,          // ventana (min) en la que se produce la caida
         vel: 3,          // km/h: por debajo, la unidad esta detenida
         motor: 'todos',  // 'todos' | 'on' (encendido) | 'off' (apagado)
-        marca: '(SC)'    // solo unidades cuyo nombre contenga esta marca
+        marca: '(SC)',   // solo unidades cuyo nombre contenga esta marca
+        km: 20,          // km recorridos para juzgar un sensor (calibracion)
+        l100: 1          // consumo minimo esperado (L/100 km); 0 = no revisar
     },
     fuelSinSensor: false, // la ultima corrida no encontro sensor de nivel
     uniSel: {},          // unidades marcadas para filtrar las filas (vacio = todas)
@@ -1590,6 +1592,8 @@ const RX_FUEL_RE = /(COMBUSTIBLE|FUEL|DIESEL|GASOLINA|GASOLINE|NIVEL|TANQUE|TANK
 // fragmento y este nucleo debe poder probarse aislado).
 const RX_FUEL_MOTOR_KEYS = ['engine', 'ignition', 'acc', 'motor', 'encendido', 'engineoperation', 'ignicion'];
 const RX_FUEL_COLS = ['Unidad', 'Fecha y hora', 'Litros', 'Minutos', 'Velocidad', 'Motor', 'Coordenadas', 'Zona'];
+// Tabla de diagnostico: una fila por unidad con el veredicto del sensor.
+const RX_FUEL_SENS_COLS = ['Unidad', 'Distancia km', 'Litros', 'L/100km', 'Muestras', 'Estado', 'Detalle'];
 // ── Lectura del mensaje ─────────────────────────────────────────────────
 function rxFuelNum(v) {
     if (v == null || v === '') return null;
@@ -1756,6 +1760,56 @@ function rxFuelZona(lat, lon) {
     if (lat == null || lon == null) return '';
     try { return (typeof zoneAt === 'function') ? (zoneAt(lat, lon) || '') : ''; } catch (_) { return ''; }
 }
+// ── Calibracion / diagnostico del sensor (pura) ─────────────────────────
+// Metricas de una unidad a partir de sus muestras: distancia recorrida (con
+// filtro de saltos GPS), nivel inicial/final, rango y numero de lecturas.
+function rxFuelMetricas(muestras) {
+    const arr = (muestras || []).slice().sort((a, b) => a.t - b.t);
+    let km = 0, prev = null;
+    const vals = [];
+    for (const m of arr) {
+        if (m.lat != null && m.lon != null) {
+            if (prev) {
+                let d = 0;
+                try { d = (typeof haversine === 'function') ? haversine(prev.lat, prev.lon, m.lat, m.lon) : 0; } catch (_) { d = 0; }
+                // Un salto de mas de 5 km entre reportes es GPS erratico, no
+                // recorrido: no cuenta (mismo criterio que el odometro).
+                if (d > 0 && d <= 5000) km += d;
+            }
+            prev = { lat: m.lat, lon: m.lon };
+        }
+        if (m.fuel != null) vals.push(m.fuel);
+    }
+    const n = vals.length;
+    const ini = n ? vals[0] : null;
+    const fin = n ? vals[n - 1] : null;
+    let mn = null, mx = null;
+    for (const v of vals) { if (mn == null || v < mn) mn = v; if (mx == null || v > mx) mx = v; }
+    const drop = (ini != null && fin != null) ? (ini - fin) : null;  // >0 = bajo
+    const l100 = (drop != null && km > 0) ? (drop / km) * 100 : null;
+    return { km: km / 1000, n: n, ini: ini, fin: fin, min: mn, max: mx, rango: (mx != null && mn != null) ? (mx - mn) : 0, drop: drop, l100: l100 };
+}
+// Veredicto del sensor. La regla pedida: si la unidad RECORRE km y el nivel NO
+// baja (o sube), el sensor esta defectuoso o alterado. Con `l100` (L/100 km)
+// se marca ademas un consumo sospechosamente bajo aunque algo baje.
+function rxFuelVeredicto(met, opts) {
+    const o = opts || {};
+    const minKm = (Number(o.km) > 0) ? Number(o.km) : 20;
+    const minL100 = (Number(o.l100) > 0) ? Number(o.l100) : 0;
+    if (!met || !met.n) return { estado: 'Sin datos', detalle: 'no publica nivel de combustible', malo: false };
+    if (met.n < 3) return { estado: 'Pocas muestras', detalle: 'solo ' + met.n + ' lectura(s)', malo: false };
+    if (met.km >= minKm && met.drop != null) {
+        if (met.drop < 0) return { estado: 'Alterado', detalle: 'el nivel subio ' + rxInfFmt(-met.drop) + ' L con ' + rxInfFmt(met.km) + ' km', malo: true };
+        if (met.drop === 0) return { estado: 'Defectuoso', detalle: 'recorrio ' + rxInfFmt(met.km) + ' km y el nivel no bajo', malo: true };
+    }
+    if (met.km >= minKm && minL100 > 0 && met.l100 != null && met.l100 < minL100) {
+        return { estado: 'Revisar', detalle: 'consumo ' + rxInfFmt(met.l100) + ' L/100km (bajo)', malo: true };
+    }
+    if (met.rango === 0 && met.km >= minKm) {
+        return { estado: 'Defectuoso', detalle: 'nivel constante con ' + rxInfFmt(met.km) + ' km', malo: true };
+    }
+    return { estado: 'OK', detalle: '', malo: false };
+}
 // ── Ejecucion del reporte ───────────────────────────────────────────────
 // `unidades` es la lista [{id, eco, u}] a barrer. Devuelve la forma que ya
 // entiende la pantalla de informes (cols/filas/tablas/meta).
@@ -1763,8 +1817,9 @@ async function rxFuelCorre(unidades, desde, hasta, opts, onProg, token) {
     const t0 = Date.now();
     const lista = (unidades || []).slice(0, RX_FUEL_MAX_U);
     const filas = [];
+    const sensores = [];
     const errores = [];
-    let conSensor = 0, sinSensor = 0, hechas = 0;
+    let conSensor = 0, sinSensor = 0, hechas = 0, fallos = 0;
     const fecha = rxFuelFecha;
     for (const u of lista) {
         if (token && token.cancelado) break;
@@ -1781,6 +1836,19 @@ async function rxFuelCorre(unidades, desde, hasta, opts, onProg, token) {
         const muestras = [];
         for (const m of msgs) { const x = rxFuelMsg(m, sens); if (x) muestras.push(x); }
         if (muestras.some((m) => m.fuel != null)) conSensor++; else sinSensor++;
+        // Diagnostico del sensor: distancia vs nivel (defectuoso/alterado).
+        const met = rxFuelMetricas(muestras);
+        const ver = rxFuelVeredicto(met, opts);
+        if (ver.malo) fallos++;
+        sensores.push([
+            u.eco || String(u.id),
+            rxInfFmt(met.km),
+            (met.drop == null ? '-' : rxInfFmt(met.drop)),
+            (met.l100 == null ? '-' : rxInfFmt(met.l100)),
+            met.n,
+            ver.estado,
+            ver.detalle
+        ]);
         const evs = rxFuelDetecta(muestras, opts);
         for (const e of evs) {
             filas.push([
@@ -1800,13 +1868,25 @@ async function rxFuelCorre(unidades, desde, hasta, opts, onProg, token) {
         await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
     }
     filas.sort((a, b) => String(b[1]).localeCompare(String(a[1])));
+    // Los peores sensores primero, para que el diagnostico salte a la vista.
+    sensores.sort((a, b) => {
+        const pa = /Defectuoso|Alterado/.test(a[5]) ? 0 : (/Revisar/.test(a[5]) ? 1 : 2);
+        const pb = /Defectuoso|Alterado/.test(b[5]) ? 0 : (/Revisar/.test(b[5]) ? 1 : 2);
+        return (pa - pb) || String(a[0]).localeCompare(String(b[0]), 'es');
+    });
+    // Tablas: las perdidas (si hay) y siempre el diagnostico de sensores.
+    const tablas = [];
+    if (filas.length) tablas.push({ idx: 0, name: 'perdidas', label: 'Perdidas', cols: RX_FUEL_COLS.slice(), filas: filas });
+    tablas.push({ idx: tablas.length, name: 'sensores', label: 'Sensores', cols: RX_FUEL_SENS_COLS.slice(), filas: sensores });
+    // Tabla activa: las perdidas si las hay; si no, el diagnostico.
+    const activa = filas.length ? { cols: RX_FUEL_COLS.slice(), filas: filas } : { cols: RX_FUEL_SENS_COLS.slice(), filas: sensores };
     return {
-        cols: RX_FUEL_COLS.slice(),
-        filas: filas,
-        tablas: filas.length ? [{ idx: 0, name: 'perdidas', label: 'Perdidas', cols: RX_FUEL_COLS.slice(), filas: filas }] : [],
+        cols: activa.cols,
+        filas: activa.filas,
+        tablas: tablas,
         trozos: 0, hechos: hechas, objetos: lista.length, alcance: 'fuel',
         fallos: errores.length, errores: errores, cacheados: 0, lleno: false,
-        conSensor: conSensor, sinSensor: sinSensor, ms: Date.now() - t0
+        conSensor: conSensor, sinSensor: sinSensor, sensoresFallo: fallos, ms: Date.now() - t0
     };
 }
 // Etiqueta de la plantilla integrada (aparece en la lista de la pantalla).
@@ -2097,10 +2177,13 @@ function abrirInformesPlantilla(origen) {
                         '<input type="text" id="rgi-fuel-marca" class="filtro" style="min-width:96px" placeholder="(SC)" value="' + esc(RX_INF.fuel.marca || '') + '" title="Solo se revisan unidades cuyo nombre contenga esta marca" ' + dis + '>' +
                         '<i>' + esc(String(nUnMarca)) + '/' + esc(String(nBase)) + '</i></span>' +
                         '<span class="rgi-gen-hint">' + esc('Solo se barren las unidades marcadas con el sensor (ej. "(SC)"). Vacio = todas.') + '</span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb">Calibrar</span>' +
+                        '<span class="rgi-num">defectuoso si recorre <input type="number" min="1" max="2000" step="1" id="rgi-fuel-km" value="' + esc(String(RX_INF.fuel.km)) + '"' + dis + '> km sin bajar</span>' +
+                        '<span class="rgi-num">consumo min <input type="number" min="0" max="100" step="0.1" id="rgi-fuel-l100" value="' + esc(String(RX_INF.fuel.l100)) + '"' + dis + '> L/100km</span></div>' +
                         '<div class="rgi-row"><span class="rgi-lb">Motor</span><div class="rgi-chips">' +
                         fOption('todos', 'Da igual') + fOption('on', 'Encendido') + fOption('off', 'Apagado') + '</div></div>' +
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
-                        esc('Cuenta la caida de nivel con la unidad totalmente detenida (motor encendido o apagado). Perdida de referencia: 10 litros en 1-2 minutos.') +
+                        esc('Cuenta la caida de nivel con la unidad totalmente detenida (motor encendido o apagado). Perdida de referencia: 10 litros en 1-2 minutos. La pestana Sensores marca los sensores defectuosos o alterados.') +
                         '</span></div>');
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
@@ -2140,6 +2223,10 @@ function abrirInformesPlantilla(origen) {
                     const ft = rxFuelTplCombustible(plantillas);
                     avisos.push(esc('Ninguna unidad del alcance publica nivel de combustible (sensor). Prueba otras unidades o ejecuta una plantilla de combustible.') +
                         (ft ? ' <button type="button" class="mini" id="rgi-fuel-tpl" data-tpl="' + esc(rxInfClave(ft)) + '">usar "' + esc(ft.nombre) + '"</button>' : ''));
+                }
+                // Sensores defectuosos/alterados (no bajan caminando).
+                if (esFuel && RX_INF.meta && RX_INF.meta.sensoresFallo) {
+                    avisos.push(esc(RX_INF.meta.sensoresFallo + ' sensor(es) defectuoso(s) o alterado(s): recorre km y el nivel no baja. Mira la pesta\u00f1a "Sensores".'));
                 }
                 if (RX_INF.diag && RX_INF.diag.error) {
                     avisos.push('Ultimo intento: ' + esc(RX_INF.diag.enviado
@@ -2239,10 +2326,13 @@ function abrirInformesPlantilla(origen) {
                         '<input type="text" id="rgi-q" class="filtro" placeholder="Filtrar filas\u2026" value="' + esc(RX_INF.q || '') + '"' + dis + '></span></div>');
                 }
                 const kpis = hay ? '<div class="rgi-kpis">' +
-                    '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>Filas</span></div>' +
+                    '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>' + (esFuel ? 'Eventos' : 'Filas') + '</span></div>' +
                     (v.iUni >= 0 ? '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' : '') +
                     (v.iZona >= 0 ? '<div class="rgi-kpi"><b>' + v.zonas + '</b><span>Geocercas</span></div>' : '') +
-                    '<div class="rgi-kpi"><b>' + v.meta.trozos + '</b><span>Trozos</span></div>' +
+                    (esFuel
+                        ? '<div class="rgi-kpi"><b>' + esc(String(RX_INF.fuel.litros)) + ' L/' + esc(String(RX_INF.fuel.min)) + 'm</b><span>Umbral</span></div>'
+                        : '<div class="rgi-kpi"><b>' + v.meta.trozos + '</b><span>Trozos</span></div>') +
+                    (esFuel && v.meta.sensoresFallo ? '<div class="rgi-kpi vivo"><b>' + v.meta.sensoresFallo + '</b><span>Sensores mal</span></div>' : '') +
                     '<div class="rgi-kpi"><b>' + Math.round(v.meta.ms / 1000) + ' s</b><span>Calculo</span></div>' +
                     (v.meta.cacheados ? '<div class="rgi-kpi"><b>' + v.meta.cacheados + '</b><span>En cache</span></div>' : '') +
                     (v.meta.fallos ? '<div class="rgi-kpi"><b>' + v.meta.fallos + '</b><span>Trozos con error</span></div>' : '') +
@@ -2398,7 +2488,7 @@ function abrirInformesPlantilla(origen) {
                     filas: RX_INF.filas.length, unidades: v.unidades, trozos: res.trozos, objetos: res.objetos,
                     ms: res.ms, fallos: res.fallos, errores: res.errores, cacheados: res.cacheados,
                     lleno: res.lleno, bloqueado: res.bloqueado, recortado: res.recortado,
-                    conSensor: res.conSensor, sinSensor: res.sinSensor
+                    conSensor: res.conSensor, sinSensor: res.sinSensor, sensoresFallo: res.sensoresFallo
                 };
                 pinta();
                 if (res.cancelado) advice('Informe cancelado', RX_INF.filas.length + ' fila(s) hasta donde lleg\u00f3 (quedan guardadas).');
@@ -2659,6 +2749,8 @@ function abrirInformesPlantilla(origen) {
                 if (t.id === 'rgi-fuel-litros') { RX_INF.fuel.litros = Math.max(1, Number(t.value) || RX_INF.fuel.litros); return; }
                 if (t.id === 'rgi-fuel-min') { RX_INF.fuel.min = clamp(Number(t.value) || RX_INF.fuel.min, 1, 60); return; }
                 if (t.id === 'rgi-fuel-vel') { RX_INF.fuel.vel = clamp(Number(t.value) || 0, 0, 40); return; }
+                if (t.id === 'rgi-fuel-km') { RX_INF.fuel.km = clamp(Number(t.value) || RX_INF.fuel.km, 1, 2000); return; }
+                if (t.id === 'rgi-fuel-l100') { RX_INF.fuel.l100 = clamp(Number(t.value) || 0, 0, 100); return; }
                 if (t.id === 'rgi-fuel-marca') {
                     RX_INF.fuel.marca = t.value || '';
                     // Solo se repinta el contador, para no perder el foco.

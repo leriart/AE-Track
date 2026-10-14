@@ -44,6 +44,7 @@ const stubs = [
     'function rxGeoInfAnillo(z){ return (z && z.puntos) ? z.puntos : []; }',
     'function glocOrigen(z){ return { id: (z && z.app) ? "app" : "plat" }; }',
     'function zoneAt(lat, lon){ return (lat != null && Math.abs(lat - 19.4) < 0.01) ? "PATIO" : ""; }',
+    'function haversine(y1, x1, y2, x2){ const dy = (y2 - y1), dx = (x2 - x1); return Math.sqrt(dy * dy + dx * dx) * 111320; }',
     'function rxFechaHora(ms){ return String(ms); }',
     'function clamp(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }',
     'function rxGeoInfYield(){ return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } }); }',
@@ -59,7 +60,8 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS,' +
     'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
-    'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca};';
+    'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
+    'rxFuelMetricas,rxFuelVeredicto};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -435,10 +437,15 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         rf.cols[0] === 'Unidad' && rf.cols[2] === 'Litros' && rf.filas.length === 1 &&
         rf.filas[0][0] === '105' && rf.conSensor === 1 && rf.sinSensor === 0,
         JSON.stringify({ cols: rf.cols, filas: rf.filas.length, con: rf.conSensor }));
+    ok('combustible: incluye la pestana de diagnostico de sensores',
+        rf.tablas.length === 2 && rf.tablas[1].label === 'Sensores' &&
+        rf.tablas[1].cols[5] === 'Estado' && rf.tablas[1].filas.length === 1);
     fuelMsgs = null;
     const rsf = await mod.rxFuelCorre([{ id: 7, eco: '105', u: { id: 7, nm: '105' } }], base - 100, base + 3600, { litros: 10, min: 2 }, null, null);
-    ok('combustible: sin sensor de nivel avisa (conSensor=0)',
-        rsf.sinSensor === 1 && rsf.conSensor === 0 && rsf.filas.length === 0);
+    ok('combustible: sin sensor de nivel avisa (conSensor=0) y solo muestra el diagnostico',
+        rsf.sinSensor === 1 && rsf.conSensor === 0 &&
+        rsf.tablas.length === 1 && rsf.tablas[0].label === 'Sensores',
+        JSON.stringify({ sin: rsf.sinSensor, con: rsf.conSensor, tablas: rsf.tablas.map((t) => t.label) }));
     ok('combustible: la plantilla integrada se reconoce y el respaldo busca por nombre',
         mod.rxFuelEsTpl(mod.RX_FUEL_TPL) === true &&
         !!mod.rxFuelTplCombustible([{ nombre: 'Consumo de combustible' }, { nombre: 'Otro' }]));
@@ -449,6 +456,25 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         mod.rxFuelFiltraMarca([
             { eco: 'a', u: { nm: 'A (SC)' } }, { eco: 'b', u: { nm: 'B' } }
         ], '(SC)').length === 1);
+    // Diagnostico del sensor: caminar sin que baje el nivel = defectuoso.
+    const metMueve = mod.rxFuelMetricas([
+        { t: base, lat: 19.40, lon: -99.10, fuel: 100 },
+        { t: base + 600, lat: 19.43, lon: -99.10, fuel: 98 },
+        { t: base + 1200, lat: 19.46, lon: -99.10, fuel: 95 }
+    ]);
+    ok('combustible: las metricas miden distancia y caida de nivel',
+        metMueve.km > 6 && metMueve.drop === 5 && metMueve.n === 3,
+        JSON.stringify({ km: metMueve.km, drop: metMueve.drop }));
+    ok('combustible: caminar y no bajar el nivel -> defectuoso',
+        mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0, l100: null, rango: 0 }, { km: 20, l100: 1 }).estado === 'Defectuoso' &&
+        mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0, l100: null, rango: 0 }, { km: 20, l100: 1 }).malo === true);
+    ok('combustible: nivel que sube caminando -> alterado',
+        mod.rxFuelVeredicto({ km: 30, n: 5, drop: -4, l100: null, rango: 0 }, { km: 20, l100: 1 }).estado === 'Alterado');
+    ok('combustible: consumo normal -> OK y consumo bajo -> revisar',
+        mod.rxFuelVeredicto({ km: 30, n: 5, drop: 12, l100: 40, rango: 5 }, { km: 20, l100: 1 }).estado === 'OK' &&
+        mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0.3, l100: 1, rango: 5 }, { km: 20, l100: 5 }).estado === 'Revisar');
+    ok('combustible: sin lecturas -> sin datos',
+        mod.rxFuelVeredicto(mod.rxFuelMetricas([]), { km: 20 }).estado === 'Sin datos');
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

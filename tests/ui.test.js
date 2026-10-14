@@ -809,6 +809,10 @@ ok('informes: filtro por marca de sensor y anti-rebote',
     /id="rgi-fuel-marca"/.test(src) && /function rxFuelFiltraMarca/.test(src) &&
     /rxFuelFiltraMarca\(base, RX_INF\.fuel\.marca\)/.test(src) &&
     /Anti-rebote/.test(src) && /marca: '\(SC\)'/.test(src));
+ok('informes: diagnostico de sensores defectuosos/alterados',
+    /function rxFuelMetricas/.test(src) && /function rxFuelVeredicto/.test(src) &&
+    /id="rgi-fuel-km"/.test(src) && /id="rgi-fuel-l100"/.test(src) &&
+    /sensoresFallo/.test(src) && /'Sensores'/.test(src));
 ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
     /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
     /RX_INF\.fuelSinSensor/.test(src));
