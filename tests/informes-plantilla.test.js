@@ -145,8 +145,8 @@ function remote(m, p) {
     if (m === 'report/get_result_rows') {
         if (tablaThefts) {
             return Promise.resolve([
-                { n: 0, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, 'GEOCERCA TESTEO STS', { t: '2026-10-14 13:38:25', v: 1792000705 }, '186,40 l', '0 km/h', '24,55 l', '161,85 l', 'DIESEL 1'] },
-                { n: 1, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, 'GEOCERCA TESTEO STS', { t: '2026-10-14 13:38:25', v: 1792000705 }, '180,00 l', '0 km/h', '20,00 l', '160,00 l', 'DIESEL 2'] }
+                { n: 0, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, { t: 'GEOCERCA TESTEO STS', y: 20.84390, x: -102.70790 }, { t: '2026-10-14 13:38:25', v: 1792000705 }, '186,40 l', '0 km/h', '24,55 l', '161,85 l', 'DIESEL 1'] },
+                { n: 1, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, { t: 'GEOCERCA TESTEO STS', y: 20.84390, x: -102.70790 }, { t: '2026-10-14 13:38:25', v: 1792000705 }, '180,00 l', '0 km/h', '20,00 l', '160,00 l', 'DIESEL 2'] }
             ]);
         }
         if (!tablaReal) return Promise.resolve([]);
@@ -587,12 +587,12 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     const rPlat = await mod.rxFuelCorrePlataforma({ rid: 3, id: 10, nombre: 'Informe de Combustible' },
         [{ id: 7, eco: '105' }], 1700000000, 1700000000 + 3600, {}, null, null);
     tablaThefts = false;
-    ok('combustible plataforma: arma filas con unidad, inicio/fin, duracion y sensor',
-        rPlat.cols[0] === 'Unidad' && rPlat.cols[4] === 'Duración' &&
+    ok('combustible plataforma: arma filas con unidad, coordenadas, inicio/fin, duracion y sensor',
+        rPlat.cols[0] === 'Unidad' && rPlat.cols[2] === 'Coordenadas' && rPlat.cols[5] === 'Duración' &&
         rPlat.filas.length === 2 && rPlat.filas[0][0] === '105' &&
-        rPlat.filas[0][1] === 'GEOCERCA TESTEO STS' && rPlat.filas[0][4] === '0:02:00' &&
-        rPlat.filas[0][5] === '24,55 l' && rPlat.filas[0][8] === 'DIESEL 1' &&
-        rPlat.filas[1][8] === 'DIESEL 2',
+        rPlat.filas[0][1] === 'GEOCERCA TESTEO STS' && /^20\.84/.test(rPlat.filas[0][2]) &&
+        rPlat.filas[0][5] === '0:02:00' && rPlat.filas[0][6] === '24,55 l' && rPlat.filas[0][9] === 'DIESEL 1' &&
+        rPlat.filas[1][9] === 'DIESEL 2',
         JSON.stringify({ cols: rPlat.cols, f0: rPlat.filas[0] }));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
