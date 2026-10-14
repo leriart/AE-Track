@@ -6,7 +6,7 @@ Referencia generada automaticamente desde `DEFAULTS`
 usa `APP.config`, asi que puedes consultarla desde la consola del navegador
 (`APP.config.pollMs`).
 
-Total: **106 claves**.
+Total: **107 claves**.
 
 | Clave | Tipo | Valor por defecto | Descripcion |
 | --- | --- | --- | --- |
@@ -109,6 +109,7 @@ Total: **106 claves**.
 | `geocercaDetenidoMin` | number | `5` | minutos detenido dentro de geocerca para alertar |
 | `geocercaEstableSeg` | number | `15` | v6.0.2: segundos que debe sostenerse un cambio de geocerca antes de avisar ENTER/EXIT. Evita el parpadeo de avisos cuando el GPS oscila en el borde de una geocerca. |
 | `geoAlertas` | object | `{ porZona: Object.freeze({}), alcance: 'vigiladas', severidad: 'medio', disparo: 'paso', minMin: 2, motorMin: 1… }` | al detenerse o al detenerse con el motor apagado. porZona: nombre de la geocerca -> ajustes; reglas.geoAlerta es el interruptor maestro de todas ellas. |
+| `combustible` | object | `{ on: false, litrosMin: 3, ventanaMin: 2, ritmoMax: 60, radioM: 30, reversionMin: 5, llenadoMin: 30, fugaRitmo:… }` | Apagada por defecto; se prueba en tests/combustible.test.js y la usan el informe de combustible y su validacion. Los valores son los del algoritmo puro (COMB_DEF): ajustarlos cambia el umbral de descarte. |
 | `desvioMunicipio` | boolean | `true` | v5.15: tolerancia de desvio por municipio. Mientras la unidad siga DENTRO de un municipio por el que pasa su ruta (o una de sus paradas), el desvio no se marca hasta desvioMunicipioM metros. |
 | `desvioMunicipioM` | number | `3000` |  |
 | `paradaLlegadaM` | number | `150` | v5.15: radio (m) para considerar "llego" a cada parada del plan. |

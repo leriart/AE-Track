@@ -175,6 +175,38 @@
             // 0 = usar el cooldown global de alertas
             cooldownS: 0
         }),
+        // v8.3: deteccion PROPIA de robo/perdida de combustible (fragmento 56).
+        // Apagada por defecto; se prueba en tests/combustible.test.js y la usan
+        // el informe de combustible y su validacion. Los valores son los del
+        // algoritmo puro (COMB_DEF): ajustarlos cambia el umbral de descarte.
+        combustible: Object.freeze({
+            // interruptor maestro del algoritmo propio
+            on: false,
+            // delta (L) por debajo del cual la caida es solo ruido
+            litrosMin: 3,
+            // ventana (min) para medir una caida
+            ventanaMin: 2,
+            // L/min: por encima y en menos de 5 s es un escalon de sensor
+            ritmoMax: 60,
+            // radio (m) para contar unidades carnada en el mismo punto
+            radioM: 30,
+            // si el nivel vuelve en menos de N min fue salpicadura/rebote
+            reversionMin: 5,
+            // +/- min para marcar un llenado contiguo
+            llenadoMin: 30,
+            // L/min: por debajo y sostenido es fuga (no un trasvase)
+            fugaRitmo: 2,
+            // duracion minima (s) para hablar de fuga
+            fugaMinSeg: 1800,
+            // capacidad tipica del tanque para filtrar deltas imposibles
+            capacidadL: 400,
+            // banda de ruido minima (L) si la serie es muy plana
+            bandaMin: 0.5,
+            // sigmas de MAD que forman la banda de ruido
+            bandaK: 3,
+            // 0 = la convergencia no filtra por hora (solo radio)
+            convVentanaMin: 0
+        }),
         // v5.15: tolerancia de desvio por municipio. Mientras la unidad siga
         // DENTRO de un municipio por el que pasa su ruta (o una de sus
         // paradas), el desvio no se marca hasta desvioMunicipioM metros.
