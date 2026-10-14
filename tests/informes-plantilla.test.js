@@ -63,7 +63,8 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
     'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
     'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos,rxFuelLimpia,rxFuelAgrupa,' +
-    'rxFuelTablaDescarga,rxFuelTplDescarga,rxFuelUsaPlataforma};';
+    'rxFuelTablaDescarga,rxFuelTplDescarga,rxFuelUsaPlataforma,' +
+    'rxFuelParseFecha,rxFuelMapeaColsDescarga,rxFuelTablaSalida,rxFuelCorrePlataforma,RX_FUEL_DESC_COLS};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -76,6 +77,7 @@ let umbral1004 = 0;   // si un intervalo supera esto, la plataforma da code 1004
 let soloObjeto = null; // si se fija, solo ese reportObjectId devuelve filas
 let soloDef = false;   // si se activa, solo la plantilla propia (sin filtros) devuelve filas
 let tablaReal = false; // exec_report responde con TABLAS y el contenido va en get_result_rows
+let tablaThefts = false; // exec_report responde con la tabla unit_thefts (Descargas)
 let fuelMsgs = null;   // historial que devuelve messages/load_interval (combustible)
 function remote(m, p) {
     calls.push({ m: m, p: p });
@@ -119,6 +121,14 @@ function remote(m, p) {
         if (!soloDef && soloObjeto != null && String(p.reportObjectId) !== String(soloObjeto)) {
             return Promise.resolve({ reportResult: { columns: [{ n: 'Unidad' }, { n: 'Km' }], rows: [] } });
         }
+        if (tablaThefts) {
+            return Promise.resolve({
+                reportResult: { tables: [
+                    { name: 'unit_thefts', label: 'Descargas de Combustible', rows: 2, columns: 8,
+                      header: ['Comienzo', 'Posición inicial', 'Hora', 'Nivel de combustible inicial', 'Velocidad inicial', 'Descargado', 'Nivel de combustible final', 'Nombre del sensor'] }
+                ] }
+            });
+        }
         if (tablaReal) {
             return Promise.resolve({
                 reportResult: { tables: [
@@ -133,6 +143,12 @@ function remote(m, p) {
     }
     // El contenido de la tabla se pide aparte, como en la plataforma real.
     if (m === 'report/get_result_rows') {
+        if (tablaThefts) {
+            return Promise.resolve([
+                { n: 0, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, 'GEOCERCA TESTEO STS', { t: '2026-10-14 13:38:25', v: 1792000705 }, '186,40 l', '0 km/h', '24,55 l', '161,85 l', 'DIESEL 1'] },
+                { n: 1, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, 'GEOCERCA TESTEO STS', { t: '2026-10-14 13:38:25', v: 1792000705 }, '180,00 l', '0 km/h', '20,00 l', '160,00 l', 'DIESEL 2'] }
+            ]);
+        }
         if (!tablaReal) return Promise.resolve([]);
         if (p.tableIndex === 1) {
             return Promise.resolve([{ n: 0, d: 0, c: ['CDOS.4286 - JY21236', '12,5 l'] }]);
@@ -380,8 +396,9 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     }], 12, ['unit_thefts']);
     ok('combustible: la definicion deja solo la tabla de descargas y quita el bind',
         defSolo && defSolo.tbl.length === 1 && defSolo.tbl[0].n === 'unit_thefts' &&
-        JSON.parse(defSolo.p).bind === undefined && defSolo.id === 0,
-        JSON.stringify(defSolo && { id: defSolo.id, tbl: defSolo.tbl.map((x) => x.n), p: defSolo.p }));
+        JSON.parse(defSolo.p).bind === undefined && defSolo.id === 0 &&
+        JSON.parse(defSolo.tbl[0].p).sensor_name === '*',
+        JSON.stringify(defSolo && { id: defSolo.id, tbl: defSolo.tbl.map((x) => x.n), p: defSolo.p, tp: defSolo.tbl[0].p }));
     await mod.rxInfPrecargaItems({ tablas: [{ filtros: ['unit_groups'] }] });
     ok('filtros: un nombre de grupo se resuelve a su id',
         mod.rxInfFiltroResuelve('unit_groups', 'GRUPO NORTE') === '501',
@@ -549,6 +566,34 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     mod.RX_INF.fuel._desc = undefined;
     mod.RX_INF.fuel.fuente = 'plataforma';
     ok('combustible: la fuente decide entre plataforma y sensor', usePlat === true && noPlat === false);
+
+    // ── Descargas de la plataforma: unidad, ubicacion, fecha/hora, duracion ──
+    ok('combustible plataforma: parsea fecha/hora', (function () {
+        const ms = mod.rxFuelParseFecha('2026-10-14 13:36:25');
+        const d = new Date(ms);
+        return ms != null && d.getFullYear() === 2026 && d.getMonth() === 9 && d.getDate() === 14 &&
+            d.getHours() === 13 && d.getMinutes() === 36 && mod.rxFuelParseFecha('') === null;
+    })());
+    const idxDesc = mod.rxFuelMapeaColsDescarga(['Comienzo', 'Posición inicial', 'Hora', 'Nivel de combustible inicial', 'Velocidad inicial', 'Descargado', 'Nivel de combustible final', 'Nombre del sensor']);
+    ok('combustible plataforma: mapea las columnas de descargas',
+        idxDesc.ini === 0 && idxDesc.ubi === 1 && idxDesc.fin === 2 && idxDesc.iniNiv === 3 &&
+        idxDesc.vel === 4 && idxDesc.litros === 5 && idxDesc.finNiv === 6 && idxDesc.sensor === 7,
+        JSON.stringify(idxDesc));
+    ok('combustible plataforma: elige la tabla de descargas',
+        mod.rxFuelTablaSalida({ tablas: [{ name: 'unit_trips', label: 'Viajes' }, { name: 'unit_thefts', label: 'Descargas de Combustible' }] }).name === 'unit_thefts');
+    // Ejecucion completa con la tabla de descargas simulada (2 sensores).
+    tablaThefts = true;
+    mod.rxInfCacheLimpiar();
+    const rPlat = await mod.rxFuelCorrePlataforma({ rid: 3, id: 10, nombre: 'Informe de Combustible' },
+        [{ id: 7, eco: '105' }], 1700000000, 1700000000 + 3600, {}, null, null);
+    tablaThefts = false;
+    ok('combustible plataforma: arma filas con unidad, inicio/fin, duracion y sensor',
+        rPlat.cols[0] === 'Unidad' && rPlat.cols[4] === 'Duración' &&
+        rPlat.filas.length === 2 && rPlat.filas[0][0] === '105' &&
+        rPlat.filas[0][1] === 'GEOCERCA TESTEO STS' && rPlat.filas[0][4] === '0:02:00' &&
+        rPlat.filas[0][5] === '24,55 l' && rPlat.filas[0][8] === 'DIESEL 1' &&
+        rPlat.filas[1][8] === 'DIESEL 2',
+        JSON.stringify({ cols: rPlat.cols, f0: rPlat.filas[0] }));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
