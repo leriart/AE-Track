@@ -14008,6 +14008,36 @@ function rxInfDefSinUnidades(datos, tplId) {
         return def;
     } catch (_) { return null; }
 }
+// Definicion propia con SOLO las tablas pedidas (por nombre interno). Sirve
+// para ejecutar una plantilla pesada (viajes + paradas + chart + stats) con
+// unicamente la tabla que interesa: en combustible, `unit_thefts` (Descargas).
+// Sin esto la plataforma calcula todo el informe por unidad (lento) y la tabla
+// activa acababa siendo la de consumo por viajes.
+function rxInfDefSoloTablas(datos, tplId, nombres) {
+    try {
+        const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+        const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+        if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
+        const keep = (nombres && nombres.length) ? nombres : ['unit_thefts'];
+        const def = JSON.parse(JSON.stringify(t));
+        def.id = 0;
+        rxInfDefSinBind(def);
+        def.tbl = def.tbl.filter((tb) => keep.indexOf(tb.n) >= 0);
+        // La tabla de descargas queda con el filtro de sensor en TODOS los
+        // sensores de combustible de la unidad (una fila por sensor), no en el
+        // grupo "*TOTAL*" que traia la plantilla guardada. Asi una unidad con 3
+        // sensores los mide los 3.
+        def.tbl.forEach((tb) => {
+            if (!/theft|descarg/i.test(String(tb.n || '') + ' ' + String(tb.l || ''))) return;
+            let p = {};
+            try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
+            delete p.custom_sensor_name;
+            p.sensor_name = '*';
+            tb.p = JSON.stringify(p);
+        });
+        return def.tbl.length ? def : null;
+    } catch (_) { return null; }
+}
 function rxInfCandidatos(tpl, info, datos, defBase) {
     const out = [];
     const visto = {};
@@ -14121,7 +14151,7 @@ function rxInfAcumulaTablas(acum, tablas) {
 // (de ahi que ninguna reviente con el limite de tiempo) y repetir el informe
 // no vuelve a preguntar lo mismo.
 //   onProg(hechos, total, filas, eco)
-async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
+async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar, defFijo) {
     const t0 = Date.now();
     RX_INF.intentos = [];
     rxInfCacheCargar();
@@ -14130,6 +14160,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
     if (unidades && unidades.length) {
         objs = unidades.map((u) => ({ id: String(u.id), sec: '0', eco: u.eco }));
         modo = 'seleccion';
+        if (defFijo) objs.forEach((o) => { o.def = defFijo; });
     } else {
         const datos = await rxInfDatosPlantilla(tpl);
         const info = rxInfPlantillaInfo(datos, tpl.id);
@@ -14139,11 +14170,11 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
         const esGeo = (forzar === 'flota') ? false : (info ? info.esGeo : (rxInfPista(tpl) === 'geocercas'));
         // Filtros elegidos por el operador (units, geozones...): van como
         // definicion propia para TODOS los objetos.
-        let defBase = rxInfDefFiltros(datos, tpl.id, rxInfFiltrosEfectivos());
+        let defBase = defFijo || rxInfDefFiltros(datos, tpl.id, rxInfFiltrosEfectivos());
         // Al forzar flota se quitan los filtros de unidad/objeto guardados: el
         // informe se ejecuta unidad por unidad y un filtro atado a otra unidad
         // solo provoca errores.
-        if (forzar === 'flota' && !defBase) defBase = rxInfDefSinUnidades(datos, tpl.id);
+        if (!defBase && forzar === 'flota') defBase = rxInfDefSinUnidades(datos, tpl.id);
         if (esGeo) {
             objs = await rxInfModelo(tpl, info, datos, desde, hasta, token, defBase);
             modo = 'geocercas';
@@ -15140,6 +15171,104 @@ async function rxFuelTplDescarga(plantillas) {
 function rxFuelUsaPlataforma() {
     return RX_INF.fuel.fuente !== 'sensor' && !!RX_INF.fuel._desc;
 }
+// ── Descargas de la plataforma: filas con unidad, ubicacion y duracion ──
+const RX_FUEL_DESC_COLS = ['Unidad', 'Ubicaci\u00f3n', 'Inicio', 'Fin', 'Duraci\u00f3n', 'Litros', 'Nivel inicial', 'Nivel final', 'Sensor'];
+// Fecha/hora tolerante: "AAAA-MM-DD HH:MM:SS", "DD/MM/AAAA HH:MM:SS" o ISO.
+function rxFuelParseFecha(s) {
+    if (s == null) return null;
+    const t = String(s).trim();
+    if (!t) return null;
+    let m = t.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime();
+    m = t.match(/(\d{1,2})[-.\/](\d{1,2})[-.\/](\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m) return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime();
+    const d = new Date(t);
+    return isFinite(d.getTime()) ? d.getTime() : null;
+}
+// Indices de las columnas de la tabla de descargas (por etiqueta o clave
+// interna: Comienzo/Hora, Descargado, Nivel inicial/final, Sensor...).
+function rxFuelMapeaColsDescarga(cols) {
+    const out = { ini: -1, fin: -1, ubi: -1, litros: -1, iniNiv: -1, finNiv: -1, sensor: -1, vel: -1 };
+    (cols || []).forEach((c, i) => {
+        const n = rxInfNombreCol(c);
+        if (out.ini < 0 && /^(COMIENZ|COMENZ|TIME_BEGIN|TIME BEGIN|TIEMPO_INICIO|FECHA_INICIO|INICIO)/.test(n)) out.ini = i;
+        if (out.fin < 0 && /^(HORA|TIME_END|TIME END|TIEMPO_FIN|FECHA_FIN|FIN)/.test(n)) out.fin = i;
+        if (out.ubi < 0 && /(UBICACI|LOCATION|POSICION|LUGAR|DIRECCI|ADDRESS)/.test(n)) out.ubi = i;
+        if (out.litros < 0 && /(DESCARG|THEFT|VOLUMEN|LITROS|CONSUMID|FILLED|LLENADO)/.test(n)) out.litros = i;
+        if (out.iniNiv < 0 && /(NIVEL.*INICIAL|COMBUSTIBLE.*INICIAL|FUEL.*LEVEL.*BEGIN|BEGIN.*BALANCE)/.test(n)) out.iniNiv = i;
+        if (out.finNiv < 0 && /(NIVEL.*FINAL|COMBUSTIBLE.*FINAL|FUEL.*LEVEL.*(END|THEFTED)|END.*BALANCE)/.test(n)) out.finNiv = i;
+        if (out.sensor < 0 && /SENSOR/.test(n)) out.sensor = i;
+        if (out.vel < 0 && /(VELOCIDAD|SPEED)/.test(n)) out.vel = i;
+    });
+    return out;
+}
+// La tabla de descargas dentro de lo que devolvio una ejecucion.
+function rxFuelTablaSalida(r) {
+    const tabs = (r && r.tablas) ? r.tablas : [];
+    for (const t of tabs) {
+        if (/THEFT|DESCARG/i.test(String(t.name || '') + ' ' + String(t.label || ''))) return t;
+    }
+    if (tabs.length) return tabs[0];
+    return (r && r.cols && r.cols.length)
+        ? { cols: r.cols, filas: r.filas || [], name: 'descargas', label: 'Descargas' } : null;
+}
+// Corre la plantilla de descargas POR UNIDAD y arma las filas con lo que pide
+// el operador: unidad, ubicacion, dia/hora de inicio y fin, duracion y litros.
+async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, token) {
+    const t0 = Date.now();
+    const lista = (unidades || []).slice(0, RX_FUEL_MAX_U);
+    const filas = [];
+    const errores = [];
+    const trozos = rxGeoInfTrozos(desde, hasta, RX_INF_DIAS_TROZO * 86400).slice(0, RX_INF_MAX_TROZOS);
+    let hechas = 0, fallos = 0, conDatos = 0;
+    for (const u of lista) {
+        if (token && token.cancelado) break;
+        let nUni = 0;
+        for (const tr of trozos) {
+            if (token && token.cancelado || filas.length >= RX_FUEL_MAX_EV) break;
+            let r;
+            try { r = await rxInfEjecuta(tpl, { id: u.id, sec: '0' }, tr[0], tr[1], token, 0, def); }
+            catch (e) {
+                fallos++;
+                if (errores.length < 5) errores.push((u.eco ? (u.eco + ': ') : '') + ((e && e.message) || e));
+                continue;
+            }
+            if (r.error && r.error !== 'cancelado') {
+                fallos++;
+                if (errores.length < 5) errores.push((u.eco ? (u.eco + ': ') : '') + rxInfExplicaError(r.error));
+                continue;
+            }
+            const tb = rxFuelTablaSalida(r);
+            if (!tb) continue;
+            const idx = rxFuelMapeaColsDescarga(tb.cols || []);
+            for (const f of (tb.filas || [])) {
+                const cel = (k) => (idx[k] >= 0 && f[idx[k]] != null) ? String(f[idx[k]]) : '';
+                const inicio = cel('ini'), fin = cel('fin');
+                const ms0 = rxFuelParseFecha(inicio), ms1 = rxFuelParseFecha(fin);
+                const dur = (ms0 != null && ms1 != null && ms1 >= ms0) ? (ms1 - ms0) / 1000 : null;
+                filas.push([
+                    u.eco || String(u.id), cel('ubi'), inicio, fin,
+                    (dur != null ? rxInfFmtDur(dur) : '-'), cel('litros'),
+                    cel('iniNiv'), cel('finNiv'), cel('sensor')
+                ]);
+                nUni++;
+                if (filas.length >= RX_FUEL_MAX_EV) break;
+            }
+        }
+        if (nUni) conDatos++;
+        hechas++;
+        if (onProg) onProg(hechas, lista.length, filas.length, u.eco);
+        await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
+    }
+    filas.sort((a, b) => String(b[2]).localeCompare(String(a[2])));
+    return {
+        cols: RX_FUEL_DESC_COLS.slice(), filas: filas,
+        tablas: filas.length ? [{ idx: 0, name: 'descargas', label: 'Descargas', cols: RX_FUEL_DESC_COLS.slice(), filas: filas }] : [],
+        trozos: trozos.length, hechos: hechas, objetos: lista.length, alcance: 'plataforma',
+        fallos: fallos, errores: errores, cacheados: 0, lleno: filas.length >= RX_FUEL_MAX_EV,
+        conSensor: conDatos, sinSensor: lista.length - conDatos, ms: Date.now() - t0
+    };
+}
 // Unidades a barrer cuando el alcance es "toda la flota". Conserva la
 // referencia a la unidad cruda para leer su catalogo de sensores y el nombre
 // completo (para el filtro por marca).
@@ -15420,17 +15549,22 @@ function abrirInformesPlantilla(origen) {
                         '</span></div>';
                     const fOption = (val, txt) => '<button type="button" class="rgi-chip' +
                         (RX_INF.fuel.motor === val ? ' activo' : '') + '" data-fuelmotor="' + esc(val) + '"' + dis + '>' + esc(txt) + '</button>';
+                    // El filtro por marca (unidades con sensor, p. ej. "(SC)")
+                    // aplica a LAS DOS fuentes: plataforma y sensor propio.
+                    const filaMarca = '<div class="rgi-row"><span class="rgi-lb">Sensor</span>' +
+                        '<span class="rgi-busca" style="flex:0 0 auto"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rgi-fuel-marca" class="filtro" style="min-width:96px" placeholder="(SC)" value="' + esc(RX_INF.fuel.marca || '') + '" title="Solo se revisan unidades cuyo nombre contenga esta marca" ' + dis + '>' +
+                        '<i>' + esc(String(nUnMarca)) + '/' + esc(String(nBase)) + '</i></span>' +
+                        (usarPlat ? '' : '<span class="rgi-num">clave <input type="text" id="rgi-fuel-sensor" style="width:96px" placeholder="auto" value="' + esc(RX_INF.fuel.sensor || '') + '" title="Clave o nombre exacto del parametro de nivel (si la autodeteccion falla)" ' + dis + '></span>') +
+                        '<span class="rgi-gen-hint">' + esc(usarPlat
+                            ? 'Solo se barren las unidades marcadas (ej. "(SC)"). La plataforma mide TODOS los sensores de combustible de la unidad.'
+                            : 'Solo se barren las unidades marcadas (ej. "(SC)"). "clave" fuerza el parametro de nivel si el sensor tiene otro nombre.') +
+                        '</span></div>';
                     const opcionesSensor = usarPlat ? '' :
                         ('<div class="rgi-row"><span class="rgi-lb">Caida</span>' +
                         '<span class="rgi-num"><input type="number" min="1" step="1" id="rgi-fuel-litros" value="' + esc(String(RX_INF.fuel.litros)) + '"' + dis + '> litros</span>' +
                         '<span class="rgi-num">en <input type="number" min="1" max="60" step="1" id="rgi-fuel-min" value="' + esc(String(RX_INF.fuel.min)) + '"' + dis + '> min</span>' +
                         '<span class="rgi-num">parada a <input type="number" min="0" max="40" step="1" id="rgi-fuel-vel" value="' + esc(String(RX_INF.fuel.vel)) + '"' + dis + '> km/h</span></div>' +
-                        '<div class="rgi-row"><span class="rgi-lb">Sensor</span>' +
-                        '<span class="rgi-busca" style="flex:0 0 auto"><span class="rondo-usym">' + UIS.filter + '</span>' +
-                        '<input type="text" id="rgi-fuel-marca" class="filtro" style="min-width:96px" placeholder="(SC)" value="' + esc(RX_INF.fuel.marca || '') + '" title="Solo se revisan unidades cuyo nombre contenga esta marca" ' + dis + '>' +
-                        '<i>' + esc(String(nUnMarca)) + '/' + esc(String(nBase)) + '</i></span>' +
-                        '<span class="rgi-num">clave <input type="text" id="rgi-fuel-sensor" style="width:96px" placeholder="auto" value="' + esc(RX_INF.fuel.sensor || '') + '" title="Clave o nombre exacto del parametro de nivel (si la autodeteccion falla)" ' + dis + '></span>' +
-                        '<span class="rgi-gen-hint">' + esc('Solo se barren las unidades marcadas (ej. "(SC)"). "clave" fuerza el parametro de nivel si el sensor tiene otro nombre.') + '</span></div>' +
                         '<div class="rgi-row"><span class="rgi-lb">Calibrar</span>' +
                         '<span class="rgi-num">defectuoso si recorre <input type="number" min="1" max="2000" step="1" id="rgi-fuel-km" value="' + esc(String(RX_INF.fuel.km)) + '"' + dis + '> km sin bajar</span>' +
                         '<span class="rgi-num">consumo min <input type="number" min="0" max="100" step="0.1" id="rgi-fuel-l100" value="' + esc(String(RX_INF.fuel.l100)) + '"' + dis + '> L/100km</span></div>' +
@@ -15439,7 +15573,7 @@ function abrirInformesPlantilla(origen) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc('Cuenta la caida de nivel con la unidad totalmente detenida (motor encendido o apagado). Perdida de referencia: 10 litros en 1-2 minutos. La pestana Sensores marca los sensores defectuosos o alterados.') +
                         '</span></div>');
-                    pasoFuel = paso(4, 'Perdida de combustible', filaFuente + opcionesSensor);
+                    pasoFuel = paso(4, 'Perdida de combustible', filaFuente + filaMarca + opcionesSensor);
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
                 // los ajustes de formato). Es lo que antes no se podia tocar.
@@ -15707,19 +15841,37 @@ function abrirInformesPlantilla(origen) {
                 try {
                     if (esFuel && rxFuelUsaPlataforma()) {
                         // Descargas detectadas por la plataforma: se ejecuta SU
-                        // plantilla de combustible (nivel de combustible /
-                        // descargado) con el mismo motor de informes, forzando
-                        // el modelo POR UNIDAD (su tabla de nivel es por unidad).
+                        // plantilla SOLO con la tabla de descargas y POR UNIDAD,
+                        // y se arman las filas con unidad, ubicacion, fecha/hora
+                        // y duracion.
                         const desc = RX_INF.fuel._desc;
                         RX_INF.zonas = []; RX_INF.eco = ''; RX_INF.filtros = {};
-                        res = await rxInfCorre(desc.tpl, r.desde, r.hasta, (RX_INF.alcance === 'sel' ? (sel || []) : null), (h, t, filas, eco) => {
+                        let defThefts = null;
+                        try {
+                            const datos = await rxInfDatosPlantilla(desc.tpl);
+                            defThefts = rxInfDefSoloTablas(datos, desc.tpl.id, ['unit_thefts']);
+                        } catch (_) { defThefts = null; }
+                        const baseUn = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
+                        const listaUn = rxFuelFiltraMarca(baseUn, RX_INF.fuel.marca);
+                        if (!listaUn.length) {
+                            RX_INF._buscando = false; finProg();
+                            adviceWarn('Sin unidades', RX_INF.fuel.marca
+                                ? ('Ninguna unidad coincide con la marca "' + RX_INF.fuel.marca + '".')
+                                : 'No hay unidades que revisar en ese periodo.');
+                            pinta();
+                            return;
+                        }
+                        const prog = (h, t, filas, eco) => {
                             RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
                             setProg(RX_INF.prog.pct,
                                 'Plataforma \u00b7 ' + desc.tpl.nombre + ' \u00b7 ' + h + '/' + t +
-                                (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
+                                (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' descarga(s)' : ''));
                             const dyn = byId('rgi-dyn');
                             if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
-                        }, RX_INF._token, 'flota');
+                        };
+                        res = defThefts
+                            ? await rxFuelCorrePlataforma(desc.tpl, listaUn, r.desde, r.hasta, defThefts, prog, RX_INF._token)
+                            : await rxInfCorre(desc.tpl, r.desde, r.hasta, listaUn, prog, RX_INF._token, 'flota');
                         RX_INF.fuelPlat = desc.tpl.nombre;
                     } else if (esFuel) {
                         const base = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
