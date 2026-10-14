@@ -14623,6 +14623,30 @@ function rxFuelNum(v) {
     const n = Number(String(v).replace(',', '.'));
     return isFinite(n) ? n : null;
 }
+// Quita picos de UN SOLO dato. La causa tipica de datos incoherentes en el
+// nivel de combustible es un pico aislado (recarga mal reportada, glitch del
+// sensor): 51 -> 220 -> 51 en segundos. Sin esto, el 220 se volvia la
+// referencia y la vuelta al 51 se contaba como una "perdida" de 169 L.
+// Un dato se descarta si se aleja de la media de sus vecinos mucho mas de lo
+// que se diferencian esos vecinos entre si.
+function rxFuelLimpia(muestras) {
+    const arr = (muestras || []).filter((m) => m && m.fuel != null);
+    const out = [];
+    for (let i = 0; i < arr.length; i++) {
+        const a = arr[i];
+        if (i > 0 && i < arr.length - 1) {
+            const p = arr[i - 1], nn = arr[i + 1];
+            if (p.fuel != null && nn.fuel != null && a.fuel != null) {
+                const media = (p.fuel + nn.fuel) / 2;
+                const desv = Math.abs(a.fuel - media);
+                const rango = Math.abs(nn.fuel - p.fuel);
+                if (desv > Math.max(5, rango * 2)) continue;
+            }
+        }
+        out.push(a);
+    }
+    return out;
+}
 // Catalogo de sensores de una unidad. Wialon lo publica en `sens` (flag
 // 0x1000) y puede llegar como objeto o como JSON serializado. Se normaliza a
 // mapa id -> nombre para poder traducir las claves de los parametros.
@@ -14760,6 +14784,27 @@ function rxFuelParamsVistos(msgs, max) {
     });
     return out;
 }
+// Agrupa perdidas contiguas en una sola: una fuga sostenida (varias caidas
+// seguidas, sin recuperar el nivel) es UN evento con su total y su duracion,
+// no diez avisos de una linea. Solo se pegan eventos separados por <= la
+// ventana y sin una subida de por medio (ya garantizado por la referencia).
+function rxFuelAgrupa(eventos, opts) {
+    const win = ((Number((opts || {}).min) > 0) ? Number((opts || {}).min) : 2) * 60;
+    const out = [];
+    for (const e of eventos) {
+        const last = out[out.length - 1];
+        const gap = last ? (e.desde - last.hasta) : -1;
+        if (last && last.motor === e.motor && gap >= 0 && gap <= win) {
+            last.hasta = e.hasta;
+            last.litros += e.litros;
+            last.min = Math.round((last.hasta - last.desde) / 60);
+            last.lat = e.lat; last.lon = e.lon;
+        } else {
+            out.push(Object.assign({}, e));
+        }
+    }
+    return out;
+}
 // ── Deteccion (pura) ────────────────────────────────────────────────────
 // Algoritmo de REFERENCIA + anti-rebote (mejor que "ventana fija por pares"):
 // se mantiene una muestra de referencia (el ultimo nivel alto con la unidad
@@ -14778,7 +14823,7 @@ function rxFuelDetecta(msgs, opts) {
     const vel = (o.vel == null) ? 3 : Number(o.vel);
     const motor = o.motor || 'todos';
     const out = [];
-    const arr = (msgs || []).filter((m) => m && m.t && m.fuel != null).sort((a, b) => a.t - b.t);
+    const arr = rxFuelLimpia(msgs).sort((a, b) => a.t - b.t);
     let ref = -1;
     for (let k = 0; k < arr.length; k++) {
         const cur = arr[k];
@@ -14817,7 +14862,7 @@ function rxFuelDetecta(msgs, opts) {
         }
         ref = k;
     }
-    return out;
+    return rxFuelAgrupa(out, o);
 }
 // ── Descarga del historial (paginada) ───────────────────────────────────
 async function rxFuelFetch(uid, desde, hasta, token) {
@@ -14861,7 +14906,6 @@ function rxFuelZona(lat, lon) {
 function rxFuelMetricas(muestras) {
     const arr = (muestras || []).slice().sort((a, b) => a.t - b.t);
     let km = 0, prev = null;
-    const vals = [];
     for (const m of arr) {
         if (m.lat != null && m.lon != null) {
             if (prev) {
@@ -14873,8 +14917,10 @@ function rxFuelMetricas(muestras) {
             }
             prev = { lat: m.lat, lon: m.lon };
         }
-        if (m.fuel != null) vals.push(m.fuel);
     }
+    // El nivel se mide sobre la serie SIN picos: si no, un pico aislado
+    // dispara el rango y el veredicto del sensor.
+    const vals = rxFuelLimpia(arr).map((m) => m.fuel).filter((v) => v != null);
     const n = vals.length;
     const ini = n ? vals[0] : null;
     const fin = n ? vals[n - 1] : null;
@@ -14884,24 +14930,25 @@ function rxFuelMetricas(muestras) {
     const l100 = (drop != null && km > 0) ? (drop / km) * 100 : null;
     return { km: km / 1000, n: n, ini: ini, fin: fin, min: mn, max: mx, rango: (mx != null && mn != null) ? (mx - mn) : 0, drop: drop, l100: l100 };
 }
-// Veredicto del sensor. La regla pedida: si la unidad RECORRE km y el nivel NO
-// baja (o sube), el sensor esta defectuoso o alterado. Con `l100` (L/100 km)
-// se marca ademas un consumo sospechosamente bajo aunque algo baje.
+// Veredicto del sensor. Conservador a proposito: una recarga (el nivel sube)
+// es normal, no un sensor alterado, y fluctuar no es defecto. Solo se marca
+// DEFECTUOSO cuando el sensor esta claramente congelado (recorre km y el nivel
+// no se mueve nada) o cuando el consumo es imposiblemente bajo.
 function rxFuelVeredicto(met, opts) {
     const o = opts || {};
     const minKm = (Number(o.km) > 0) ? Number(o.km) : 20;
     const minL100 = (Number(o.l100) > 0) ? Number(o.l100) : 0;
     if (!met || !met.n) return { estado: 'Sin datos', detalle: 'no publica nivel de combustible', malo: false };
     if (met.n < 3) return { estado: 'Pocas muestras', detalle: 'solo ' + met.n + ' lectura(s)', malo: false };
-    if (met.km >= minKm && met.drop != null) {
-        if (met.drop < 0) return { estado: 'Alterado', detalle: 'el nivel subio ' + rxInfFmt(-met.drop) + ' L con ' + rxInfFmt(met.km) + ' km', malo: true };
-        if (met.drop === 0) return { estado: 'Defectuoso', detalle: 'recorrio ' + rxInfFmt(met.km) + ' km y el nivel no bajo', malo: true };
-    }
-    if (met.km >= minKm && minL100 > 0 && met.l100 != null && met.l100 < minL100) {
+    if (met.km < minKm) return { estado: 'OK', detalle: 'sin km suficientes para juzgar', malo: false };
+    // Congelado: recorrio km y el nivel no se movio en absoluto.
+    if (met.rango <= 0.6) return { estado: 'Defectuoso', detalle: 'nivel fijo con ' + rxInfFmt(met.km) + ' km', malo: true };
+    // No bajo neto pese a recorrer: puede ser una recarga; se marca a revisar,
+    // no defectuoso.
+    if (met.drop != null && met.drop < -30) return { estado: 'Alterado', detalle: 'subio ' + rxInfFmt(-met.drop) + ' L con ' + rxInfFmt(met.km) + ' km', malo: true };
+    if (met.drop != null && met.drop <= 0) return { estado: 'Revisar', detalle: 'no bajo con ' + rxInfFmt(met.km) + ' km', malo: true };
+    if (minL100 > 0 && met.l100 != null && met.l100 < minL100) {
         return { estado: 'Revisar', detalle: 'consumo ' + rxInfFmt(met.l100) + ' L/100km (bajo)', malo: true };
-    }
-    if (met.rango === 0 && met.km >= minKm) {
-        return { estado: 'Defectuoso', detalle: 'nivel constante con ' + rxInfFmt(met.km) + ' km', malo: true };
     }
     return { estado: 'OK', detalle: '', malo: false };
 }

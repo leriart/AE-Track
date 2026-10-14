@@ -61,7 +61,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
     'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
-    'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos};';
+    'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos,rxFuelLimpia,rxFuelAgrupa};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -426,12 +426,23 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
             { t: base + 60, s: 0, fuel: 88, motor: false },
             { t: base + 120, s: 0, fuel: 99, motor: false }
         ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
-    ok('combustible: una fuga sostenida se parte en perdidas de la ventana',
+    // El pico de un solo dato (51 -> 220 -> 51) se limpia: sin esto se volvia
+    // la referencia y la vuelta al 51 era una "perdida" de 169 L.
+    ok('combustible: el pico aislado se descarta (datos coherentes)',
+        mod.rxFuelLimpia([
+            { t: base, fuel: 51 }, { t: base + 10, fuel: 220 }, { t: base + 20, fuel: 51 }
+        ]).length === 2 &&
+        mod.rxFuelDetecta([
+            { t: base, s: 0, fuel: 51, motor: false },
+            { t: base + 10, s: 0, fuel: 220, motor: false },
+            { t: base + 20, s: 0, fuel: 51, motor: false }
+        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
+    ok('combustible: una fuga sostenida se agrupa en un solo evento',
         mod.rxFuelDetecta([
             { t: base, s: 0, fuel: 100, motor: false },
             { t: base + 60, s: 0, fuel: 89, motor: false },
             { t: base + 120, s: 0, fuel: 79, motor: false }
-        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 2);
+        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 1);
     ok('combustible: si la unidad se movio no cuenta',
         mod.rxFuelDetecta([
             { t: base, s: 0, fuel: 100, motor: false },
@@ -487,11 +498,13 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('combustible: las metricas miden distancia y caida de nivel',
         metMueve.km > 6 && metMueve.drop === 5 && metMueve.n === 3,
         JSON.stringify({ km: metMueve.km, drop: metMueve.drop }));
-    ok('combustible: caminar y no bajar el nivel -> defectuoso',
+    ok('combustible: sensor congelado (nivel fijo con km) -> defectuoso',
         mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0, l100: null, rango: 0 }, { km: 20, l100: 1 }).estado === 'Defectuoso' &&
         mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0, l100: null, rango: 0 }, { km: 20, l100: 1 }).malo === true);
-    ok('combustible: nivel que sube caminando -> alterado',
-        mod.rxFuelVeredicto({ km: 30, n: 5, drop: -4, l100: null, rango: 0 }, { km: 20, l100: 1 }).estado === 'Alterado');
+    ok('combustible: subir mucho caminando -> alterado',
+        mod.rxFuelVeredicto({ km: 30, n: 5, drop: -40, l100: null, rango: 60 }, { km: 20, l100: 1 }).estado === 'Alterado');
+    ok('combustible: no baja neto pero fluctua -> revisar (no defectuoso)',
+        mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0, l100: null, rango: 5 }, { km: 20, l100: 1 }).estado === 'Revisar');
     ok('combustible: consumo normal -> OK y consumo bajo -> revisar',
         mod.rxFuelVeredicto({ km: 30, n: 5, drop: 12, l100: 40, rango: 5 }, { km: 20, l100: 1 }).estado === 'OK' &&
         mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0.3, l100: 1, rango: 5 }, { km: 20, l100: 5 }).estado === 'Revisar');
