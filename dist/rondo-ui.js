@@ -13077,7 +13077,8 @@ const RX_INF = {
         litros: 10,      // caida de nivel que ya cuenta como perdida
         min: 2,          // ventana (min) en la que se produce la caida
         vel: 3,          // km/h: por debajo, la unidad esta detenida
-        motor: 'todos'   // 'todos' | 'on' (encendido) | 'off' (apagado)
+        motor: 'todos',  // 'todos' | 'on' (encendido) | 'off' (apagado)
+        marca: '(SC)'    // solo unidades cuyo nombre contenga esta marca
     },
     fuelSinSensor: false, // la ultima corrida no encontro sensor de nivel
     uniSel: {},          // unidades marcadas para filtrar las filas (vacio = todas)
@@ -14679,10 +14680,16 @@ function rxFuelMsg(m, sens) {
     };
 }
 // ── Deteccion (pura) ────────────────────────────────────────────────────
-// Una caida cuenta si entre la muestra alta y la baja no pasa mas de `min`
-// minutos, no supera `litros` de descenso y la unidad NO se movio durante
-// toda la ventana (velocidad <= `vel` en cada muestra). Se toma la muestra
-// MAS BAJA alcanzada en la ventana para no perder perdidas escalonadas.
+// Algoritmo de REFERENCIA + anti-rebote (mejor que "ventana fija por pares"):
+// se mantiene una muestra de referencia (el ultimo nivel alto con la unidad
+// parada) y, cuando el nivel cae `litros` o mas dentro de `min` minutos SIN
+// que la unidad se mueva, se marca la perdida y la referencia pasa a ser el
+// nuevo nivel bajo. Asi:
+//   - una caida escalonada (10 L + 10 L) se detecta como dos perdidas y no se
+//     solapan ni se cuentan dos veces;
+//   - un pico momentaneo del sensor (baja y vuelve a subir en la ventana) se
+//     descarta como ruido (rebote), que es la causa tipica de falsos eventos;
+//   - una caida mas lenta que la ventana reinicia la referencia y no cuenta.
 function rxFuelDetecta(msgs, opts) {
     const o = opts || {};
     const th = (Number(o.litros) > 0) ? Number(o.litros) : 10;
@@ -14691,29 +14698,43 @@ function rxFuelDetecta(msgs, opts) {
     const motor = o.motor || 'todos';
     const out = [];
     const arr = (msgs || []).filter((m) => m && m.t && m.fuel != null).sort((a, b) => a.t - b.t);
-    for (let i = 0; i < arr.length; i++) {
-        const a = arr[i];
-        if (a.s > vel) continue;              // la unidad ya venia moviendose
-        let idxMin = -1, minF = a.fuel, movio = false;
-        for (let j = i + 1; j < arr.length; j++) {
-            const b = arr[j];
-            if (b.t - a.t > win) break;
-            if (b.s > vel) movio = true;
-            if (b.fuel < minF) { minF = b.fuel; idxMin = j; }
+    let ref = -1;
+    for (let k = 0; k < arr.length; k++) {
+        const cur = arr[k];
+        if (ref < 0) { ref = k; continue; }
+        const r = arr[ref];
+        // Cualquier movimiento invalida la referencia: la perdida tiene que
+        // producirse con la unidad TOTALMENTE detenida.
+        if (cur.s > vel || r.s > vel) { ref = k; continue; }
+        // El nivel sube o se mantiene: nueva referencia (repostaje o calma).
+        // Si se mantiene pero la referencia ya es vieja, se adelanta para que
+        // la ventana mida tiempo real.
+        if (cur.fuel >= r.fuel) {
+            if (cur.fuel > r.fuel || (cur.t - r.t) > win) ref = k;
+            continue;
         }
-        if (movio || idxMin < 0) continue;
-        const caida = a.fuel - minF;
-        if (caida < th) continue;
-        const b = arr[idxMin];
-        const mot = (b.motor == null) ? a.motor : b.motor;
-        if (motor === 'on' && mot !== true) { i = idxMin; continue; }
-        if (motor === 'off' && mot !== false) { i = idxMin; continue; }
-        out.push({
-            desde: a.t, hasta: b.t, litros: caida, min: Math.round((b.t - a.t) / 60),
-            vel: Math.max(0, Math.round(a.s)), lat: b.lat, lon: b.lon, motor: mot
-        });
-        i = idxMin;
-        if (out.length >= RX_FUEL_MAX_EV) break;
+        const caida = r.fuel - cur.fuel;
+        const dt = cur.t - r.t;
+        if (dt > win) { ref = k; continue; }   // caida demasiado lenta
+        if (caida < th) continue;              // aun no llega al umbral
+        const mot = (cur.motor == null) ? r.motor : cur.motor;
+        if (motor === 'on' && mot !== true) { ref = k; continue; }
+        if (motor === 'off' && mot !== false) { ref = k; continue; }
+        // Anti-rebote: si en la ventana siguiente el nivel vuelve a la banda
+        // alta, era un pico del sensor y no una perdida real.
+        let rebote = false;
+        for (let j = k + 1; j < arr.length; j++) {
+            if (arr[j].t - cur.t > win) break;
+            if (arr[j].fuel >= r.fuel - th / 2) { rebote = true; break; }
+        }
+        if (!rebote) {
+            out.push({
+                desde: r.t, hasta: cur.t, litros: caida, min: Math.round(dt / 60),
+                vel: Math.max(0, Math.round(r.s)), lat: cur.lat, lon: cur.lon, motor: mot
+            });
+            if (out.length >= RX_FUEL_MAX_EV) break;
+        }
+        ref = k;
     }
     return out;
 }
@@ -14815,7 +14836,8 @@ function rxFuelTplCombustible(plantillas) {
     return (plantillas || []).filter((t) => t && !t.fuel && re.test(String(t.nombre)))[0] || null;
 }
 // Unidades a barrer cuando el alcance es "toda la flota". Conserva la
-// referencia a la unidad cruda para leer su catalogo de sensores.
+// referencia a la unidad cruda para leer su catalogo de sensores y el nombre
+// completo (para el filtro por marca).
 function rxFuelUnidadesTodas(desde) {
     const out = [];
     for (const u of (APP.unidades || [])) {
@@ -14825,10 +14847,28 @@ function rxFuelUnidadesTodas(desde) {
         let t = 0;
         try { t = (typeof unitState === 'function' ? (unitState(u).t || 0) : 0); } catch (_) { t = 0; }
         if (t > 0 && desde > 0 && t < desde) continue;
-        out.push({ id: String(u.id), eco: (info && (info.eco || info.clave)) || String(u.id), u: u, t: t });
+        out.push({
+            id: String(u.id), eco: (info && (info.eco || info.clave)) || String(u.id),
+            nombre: String(u.nm || u.name || ''), u: u, t: t
+        });
     }
     out.sort((a, b) => (b.t || 0) - (a.t || 0));
     return out;
+}
+// Filtro por marca de sensor en el nombre de la unidad (p. ej. "(SC)"): solo
+// se barren las unidades que la llevan, asi no se consulta toda la flota.
+// Sin marca, pasan todas.
+function rxFuelTieneMarca(o, marca) {
+    const m = norm(marca || '');
+    if (!m) return true;
+    const raw = (o && o.u) || o || {};
+    const txt = norm(String(raw.nm || raw.name || '') + ' ' + String((o && o.eco) || raw.nm || ''));
+    return txt.indexOf(m) >= 0;
+}
+function rxFuelFiltraMarca(lista, marca) {
+    const m = norm(marca || '');
+    if (!m) return lista || [];
+    return (lista || []).filter((o) => rxFuelTieneMarca(o, marca));
 }
 
 /* ====================== INFORMES POR PLANTILLA: UI ====================== */
@@ -14970,6 +15010,12 @@ function abrirInformesPlantilla(origen) {
                 const tpl = RX_INF.tpl;
                 const lista = listaTpl();
                 const nUn = unidadesSel().length;
+                // Unidades del alcance que pasan el filtro de marca (sensor)
+                // del reporte de combustible, para ensenar cuantas se barren.
+                const nUnMarca = rxFuelFiltraMarca(
+                    (RX_INF.alcance === 'sel') ? unidadesSel() : rxFuelUnidadesTodas(0),
+                    RX_INF.fuel.marca).length;
+                const nBase = (RX_INF.alcance === 'sel') ? nUn : (APP.unidades || []).length;
                 const busy = !!RX_INF._buscando;
                 const dis = busy ? ' disabled' : '';
                 const hay = (RX_INF.cols || []).length > 0;
@@ -15063,10 +15109,15 @@ function abrirInformesPlantilla(origen) {
                         '<span class="rgi-num"><input type="number" min="1" step="1" id="rgi-fuel-litros" value="' + esc(String(RX_INF.fuel.litros)) + '"' + dis + '> litros</span>' +
                         '<span class="rgi-num">en <input type="number" min="1" max="60" step="1" id="rgi-fuel-min" value="' + esc(String(RX_INF.fuel.min)) + '"' + dis + '> min</span>' +
                         '<span class="rgi-num">parada a <input type="number" min="0" max="40" step="1" id="rgi-fuel-vel" value="' + esc(String(RX_INF.fuel.vel)) + '"' + dis + '> km/h</span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb">Sensor</span>' +
+                        '<span class="rgi-busca" style="flex:0 0 auto"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rgi-fuel-marca" class="filtro" style="min-width:96px" placeholder="(SC)" value="' + esc(RX_INF.fuel.marca || '') + '" title="Solo se revisan unidades cuyo nombre contenga esta marca" ' + dis + '>' +
+                        '<i>' + esc(String(nUnMarca)) + '/' + esc(String(nBase)) + '</i></span>' +
+                        '<span class="rgi-gen-hint">' + esc('Solo se barren las unidades marcadas con el sensor (ej. "(SC)"). Vacio = todas.') + '</span></div>' +
                         '<div class="rgi-row"><span class="rgi-lb">Motor</span><div class="rgi-chips">' +
                         fOption('todos', 'Da igual') + fOption('on', 'Encendido') + fOption('off', 'Apagado') + '</div></div>' +
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
-                        esc('Cuenta la caida de nivel con la unidad totalmente detenida. La perdida de referencia es de 10 litros en 1-2 minutos; ajusta los valores si tu flota lo necesita.') +
+                        esc('Cuenta la caida de nivel con la unidad totalmente detenida (motor encendido o apagado). Perdida de referencia: 10 litros en 1-2 minutos.') +
                         '</span></div>');
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
@@ -15312,10 +15363,15 @@ function abrirInformesPlantilla(origen) {
                 let res;
                 try {
                     if (esFuel) {
-                        const lista = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
+                        const base = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
+                        // Filtro por marca de sensor: evita barrer la flota
+                        // entera; con "(SC)" solo se consultan esas unidades.
+                        const lista = rxFuelFiltraMarca(base, RX_INF.fuel.marca);
                         if (!lista.length) {
                             RX_INF._buscando = false; finProg();
-                            adviceWarn('Sin unidades', 'No hay unidades que revisar en ese periodo.');
+                            adviceWarn('Sin unidades', RX_INF.fuel.marca
+                                ? ('Ninguna unidad coincide con la marca "' + RX_INF.fuel.marca + '".')
+                                : 'No hay unidades que revisar en ese periodo.');
                             pinta();
                             return;
                         }
@@ -15620,6 +15676,15 @@ function abrirInformesPlantilla(origen) {
                 if (t.id === 'rgi-fuel-litros') { RX_INF.fuel.litros = Math.max(1, Number(t.value) || RX_INF.fuel.litros); return; }
                 if (t.id === 'rgi-fuel-min') { RX_INF.fuel.min = clamp(Number(t.value) || RX_INF.fuel.min, 1, 60); return; }
                 if (t.id === 'rgi-fuel-vel') { RX_INF.fuel.vel = clamp(Number(t.value) || 0, 0, 40); return; }
+                if (t.id === 'rgi-fuel-marca') {
+                    RX_INF.fuel.marca = t.value || '';
+                    // Solo se repinta el contador, para no perder el foco.
+                    const base = (RX_INF.alcance === 'sel') ? unidadesSel() : rxFuelUnidadesTodas(0);
+                    const n = byId('rgi-fuel-marca');
+                    const cont = n && n.parentNode && n.parentNode.querySelector('i');
+                    if (cont) cont.textContent = rxFuelFiltraMarca(base, RX_INF.fuel.marca).length + '/' + base.length;
+                    return;
+                }
                 if (t.dataset && t.dataset.filtro) { RX_INF.filtros[t.dataset.filtro] = t.value || ''; return; }
                 if (t.id === 'rgi-uni-busca') {
                     // Solo se repinta la lista: el campo no pierde el foco.
