@@ -13377,9 +13377,9 @@ function rxInfCacheLimpiar() {
 // recurso dueño importa: dos geocercas de recursos distintos pueden compartir
 // id y no ser la misma.
 function rxInfCacheKey(tpl, o, desde, hasta) {
-    const rid = (o && o.rid != null) ? o.rid : '';
     const id = (o && o.id != null) ? o.id : (o != null ? o : 0);
-    return rxInfClave(tpl) + '|' + rid + '|' + id + '|' + ((o && o.def) ? 'd|' : '') + desde + '|' + hasta;
+    const sec = (o && o.sec != null) ? o.sec : '0';
+    return rxInfClave(tpl) + '|' + id + '|' + sec + '|' + ((o && o.def) ? 'd|' : '') + desde + '|' + hasta;
 }
 // ── Que declara la plantilla (report/get_report_data) ───────────────────
 // La respuesta es una lista de plantillas con su estructura de tablas:
@@ -13750,14 +13750,17 @@ function rxInfCorrigeUnidades(cols, filas) {
 // un intervalo grande nunca tira el informe entero.
 async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
     if (token && token.cancelado) return { filas: [], error: 'cancelado' };
-    const rid = (o && o.rid != null) ? o.rid : tpl.rid;
-    const secId = (o && o.id != null) ? String(o.id) : '0';
+    // Wialon: reportObjectId = item (unidad/geocerca) y reportObjectSecId =
+    // subitem (conductor/remolque; 0 si no hay). El objeto trae `id` (item) y
+    // `sec` (subitem).
+    const objId = (o && o.id != null) ? o.id : tpl.rid;
+    const secId = (o && o.sec != null) ? String(o.sec) : '0';
     const d = def || (o && o.def) || null;
     const enviado = {
         reportResourceId: tpl.rid,
         reportTemplateId: d ? 0 : tpl.id,
         reportTemplate: d || null,
-        reportObjectId: rid, reportObjectSecId: secId,
+        reportObjectId: objId, reportObjectSecId: secId,
         interval: { from: desde, to: hasta, flags: 0 }
     };
     let err = '';
@@ -13944,6 +13947,18 @@ function rxInfFiltrosCargar() {
     const k = rxInfClave(RX_INF.tpl);
     RX_INF.filtros = (k && g[k] && typeof g[k] === 'object') ? Object.assign({}, g[k]) : {};
 }
+// Las plantillas de Wialon pueden venir ATADAS a unidades concretas en su
+// parametro de nivel (`p.bind.avl_unit`). Al construir una definicion propia
+// para ejecutarla por OTRA unidad, ese bind hace que la plataforma responda
+// "code 4": se quita de la copia.
+function rxInfDefSinBind(def) {
+    try {
+        const p = JSON.parse(def.p || '{}') || {};
+        delete p.bind;
+        def.p = JSON.stringify(p);
+    } catch (_) { def.p = '{}'; }
+    return def;
+}
 // Definicion propia de la plantilla (reportTemplateId 0 + reportTemplate) con
 // los filtros elegidos aplicados. Null si no hay filtros: entonces se usa la
 // plantilla tal cual (con la definicion "sin filtros" como ultimo recurso).
@@ -13955,6 +13970,7 @@ function rxInfDefFiltros(datos, tplId, filtros) {
         if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
         const def = JSON.parse(JSON.stringify(t));
         def.id = 0;
+        rxInfDefSinBind(def);
         def.tbl.forEach((tb) => {
             let p = {};
             try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
@@ -13980,6 +13996,7 @@ function rxInfDefSinUnidades(datos, tplId) {
         if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
         const def = JSON.parse(JSON.stringify(t));
         def.id = 0;
+        rxInfDefSinBind(def);
         def.tbl.forEach((tb) => {
             let p = {};
             try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
@@ -13994,15 +14011,17 @@ function rxInfDefSinUnidades(datos, tplId) {
 function rxInfCandidatos(tpl, info, datos, defBase) {
     const out = [];
     const visto = {};
-    const meter = (rid, id, eco, esZona, def) => {
-        if (rid == null) return;
-        const k = String(rid) + '|' + String(id) + (def ? '|d' : '');
+    // `item` es el reportObjectId (unidad/geocerca) y `sec` el reportObjectSecId
+    // (conductor/remolque; '0' si no hay).
+    const meter = (item, sec, eco, esZona, def) => {
+        if (item == null) return;
+        const k = String(item) + '|' + String(sec) + (def ? '|d' : '');
         if (visto[k]) return;
         visto[k] = 1;
-        out.push({ rid: rid, id: String(id == null ? '0' : id), eco: eco || '', esZona: !!esZona, def: def || null });
+        out.push({ id: String(item), sec: String(sec == null ? '0' : sec), eco: eco || '', esZona: !!esZona, def: def || null });
     };
     const zs = rxInfZonasPlataforma();
-    const mkZona = (z, def) => meter((z.rid != null ? z.rid : tpl.rid), z.id, z.eco + (def ? ' (sin filtro)' : ''), true, def);
+    const mkZona = (z, def) => meter(z.id, '0', z.eco + (def ? ' (sin filtro)' : ''), true, def);
     const marcadas = (RX_INF.zonas || []);
     let usar = zs;
     if (zs.length && marcadas.length) {
@@ -14029,7 +14048,7 @@ function rxInfCandidatos(tpl, info, datos, defBase) {
     // 4) La primera unidad de la flota.
     const us = rxInfUnidades(0);
     if (us.length) meter(us[0].id, '0', us[0].eco);
-    // 5) Item + geocerca: la unidad que pisa la zona.
+    // 5) Item + geocerca: la unidad que pisa la zona (unidad con remolque/zona).
     const unidadesPrueba = items.slice(0, 1).concat(us.length ? [us[0].id] : []);
     unidadesPrueba.slice(0, 2).forEach((uid) => prueba.forEach((z) => meter(uid, z.id, z.eco + ' + u' + uid)));
     // 6) La plantilla SIN sus filtros guardados (definicion propia). Es la
@@ -14109,7 +14128,7 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
     const trozos = rxGeoInfTrozos(desde, hasta, RX_INF_DIAS_TROZO * 86400).slice(0, RX_INF_MAX_TROZOS);
     let objs, modo, recortado = false;
     if (unidades && unidades.length) {
-        objs = unidades.map((u) => ({ id: String(u.id), eco: u.eco, rid: (u.rid != null ? u.rid : tpl.rid) }));
+        objs = unidades.map((u) => ({ id: String(u.id), sec: '0', eco: u.eco }));
         modo = 'seleccion';
     } else {
         const datos = await rxInfDatosPlantilla(tpl);
@@ -14135,11 +14154,11 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
             const tipo = (info && info.tipoObj) || '';
             const especiales = await rxInfObjetosTipo(tipo, tpl.rid);
             if (especiales && especiales.length) {
-                objs = especiales.slice(0, RX_INF_MAX_OBJETOS);
+                objs = especiales.slice(0, RX_INF_MAX_OBJETOS).map((o) => ({ id: o.id, sec: '0', eco: o.eco }));
                 modo = 'tipo';
             } else {
-                objs = rxInfUnidades(desde).map((u) => ({ id: u.id, eco: u.eco, rid: tpl.rid }));
-                if (!objs.length) objs = [{ id: '0', eco: '', rid: tpl.rid }];
+                objs = rxInfUnidades(desde).map((u) => ({ id: u.id, sec: '0', eco: u.eco }));
+                if (!objs.length) objs = [{ id: tpl.rid, sec: '0', eco: '' }];
                 modo = 'flota';
             }
         }
