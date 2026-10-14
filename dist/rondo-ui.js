@@ -1733,7 +1733,10 @@
             '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
             // v6.15: informe por geocerca (cruces y paradas dentro). Elige la
             // geocerca, el periodo y los datos; sale en PDF, CSV o Markdown.
-            '<button id="rondo-informe-geo" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas,zonas" title="Informes de la plataforma: ejecuta una plantilla por API, en trozos, sin el limite de tiempo"><span class="rondo-usym">' + UIS.zone + '</span></button>' +
+            // V8.1: acceso OCULTO. Solo aparece tras 5 clics en el logo de la
+            // plataforma (esquina superior izquierda). data-reveal lo mantiene
+            // oculto en paintTools hasta que APP.revelado.informes sea true.
+            '<button id="rondo-informe-geo" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas,zonas" data-reveal="informes" style="display:none" title="Informes de la plataforma: ejecuta una plantilla por API, en trozos, sin el limite de tiempo"><span class="rondo-usym">' + UIS.zone + '</span></button>' +
             '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
@@ -1948,7 +1951,9 @@
              '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
              // v6.15: el informe por geocerca tambien desde aqui; al abrirlo
              // toma las fechas del recorrido que se esta viendo.
-             '<button class="mini" id="rondo-replay-informe-geo" title="Informes de la plataforma en el periodo del recorrido cargado"><span class="rondo-usym">' + UIS.export + '</span> Informe</button>' +
+             // V8.1: mismo acceso oculto que el boton de la barra (5 clics en
+             // el logo). rxPintaReveal lo muestra cuando se desbloquea.
+             '<button class="mini" id="rondo-replay-informe-geo" data-reveal="informes" style="display:none" title="Informes de la plataforma en el periodo del recorrido cargado"><span class="rondo-usym">' + UIS.export + '</span> Informe</button>' +
              '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
@@ -2703,7 +2708,15 @@
         let visibles = 0;
         cont.querySelectorAll('.rondo-tool').forEach((el) => {
             const tabs = String(el.dataset.tabs || '').split(',').map((s) => s.trim()).filter(Boolean);
-            const show = tabs.length === 0 || tabs.indexOf(tab) >= 0;
+            let show = tabs.length === 0 || tabs.indexOf(tab) >= 0;
+            // V8.1: accesos ocultos tras un gesto (p. ej. informes con 5 clics
+            // en el logo). paintTools corre en cada cambio de pestana, asi que
+            // aqui se respeta el estado persistente; sin el helper, se oculta.
+            if (el.dataset.reveal) {
+                let on = false;
+                try { on = (typeof rxRevelado === 'function') && rxRevelado(el.dataset.reveal); } catch (_) { on = false; }
+                if (!on) show = false;
+            }
             el.style.display = show ? '' : 'none';
             if (show) visibles++;
         });
@@ -5075,6 +5088,67 @@
         });
     }
 /* ====================== EVENTOS ====================== */
+    // ── Accesos ocultos (V8.1) ──────────────────────────────────────────
+    // Hay funciones/paneles que no deben estar a la vista de cualquiera. Se
+    // revelan con un gesto discreto y se recuerdan en localStorage, de modo
+    // que una vez desbloqueados no hay que repetirlo.
+    function rxRevelado(clave) {
+        try { return !!(APP.revelado && APP.revelado[clave]); } catch (_) { return false; }
+    }
+    function rxMarcarRevelado(clave) {
+        if (!clave) return;
+        APP.revelado = APP.revelado || {};
+        APP.revelado[clave] = 1;
+        try { writeJSON(LS.revelado, APP.revelado); } catch (_) { /* noop */ }
+    }
+    function rxRevelarInformes() {
+        if (rxRevelado('informes')) return;
+        rxMarcarRevelado('informes');
+        try { paintTools(); } catch (_) { /* noop */ }
+        try { rxPintaReveal(); } catch (_) { /* noop */ }
+        try { adviceOk('Informes de la plataforma', 'Acceso desbloqueado: ya tienes el boton disponible.'); } catch (_) { /* noop */ }
+    }
+    // Aplica el estado de revelado a los elementos con data-reveal que NO van
+    // en la barra de herramientas (esos los gobierna paintTools, que ademas
+    // respeta la pestana activa). Cubre el boton "Informe" del Replay.
+    function rxPintaReveal() {
+        try {
+            document.querySelectorAll('[data-reveal]').forEach((el) => {
+                if (el.classList && el.classList.contains('rondo-tool')) return;
+                el.style.display = rxRevelado(el.dataset.reveal) ? '' : 'none';
+            });
+        } catch (_) { /* noop */ }
+    }
+    // El logo de la plataforma vive en la esquina superior izquierda. Se
+    // detecta por el elemento (clase logo) y, si la instalacion lo pinta con
+    // otra clase, por la POSICION del clic (el logo siempre esta arriba a la
+    // izquierda). Asi el gesto funciona sin depender del DOM exacto.
+    function rxEsLogoPlataforma(e) {
+        const t = e && e.target;
+        if (t && t.closest) {
+            // Un clic sobre el propio panel de Rondo nunca cuenta.
+            try { if (t.closest('#rondo-panel,#rondo-dialog,#rondo-barra,#rondo-ayuda')) return false; } catch (_) { /* noop */ }
+            try {
+                if (t.closest('.top .logo,.logo,#block_top_panel .logo,.logo-wrapper .logo,.header-logo,[class*="logo" i]')) return true;
+            } catch (_) { /* selector no soportado: se cae a la posicion */ }
+        }
+        const x = Number(e && (e.clientX != null ? e.clientX : e.pageX)) || 0;
+        const y = Number(e && (e.clientY != null ? e.clientY : e.pageY)) || 0;
+        return x >= 0 && x <= 320 && y >= 0 && y <= 96;
+    }
+    // 5 clics sobre el logo (con un lapso entre ellos) revelan los informes.
+    function rxBindLogoRevelar() {
+        const NECESARIOS = 5;
+        const VENTANA = 1600;  // ms maximos entre clics para que cuenten seguidos
+        let toques = 0, ultimo = 0;
+        document.addEventListener('click', (e) => {
+            if (!rxEsLogoPlataforma(e)) return;
+            const ahora = Date.now();
+            toques = (ahora - ultimo <= VENTANA) ? (toques + 1) : 1;
+            ultimo = ahora;
+            if (toques >= NECESARIOS) { toques = 0; rxRevelarInformes(); }
+        }, true);
+    }
     function bindEvents() {
         mainBtn.addEventListener('click', () => {
             const ta = byId('rondo-txt'); if (ta) ta.value = '';
@@ -6904,6 +6978,8 @@
         bindCaravanaSelect();
         bindReplay();
         bindRiesgo();
+        try { rxBindLogoRevelar(); } catch (_) { /* noop */ }
+        try { rxPintaReveal(); } catch (_) { /* noop */ }
         try { rxDiagBind(); } catch (_) { /* noop */ }
 
         const ok = await wialonReady();
@@ -12996,6 +13072,14 @@ const RX_INF = {
     zonas: [],           // geocercas marcadas (plantilla de geocercas)
     zonaBusca: '',       // filtro de texto del selector de geocercas
     filtros: {},         // filtros de la plantilla elegidos a mano (units, geozones...)
+    // V8.1: opciones del reporte extra "Perdida de combustible".
+    fuel: {
+        litros: 10,      // caida de nivel que ya cuenta como perdida
+        min: 2,          // ventana (min) en la que se produce la caida
+        vel: 3,          // km/h: por debajo, la unidad esta detenida
+        motor: 'todos'   // 'todos' | 'on' (encendido) | 'off' (apagado)
+    },
+    fuelSinSensor: false, // la ultima corrida no encontro sensor de nivel
     uniSel: {},          // unidades marcadas para filtrar las filas (vacio = todas)
     uniBusca: '',        // buscador del selector de unidades
     colsOcultas: {},     // columnas ocultas de la tabla (indice -> 1)
@@ -13300,6 +13384,21 @@ async function rxInfDatosPlantilla(tpl) {
     try { return await remoteCall('report/get_report_data', { itemId: tpl.rid, col: [String(tpl.id)], flags: 0 }); }
     catch (_) { return null; }
 }
+// Normaliza una lista que la plataforma puede mandar como array, como JSON
+// serializado o como texto separado por comas (los "filter_order" de las
+// plantillas cambian de formato entre versiones). Se usa para sacar la lista
+// de FILTROS que declara la plantilla, ademas de los que vienen guardados.
+function rxInfLista(v) {
+    if (v == null) return [];
+    if (Array.isArray(v)) return v.map((x) => String(x)).filter(Boolean);
+    const s = String(v).trim();
+    if (!s) return [];
+    if (s.charAt(0) === '[') {
+        try { const a = JSON.parse(s); return Array.isArray(a) ? a.map((x) => String(x)).filter(Boolean) : []; }
+        catch (_) { return []; }
+    }
+    return s.split(/[,;|]+/).map((x) => x.trim()).filter(Boolean);
+}
 function rxInfPlantillaInfo(datos, tplId) {
     const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
     const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
@@ -13313,7 +13412,12 @@ function rxInfPlantillaInfo(datos, tplId) {
             n: tb.n || '', l: tb.l || '',
             claves: Array.isArray(claves) ? claves : [],
             etiquetas: Array.isArray(etiquetas) ? etiquetas : [],
-            params: (params && typeof params === 'object') ? params : null
+            params: (params && typeof params === 'object') ? params : null,
+            // Filtros que ADMITE la tabla (filter_order): sin esto solo se
+            // ofrecian los que ya venian guardados en la plantilla. Se
+            // descartan valores que no parezcan una clave de filtro.
+            filtros: rxInfLista(tb.filtros != null ? tb.filtros : (tb.f != null ? tb.f : tb.fl))
+                .filter((k) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(k))
         };
     });
     const ct = String(t.ct || '');
@@ -13437,6 +13541,45 @@ function rxInfUnidades(rangoDesde) {
     // unidades que mas filas pueden traer.
     out.sort((a, b) => (b.t || 0) - (a.t || 0));
     return out;
+}
+// Tipos de objeto que puede pedir una plantilla que NO son unidades ni
+// geocercas (grupos de unidades, conductores, remolques). La plataforma los
+// expone como items de recurso y el informe se ejecuta con su id. Se cachean
+// (nombre -> id) porque resolver un filtro por nombre los necesita.
+const _rxInfItems = {};   // itemsType -> { NOMBRE: id }
+const _RX_INF_TIPOS = {
+    AVL_UNIT_GROUP: 'avl_unit_group', AVL_UNITGROUPS: 'avl_unit_group', UNIT_GROUP: 'avl_unit_group',
+    AVL_DRIVER: 'avl_driver', DRIVER: 'avl_driver',
+    AVL_TRAILER: 'avl_trailer', TRAILER: 'avl_trailer'
+};
+// Lee (y cachea) los items de un tipo. `conDetalle` devuelve ademas la lista
+// con recurso dueño; sin el, solo el mapa nombre -> id.
+async function rxInfItemsTipo(itemsType, conDetalle) {
+    const out = {};
+    const lista = [];
+    try {
+        const r = await remoteCall('core/search_items', {
+            spec: { itemsType: itemsType, propName: 'sys_name', propValueMask: '*', sortType: 'sys_name' },
+            force: 1, flags: (conDetalle ? (1 | 2) : 1), from: 0, to: 0
+        });
+        (r.items || []).forEach((it) => {
+            if (!it || it.id == null) return;
+            const nm = it.nm || it.name || String(it.id);
+            out[norm(nm)] = String(it.id);
+            if (conDetalle) lista.push({ id: String(it.id), eco: it.nm || it.name || String(it.id) });
+        });
+    } catch (_) { /* sin permiso para listar ese tipo */ }
+    _rxInfItems[itemsType] = out;
+    return conDetalle ? lista : out;
+}
+// Objetos de una plantilla de grupo/conductor/remolque, listos para ejecutar
+// (rid = recurso dueño si se conoce, si no el de la plantilla). Null si el
+// tipo no es especial.
+async function rxInfObjetosTipo(tipoObj, ridPlantilla) {
+    const itemsType = _RX_INF_TIPOS[norm(tipoObj)];
+    if (!itemsType) return null;
+    const lista = await rxInfItemsTipo(itemsType, true);
+    return lista.map((it) => ({ id: it.id, eco: it.eco, rid: ridPlantilla }));
 }
 // ── Ejecucion (sincrona, con particion adaptativa) ──────────────────────
 function rxInfEspera(ms) {
@@ -13680,6 +13823,24 @@ function rxInfFiltrosDe(info) {
     (info && info.params ? info.params : []).forEach((p) => meter(p && p.k));
     return out;
 }
+// Precarga los items que necesitan los filtros de la plantilla (grupos,
+// conductores, remolques) para poder resolver sus NOMBRES a id. Se llama una
+// vez al leer la declaracion; sin esto, esos filtros solo admitirian ids.
+async function rxInfPrecargaItems(info) {
+    const keys = rxInfFiltrosDe(info);
+    const want = {};
+    keys.forEach((k) => {
+        const n = norm(k);
+        if (/GROUP|GRUPO/.test(n)) want.avl_unit_group = 1;
+        else if (/DRIVER|CONDUCTOR|PILOTO|OPERADOR/.test(n)) want.avl_driver = 1;
+        else if (/TRAILER|REMOLQUE/.test(n)) want.avl_trailer = 1;
+    });
+    for (const t of Object.keys(want)) {
+        if (!_rxInfItems[t] || !Object.keys(_rxInfItems[t]).length) {
+            try { await rxInfItemsTipo(t, false); } catch (_) { /* noop */ }
+        }
+    }
+}
 // Valor actual de un filtro: lo que tecleo el operador o lo que trae guardado
 // la plantilla.
 function rxInfFiltroValor(info, k) {
@@ -13694,7 +13855,7 @@ function rxInfFiltroResuelve(k, v) {
     const partes = String(v == null ? '' : v).split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
     const ids = partes.map((x) => {
         const n = norm(x);
-        if (/unit|unidad/i.test(k)) {
+        if (/unit|unidad/i.test(k) && !/group|grupo/i.test(k)) {
             for (const u of (APP.unidades || [])) {
                 let i = null;
                 try { i = parseUnitName(u); } catch (_) { i = null; }
@@ -13706,6 +13867,18 @@ function rxInfFiltroResuelve(k, v) {
             for (const z of (APP.zonas || [])) {
                 if (norm(rxGeoInfNombre(z)) === n) return String(z.id);
             }
+        }
+        if (/group|grupo/i.test(k)) {
+            const c = _rxInfItems['avl_unit_group'];
+            if (c && c[n]) return c[n];
+        }
+        if (/driver|conductor|piloto|operador/i.test(k)) {
+            const c = _rxInfItems['avl_driver'];
+            if (c && c[n]) return c[n];
+        }
+        if (/trailer|remolque/i.test(k)) {
+            const c = _rxInfItems['avl_trailer'];
+            if (c && c[n]) return c[n];
         }
         return x;
     }).filter(Boolean);
@@ -13723,11 +13896,15 @@ function rxInfFiltrosEfectivos() {
 }
 // Pista para el campo de un filtro: que se puede escribir.
 function rxInfFiltroPista(k) {
-    if (/unit|unidad/i.test(k)) return 'eco o id de unidad';
-    if (/geozon|geofence|zona/i.test(k)) return 'nombre o id de geocerca';
-    if (/driver|conductor/i.test(k)) return 'id de conductor';
-    if (/trailer|remolque/i.test(k)) return 'id de remolque';
-    if (/group|grupo/i.test(k)) return 'id de grupo';
+    const n = norm(k);
+    if (/UNIT|UNIDAD/.test(n) && !/GROUP|GRUPO/.test(n)) return 'eco o id de unidad';
+    if (/GEOZON|GEOFENCE|ZONA/.test(n)) return 'nombre o id de geocerca';
+    if (/DRIVER|CONDUCTOR|PILOTO|OPERADOR/.test(n)) return 'nombre o id de conductor';
+    if (/TRAILER|REMOLQUE/.test(n)) return 'id o nombre de remolque';
+    if (/GROUP|GRUPO/.test(n)) return 'nombre o id de grupo';
+    if (/ROUTE|RUTA/.test(n)) return 'id de ruta';
+    if (/FECHA|DATE|TIME|HORA/.test(n)) return 'fecha (AAAA-MM-DD)';
+    if (/MIN|DURACION|HORA/.test(n)) return 'minutos';
     return 'id o valor';
 }
 // Filtros por plantilla, persistidos: el operador no tiene que volver a
@@ -13936,9 +14113,19 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
             objs = await rxInfModelo(tpl, info, datos, desde, hasta, token, defBase);
             modo = 'geocercas';
         } else {
-            objs = rxInfUnidades(desde).map((u) => ({ id: u.id, eco: u.eco, rid: tpl.rid }));
-            if (!objs.length) objs = [{ id: '0', eco: '', rid: tpl.rid }];
-            modo = 'flota';
+            // Plantillas atadas a un tipo que NO es unidad (grupos, conductores,
+            // remolques): se ejecutan por sus objetos; si el recurso no los
+            // expone, se cae a la flota para no quedarse sin datos.
+            const tipo = (info && info.tipoObj) || '';
+            const especiales = await rxInfObjetosTipo(tipo, tpl.rid);
+            if (especiales && especiales.length) {
+                objs = especiales.slice(0, RX_INF_MAX_OBJETOS);
+                modo = 'tipo';
+            } else {
+                objs = rxInfUnidades(desde).map((u) => ({ id: u.id, eco: u.eco, rid: tpl.rid }));
+                if (!objs.length) objs = [{ id: '0', eco: '', rid: tpl.rid }];
+                modo = 'flota';
+            }
         }
         if (defBase) objs.forEach((o) => { o.def = defBase; });
     }
@@ -14257,10 +14444,10 @@ function rxInfHTML(t) {
         rxInfCabecera('Rondo', t.titulo || 'Informe de la plataforma',
             esc(t.subtitulo || '') + '<br>Documento de solo lectura') +
         '<div class="kpis">' +
-        kpi(m.filas, 'Filas') + kpi(m.unidades, 'Unidades') +
-        kpi(m.trozos, 'Trozos de 7 dias') + kpi(m.objetos, 'Objetos') +
+        kpi(m.filas, t.esFuel ? 'Perdidas' : 'Filas') + kpi(m.unidades, 'Unidades') +
+        (t.esFuel ? '' : kpi(m.trozos, 'Trozos de 7 dias')) + kpi(m.objetos, 'Objetos') +
         kpi(Math.round((m.ms || 0) / 1000) + ' s', 'Calculo') +
-        (m.fallos ? kpi(m.fallos, 'Trozos con error') : '') +
+        (m.fallos ? kpi(m.fallos, t.esFuel ? 'Con error' : 'Trozos con error') : '') +
         '</div>' +
         '<p class="resumen">' + esc(t.resumen || '') + '</p>' +
         (t.mapa ? '<h2 class="seccion">1. Mapa</h2>' + t.mapa : '') +
@@ -14346,7 +14533,7 @@ function rxInfResumenLinea(v) {
         v.total + ' fila(s)' +
         (v.iUni >= 0 ? ', ' + v.unidades + ' unidad(es)' : '') +
         (v.iZona >= 0 ? ', ' + v.zonas + ' geocerca(s)' : '') + ' \u00b7 ' +
-        m.trozos + ' trozos \u00b7 ' + Math.round(m.ms / 1000) + ' s' +
+        (m.trozos ? (m.trozos + ' trozos \u00b7 ') : '') + Math.round(m.ms / 1000) + ' s' +
         (m.cacheados ? ' \u00b7 ' + m.cacheados + ' ya estaban en cache' : '') +
         (m.fallos ? ' \u00b7 ' + m.fallos + ' trozo(s) con error' : '');
 }
@@ -14393,6 +14580,257 @@ function rxInfTablaHTML(cols, filas, max) {
     }).join('');
     return '<table><thead><tr>' + cab + '</tr></thead><tbody>' + cuerpo + '</tbody></table>';
 }
+/* ====================== PERDIDA DE COMBUSTIBLE (V8.1) ======================
+ * Reporte extra dentro de "Informes de la plataforma". Lee el historial de la
+ * plataforma (messages/load_interval) y busca CAIDAS del nivel de combustible
+ * con la unidad TOTALMENTE DETENIDA (velocidad <= umbral). El motor puede
+ * estar encendido o apagado: da igual, lo que importa es que la unidad no se
+ * mueva (asi se descartan las oscilaciones por movimiento del tanque).
+ *
+ * Una perdida cuenta cuando el nivel cae al menos 10 litros dentro de una
+ * ventana de 2 minutos (lo que se pidio; umbral y ventana son configurables
+ * en la pantalla).
+ *
+ * Si una unidad no publica sensor de nivel de combustible NO se inventa nada:
+ * se avisa y se ofrece ejecutar una plantilla de combustible de la plataforma
+ * (el fallback acordado). El nucleo de deteccion es puro y se prueba aparte.
+ */
+const RX_FUEL_MAX_U = 3000;     // tope de unidades por barrido
+const RX_FUEL_MSGS = 5000;      // mensajes por peticion (load_interval)
+const RX_FUEL_PAGS = 30;        // paginas por unidad
+const RX_FUEL_MAX_EV = 5000;    // tope de eventos acumulados
+// Nombres tipicos del sensor de nivel de combustible (se busca tambien en el
+// catalogo de sensores de la unidad cuando el parametro llega como id).
+const RX_FUEL_RE = /(COMBUSTIBLE|FUEL|DIESEL|GASOLINA|GASOLINE|NIVEL|TANQUE|TANK|LEVEL|LITROS?|LITERS?|LITRES?)/;
+// Nombres de sensor de motor (una copia local: la de Replay vive en otro
+// fragmento y este nucleo debe poder probarse aislado).
+const RX_FUEL_MOTOR_KEYS = ['engine', 'ignition', 'acc', 'motor', 'encendido', 'engineoperation', 'ignicion'];
+const RX_FUEL_COLS = ['Unidad', 'Fecha y hora', 'Litros', 'Minutos', 'Velocidad', 'Motor', 'Coordenadas', 'Zona'];
+// ── Lectura del mensaje ─────────────────────────────────────────────────
+function rxFuelNum(v) {
+    if (v == null || v === '') return null;
+    if (typeof v === 'object') {
+        if (v.v != null) return rxFuelNum(v.v);
+        if (v.n != null) return rxFuelNum(v.n);
+        return null;
+    }
+    const n = Number(String(v).replace(',', '.'));
+    return isFinite(n) ? n : null;
+}
+// Catalogo de sensores de la unidad: id -> nombre. Wialon lo publica en
+// `sens` cuando se pide con los flags adecuados; si no esta, se devuelve {}.
+function rxFuelSensores(u) {
+    const out = {};
+    const sens = u && (u.sens || u.sensors);
+    if (sens && typeof sens === 'object') {
+        Object.keys(sens).forEach((id) => {
+            const s = sens[id];
+            const n = (s && (s.n || s.name)) || '';
+            if (n) out[String(id)] = String(n);
+        });
+    }
+    return out;
+}
+// Nombre del parametro: si la clave es un id numerico y hay catalogo, se
+// traduce al nombre del sensor.
+function rxFuelNombre(k, sens) {
+    const s = String(k == null ? '' : k);
+    return (/^\d+$/.test(s) && sens && sens[s]) ? sens[s] : s;
+}
+// Nivel de combustible de un mensaje (null si no trae sensor de nivel).
+function rxFuelNivel(m, sens) {
+    const p = (m && (m.params || m.p)) || null;
+    if (!p || typeof p !== 'object') return null;
+    for (const k of Object.keys(p)) {
+        if (!RX_FUEL_RE.test(norm(rxFuelNombre(k, sens)))) continue;
+        const v = rxFuelNum(p[k]);
+        if (v != null) return v;
+    }
+    return null;
+}
+// Estado del motor (true encendido / false apagado / null sin dato).
+function rxFuelMotor(m, sens) {
+    if (!m) return null;
+    if (m.eng === true || m.eng === false) return m.eng;
+    const p = m.params || m.p;
+    if (!p || typeof p !== 'object') return null;
+    for (const k of Object.keys(p)) {
+        const kk = norm(rxFuelNombre(k, sens)).replace(/[^A-Z0-9]/g, '').toLowerCase();
+        if (RX_FUEL_MOTOR_KEYS.indexOf(kk) < 0) continue;
+        const v = p[k];
+        if (v === true || v === 1) return true;
+        if (v === false || v === 0) return false;
+        const s = String(v).trim().toLowerCase();
+        if (s === '1' || s === 'on' || s === 'true' || s === 'encendido') return true;
+        if (s === '0' || s === 'off' || s === 'false' || s === 'apagado') return false;
+    }
+    return null;
+}
+// Una muestra del historial: tiempo, posicion, velocidad, nivel y motor.
+function rxFuelMsg(m, sens) {
+    if (!m || !m.pos) return null;
+    const t = Number(m.t) || 0;
+    if (!t) return null;
+    return {
+        t: t, lat: (m.pos.y != null && isFinite(+m.pos.y)) ? +m.pos.y : null,
+        lon: (m.pos.x != null && isFinite(+m.pos.x)) ? +m.pos.x : null,
+        s: Number(m.pos.s) || 0,
+        fuel: rxFuelNivel(m, sens), motor: rxFuelMotor(m, sens)
+    };
+}
+// ── Deteccion (pura) ────────────────────────────────────────────────────
+// Una caida cuenta si entre la muestra alta y la baja no pasa mas de `min`
+// minutos, no supera `litros` de descenso y la unidad NO se movio durante
+// toda la ventana (velocidad <= `vel` en cada muestra). Se toma la muestra
+// MAS BAJA alcanzada en la ventana para no perder perdidas escalonadas.
+function rxFuelDetecta(msgs, opts) {
+    const o = opts || {};
+    const th = (Number(o.litros) > 0) ? Number(o.litros) : 10;
+    const win = ((Number(o.min) > 0) ? Number(o.min) : 2) * 60;
+    const vel = (o.vel == null) ? 3 : Number(o.vel);
+    const motor = o.motor || 'todos';
+    const out = [];
+    const arr = (msgs || []).filter((m) => m && m.t && m.fuel != null).sort((a, b) => a.t - b.t);
+    for (let i = 0; i < arr.length; i++) {
+        const a = arr[i];
+        if (a.s > vel) continue;              // la unidad ya venia moviendose
+        let idxMin = -1, minF = a.fuel, movio = false;
+        for (let j = i + 1; j < arr.length; j++) {
+            const b = arr[j];
+            if (b.t - a.t > win) break;
+            if (b.s > vel) movio = true;
+            if (b.fuel < minF) { minF = b.fuel; idxMin = j; }
+        }
+        if (movio || idxMin < 0) continue;
+        const caida = a.fuel - minF;
+        if (caida < th) continue;
+        const b = arr[idxMin];
+        const mot = (b.motor == null) ? a.motor : b.motor;
+        if (motor === 'on' && mot !== true) { i = idxMin; continue; }
+        if (motor === 'off' && mot !== false) { i = idxMin; continue; }
+        out.push({
+            desde: a.t, hasta: b.t, litros: caida, min: Math.round((b.t - a.t) / 60),
+            vel: Math.max(0, Math.round(a.s)), lat: b.lat, lon: b.lon, motor: mot
+        });
+        i = idxMin;
+        if (out.length >= RX_FUEL_MAX_EV) break;
+    }
+    return out;
+}
+// ── Descarga del historial (paginada) ───────────────────────────────────
+async function rxFuelFetch(uid, desde, hasta, token) {
+    const msgs = [];
+    let t0 = desde;
+    for (let pag = 0; pag < RX_FUEL_PAGS; pag++) {
+        if (token && token.cancelado) break;
+        const r = await remoteCall('messages/load_interval', {
+            itemId: uid, timeFrom: t0, timeTo: hasta,
+            // Mismo flags que usa el Replay (probado con esta instalacion):
+            // cada mensaje trae posicion y parametros de sensores.
+            flags: 1, flagsMask: 1, loadCount: RX_FUEL_MSGS
+        });
+        const parte = (r && r.messages) || [];
+        if (!parte.length) break;
+        let ult = 0;
+        for (const m of parte) { const t = Number(m && m.t) || 0; if (t > ult) ult = t; }
+        msgs.push.apply(msgs, parte);
+        if (parte.length < RX_FUEL_MSGS || !ult || ult <= t0) break;
+        t0 = ult + 1;
+    }
+    return msgs;
+}
+// ── Formato de salida ───────────────────────────────────────────────────
+function rxFuelFecha(seg) {
+    try {
+        const d = new Date((Number(seg) || 0) * 1000);
+        const p2 = (x) => (x < 10 ? '0' + x : String(x));
+        return d.getFullYear() + '-' + p2(d.getMonth() + 1) + '-' + p2(d.getDate()) + ' ' +
+            p2(d.getHours()) + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds());
+    } catch (_) { return String(seg); }
+}
+function rxFuelZona(lat, lon) {
+    if (lat == null || lon == null) return '';
+    try { return (typeof zoneAt === 'function') ? (zoneAt(lat, lon) || '') : ''; } catch (_) { return ''; }
+}
+// ── Ejecucion del reporte ───────────────────────────────────────────────
+// `unidades` es la lista [{id, eco, u}] a barrer. Devuelve la forma que ya
+// entiende la pantalla de informes (cols/filas/tablas/meta).
+async function rxFuelCorre(unidades, desde, hasta, opts, onProg, token) {
+    const t0 = Date.now();
+    const lista = (unidades || []).slice(0, RX_FUEL_MAX_U);
+    const filas = [];
+    const errores = [];
+    let conSensor = 0, sinSensor = 0, hechas = 0;
+    const fecha = rxFuelFecha;
+    for (const u of lista) {
+        if (token && token.cancelado) break;
+        const raw = u.u || u;
+        const sens = rxFuelSensores(raw);
+        let msgs = [];
+        try { msgs = await rxFuelFetch(u.id, desde, hasta, token); }
+        catch (err) {
+            if (errores.length < 5) errores.push((u.eco ? (u.eco + ': ') : '') + ((err && err.message) || err));
+            hechas++;
+            if (onProg) onProg(hechas, lista.length, filas.length, u.eco);
+            continue;
+        }
+        const muestras = [];
+        for (const m of msgs) { const x = rxFuelMsg(m, sens); if (x) muestras.push(x); }
+        if (muestras.some((m) => m.fuel != null)) conSensor++; else sinSensor++;
+        const evs = rxFuelDetecta(muestras, opts);
+        for (const e of evs) {
+            filas.push([
+                u.eco || String(u.id),
+                fecha(e.desde),
+                rxInfFmt(e.litros),
+                e.min,
+                rxInfFmt(e.vel),
+                (e.motor === true ? 'Encendido' : (e.motor === false ? 'Apagado' : '-')),
+                (e.lat != null && e.lon != null) ? (e.lat.toFixed(5) + ', ' + e.lon.toFixed(5)) : '',
+                rxFuelZona(e.lat, e.lon)
+            ]);
+            if (filas.length >= RX_FUEL_MAX_EV) break;
+        }
+        hechas++;
+        if (onProg) onProg(hechas, lista.length, filas.length, u.eco);
+        await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
+    }
+    filas.sort((a, b) => String(b[1]).localeCompare(String(a[1])));
+    return {
+        cols: RX_FUEL_COLS.slice(),
+        filas: filas,
+        tablas: filas.length ? [{ idx: 0, name: 'perdidas', label: 'Perdidas', cols: RX_FUEL_COLS.slice(), filas: filas }] : [],
+        trozos: 0, hechos: hechas, objetos: lista.length, alcance: 'fuel',
+        fallos: errores.length, errores: errores, cacheados: 0, lleno: false,
+        conSensor: conSensor, sinSensor: sinSensor, ms: Date.now() - t0
+    };
+}
+// Etiqueta de la plantilla integrada (aparece en la lista de la pantalla).
+const RX_FUEL_TPL = { rid: '__fuel__', id: '__fuel__', nombre: 'Perdida de combustible', fuel: true };
+function rxFuelEsTpl(tpl) { return !!(tpl && tpl.fuel); }
+// Mejor plantilla de la plataforma que parece de combustible (fallback cuando
+// ninguna unidad publica sensor de nivel).
+function rxFuelTplCombustible(plantillas) {
+    const re = /(COMBUSTIBLE|FUEL|CONSUMO|TANQUE|DIESEL|GASOLINA|RELLENO|CARGA)/i;
+    return (plantillas || []).filter((t) => t && !t.fuel && re.test(String(t.nombre)))[0] || null;
+}
+// Unidades a barrer cuando el alcance es "toda la flota". Conserva la
+// referencia a la unidad cruda para leer su catalogo de sensores.
+function rxFuelUnidadesTodas(desde) {
+    const out = [];
+    for (const u of (APP.unidades || [])) {
+        if (!u || u.id == null) continue;
+        let info = null;
+        try { info = parseUnitName(u); } catch (_) { info = null; }
+        let t = 0;
+        try { t = (typeof unitState === 'function' ? (unitState(u).t || 0) : 0); } catch (_) { t = 0; }
+        if (t > 0 && desde > 0 && t < desde) continue;
+        out.push({ id: String(u.id), eco: (info && (info.eco || info.clave)) || String(u.id), u: u, t: t });
+    }
+    out.sort((a, b) => (b.t || 0) - (a.t || 0));
+    return out;
+}
+
 /* ====================== INFORMES POR PLANTILLA: UI ====================== */
 // Pantalla por pasos: 1) elegir plantilla  2) periodo  3) objetos/filtros
 // 4) ejecutar y ver resultados con sus salidas. Todo lo que muestra el boton
@@ -14451,14 +14889,18 @@ function abrirInformesPlantilla(origen) {
                     try { info = parseUnitName(u); } catch (_) { continue; }
                     if (!info || u.id == null) continue;
                     const clave = info.eco || info.placa || String(info.id);
-                    if (sel.has(clave) || sel.has(info.eco) || sel.has(String(info.id))) out.push({ id: u.id, eco: info.eco || clave, rid: RX_INF.tpl ? RX_INF.tpl.rid : null });
+                    if (sel.has(clave) || sel.has(info.eco) || sel.has(String(info.id))) out.push({ id: u.id, eco: info.eco || clave, rid: RX_INF.tpl ? RX_INF.tpl.rid : null, u: u });
                 }
                 return out;
             };
             const listaTpl = () => {
                 const q = norm(RX_INF.busca || '');
-                return q ? plantillas.filter((t) => norm(t.nombre).indexOf(q) >= 0) : plantillas;
+                if (!q) return plantillas;
+                // La plantilla integrada (combustible) siempre se ofrece.
+                return plantillas.filter((t) => t.fuel || norm(t.nombre).indexOf(q) >= 0);
             };
+            // Etiqueta secundaria de una plantilla en la lista.
+            const tplSub = (t) => (t && t.fuel) ? 'reporte integrado' : ('#' + (t ? t.id : ''));
             // Rango elegido en segundos (el que espera exec_report).
             const rangoS = () => {
                 const ahora = Math.floor(Date.now() / 1000);
@@ -14493,6 +14935,14 @@ function abrirInformesPlantilla(origen) {
             const panelDecl = () => {
                 const d = RX_INF.decl;
                 if (!RX_INF.tpl) return '';
+                if (rxFuelEsTpl(RX_INF.tpl)) {
+                    return '<div class="rgi-sonda"><div class="rgi-sonda-t"><b>Perdida de combustible</b>' +
+                        '<span>reporte integrado</span></div>' +
+                        '<div class="rgi-campos"><span class="rgi-campo t-texto">Caidas de nivel con la unidad detenida</span>' +
+                        '<span class="rgi-campo">10 L en 2 min (ajustable)</span>' +
+                        '<span class="rgi-campo">Motor encendido o apagado</span>' +
+                        '<span class="rgi-campo t-numero">Sensor de nivel de la plataforma</span></div></div>';
+                }
                 const pista = rxInfPista(RX_INF.tpl);
                 const ETQ = { geocercas: 'Geocercas', vehiculos: 'Veh\u00edculos', mixto: 'Veh\u00edculos y geocercas', otro: 'Datos generales' };
                 const cl = d ? rxInfClasifica(d.columnas || [], []) : null;
@@ -14523,17 +14973,20 @@ function abrirInformesPlantilla(origen) {
                 const busy = !!RX_INF._buscando;
                 const dis = busy ? ' disabled' : '';
                 const hay = (RX_INF.cols || []).length > 0;
+                const esFuel = rxFuelEsTpl(tpl);
                 const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.export + '</span>' +
                     '<div class="rgi-herot"><b>' + esc(tpl ? tpl.nombre : 'Informes de la plataforma') + '</b>' +
                     '<span>' + esc(tpl
-                        ? 'Ejecutada por report/exec_report, en trozos de ' + RX_INF_DIAS_TROZO + ' d\u00edas para no chocar con el l\u00edmite de tiempo'
+                        ? (esFuel
+                            ? 'Busca caidas de nivel con la unidad detenida (motor encendido o apagado)'
+                            : 'Ejecutada por report/exec_report, en trozos de ' + RX_INF_DIAS_TROZO + ' d\u00edas para no chocar con el l\u00edmite de tiempo')
                         : 'Elige una plantilla de las que ya tienes en AE-Track') + '</span></div>' +
-                    (tpl ? '<i class="rgi-ori">API</i>' : '') + '</div>';
+                    (tpl ? '<i class="rgi-ori' + (esFuel ? ' o-app' : '') + '">' + (esFuel ? 'Integrado' : 'API') + '</i>' : '') + '</div>';
                 // Paso 1: plantilla.
                 const listaHtml = '<div class="rgi-tpls" id="rgi-lista">' + (plantillas.length
                     ? lista.map((t) => '<div class="rgi-tpl' + (rxInfClave(t) === rxInfClave(tpl) ? ' activo' : '') + '">' +
                         '<button type="button" class="rgi-tpl-sel" data-tpl="' + esc(rxInfClave(t)) + '"' + dis + '>' +
-                        '<b>' + esc(t.nombre) + '</b><i>#' + esc(t.id) + '</i></button>' +
+                        '<b>' + esc(t.nombre) + '</b><i>' + esc(tplSub(t)) + '</i></button>' +
                         '<button type="button" class="rgi-tpl-run" data-tplrun="' + esc(rxInfClave(t)) + '" title="Ejecutar esta plantilla"' + dis + '>' +
                         '<span class="rondo-usym">' + UIS.play + '</span></button>' +
                         '</div>').join('')
@@ -14595,13 +15048,32 @@ function abrirInformesPlantilla(origen) {
                         (nUn ? ' title="Solo las ' + nUn + ' seleccionadas"' : ' title="Ning\u00fan unidad seleccionada"') + '>' +
                         'Solo seleccionadas (' + nUn + ')</button></div></div>' +
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
-                        esc('La plantilla se ejecuta unidad por unidad y por trozos; el resultado se une.') + '</span></div>');
+                        esc(esFuel
+                            ? 'Se recorre el historial de cada unidad; con flotas grandes acota el periodo o las unidades.'
+                            : 'La plantilla se ejecuta unidad por unidad y por trozos; el resultado se une.') + '</span></div>');
+                }
+                // Paso 4a: opciones del reporte de combustible (umbral, ventana
+                // y estado del motor). Solo cuando la plantilla es la integrada.
+                let pasoFuel = '';
+                if (esFuel) {
+                    const fOption = (val, txt) => '<button type="button" class="rgi-chip' +
+                        (RX_INF.fuel.motor === val ? ' activo' : '') + '" data-fuelmotor="' + esc(val) + '"' + dis + '>' + esc(txt) + '</button>';
+                    pasoFuel = paso(4, 'Perdida de combustible',
+                        '<div class="rgi-row"><span class="rgi-lb">Caida</span>' +
+                        '<span class="rgi-num"><input type="number" min="1" step="1" id="rgi-fuel-litros" value="' + esc(String(RX_INF.fuel.litros)) + '"' + dis + '> litros</span>' +
+                        '<span class="rgi-num">en <input type="number" min="1" max="60" step="1" id="rgi-fuel-min" value="' + esc(String(RX_INF.fuel.min)) + '"' + dis + '> min</span>' +
+                        '<span class="rgi-num">parada a <input type="number" min="0" max="40" step="1" id="rgi-fuel-vel" value="' + esc(String(RX_INF.fuel.vel)) + '"' + dis + '> km/h</span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb">Motor</span><div class="rgi-chips">' +
+                        fOption('todos', 'Da igual') + fOption('on', 'Encendido') + fOption('off', 'Apagado') + '</div></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        esc('Cuenta la caida de nivel con la unidad totalmente detenida. La perdida de referencia es de 10 litros en 1-2 minutos; ajusta los valores si tu flota lo necesita.') +
+                        '</span></div>');
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
                 // los ajustes de formato). Es lo que antes no se podia tocar.
                 const filtrosKeys = rxInfFiltrosDe(RX_INF.decl);
                 let pasoFiltros = '';
-                if (tpl && filtrosKeys.length) {
+                if (tpl && !esFuel && filtrosKeys.length) {
                     pasoFiltros = paso(4, 'Filtros de la plantilla',
                         '<div class="rgi-filtros">' +
                         filtrosKeys.map((k) => '<label class="rgi-filtro">' +
@@ -14613,7 +15085,7 @@ function abrirInformesPlantilla(origen) {
                         esc('Aceptan ids o nombres separados por comas (ej. "CDOS.4286, 105"). Los ajustes de la plataforma (address_format, us_units, averaging...) no filtran nada y no se listan.') +
                         '</span></div>');
                 }
-                const nRes = filtrosKeys.length ? 5 : 4;
+                const nRes = (esFuel || filtrosKeys.length) ? 5 : 4;
                 // Avisos.
                 const avisos = [];
                 if (RX_INF.alcance === 'sel' && !nUn && !esGeo) avisos.push(esc('No hay unidades seleccionadas: usa "Toda la flota" o selecciona unidades en la lista.'));
@@ -14623,10 +15095,17 @@ function abrirInformesPlantilla(origen) {
                 if (RX_INF.meta && RX_INF.meta.lleno) avisos.push(esc('Se alcanz\u00f3 el tope de ' + Math.round(RX_INF_MAX_FILAS / 1000) + 'k filas: acorta el periodo.'));
                 if (hay) {
                     const vacias = rxInfColumnasVacias(v.cols, v.filas);
-                    if (vacias.length && vacias.length < v.cols.length) {
+                    if (!esFuel && vacias.length && vacias.length < v.cols.length) {
                         avisos.push(esc('Columnas sin datos: ' + vacias.slice(0, 4).join(', ') +
                             '. Suele ser que a la plantilla le falta un filtro que solo puedes poner en la plataforma.'));
                     }
+                }
+                // Combustible sin sensor: se avisa y se ofrece la plantilla de
+                // combustible de la plataforma como respaldo.
+                if (esFuel && RX_INF.fuelSinSensor) {
+                    const ft = rxFuelTplCombustible(plantillas);
+                    avisos.push(esc('Ninguna unidad del alcance publica nivel de combustible (sensor). Prueba otras unidades o ejecuta una plantilla de combustible.') +
+                        (ft ? ' <button type="button" class="mini" id="rgi-fuel-tpl" data-tpl="' + esc(rxInfClave(ft)) + '">usar "' + esc(ft.nombre) + '"</button>' : ''));
                 }
                 if (RX_INF.diag && RX_INF.diag.error) {
                     avisos.push('Ultimo intento: ' + esc(RX_INF.diag.enviado
@@ -14665,10 +15144,12 @@ function abrirInformesPlantilla(origen) {
                       '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar</b><i>conserva lo ya calculado</i></button>'
                     : '<button type="button" class="rgi-btn gen' + (tpl ? ' pulsa' : '') + '" id="rgi-ejecutar"' + (tpl ? '' : ' disabled') + '>' +
                       '<span class="rondo-usym">' + UIS.play + '</span><b>' + (hay ? 'Volver a ejecutar' : 'Ejecutar informe') + '</b>' +
-                      '<i>' + nTrozos + ' trozos de ' + RX_INF_DIAS_TROZO + ' d\u00edas</i></button>';
+                      '<i>' + esc(esFuel ? ('historial unidad por unidad') : (nTrozos + ' trozos de ' + RX_INF_DIAS_TROZO + ' d\u00edas')) + '</i></button>';
                 const barraEjec = '<div class="rgi-generar">' + ejecutar +
                     '<span class="rgi-gen-hint">' + esc(tpl
-                        ? (busy ? 'Calculando\u2026 puedes cancelar cuando quieras.' : 'La plataforma calcula cada trozo; el resultado se guarda en este navegador.')
+                        ? (busy ? 'Calculando\u2026 puedes cancelar cuando quieras.'
+                            : (esFuel ? 'Se descarga el historial de cada unidad y se detectan las caidas; puede tardar en flotas grandes.'
+                                : 'La plataforma calcula cada trozo; el resultado se guarda en este navegador.'))
                         : 'Selecciona una plantilla para empezar.') + '</span></div>';
                 // Progreso dentro del cuerpo.
                 const prog = RX_INF.prog && RX_INF.prog.activo
@@ -14750,7 +15231,7 @@ function abrirInformesPlantilla(origen) {
                     '<span class="rondo-usym">' + UIS.clear + '</span> Vaciar resultados guardados</button></div>' : '';
                 return '<div class="rgi">' + hero + paso1 + prog +
                     ((avisos.length) ? '<div class="rgi-aviso">' + avisos.join(' ') + '</div>' : '') +
-                    paso2 + paso3 + pasoFiltros + barraEjec +
+                    paso2 + paso3 + pasoFuel + pasoFiltros + barraEjec +
                     (hay ? barraVista + '<div id="rgi-dyn">' + kpis + resumen + tabla + '</div>' + salidas : '<div id="rgi-dyn">' + tabla + '</div>') +
                     '</div>';
             };
@@ -14778,16 +15259,21 @@ function abrirInformesPlantilla(origen) {
                 pinta();
                 let ok = true;
                 try { plantillas = await rxInfPlantillas(); } catch (_) { plantillas = []; ok = false; }
+                // La plantilla integrada de combustible va primero: es el
+                // "reporte extra" del dialogo.
+                plantillas = [RX_FUEL_TPL].concat(plantillas);
                 RX_INF._cargadas = true;
                 if (!RX_INF.tpl && plantillas.length) { RX_INF.tpl = plantillas[0]; rxInfFiltrosCargar(); }
                 RX_INF._buscando = false;
                 pinta();
-                if (plantillas.length && !ok) adviceWarn('Sin plantillas', 'No se pudieron leer las plantillas de la plataforma.');
+                if (plantillas.length > 1 && !ok) adviceWarn('Sin plantillas', 'No se pudieron leer las plantillas de la plataforma.');
                 if (RX_INF.tpl) declara();
             };
             // Lee lo que declara la plantilla (columnas, tipo, filtros).
             const declara = async () => {
                 if (!RX_INF.tpl) return;
+                // La plantilla integrada no se lee de la plataforma.
+                if (rxFuelEsTpl(RX_INF.tpl)) { RX_INF.decl = null; RX_INF._declKey = 'fuel'; return; }
                 const t = RX_INF.tpl;
                 const key = 'decl|' + rxInfClave(t);
                 if (RX_INF._declKey === key) return;
@@ -14797,6 +15283,11 @@ function abrirInformesPlantilla(origen) {
                 if (RX_INF.tpl && rxInfClave(RX_INF.tpl) !== rxInfClave(t)) return;
                 RX_INF.decl = info;
                 RX_INF._declKey = key;
+                // Con la declaracion se saben los filtros: se precargan los
+                // items (grupos/conductores/remolques) para poder resolverlos
+                // por nombre, no solo por id.
+                try { if (info) await rxInfPrecargaItems(info); } catch (_) { /* noop */ }
+                if (RX_INF.tpl && rxInfClave(RX_INF.tpl) !== rxInfClave(t)) return;
                 pinta();
             };
             const ejecutar = async () => {
@@ -14805,12 +15296,14 @@ function abrirInformesPlantilla(origen) {
                 if (RX_INF._buscando) return;
                 const r = rangoS();
                 if (!(r.hasta > r.desde)) { adviceWarn('Rango inv\u00e1lido', 'El fin debe ser posterior al inicio.'); return; }
+                const esFuel = rxFuelEsTpl(RX_INF.tpl);
                 const esGeo = rxInfEsDeGeocercas();
                 const sel = (!esGeo && RX_INF.alcance === 'sel') ? unidadesSel() : null;
-                if (!esGeo && RX_INF.alcance === 'sel' && (!sel || !sel.length)) {
+                if (!esFuel && !esGeo && RX_INF.alcance === 'sel' && (!sel || !sel.length)) {
                     adviceWarn('Sin unidades', 'Selecciona unidades en la lista o elige "Toda la flota".');
                     return;
                 }
+                RX_INF.fuelSinSensor = false;
                 RX_INF._buscando = true;
                 RX_INF._token = { cancelado: false };
                 RX_INF.prog = { activo: true, hechas: 0, total: 0, filas: 0, txt: 'Preparando\u2026', pct: 4 };
@@ -14818,14 +15311,35 @@ function abrirInformesPlantilla(origen) {
                 setProg(4, 'Preparando\u2026');
                 let res;
                 try {
-                    res = await rxInfCorre(RX_INF.tpl, r.desde, r.hasta, sel, (h, t, filas, eco) => {
-                        RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
-                        setProg(RX_INF.prog.pct,
-                            (RX_INF.tpl ? RX_INF.tpl.nombre + ' \u00b7 ' : '') + h + '/' + t +
-                            (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
-                        const dyn = byId('rgi-dyn');
-                        if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
-                    }, RX_INF._token);
+                    if (esFuel) {
+                        const lista = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
+                        if (!lista.length) {
+                            RX_INF._buscando = false; finProg();
+                            adviceWarn('Sin unidades', 'No hay unidades que revisar en ese periodo.');
+                            pinta();
+                            return;
+                        }
+                        // El filtro de geocercas es de las plantillas de la
+                        // plataforma: en combustible no aplica.
+                        RX_INF.zonas = []; RX_INF.eco = '';
+                        res = await rxFuelCorre(lista, r.desde, r.hasta, RX_INF.fuel, (h, t, filas, eco) => {
+                            RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
+                            setProg(RX_INF.prog.pct,
+                                'Combustible \u00b7 ' + h + '/' + t + (eco ? ' \u00b7 ' + eco : '') +
+                                (filas ? ' \u00b7 ' + filas + ' perdida(s)' : ''));
+                            const dyn = byId('rgi-dyn');
+                            if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
+                        }, RX_INF._token);
+                    } else {
+                        res = await rxInfCorre(RX_INF.tpl, r.desde, r.hasta, sel, (h, t, filas, eco) => {
+                            RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
+                            setProg(RX_INF.prog.pct,
+                                (RX_INF.tpl ? RX_INF.tpl.nombre + ' \u00b7 ' : '') + h + '/' + t +
+                                (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
+                            const dyn = byId('rgi-dyn');
+                            if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
+                        }, RX_INF._token);
+                    }
                 } catch (e) {
                     res = { cols: RX_INF.cols, filas: RX_INF.filas, trozos: 0, hechos: 0, objetos: 0, fallos: 1, errores: [(e && e.message) || e], cacheados: 0, ms: 0, cancelado: false };
                 }
@@ -14839,16 +15353,21 @@ function abrirInformesPlantilla(origen) {
                 // por que ser las del anterior: se limpia la seleccion.
                 RX_INF.uniSel = {};
                 RX_INF.colsOcultas = {};
+                if (esFuel) RX_INF.fuelSinSensor = (res.conSensor === 0 && res.sinSensor > 0);
                 const v = rxInfVista();
                 RX_INF.meta = {
                     filas: RX_INF.filas.length, unidades: v.unidades, trozos: res.trozos, objetos: res.objetos,
                     ms: res.ms, fallos: res.fallos, errores: res.errores, cacheados: res.cacheados,
-                    lleno: res.lleno, bloqueado: res.bloqueado, recortado: res.recortado
+                    lleno: res.lleno, bloqueado: res.bloqueado, recortado: res.recortado,
+                    conSensor: res.conSensor, sinSensor: res.sinSensor
                 };
                 pinta();
                 if (res.cancelado) advice('Informe cancelado', RX_INF.filas.length + ' fila(s) hasta donde lleg\u00f3 (quedan guardadas).');
-                else adviceOk('Informe generado', RX_INF.filas.length + ' fila(s) de ' + (RX_INF.tpl ? RX_INF.tpl.nombre : '') +
-                    (res.fallos ? ' \u00b7 ' + res.fallos + ' trozo(s) con error' : '') + ' \u00b7 ' + Math.round(res.ms / 1000) + ' s');
+                else if (esFuel && res.conSensor === 0 && res.sinSensor > 0 && !RX_INF.filas.length) {
+                    adviceWarn('Sin sensor de combustible', 'Ninguna unidad del alcance publica nivel de combustible. Usa una plantilla de combustible de la plataforma.');
+                } else adviceOk(esFuel ? 'Perdidas de combustible' : 'Informe generado', RX_INF.filas.length + (esFuel ? ' perdida(s)' : ' fila(s)') +
+                    ' de ' + (RX_INF.tpl ? RX_INF.tpl.nombre : '') +
+                    (res.fallos ? ' \u00b7 ' + res.fallos + ' error(es)' : '') + ' \u00b7 ' + Math.round(res.ms / 1000) + ' s');
             };
             box.addEventListener('click', async (ev) => {
                 const btn = ev.target.closest && ev.target.closest('button');
@@ -14860,6 +15379,21 @@ function abrirInformesPlantilla(origen) {
                         return;
                     }
                     if (btn.id === 'rgi-tpl-cargar') { await cargarTpl(); return; }
+                    // Respaldo: ejecutar la plantilla de combustible de la
+                    // plataforma cuando ninguna unidad publica sensor.
+                    if (btn.id === 'rgi-fuel-tpl') {
+                        const t = rxInfTplDeClave(btn.dataset.tpl || '');
+                        const ft = t ? (plantillas.filter((x) => rxInfClave(x) === rxInfClave(t))[0] || t) : null;
+                        if (ft) {
+                            RX_INF.tpl = ft;
+                            RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
+                            RX_INF.fuelSinSensor = false;
+                            rxInfFiltrosCargar();
+                            pinta();
+                            ejecutar();
+                        }
+                        return;
+                    }
                     if (btn.id === 'rgi-diag') {
                         const det = { ultimo: RX_INF.diag, intentos: RX_INF.intentos || [] };
                         try { await navigator.clipboard.writeText(JSON.stringify(det, null, 1)); } catch (_) { /* noop */ }
@@ -14890,7 +15424,8 @@ function abrirInformesPlantilla(origen) {
                                     titulo: titulo, subtitulo: sub, cols: rec.cols, filas: rec.filas,
                                     mapa: rxInfMapaHTML(v, 660, 240),
                                     meta: Object.assign({}, v.meta, { unidades: v.unidades }),
-                                    resumen: rxInfResumenLinea(v)
+                                    resumen: rxInfResumenLinea(v),
+                                    esFuel: rxFuelEsTpl(RX_INF.tpl)
                                 }));
                                 advice('Reporte listo', 'Elige "Guardar como PDF" en el di\u00e1logo de impresi\u00f3n.');
                             } catch (e) {
@@ -15040,6 +15575,14 @@ function abrirInformesPlantilla(origen) {
                 else RX_INF[b.dataset.i] = b.dataset.v;
                 pinta();
             });
+            // Estado del motor del reporte de combustible (chips propios).
+            box.addEventListener('click', (ev) => {
+                const fm = ev.target.closest && ev.target.closest('[data-fuelmotor]');
+                if (!fm || !box.contains(fm)) return;
+                if (RX_INF._buscando) return;
+                RX_INF.fuel.motor = fm.dataset.fuelmotor || 'todos';
+                pinta();
+            });
             box.addEventListener('change', (ev) => {
                 const t = ev.target;
                 if (t && t.dataset && t.dataset.filtro) { rxInfFiltrosGuardar(); return; }
@@ -15055,7 +15598,7 @@ function abrirInformesPlantilla(origen) {
                         cont.innerHTML = listaTpl().map((x) => '<div class="rgi-tpl' +
                             (rxInfClave(x) === rxInfClave(RX_INF.tpl) ? ' activo' : '') + '">' +
                             '<button type="button" class="rgi-tpl-sel" data-tpl="' + esc(rxInfClave(x)) + '">' +
-                            '<b>' + esc(x.nombre) + '</b><i>#' + esc(x.id) + '</i></button></div>').join('');
+                            '<b>' + esc(x.nombre) + '</b><i>' + esc(tplSub(x)) + '</i></button></div>').join('');
                     }
                     const n = byId('rgi-busca-n');
                     if (n) n.textContent = listaTpl().length + '/' + plantillas.length;
@@ -15074,6 +15617,9 @@ function abrirInformesPlantilla(origen) {
                 }
                 if (t.id === 'rgi-eco') { RX_INF.eco = t.value || ''; pintaResultados(); return; }
                 if (t.id === 'rgi-q') { RX_INF.q = t.value || ''; pintaResultados(); return; }
+                if (t.id === 'rgi-fuel-litros') { RX_INF.fuel.litros = Math.max(1, Number(t.value) || RX_INF.fuel.litros); return; }
+                if (t.id === 'rgi-fuel-min') { RX_INF.fuel.min = clamp(Number(t.value) || RX_INF.fuel.min, 1, 60); return; }
+                if (t.id === 'rgi-fuel-vel') { RX_INF.fuel.vel = clamp(Number(t.value) || 0, 0, 40); return; }
                 if (t.dataset && t.dataset.filtro) { RX_INF.filtros[t.dataset.filtro] = t.value || ''; return; }
                 if (t.id === 'rgi-uni-busca') {
                     // Solo se repinta la lista: el campo no pierde el foco.

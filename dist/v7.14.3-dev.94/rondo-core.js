@@ -488,7 +488,7 @@
     // @version del propio archivo en el arranque (ver autodetectarVER()).
     // Mantener sincronizado al bumpear la version (tests/ui.test.js lo
     // verifica).
-    const VER = '7.14.3-dev.93';
+    const VER = '7.14.3-dev.94';
     const UPDATE_URL = 'https://raw.githubusercontent.com/leriart/AE-Track/main/rondo.user.js';
     const UPDATE_URL_DEV = 'https://raw.githubusercontent.com/leriart/AE-Track/dev/rondo.user.js';
     const UPDATE_CHANGELOGS_API = 'https://api.github.com/repos/leriart/AE-Track/contents/changelogs';
@@ -597,7 +597,11 @@
         // V8.0: filtros de cada plantilla de informe elegidos por el
         // operador (units, geozones...), para no tener que volver a
         // teclearlos cada vez.
-        infplantfilt: 'rondo.api.infplantfilt'
+        infplantfilt: 'rondo.api.infplantfilt',
+        // V8.1: accesos que se revelan con un gesto oculto. Por ahora solo
+        // "informes": 5 clics en el logo de la plataforma muestran el boton
+        // de informes de la plataforma. Se recuerda para no repetir el gesto.
+        revelado: 'rondo.api.revelado'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
@@ -1083,7 +1087,10 @@
         zonasLocales: readArray(SS.geolocal, []),
         // v6.14: que se previsualiza en el mapa del editor de geocercas:
         // 'todas' | 'app' | 'plat' (solo la plataforma).
-        geoPreview: 'todas'
+        geoPreview: 'todas',
+        // V8.1: accesos revelados con gestos ocultos (p. ej. 5 clics en el
+        // logo -> "informes"). Persistente: una vez revelado no se repite.
+        revelado: readObject(LS.revelado, {})
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);
