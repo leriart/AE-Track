@@ -61,7 +61,8 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
     'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
-    'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos,rxFuelLimpia,rxFuelAgrupa};';
+    'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos,rxFuelLimpia,rxFuelAgrupa,' +
+    'rxFuelTablaDescarga,rxFuelTplDescarga,rxFuelUsaPlataforma};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -426,17 +427,25 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
             { t: base + 60, s: 0, fuel: 88, motor: false },
             { t: base + 120, s: 0, fuel: 99, motor: false }
         ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
-    // El pico de un solo dato (51 -> 220 -> 51) se limpia: sin esto se volvia
-    // la referencia y la vuelta al 51 era una "perdida" de 169 L.
-    ok('combustible: el pico aislado se descarta (datos coherentes)',
-        mod.rxFuelLimpia([
-            { t: base, fuel: 51 }, { t: base + 10, fuel: 220 }, { t: base + 20, fuel: 51 }
-        ]).length === 2 &&
-        mod.rxFuelDetecta([
-            { t: base, s: 0, fuel: 51, motor: false },
-            { t: base + 10, s: 0, fuel: 220, motor: false },
-            { t: base + 20, s: 0, fuel: 51, motor: false }
-        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
+    // El pico de 1 o 2 datos (100, 343, 343, 100) se limpia: sin esto se
+    // volvia la referencia y la vuelta al 100 era una "perdida" de 243 L.
+    const seriePico = [
+        { t: base, fuel: 100 }, { t: base + 60, fuel: 100 }, { t: base + 120, fuel: 343 },
+        { t: base + 180, fuel: 343 }, { t: base + 240, fuel: 100 }, { t: base + 300, fuel: 100 }
+    ];
+    const serieEscalon = [
+        { t: base, fuel: 100 }, { t: base + 60, fuel: 100 }, { t: base + 120, fuel: 100 },
+        { t: base + 180, fuel: 20 }, { t: base + 240, fuel: 20 }, { t: base + 300, fuel: 20 }, { t: base + 360, fuel: 20 }
+    ];
+    ok('combustible: el pico de 1-2 datos se descarta (datos coherentes)',
+        mod.rxFuelLimpia(seriePico).length === 4 &&
+        mod.rxFuelLimpia(seriePico).every((m) => m.fuel === 100) &&
+        mod.rxFuelLimpia(serieEscalon).length === 7);
+    ok('combustible: con el pico limpio no hay falso evento, y el escalon real si',
+        mod.rxFuelDetecta(seriePico.map((m) => ({ t: m.t, s: 0, fuel: m.fuel, motor: false })),
+            { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0 &&
+        mod.rxFuelDetecta(serieEscalon.map((m) => ({ t: m.t, s: 0, fuel: m.fuel, motor: false })),
+            { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 1);
     ok('combustible: una fuga sostenida se agrupa en un solo evento',
         mod.rxFuelDetecta([
             { t: base, s: 0, fuel: 100, motor: false },
@@ -510,6 +519,23 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         mod.rxFuelVeredicto({ km: 30, n: 5, drop: 0.3, l100: 1, rango: 5 }, { km: 20, l100: 5 }).estado === 'Revisar');
     ok('combustible: sin lecturas -> sin datos',
         mod.rxFuelVeredicto(mod.rxFuelMetricas([]), { km: 20 }).estado === 'Sin datos');
+    // Deteccion de descargas de la PLATAFORMA: se reconoce la tabla de nivel de
+    // combustible del informe nativo por sus columnas.
+    ok('combustible: reconoce la tabla de descargas de la plataforma',
+        !!mod.rxFuelTablaDescarga({ tablas: [{ n: 'fuel', l: 'Combustible',
+            etiquetas: ['Hora', 'Nivel de combustible inicial', 'Descargado', 'Nivel de combustible final', 'Nombre del sensor'],
+            claves: ['time', 'begin_balance', 'thefted', 'end_balance', 'sensor'] }] }) &&
+        !!mod.rxFuelTablaDescarga({ tablas: [{ n: 'fuel', l: '', etiquetas: [], claves: ['begin_balance', 'end_balance'] }] }));
+    ok('combustible: no confunde una tabla corriente',
+        mod.rxFuelTablaDescarga({ tablas: [{ n: 't', l: 'Resumen', etiquetas: ['Unidad', 'Km'], claves: ['unit', 'km'] }] }) === null);
+    mod.RX_INF.fuel._desc = { tpl: { nombre: 'Combustible' } };
+    mod.RX_INF.fuel.fuente = 'plataforma';
+    const usePlat = mod.rxFuelUsaPlataforma();
+    mod.RX_INF.fuel.fuente = 'sensor';
+    const noPlat = mod.rxFuelUsaPlataforma();
+    mod.RX_INF.fuel._desc = undefined;
+    mod.RX_INF.fuel.fuente = 'plataforma';
+    ok('combustible: la fuente decide entre plataforma y sensor', usePlat === true && noPlat === false);
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
