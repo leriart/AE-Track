@@ -13081,9 +13081,14 @@ const RX_INF = {
         marca: '(SC)',   // solo unidades cuyo nombre contenga esta marca
         sensor: '',      // clave/nombre exacto del parametro de nivel (override)
         km: 20,          // km recorridos para juzgar un sensor (calibracion)
-        l100: 1          // consumo minimo esperado (L/100 km); 0 = no revisar
+        l100: 1,         // consumo minimo esperado (L/100 km); 0 = no revisar
+        // 'plataforma' usa la deteccion de descargas del informe nativo de la
+        // plataforma (su tabla de nivel de combustible); 'sensor' usa el
+        // detector propio sobre el historial. UNDEFINED = todavia no buscada.
+        fuente: 'plataforma', _desc: undefined
     },
     fuelSinSensor: false, // la ultima corrida no encontro sensor de nivel
+    fuelPlat: '',        // nombre de la plantilla de plataforma usada (o '')
     uniSel: {},          // unidades marcadas para filtrar las filas (vacio = todas)
     uniBusca: '',        // buscador del selector de unidades
     colsOcultas: {},     // columnas ocultas de la tabla (indice -> 1)
@@ -14623,25 +14628,30 @@ function rxFuelNum(v) {
     const n = Number(String(v).replace(',', '.'));
     return isFinite(n) ? n : null;
 }
-// Quita picos de UN SOLO dato. La causa tipica de datos incoherentes en el
-// nivel de combustible es un pico aislado (recarga mal reportada, glitch del
-// sensor): 51 -> 220 -> 51 en segundos. Sin esto, el 220 se volvia la
-// referencia y la vuelta al 51 se contaba como una "perdida" de 169 L.
-// Un dato se descarta si se aleja de la media de sus vecinos mucho mas de lo
-// que se diferencian esos vecinos entre si.
+// Quita picos del nivel (datos incoherentes). El nivel de combustible sufre
+// picos de 1 o 2 muestras (recarga mal reportada, glitch del flotador): un
+// 343 aislado en una serie estable de 100. El anti-picos de vecino inmediato
+// fallaba con picos de 2 muestras; aqui se compara cada dato con la MEDIANA de
+// sus 4 vecinos (+/-2). Un pico corto tiene mediana en el nivel real y se
+// descarta; una caida real (escalon con meseta) tiene la mediana a su propio
+// nivel en los bordes y NO se toca. Nunca se sustituye el valor: solo se quita
+// el dato atipico.
 function rxFuelLimpia(muestras) {
     const arr = (muestras || []).filter((m) => m && m.fuel != null);
+    if (arr.length < 5) return arr.slice();
     const out = [];
     for (let i = 0; i < arr.length; i++) {
         const a = arr[i];
-        if (i > 0 && i < arr.length - 1) {
-            const p = arr[i - 1], nn = arr[i + 1];
-            if (p.fuel != null && nn.fuel != null && a.fuel != null) {
-                const media = (p.fuel + nn.fuel) / 2;
-                const desv = Math.abs(a.fuel - media);
-                const rango = Math.abs(nn.fuel - p.fuel);
-                if (desv > Math.max(5, rango * 2)) continue;
-            }
+        if (i >= 2 && i <= arr.length - 3) {
+            const v = [arr[i - 2].fuel, arr[i - 1].fuel, a.fuel, arr[i + 1].fuel, arr[i + 2].fuel]
+                .sort((x, y) => x - y);
+            const med = v[2];
+            const desv = Math.abs(a.fuel - med);
+            // Tolerancia: 15% del nivel o 5 L, lo que sea mayor. Un volumen
+            // grande (tanque lleno) admite mas ruido del flotador sin que sea
+            // un pico.
+            const tol = Math.max(5, Math.abs(med) * 0.15);
+            if (desv > tol) continue;
         }
         out.push(a);
     }
@@ -14832,13 +14842,11 @@ function rxFuelDetecta(msgs, opts) {
         // Cualquier movimiento invalida la referencia: la perdida tiene que
         // producirse con la unidad TOTALMENTE detenida.
         if (cur.s > vel || r.s > vel) { ref = k; continue; }
-        // El nivel sube o se mantiene: nueva referencia (repostaje o calma).
-        // Si se mantiene pero la referencia ya es vieja, se adelanta para que
-        // la ventana mida tiempo real.
-        if (cur.fuel >= r.fuel) {
-            if (cur.fuel > r.fuel || (cur.t - r.t) > win) ref = k;
-            continue;
-        }
+        // El nivel sube o se mantiene: la referencia pasa a ser ESTA muestra
+        // (la ultima estable), de modo que la ventana se mida desde el final
+        // de la meseta y no desde su inicio (si no, una meseta larga hacia que
+        // dt superase la ventana y la caida se perdiese).
+        if (cur.fuel >= r.fuel) { ref = k; continue; }
         const caida = r.fuel - cur.fuel;
         const dt = cur.t - r.t;
         if (dt > win) { ref = k; continue; }   // caida demasiado lenta
@@ -15061,6 +15069,46 @@ function rxFuelEsTpl(tpl) { return !!(tpl && tpl.fuel); }
 function rxFuelTplCombustible(plantillas) {
     const re = /(COMBUSTIBLE|FUEL|CONSUMO|TANQUE|DIESEL|GASOLINA|RELLENO|CARGA)/i;
     return (plantillas || []).filter((t) => t && !t.fuel && re.test(String(t.nombre)))[0] || null;
+}
+// ── Descargas de la PLATAFORMA ──────────────────────────────────────────
+// El mejor detector de descargas es el de la propia plataforma: sus informes
+// con la tabla de nivel de combustible calculan llenados/descargas con la
+// configuracion real del sensor (p. ej. "DIESEL TOTAL"), columnas tipo
+// "Nivel de combustible inicial/final" y "Descargado".
+//
+// Aqui se busca, entre las plantillas del operador, una que traiga esa tabla y
+// se ejecuta con el MISMO motor de informes (rxInfCorre). Asi el resultado del
+// informe de combustible es el de la plataforma, no una relectura del sensor.
+// Se reconoce la tabla por su nombre, su etiqueta o sus columnas.
+function rxFuelTablaDescarga(info) {
+    const tablas = (info && info.tablas) ? info.tablas : [];
+    for (const tb of tablas) {
+        const txt = norm([tb.n, tb.l, (tb.etiquetas || []).join(' '), (tb.claves || []).join(' ')].join(' '));
+        if (/(DESCARG|THEFT|NIVEL[_\s]*DE[_\s]*COMBUSTIBLE|COMBUSTIBLE[_\s]*(INICIAL|FINAL)|INITIAL[_\s]*FUEL|FINAL[_\s]*FUEL|BEGIN[_\s]*BALANCE|END[_\s]*BALANCE|FUEL[_\s]*LEVEL|LLENADO|FILLING)/.test(txt)) return tb;
+    }
+    return null;
+}
+// Busca la plantilla de descargas (una sola vez por lista de plantillas).
+// Devuelve { tpl, info, tabla } o null. Cachea el resultado en RX_INF.fuel._desc
+// (undefined = no buscado aun).
+async function rxFuelTplDescarga(plantillas) {
+    if (RX_INF.fuel._desc !== undefined) return RX_INF.fuel._desc;
+    const lista = (plantillas || []).filter((t) => t && !t.fuel);
+    const re = /FUEL|COMBUSTIBLE|COMB|DIESEL|GASOLINA|DESCARGA|ROBO|TANQUE|CONSUMO|RELLENO|LLENADO|CARGA/i;
+    const prio = lista.filter((t) => re.test(String(t.nombre)));
+    const orden = prio.concat(lista.filter((t) => prio.indexOf(t) < 0));
+    RX_INF.fuel._desc = null;
+    for (const t of orden.slice(0, 60)) {
+        let info = null;
+        try { info = rxInfPlantillaInfo(await rxInfDatosPlantilla(t), t.id); } catch (_) { info = null; }
+        if (!info) continue;
+        const tb = rxFuelTablaDescarga(info);
+        if (tb) { RX_INF.fuel._desc = { tpl: t, info: info, tabla: tb }; break; }
+    }
+    return RX_INF.fuel._desc;
+}
+function rxFuelUsaPlataforma() {
+    return RX_INF.fuel.fuente !== 'sensor' && !!RX_INF.fuel._desc;
 }
 // Unidades a barrer cuando el alcance es "toda la flota". Conserva la
 // referencia a la unidad cruda para leer su catalogo de sensores y el nombre
@@ -15329,10 +15377,21 @@ function abrirInformesPlantilla(origen) {
                 // y estado del motor). Solo cuando la plantilla es la integrada.
                 let pasoFuel = '';
                 if (esFuel) {
+                    const desc = RX_INF.fuel._desc || null;
+                    const usarPlat = rxFuelUsaPlataforma();
+                    const fSrc = (val, txt) => '<button type="button" class="rgi-chip' +
+                        (RX_INF.fuel.fuente === val ? ' activo' : '') + '" data-fuelsrc="' + esc(val) + '"' + dis + '>' + esc(txt) + '</button>';
+                    const filaFuente = '<div class="rgi-row"><span class="rgi-lb">Fuente</span><div class="rgi-chips">' +
+                        fSrc('plataforma', 'Plataforma (descargas)') + fSrc('sensor', 'Sensor (propio)') + '</div></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        esc(desc
+                            ? ('Descargas calculadas por el informe "' + desc.tpl.nombre + '" de la plataforma (su sensor de nivel).')
+                            : 'No se encontro una plantilla de combustible en la plataforma: se usara el detector propio del sensor.') +
+                        '</span></div>';
                     const fOption = (val, txt) => '<button type="button" class="rgi-chip' +
                         (RX_INF.fuel.motor === val ? ' activo' : '') + '" data-fuelmotor="' + esc(val) + '"' + dis + '>' + esc(txt) + '</button>';
-                    pasoFuel = paso(4, 'Perdida de combustible',
-                        '<div class="rgi-row"><span class="rgi-lb">Caida</span>' +
+                    const opcionesSensor = usarPlat ? '' :
+                        ('<div class="rgi-row"><span class="rgi-lb">Caida</span>' +
                         '<span class="rgi-num"><input type="number" min="1" step="1" id="rgi-fuel-litros" value="' + esc(String(RX_INF.fuel.litros)) + '"' + dis + '> litros</span>' +
                         '<span class="rgi-num">en <input type="number" min="1" max="60" step="1" id="rgi-fuel-min" value="' + esc(String(RX_INF.fuel.min)) + '"' + dis + '> min</span>' +
                         '<span class="rgi-num">parada a <input type="number" min="0" max="40" step="1" id="rgi-fuel-vel" value="' + esc(String(RX_INF.fuel.vel)) + '"' + dis + '> km/h</span></div>' +
@@ -15350,6 +15409,7 @@ function abrirInformesPlantilla(origen) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc('Cuenta la caida de nivel con la unidad totalmente detenida (motor encendido o apagado). Perdida de referencia: 10 litros en 1-2 minutos. La pestana Sensores marca los sensores defectuosos o alterados.') +
                         '</span></div>');
+                    pasoFuel = paso(4, 'Perdida de combustible', filaFuente + opcionesSensor);
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
                 // los ajustes de formato). Es lo que antes no se podia tocar.
@@ -15392,6 +15452,11 @@ function abrirInformesPlantilla(origen) {
                 // Sensores defectuosos/alterados (no bajan caminando).
                 if (esFuel && RX_INF.meta && RX_INF.meta.sensoresFallo) {
                     avisos.push(esc(RX_INF.meta.sensoresFallo + ' sensor(es) defectuoso(s) o alterado(s): recorre km y el nivel no baja. Mira la pesta\u00f1a "Sensores".'));
+                }
+                // Fuente plataforma: se dice que plantilla del operador calculo
+                // las descargas.
+                if (esFuel && RX_INF.fuelPlat) {
+                    avisos.push(esc('Descargas calculadas por la plataforma (plantilla "' + RX_INF.fuelPlat + '").'));
                 }
                 if (RX_INF.diag && RX_INF.diag.error) {
                     avisos.push('Ultimo intento: ' + esc(RX_INF.diag.enviado
@@ -15552,6 +15617,9 @@ function abrirInformesPlantilla(origen) {
                 // "reporte extra" del dialogo.
                 plantillas = [RX_FUEL_TPL].concat(plantillas);
                 RX_INF._cargadas = true;
+                // La lista cambio: la busqueda de la plantilla de descargas se
+                // rehace.
+                RX_INF.fuel._desc = undefined;
                 if (!RX_INF.tpl && plantillas.length) { RX_INF.tpl = plantillas[0]; rxInfFiltrosCargar(); }
                 RX_INF._buscando = false;
                 pinta();
@@ -15561,8 +15629,15 @@ function abrirInformesPlantilla(origen) {
             // Lee lo que declara la plantilla (columnas, tipo, filtros).
             const declara = async () => {
                 if (!RX_INF.tpl) return;
-                // La plantilla integrada no se lee de la plataforma.
-                if (rxFuelEsTpl(RX_INF.tpl)) { RX_INF.decl = null; RX_INF._declKey = 'fuel'; return; }
+                // La plantilla integrada no se lee de la plataforma: se busca
+                // una plantilla de descargas (nivel de combustible) del
+                // operador para usar SU deteccion.
+                if (rxFuelEsTpl(RX_INF.tpl)) {
+                    RX_INF.decl = null; RX_INF._declKey = 'fuel';
+                    try { await rxFuelTplDescarga(plantillas); } catch (_) { /* noop */ }
+                    pinta();
+                    return;
+                }
                 const t = RX_INF.tpl;
                 const key = 'decl|' + rxInfClave(t);
                 if (RX_INF._declKey === key) return;
@@ -15600,7 +15675,22 @@ function abrirInformesPlantilla(origen) {
                 setProg(4, 'Preparando\u2026');
                 let res;
                 try {
-                    if (esFuel) {
+                    if (esFuel && rxFuelUsaPlataforma()) {
+                        // Descargas detectadas por la plataforma: se ejecuta SU
+                        // plantilla de combustible (nivel de combustible /
+                        // descargado) con el mismo motor de informes.
+                        const desc = RX_INF.fuel._desc;
+                        RX_INF.zonas = []; RX_INF.eco = '';
+                        res = await rxInfCorre(desc.tpl, r.desde, r.hasta, (RX_INF.alcance === 'sel' ? (sel || []) : null), (h, t, filas, eco) => {
+                            RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
+                            setProg(RX_INF.prog.pct,
+                                'Plataforma \u00b7 ' + desc.tpl.nombre + ' \u00b7 ' + h + '/' + t +
+                                (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
+                            const dyn = byId('rgi-dyn');
+                            if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
+                        }, RX_INF._token);
+                        RX_INF.fuelPlat = desc.tpl.nombre;
+                    } else if (esFuel) {
                         const base = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
                         // Filtro por marca de sensor: evita barrer la flota
                         // entera; con "(SC)" solo se consultan esas unidades.
@@ -15616,6 +15706,7 @@ function abrirInformesPlantilla(origen) {
                         // El filtro de geocercas es de las plantillas de la
                         // plataforma: en combustible no aplica.
                         RX_INF.zonas = []; RX_INF.eco = '';
+                        RX_INF.fuelPlat = '';
                         res = await rxFuelCorre(lista, r.desde, r.hasta, RX_INF.fuel, (h, t, filas, eco) => {
                             RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
                             setProg(RX_INF.prog.pct,
@@ -15875,6 +15966,17 @@ function abrirInformesPlantilla(origen) {
                 if (!fm || !box.contains(fm)) return;
                 if (RX_INF._buscando) return;
                 RX_INF.fuel.motor = fm.dataset.fuelmotor || 'todos';
+                pinta();
+            });
+            // Fuente del reporte de combustible: plataforma o sensor propio.
+            box.addEventListener('click', (ev) => {
+                const fs = ev.target.closest && ev.target.closest('[data-fuelsrc]');
+                if (!fs || !box.contains(fs)) return;
+                if (RX_INF._buscando) return;
+                RX_INF.fuel.fuente = fs.dataset.fuelsrc || 'plataforma';
+                if (RX_INF.fuel.fuente === 'plataforma' && !RX_INF.fuel._desc) {
+                    adviceWarn('Sin plantilla de plataforma', 'No se encontro una plantilla de combustible; se usara el sensor propio.');
+                }
                 pinta();
             });
             box.addEventListener('change', (ev) => {
