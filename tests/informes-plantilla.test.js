@@ -213,8 +213,8 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('ejecucion: trocea el periodo (2 semanas = 2 trozos por unidad)',
         r.trozos === 2 && r.objetos === 2 && execs().length === 4, 'execs=' + execs().length);
     ok('ejecucion: manda el intervalo elegido',
-        execs()[0].p.interval.from === t0 && execs()[0].p.reportObjectId === 3 &&
-        execs()[0].p.reportObjectSecId === '7', JSON.stringify(execs()[0].p));
+        execs()[0].p.interval.from === t0 && String(execs()[0].p.reportObjectId) === '7' &&
+        execs()[0].p.reportObjectSecId === '0', JSON.stringify(execs()[0].p));
 
     // 7) Cache: la segunda pasada no vuelve a preguntar.
     calls.length = 0;
@@ -296,8 +296,8 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     const rg = await mod.rxInfCorre(tplG, t0, t0 + 7 * unDia - 1, null, null, null);
     ok('geocercas: se ejecuta por la geocerca marcada (modelo por geocerca)',
         rg.objetos === 1 && rg.alcance === 'geocercas' && rg.filas.length > 0, 'objetos=' + rg.objetos);
-    ok('geocercas: usa el recurso dueño de la zona y su id como secundario',
-        execs()[0].p.reportObjectId === 27414156 && execs()[0].p.reportObjectSecId === '119',
+    ok('geocercas: usa el id de la geocerca como objeto (secundario 0)',
+        String(execs()[0].p.reportObjectId) === '119' && execs()[0].p.reportObjectSecId === '0',
         JSON.stringify(execs()[0].p));
     mod.RX_INF.zonas = [];
 
