@@ -13634,7 +13634,7 @@ function rxInfExplicaError(msg) {
     const c = String(code);
     const T = {
         '2': 'el servicio no existe en esta version de la plataforma (code 2)',
-        '4': 'la peticion es demasiado pesada para el servidor (code 4): acorta el periodo',
+        '4': 'parametros u objeto no validos (code 4): suele ser que la plantilla no admite ese objeto (p. ej. se ejecuto por geocerca una plantilla de unidad) o que el periodo es demasiado pesado',
         '5': 'la plataforma niega el acceso (code 5): la sesion no puede ejecutar ese informe',
         '7': 'parametros invalidos (code 7): la plantilla pide un filtro que no se le esta mandando',
         '8': 'objeto o recurso no encontrado (code 8): la plantilla puede haberse borrado',
@@ -14102,7 +14102,7 @@ function rxInfAcumulaTablas(acum, tablas) {
 // (de ahi que ninguna reviente con el limite de tiempo) y repetir el informe
 // no vuelve a preguntar lo mismo.
 //   onProg(hechos, total, filas, eco)
-async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
+async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar) {
     const t0 = Date.now();
     RX_INF.intentos = [];
     rxInfCacheCargar();
@@ -14114,10 +14114,17 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token) {
     } else {
         const datos = await rxInfDatosPlantilla(tpl);
         const info = rxInfPlantillaInfo(datos, tpl.id);
-        const esGeo = info ? info.esGeo : (rxInfPista(tpl) === 'geocercas');
+        // `forzar` = 'flota' obliga el modelo por unidad. Es lo correcto para
+        // las plantillas de combustible (su tabla de nivel es por unidad), que
+        // a veces se confundian con geocercas solo por el nombre.
+        const esGeo = (forzar === 'flota') ? false : (info ? info.esGeo : (rxInfPista(tpl) === 'geocercas'));
         // Filtros elegidos por el operador (units, geozones...): van como
         // definicion propia para TODOS los objetos.
-        const defBase = rxInfDefFiltros(datos, tpl.id, rxInfFiltrosEfectivos());
+        let defBase = rxInfDefFiltros(datos, tpl.id, rxInfFiltrosEfectivos());
+        // Al forzar flota se quitan los filtros de unidad/objeto guardados: el
+        // informe se ejecuta unidad por unidad y un filtro atado a otra unidad
+        // solo provoca errores.
+        if (forzar === 'flota' && !defBase) defBase = rxInfDefSinUnidades(datos, tpl.id);
         if (esGeo) {
             objs = await rxInfModelo(tpl, info, datos, desde, hasta, token, defBase);
             modo = 'geocercas';
@@ -15102,6 +15109,10 @@ async function rxFuelTplDescarga(plantillas) {
         let info = null;
         try { info = rxInfPlantillaInfo(await rxInfDatosPlantilla(t), t.id); } catch (_) { info = null; }
         if (!info) continue;
+        // La tabla de nivel de combustible es POR UNIDAD. Una plantilla de
+        // geocercas que tambien traiga alguna columna de combustible se
+        // descarta: ejecutarla por geocerca da "code 4".
+        if (info.esGeo) continue;
         const tb = rxFuelTablaDescarga(info);
         if (tb) { RX_INF.fuel._desc = { tpl: t, info: info, tabla: tb }; break; }
     }
@@ -15678,9 +15689,10 @@ function abrirInformesPlantilla(origen) {
                     if (esFuel && rxFuelUsaPlataforma()) {
                         // Descargas detectadas por la plataforma: se ejecuta SU
                         // plantilla de combustible (nivel de combustible /
-                        // descargado) con el mismo motor de informes.
+                        // descargado) con el mismo motor de informes, forzando
+                        // el modelo POR UNIDAD (su tabla de nivel es por unidad).
                         const desc = RX_INF.fuel._desc;
-                        RX_INF.zonas = []; RX_INF.eco = '';
+                        RX_INF.zonas = []; RX_INF.eco = ''; RX_INF.filtros = {};
                         res = await rxInfCorre(desc.tpl, r.desde, r.hasta, (RX_INF.alcance === 'sel' ? (sel || []) : null), (h, t, filas, eco) => {
                             RX_INF.prog = { activo: true, hechas: h, total: t, filas: filas, txt: '', pct: 6 + Math.round((h / Math.max(1, t)) * 90) };
                             setProg(RX_INF.prog.pct,
@@ -15688,7 +15700,7 @@ function abrirInformesPlantilla(origen) {
                                 (eco ? ' \u00b7 ' + eco : '') + (filas ? ' \u00b7 ' + filas + ' fila(s)' : ''));
                             const dyn = byId('rgi-dyn');
                             if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
-                        }, RX_INF._token);
+                        }, RX_INF._token, 'flota');
                         RX_INF.fuelPlat = desc.tpl.nombre;
                     } else if (esFuel) {
                         const base = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
