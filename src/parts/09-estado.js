@@ -106,7 +106,10 @@
         zonasLocales: readArray(SS.geolocal, []),
         // v6.14: que se previsualiza en el mapa del editor de geocercas:
         // 'todas' | 'app' | 'plat' (solo la plataforma).
-        geoPreview: 'todas'
+        geoPreview: 'todas',
+        // V8.1: accesos revelados con gestos ocultos (p. ej. 5 clics en el
+        // logo -> "informes"). Persistente: una vez revelado no se repite.
+        revelado: readObject(LS.revelado, {})
     };
     APP.panelHidden = !APP.config.panelVisible;
     APP.orden = readSessionArray(SS.orden, [], null);

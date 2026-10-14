@@ -43,6 +43,9 @@ const stubs = [
     'function unitState(u){ const p=(u&&u.pos)||{}; return {t:Number(p.t||0),lat:p.y,lon:p.x,vel:0}; }',
     'function rxGeoInfAnillo(z){ return (z && z.puntos) ? z.puntos : []; }',
     'function glocOrigen(z){ return { id: (z && z.app) ? "app" : "plat" }; }',
+    'function zoneAt(lat, lon){ return (lat != null && Math.abs(lat - 19.4) < 0.01) ? "PATIO" : ""; }',
+    'function rxFechaHora(ms){ return String(ms); }',
+    'function clamp(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }',
     'function rxGeoInfYield(){ return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } }); }',
     'function remoteCall(m, p){ return P_REMOTE(m, p); }'
 ].join('\n');
@@ -53,7 +56,10 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,' +
     'rxInfPlantillaInfo,rxInfZonasPlataforma,rxInfUnidades,rxInfExplicaError,rxInfOrdena,rxInfPista,' +
     'rxInfEsDeGeocercas,rxInfClasifica,rxInfColumnasVacias,rxInfZonaDeFila,rxInfDatosPlantilla,rxInfZonasDisponibles,' +
-    'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS};';
+    'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS,' +
+    'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
+    'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
+    'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -66,9 +72,14 @@ let umbral1004 = 0;   // si un intervalo supera esto, la plataforma da code 1004
 let soloObjeto = null; // si se fija, solo ese reportObjectId devuelve filas
 let soloDef = false;   // si se activa, solo la plantilla propia (sin filtros) devuelve filas
 let tablaReal = false; // exec_report responde con TABLAS y el contenido va en get_result_rows
+let fuelMsgs = null;   // historial que devuelve messages/load_interval (combustible)
 function remote(m, p) {
     calls.push({ m: m, p: p });
+    if (m === 'messages/load_interval') return Promise.resolve({ messages: fuelMsgs || [] });
     if (m === 'core/search_items') {
+        const it = p && p.spec && p.spec.itemsType;
+        if (it === 'avl_unit_group') return Promise.resolve({ items: [{ id: 501, nm: 'GRUPO NORTE' }] });
+        if (it === 'avl_driver') return Promise.resolve({ items: [{ id: 601, nm: 'JUAN PEREZ' }] });
         return Promise.resolve({
             items: [
                 { id: 3, rep: { 1: { id: 11, n: 'Resumen diario' }, 2: { id: 12, n: 'Paradas por unidad' } } },
@@ -341,6 +352,84 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         mod.rxInfColumnasVacias(['A', 'B'], [['x', '']]).join(',') === 'B');
     ok('nombre de archivo: incluye la plantilla y la vista',
         /rondo_Resumen_diario_filas_\d{4}-\d{2}-\d{2}\.csv/.test(mod.rxInfNombreArchivo(tplU, 'filas', '.csv')));
+
+    // 12) Filtros declarados por la plantilla (filter_order) + resolucion de
+    //     nombres de grupo/conductor.
+    ok('filtros: rxInfLista acepta array, JSON y texto',
+        mod.rxInfLista(['a', 'b']).join(',') === 'a,b' &&
+        mod.rxInfLista('["units","geozones"]').join(',') === 'units,geozones' &&
+        mod.rxInfLista('units, geozones').join(',') === 'units,geozones');
+    const infoFOrder = mod.rxInfPlantillaInfo([{
+        id: 11, n: 'R', ct: 'avl_unit',
+        tbl: [{ n: 't', l: 'x', c: '["unit","km"]', cl: '["Unidad","Km"]', p: '{}', f: '["units","unit_groups","address_format"]' }]
+    }], 11);
+    ok('filtros: la plantilla declara su filter_order (sin guardar nada)',
+        mod.rxInfFiltrosDe(infoFOrder).join(',') === 'units,unit_groups',
+        mod.rxInfFiltrosDe(infoFOrder).join(','));
+    await mod.rxInfPrecargaItems({ tablas: [{ filtros: ['unit_groups'] }] });
+    ok('filtros: un nombre de grupo se resuelve a su id',
+        mod.rxInfFiltroResuelve('unit_groups', 'GRUPO NORTE') === '501',
+        mod.rxInfFiltroResuelve('unit_groups', 'GRUPO NORTE'));
+    await mod.rxInfPrecargaItems({ tablas: [{ filtros: ['drivers'] }] });
+    ok('filtros: un nombre de conductor se resuelve a su id',
+        mod.rxInfFiltroResuelve('drivers', 'JUAN PEREZ') === '601');
+    ok('objetos: los grupos se listan como objetos ejecutables',
+        (await mod.rxInfObjetosTipo('avl_unit_group', 3)).length === 1);
+
+    // 13) Reporte de perdida de combustible (sensor).
+    ok('combustible: lee el nivel por nombre de sensor',
+        mod.rxFuelNivel({ params: { fuel: 42 } }, {}) === 42);
+    ok('combustible: mapea el id numerico con el catalogo de sensores',
+        mod.rxFuelNivel({ params: { 5: '37.5' } }, { 5: 'Nivel de combustible' }) === 37.5);
+    ok('combustible: sin sensor de nivel devuelve null',
+        mod.rxFuelNivel({ params: { temp: 12 } }, {}) === null);
+    ok('combustible: motor encendido/apagado',
+        mod.rxFuelMotor({ params: { engine: 1 } }, {}) === true &&
+        mod.rxFuelMotor({ params: { ignition: 0 } }, {}) === false &&
+        mod.rxFuelMotor({ params: { fuel: 12 } }, {}) === null);
+    const mt = mod.rxFuelMsg({ t: 100, pos: { y: 19.4, x: -99.1, s: 0 }, params: { fuel: 90, engine: 0 } }, {});
+    ok('combustible: la muestra lleva tiempo, posicion, velocidad, nivel y motor',
+        mt.t === 100 && mt.s === 0 && mt.fuel === 90 && mt.motor === false);
+    const base = 1700000000;
+    const muestras = [
+        { t: base, s: 0, fuel: 100, motor: false, lat: 19.4, lon: -99.1 },
+        { t: base + 60, s: 0, fuel: 95, motor: false, lat: 19.4, lon: -99.1 },
+        { t: base + 120, s: 0, fuel: 85, motor: false, lat: 19.4, lon: -99.1 },
+        { t: base + 240, s: 40, fuel: 84, motor: false, lat: 19.4, lon: -99.1 }
+    ];
+    const evs = mod.rxFuelDetecta(muestras, { litros: 10, min: 2, vel: 3, motor: 'todos' });
+    ok('combustible: detecta 10 L o mas en 1-2 min con la unidad detenida',
+        evs.length === 1 && Math.round(evs[0].litros) === 15 && evs[0].min === 2 &&
+        evs[0].lat === 19.4, JSON.stringify(evs));
+    ok('combustible: una caida mas lenta que la ventana no cuenta',
+        mod.rxFuelDetecta([
+            { t: base, s: 0, fuel: 100, motor: false },
+            { t: base + 180, s: 0, fuel: 85, motor: false }
+        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
+    ok('combustible: si la unidad se movio no cuenta',
+        mod.rxFuelDetecta([
+            { t: base, s: 0, fuel: 100, motor: false },
+            { t: base + 60, s: 50, fuel: 85, motor: false }
+        ], { litros: 10, min: 2, vel: 3, motor: 'todos' }).length === 0);
+    ok('combustible: el filtro de motor respeta encendido/apagado',
+        mod.rxFuelDetecta(muestras, { litros: 10, min: 2, vel: 3, motor: 'on' }).length === 0 &&
+        mod.rxFuelDetecta(muestras, { litros: 10, min: 2, vel: 3, motor: 'off' }).length === 1);
+    // Ejecucion completa con el historial simulado.
+    fuelMsgs = muestras.map((m) => ({ t: m.t, pos: { y: m.lat, x: m.lon, s: m.s }, params: { fuel: m.fuel, engine: 0 } }));
+    APP.unidades = [{ id: 7, nm: 'CDOS.105', sens: { 5: { n: 'Nivel de combustible' } } }];
+    const rf = await mod.rxFuelCorre(mod.rxFuelUnidadesTodas(base - 100), base - 100, base + 3600,
+        { litros: 10, min: 2, vel: 3, motor: 'todos' }, null, null);
+    ok('combustible: el reporte arma filas con la cabecera esperada',
+        rf.cols[0] === 'Unidad' && rf.cols[2] === 'Litros' && rf.filas.length === 1 &&
+        rf.filas[0][0] === '105' && rf.conSensor === 1 && rf.sinSensor === 0,
+        JSON.stringify({ cols: rf.cols, filas: rf.filas.length, con: rf.conSensor }));
+    fuelMsgs = null;
+    const rsf = await mod.rxFuelCorre([{ id: 7, eco: '105', u: { id: 7, nm: '105' } }], base - 100, base + 3600, { litros: 10, min: 2 }, null, null);
+    ok('combustible: sin sensor de nivel avisa (conSensor=0)',
+        rsf.sinSensor === 1 && rsf.conSensor === 0 && rsf.filas.length === 0);
+    ok('combustible: la plantilla integrada se reconoce y el respaldo busca por nombre',
+        mod.rxFuelEsTpl(mod.RX_FUEL_TPL) === true &&
+        !!mod.rxFuelTplCombustible([{ nombre: 'Consumo de combustible' }, { nombre: 'Otro' }]));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

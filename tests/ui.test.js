@@ -788,6 +788,26 @@ ok('informes: ejecuta la plantilla elegida por API y por trozos',
     /id="rgi-cancel"/.test(src) && /report\/exec_report/.test(src) &&
     /async function rxInfCorre\(tpl, desde, hasta, unidades, onProg, token\)/.test(src) &&
     /data-i="vista"/.test(src) && /rxInfResumenUnidad/.test(src));
+// V8.1: acceso oculto a los informes de la plataforma (5 clics en el logo).
+ok('informes: el boton arranca oculto y se revela con el gesto',
+    /data-reveal="informes"/.test(src) && /function rxRevelarInformes\(\)/.test(src) &&
+    /function rxBindLogoRevelar\(\)/.test(src) && /NECESARIOS = 5/.test(src) &&
+    /rxBindLogoRevelar\(\)/.test(src) && /rxRevelado\('informes'\)/.test(src));
+ok('informes: paintTools respeta el reveal persistente',
+    /if \(el\.dataset\.reveal\)/.test(src) && /rxRevelado\(el\.dataset\.reveal\)/.test(src) &&
+    /writeJSON\(LS\.revelado, APP\.revelado\)/.test(src) && /revelado: 'rondo\.api\.revelado'/.test(src) &&
+    /function rxPintaReveal\(\)/.test(src) && /rondo-replay-informe-geo" data-reveal="informes"/.test(src));
+// V8.1: reporte extra de perdida de combustible dentro del dialogo.
+ok('informes: la plantilla integrada de combustible encabeza la lista',
+    /RX_FUEL_TPL/.test(src) && /plantillas = \[RX_FUEL_TPL\]\.concat\(plantillas\)/.test(src) &&
+    /'Perdida de combustible'/.test(src));
+ok('informes: el reporte de combustible detecta 10 L en 1-2 min con la unidad parada',
+    /function rxFuelDetecta\(msgs, opts\)/.test(src) && /function rxFuelCorre\(unidades, desde, hasta, opts, onProg, token\)/.test(src) &&
+    /id="rgi-fuel-litros"/.test(src) && /id="rgi-fuel-min"/.test(src) && /data-fuelmotor=/.test(src) &&
+    /messages\/load_interval/.test(src) && /flags: 1, flagsMask: 1/.test(src));
+ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
+    /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
+    /RX_INF\.fuelSinSensor/.test(src));
 ok('escaneo: con "todo" arranca donde la plataforma guarda el primer mensaje',
     /async function rxGeoInfPrimerMensaje\(uid\)/.test(src) && /loadCount: 1/.test(src) &&
     /Datos desde el /.test(src));

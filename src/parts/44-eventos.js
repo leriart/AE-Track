@@ -1,4 +1,65 @@
 /* ====================== EVENTOS ====================== */
+    // ── Accesos ocultos (V8.1) ──────────────────────────────────────────
+    // Hay funciones/paneles que no deben estar a la vista de cualquiera. Se
+    // revelan con un gesto discreto y se recuerdan en localStorage, de modo
+    // que una vez desbloqueados no hay que repetirlo.
+    function rxRevelado(clave) {
+        try { return !!(APP.revelado && APP.revelado[clave]); } catch (_) { return false; }
+    }
+    function rxMarcarRevelado(clave) {
+        if (!clave) return;
+        APP.revelado = APP.revelado || {};
+        APP.revelado[clave] = 1;
+        try { writeJSON(LS.revelado, APP.revelado); } catch (_) { /* noop */ }
+    }
+    function rxRevelarInformes() {
+        if (rxRevelado('informes')) return;
+        rxMarcarRevelado('informes');
+        try { paintTools(); } catch (_) { /* noop */ }
+        try { rxPintaReveal(); } catch (_) { /* noop */ }
+        try { adviceOk('Informes de la plataforma', 'Acceso desbloqueado: ya tienes el boton disponible.'); } catch (_) { /* noop */ }
+    }
+    // Aplica el estado de revelado a los elementos con data-reveal que NO van
+    // en la barra de herramientas (esos los gobierna paintTools, que ademas
+    // respeta la pestana activa). Cubre el boton "Informe" del Replay.
+    function rxPintaReveal() {
+        try {
+            document.querySelectorAll('[data-reveal]').forEach((el) => {
+                if (el.classList && el.classList.contains('rondo-tool')) return;
+                el.style.display = rxRevelado(el.dataset.reveal) ? '' : 'none';
+            });
+        } catch (_) { /* noop */ }
+    }
+    // El logo de la plataforma vive en la esquina superior izquierda. Se
+    // detecta por el elemento (clase logo) y, si la instalacion lo pinta con
+    // otra clase, por la POSICION del clic (el logo siempre esta arriba a la
+    // izquierda). Asi el gesto funciona sin depender del DOM exacto.
+    function rxEsLogoPlataforma(e) {
+        const t = e && e.target;
+        if (t && t.closest) {
+            // Un clic sobre el propio panel de Rondo nunca cuenta.
+            try { if (t.closest('#rondo-panel,#rondo-dialog,#rondo-barra,#rondo-ayuda')) return false; } catch (_) { /* noop */ }
+            try {
+                if (t.closest('.top .logo,.logo,#block_top_panel .logo,.logo-wrapper .logo,.header-logo,[class*="logo" i]')) return true;
+            } catch (_) { /* selector no soportado: se cae a la posicion */ }
+        }
+        const x = Number(e && (e.clientX != null ? e.clientX : e.pageX)) || 0;
+        const y = Number(e && (e.clientY != null ? e.clientY : e.pageY)) || 0;
+        return x >= 0 && x <= 320 && y >= 0 && y <= 96;
+    }
+    // 5 clics sobre el logo (con un lapso entre ellos) revelan los informes.
+    function rxBindLogoRevelar() {
+        const NECESARIOS = 5;
+        const VENTANA = 1600;  // ms maximos entre clics para que cuenten seguidos
+        let toques = 0, ultimo = 0;
+        document.addEventListener('click', (e) => {
+            if (!rxEsLogoPlataforma(e)) return;
+            const ahora = Date.now();
+            toques = (ahora - ultimo <= VENTANA) ? (toques + 1) : 1;
+            ultimo = ahora;
+            if (toques >= NECESARIOS) { toques = 0; rxRevelarInformes(); }
+        }, true);
+    }
     function bindEvents() {
         mainBtn.addEventListener('click', () => {
             const ta = byId('rondo-txt'); if (ta) ta.value = '';

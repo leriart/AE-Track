@@ -37,7 +37,11 @@
         // V8.0: filtros de cada plantilla de informe elegidos por el
         // operador (units, geozones...), para no tener que volver a
         // teclearlos cada vez.
-        infplantfilt: 'rondo.api.infplantfilt'
+        infplantfilt: 'rondo.api.infplantfilt',
+        // V8.1: accesos que se revelan con un gesto oculto. Por ahora solo
+        // "informes": 5 clics en el logo de la plataforma muestran el boton
+        // de informes de la plataforma. Se recuerda para no repetir el gesto.
+        revelado: 'rondo.api.revelado'
     });
 
     // Datos por pestaña (sessionStorage): cada pestaña tiene su propia copia.
