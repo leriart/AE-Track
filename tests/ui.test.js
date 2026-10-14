@@ -824,8 +824,12 @@ ok('informes: fuente plataforma (descargas del informe nativo)',
     /function rxFuelTablaDescarga/.test(src) && /function rxFuelTplDescarga/.test(src) &&
     /function rxInfDefSoloTablas/.test(src) && /rxInfDefSoloTablas\(datos, desc\.tpl\.id, \['unit_thefts'\]\)/.test(src) &&
     /data-fuelsrc=/.test(src) && /fSrc\('plataforma'/.test(src) && /fSrc\('sensor'/.test(src) &&
-    /rxInfCorre\(desc\.tpl, r\.desde, r\.hasta/.test(src) && /RX_INF\._token, 'flota', defThefts\)/.test(src) &&
-    /if \(info\.esGeo\) continue;/.test(src) && /forzar === 'flota'/.test(src));
+    /function rxFuelCorrePlataforma/.test(src) && /rxFuelCorrePlataforma\(desc\.tpl, listaUn/.test(src) &&
+    /rxFuelFiltraMarca\(baseUn, RX_INF\.fuel\.marca\)/.test(src) &&
+    /p\.sensor_name = '\*'/.test(src) && /if \(info\.esGeo\) continue;/.test(src) && /forzar === 'flota'/.test(src));
+ok('informes: descargas con unidad, ubicacion, inicio/fin y duracion',
+    /RX_FUEL_DESC_COLS = \['Unidad'/.test(src) && /function rxFuelParseFecha/.test(src) &&
+    /function rxFuelMapeaColsDescarga/.test(src) && /rxInfFmtDur\(dur\)/.test(src));
 ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
     /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
     /RX_INF\.fuelSinSensor/.test(src));
