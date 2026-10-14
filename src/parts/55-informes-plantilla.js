@@ -653,6 +653,7 @@ function rxInfCelda(cel) {
 }
 async function rxInfFilasDeTabla(idx, total, token) {
     const filas = [];
+    const coords = [];   // por fila: [{i: columna, lat, lon}] de las celdas con y/x
     const tope = Math.min(Number(total) || 0, RX_INF_MAX_FILAS);
     const paso = 1000;
     for (let i = 0; i < tope; i += paso) {
@@ -660,7 +661,7 @@ async function rxInfFilasDeTabla(idx, total, token) {
         const j = Math.min(tope, i + paso) - 1;
         let r;
         try { r = await remoteCall('report/get_result_rows', { tableIndex: idx, indexFrom: i, indexTo: j }); }
-        catch (e) { return { filas: filas, error: (e && e.message) || String(e) }; }
+        catch (e) { return { filas: filas, coords: coords, error: (e && e.message) || String(e) }; }
         const arr = Array.isArray(r) ? r
             : ((r && Array.isArray(r.rows)) ? r.rows
                 : ((r && r.reportResult && Array.isArray(r.reportResult.rows)) ? r.reportResult.rows : []));
@@ -668,11 +669,23 @@ async function rxInfFilasDeTabla(idx, total, token) {
         for (const o of arr) {
             if (!o) continue;
             const c = Array.isArray(o.c) ? o.c : [];
-            filas.push(c.map(rxInfCelda));
+            const fila = [], cr = [];
+            for (let k = 0; k < c.length; k++) {
+                fila.push(rxInfCelda(c[k]));
+                const cel = c[k];
+                // La celda de ubicacion trae el texto y, ademas, las
+                // coordenadas en y/x: se guardan aparte (rxInfCelda las
+                // descartaba al preferir el texto).
+                if (cel && typeof cel === 'object' && cel.y != null && cel.x != null &&
+                    isFinite(+cel.y) && isFinite(+cel.x)) {
+                    cr.push({ i: k, lat: +cel.y, lon: +cel.x });
+                }
+            }
+            filas.push(fila); coords.push(cr);
         }
         if (arr.length < (j - i + 1)) break;
     }
-    return { filas: filas, error: '' };
+    return { filas: filas, coords: coords, error: '' };
 }
 // Coge las filas del resultado ya ejecutado. Se leen TODAS las tablas con
 // filas (no solo la mas grande): asi el operador puede cambiar de tabla
@@ -696,7 +709,7 @@ async function rxInfLeeResultado(r, token) {
         }
         const cols = ((t && t.header) || []).map((c) => String(c == null ? '' : c));
         rxInfCorrigeUnidades(cols, leidas.filas);
-        salida.push({ idx: i, name: t.name || '', label: t.label || '', cols: cols, filas: leidas.filas });
+        salida.push({ idx: i, name: t.name || '', label: t.label || '', cols: cols, filas: leidas.filas, coords: leidas.coords || [] });
     }
     if (!salida.length) return null;
     // La tabla elegida por defecto es la que mas filas tiene (suele ser el
@@ -2155,7 +2168,7 @@ function rxFuelUsaPlataforma() {
     return RX_INF.fuel.fuente !== 'sensor' && !!RX_INF.fuel._desc;
 }
 // ── Descargas de la plataforma: filas con unidad, ubicacion y duracion ──
-const RX_FUEL_DESC_COLS = ['Unidad', 'Ubicaci\u00f3n', 'Inicio', 'Fin', 'Duraci\u00f3n', 'Litros', 'Nivel inicial', 'Nivel final', 'Sensor'];
+const RX_FUEL_DESC_COLS = ['Unidad', 'Ubicaci\u00f3n', 'Coordenadas', 'Inicio', 'Fin', 'Duraci\u00f3n', 'Litros', 'Nivel inicial', 'Nivel final', 'Sensor'];
 // Fecha/hora tolerante: "AAAA-MM-DD HH:MM:SS", "DD/MM/AAAA HH:MM:SS" o ISO.
 function rxFuelParseFecha(s) {
     if (s == null) return null;
@@ -2224,13 +2237,20 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
             const tb = rxFuelTablaSalida(r);
             if (!tb) continue;
             const idx = rxFuelMapeaColsDescarga(tb.cols || []);
-            for (const f of (tb.filas || [])) {
+            const coords = tb.coords || [];
+            for (let fi = 0; fi < (tb.filas || []).length; fi++) {
+                const f = tb.filas[fi];
                 const cel = (k) => (idx[k] >= 0 && f[idx[k]] != null) ? String(f[idx[k]]) : '';
                 const inicio = cel('ini'), fin = cel('fin');
                 const ms0 = rxFuelParseFecha(inicio), ms1 = rxFuelParseFecha(fin);
                 const dur = (ms0 != null && ms1 != null && ms1 >= ms0) ? (ms1 - ms0) / 1000 : null;
+                // Coordenadas de la celda de ubicacion (vienen en y/x).
+                let coord = '';
+                const cr = coords[fi] || [];
+                const c = (idx.ubi >= 0 ? cr.filter((x) => x.i === idx.ubi)[0] : null) || cr[0];
+                if (c) coord = c.lat.toFixed(5) + ', ' + c.lon.toFixed(5);
                 filas.push([
-                    u.eco || String(u.id), cel('ubi'), inicio, fin,
+                    u.eco || String(u.id), cel('ubi'), coord, inicio, fin,
                     (dur != null ? rxInfFmtDur(dur) : '-'), cel('litros'),
                     cel('iniNiv'), cel('finNiv'), cel('sensor')
                 ]);
@@ -2243,7 +2263,7 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
         if (onProg) onProg(hechas, lista.length, filas.length, u.eco);
         await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
     }
-    filas.sort((a, b) => String(b[2]).localeCompare(String(a[2])));
+    filas.sort((a, b) => String(b[3]).localeCompare(String(a[3])));
     return {
         cols: RX_FUEL_DESC_COLS.slice(), filas: filas,
         tablas: filas.length ? [{ idx: 0, name: 'descargas', label: 'Descargas', cols: RX_FUEL_DESC_COLS.slice(), filas: filas }] : [],
