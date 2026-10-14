@@ -223,6 +223,10 @@
     {
       "file": "55-informes-plantilla.js",
       "chunk": "ui"
+    },
+    {
+      "file": "56-combustible-deteccion.js",
+      "chunk": "ui"
     }
   ]
 }
