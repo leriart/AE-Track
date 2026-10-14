@@ -145,6 +145,12 @@ function chipEn(que, v) {
     const html = byId('rgi-box').innerHTML;
     ok('lee las plantillas de la plataforma y las lista',
         /Resumen diario/.test(html) && /rgi-tpl-sel/.test(html), String(R.llamadas.length) + ' llamadas');
+    // La plantilla integrada de combustible encabeza la lista y trae sus
+    // opciones cuando esta seleccionada.
+    ok('la plantilla integrada de combustible esta y muestra sus opciones',
+        /Perdida de combustible/.test(html) && /id="rgi-fuel-litros"/.test(html) &&
+        /id="rgi-fuel-min"/.test(html) && /data-fuelmotor="off"/.test(html),
+        html.slice(html.indexOf('rgi-fuel-litros') - 40, html.indexOf('rgi-fuel-litros') + 60));
 
     // 3) Con datos, aparecen tabla y salidas.
     mod.RX_INF.tpl = { rid: 3, id: 12, nombre: 'GEOCERCA' };

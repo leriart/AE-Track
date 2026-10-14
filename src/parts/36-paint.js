@@ -38,7 +38,15 @@
         let visibles = 0;
         cont.querySelectorAll('.rondo-tool').forEach((el) => {
             const tabs = String(el.dataset.tabs || '').split(',').map((s) => s.trim()).filter(Boolean);
-            const show = tabs.length === 0 || tabs.indexOf(tab) >= 0;
+            let show = tabs.length === 0 || tabs.indexOf(tab) >= 0;
+            // V8.1: accesos ocultos tras un gesto (p. ej. informes con 5 clics
+            // en el logo). paintTools corre en cada cambio de pestana, asi que
+            // aqui se respeta el estado persistente; sin el helper, se oculta.
+            if (el.dataset.reveal) {
+                let on = false;
+                try { on = (typeof rxRevelado === 'function') && rxRevelado(el.dataset.reveal); } catch (_) { on = false; }
+                if (!on) show = false;
+            }
             el.style.display = show ? '' : 'none';
             if (show) visibles++;
         });

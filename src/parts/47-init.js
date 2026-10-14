@@ -20,6 +20,8 @@
         bindCaravanaSelect();
         bindReplay();
         bindRiesgo();
+        try { rxBindLogoRevelar(); } catch (_) { /* noop */ }
+        try { rxPintaReveal(); } catch (_) { /* noop */ }
         try { rxDiagBind(); } catch (_) { /* noop */ }
 
         const ok = await wialonReady();

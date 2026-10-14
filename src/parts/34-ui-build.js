@@ -94,7 +94,10 @@
             '<button id="rondo-informe" class="rondo-tool" data-tabs="dash,unidades,alertas" title="Generar reporte PDF (se abre el dialogo de impresion; elige Guardar como PDF)"><span class="rondo-usym">' + UIS.export + '</span> Reporte PDF</button>' +
             // v6.15: informe por geocerca (cruces y paradas dentro). Elige la
             // geocerca, el periodo y los datos; sale en PDF, CSV o Markdown.
-            '<button id="rondo-informe-geo" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas,zonas" title="Informes de la plataforma: ejecuta una plantilla por API, en trozos, sin el limite de tiempo"><span class="rondo-usym">' + UIS.zone + '</span></button>' +
+            // V8.1: acceso OCULTO. Solo aparece tras 5 clics en el logo de la
+            // plataforma (esquina superior izquierda). data-reveal lo mantiene
+            // oculto en paintTools hasta que APP.revelado.informes sea true.
+            '<button id="rondo-informe-geo" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas,zonas" data-reveal="informes" style="display:none" title="Informes de la plataforma: ejecuta una plantilla por API, en trozos, sin el limite de tiempo"><span class="rondo-usym">' + UIS.zone + '</span></button>' +
             '<button id="rondo-informe-md" class="rondo-tool rondo-tool-ico" data-tabs="dash,unidades,alertas" title="Generar informe Markdown (texto)"><span class="rondo-usym">' + UIS.csv + '</span></button>' +
             '<button id="rondo-csv-al" class="rondo-tool rondo-tool-ico" data-tabs="alertas" title="Exportar el historial de avisos a CSV"><span class="rondo-usym">' + UIS.alertas + '</span></button>' +
             '<button id="rondo-verif" class="rondo-tool rondo-tool-ico" data-tabs="unidades" title="Abrir solo las ventanas seleccionadas"><span class="rondo-usym">' + UIS.check + '</span></button>' +
@@ -309,7 +312,9 @@
              '<button class="mini" id="rondo-replay-csv" title="Exportar las paradas del dia a CSV"><span class="rondo-usym">' + UIS.csv + '</span> Paradas CSV</button>' +
              // v6.15: el informe por geocerca tambien desde aqui; al abrirlo
              // toma las fechas del recorrido que se esta viendo.
-             '<button class="mini" id="rondo-replay-informe-geo" title="Informes de la plataforma en el periodo del recorrido cargado"><span class="rondo-usym">' + UIS.export + '</span> Informe</button>' +
+             // V8.1: mismo acceso oculto que el boton de la barra (5 clics en
+             // el logo). rxPintaReveal lo muestra cuando se desbloquea.
+             '<button class="mini" id="rondo-replay-informe-geo" data-reveal="informes" style="display:none" title="Informes de la plataforma en el periodo del recorrido cargado"><span class="rondo-usym">' + UIS.export + '</span> Informe</button>' +
              '</div>' +
              '</div>' +
              // v5.14.6: tab de chat con IA. Solo se muestra si la IA esta
