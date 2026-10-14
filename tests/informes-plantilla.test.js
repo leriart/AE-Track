@@ -58,6 +58,7 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxInfPlantillaInfo,rxInfZonasPlataforma,rxInfUnidades,rxInfExplicaError,rxInfOrdena,rxInfPista,' +
     'rxInfEsDeGeocercas,rxInfClasifica,rxInfColumnasVacias,rxInfZonaDeFila,rxInfDatosPlantilla,rxInfZonasDisponibles,' +
     'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS,' +
+    'rxInfDefSoloTablas,' +
     'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
     'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
@@ -369,6 +370,18 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('filtros: la plantilla declara su filter_order (sin guardar nada)',
         mod.rxInfFiltrosDe(infoFOrder).join(',') === 'units,unit_groups',
         mod.rxInfFiltrosDe(infoFOrder).join(','));
+    // Definicion propia con SOLO la tabla de descargas (informe ligero).
+    const defSolo = mod.rxInfDefSoloTablas([{
+        id: 12, n: 'Informe de Combustible', p: '{"bind":{"avl_unit":["27899244"]},"descr":"X"}',
+        tbl: [
+            { n: 'unit_trips', l: 'Viajes', c: '[]', cl: '[]', p: '{}' },
+            { n: 'unit_thefts', l: 'Descargas de Combustible', c: '[]', cl: '[]', p: '{}' }
+        ]
+    }], 12, ['unit_thefts']);
+    ok('combustible: la definicion deja solo la tabla de descargas y quita el bind',
+        defSolo && defSolo.tbl.length === 1 && defSolo.tbl[0].n === 'unit_thefts' &&
+        JSON.parse(defSolo.p).bind === undefined && defSolo.id === 0,
+        JSON.stringify(defSolo && { id: defSolo.id, tbl: defSolo.tbl.map((x) => x.n), p: defSolo.p }));
     await mod.rxInfPrecargaItems({ tablas: [{ filtros: ['unit_groups'] }] });
     ok('filtros: un nombre de grupo se resuelve a su id',
         mod.rxInfFiltroResuelve('unit_groups', 'GRUPO NORTE') === '501',
