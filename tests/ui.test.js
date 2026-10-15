@@ -827,13 +827,14 @@ ok('informes: fuente plataforma (descargas del informe nativo)',
     /function rxFuelCorrePlataforma/.test(src) && /rxFuelCorrePlataforma\(desc\.tpl, listaUn/.test(src) &&
     /rxFuelFiltraMarca\(baseUn, RX_INF\.fuel\.marca\)/.test(src) &&
     /p\.sensor_name = '\*'/.test(src) && /if \(info\.esGeo\) continue;/.test(src) && /forzar === 'flota'/.test(src));
-ok('informes: descargas con unidad, ubicacion, coordenadas, inicio/fin y duracion',
-    /RX_FUEL_DESC_COLS = \['Unidad', 'Ubicaci\\u00f3n', 'Coordenadas'/.test(src) && /function rxFuelParseFecha/.test(src) &&
-    /function rxFuelMapeaColsDescarga/.test(src) && /rxInfFmtDur\(dur\)/.test(src) &&
-    /cr\.filter\(\(x\) => x\.i === idx\.ubi\)/.test(src));
-ok('informes: sin sensor de nivel se ofrece la plantilla de combustible',
-    /function rxFuelTplCombustible\(plantillas\)/.test(src) && /id="rgi-fuel-tpl"/.test(src) &&
-    /RX_INF\.fuelSinSensor/.test(src));
+ok('informes: descargas con unidad, ubicacion, coordenadas, inicio/fin, duracion, veredicto y motivo',
+    /RX_FUEL_DESC_COLS = \['Unidad', 'Ubicaci\\u00f3n', 'Coordenadas'/.test(src) && /'Veredicto', 'Motivo'\]/.test(src) &&
+    /function rxFuelParseFecha/.test(src) && /function rxFuelMapeaColsDescarga/.test(src) &&
+    /rxFuelFmtDur\(e\.durSeg\)/.test(src) && /lista\.filter\(\(x\) => x\.i === idx\.ubi\)/.test(src));
+ok('informes: descargas sin falsos positivos (une sensores, descarta sensor a 0, usa el algoritmo del fragmento 56)',
+    /function rxFuelUneSensores/.test(src) && /function rxFuelEvalDescarga/.test(src) &&
+    /combEvaluaEvento\(\{/.test(src) && /function rxFuelAnalizaDescargas/.test(src) &&
+    /label: 'Descartados'/.test(src) && /label: 'Lugares repetidos'/.test(src) && /id="rgi-fuel-tasa"/.test(src));
 ok('escaneo: con "todo" arranca donde la plataforma guarda el primer mensaje',
     /async function rxGeoInfPrimerMensaje\(uid\)/.test(src) && /loadCount: 1/.test(src) &&
     /Datos desde el /.test(src));

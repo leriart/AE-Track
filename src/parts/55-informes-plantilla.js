@@ -60,6 +60,7 @@ const RX_INF = {
         litros: 10,      // caida de nivel que ya cuenta como perdida
         min: 2,          // ventana (min) en la que se produce la caida
         vel: 3,          // km/h: por debajo, la unidad esta detenida
+        tasa: 3,         // L/min: ritmo minimo de una extraccion (fuente plataforma)
         motor: 'todos',  // 'todos' | 'on' (encendido) | 'off' (apagado)
         marca: '(SC)',   // solo unidades cuyo nombre contenga esta marca
         sensor: '',      // clave/nombre exacto del parametro de nivel (override)
@@ -217,6 +218,10 @@ function rxInfCols(cols) {
 function rxInfNum(v) {
     if (v == null || v === '') return null;
     if (typeof v === 'number') return isFinite(v) ? v : null;
+    // "1d 0:29:00": duracion de mas de un dia (Excel se come las horas >= 24 de
+    // "24:29:00", asi que el informe de combustible las separa en dias).
+    const dd = String(v).trim().match(/^(\d+)d\s+(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
+    if (dd) return Number(dd[1]) * 86400 + Number(dd[2]) * 3600 + Number(dd[3]) * 60 + Number(dd[4] || 0);
     const dur = String(v).trim().match(/^(\d+):(\d{1,2})(?::(\d{1,2}))?$/);
     if (dur) {
         const a = Number(dur[1]), b = Number(dur[2]), c = Number(dur[3] || 0);
@@ -297,7 +302,7 @@ function rxInfResumenUnidad(cols, filas, tipos) {
             const s = String(f[i] == null ? '' : f[i]).trim();
             if (!s || s === '-') continue;
             vio = true;
-            if (!/^\d+:\d{1,2}(:\d{1,2})?$/.test(s)) { dur = false; break; }
+            if (!/^(\d+d\s+)?\d+:\d{1,2}(:\d{1,2})?$/.test(s)) { dur = false; break; }
         }
         esDur[i] = vio && dur;
     }
@@ -654,6 +659,7 @@ function rxInfCelda(cel) {
 async function rxInfFilasDeTabla(idx, total, token) {
     const filas = [];
     const coords = [];   // por fila: [{i: columna, lat, lon}] de las celdas con y/x
+    const vals = [];     // por fila: [[columna, epoch s]] de las celdas de hora (v exacto)
     const tope = Math.min(Number(total) || 0, RX_INF_MAX_FILAS);
     const paso = 1000;
     for (let i = 0; i < tope; i += paso) {
@@ -661,7 +667,7 @@ async function rxInfFilasDeTabla(idx, total, token) {
         const j = Math.min(tope, i + paso) - 1;
         let r;
         try { r = await remoteCall('report/get_result_rows', { tableIndex: idx, indexFrom: i, indexTo: j }); }
-        catch (e) { return { filas: filas, coords: coords, error: (e && e.message) || String(e) }; }
+        catch (e) { return { filas: filas, coords: coords, vals: vals, error: (e && e.message) || String(e) }; }
         const arr = Array.isArray(r) ? r
             : ((r && Array.isArray(r.rows)) ? r.rows
                 : ((r && r.reportResult && Array.isArray(r.reportResult.rows)) ? r.reportResult.rows : []));
@@ -669,10 +675,15 @@ async function rxInfFilasDeTabla(idx, total, token) {
         for (const o of arr) {
             if (!o) continue;
             const c = Array.isArray(o.c) ? o.c : [];
-            const fila = [], cr = [];
+            const fila = [], cr = [], vr = [];
             for (let k = 0; k < c.length; k++) {
                 fila.push(rxInfCelda(c[k]));
                 const cel = c[k];
+                // El texto de una hora llega sin segundos segun el formato del
+                // usuario ("10/10/2026 18:20"); `v` trae el instante exacto.
+                // Solo se guardan las horas (epoch plausible): mantiene la fila
+                // y la cache pequenas.
+                if (cel && typeof cel === 'object' && cel.v != null && isFinite(+cel.v) && +cel.v > 1e9 && +cel.v < 4e9) vr.push([k, +cel.v]);
                 // La celda de ubicacion trae el texto y, ademas, las
                 // coordenadas en y/x: se guardan aparte (rxInfCelda las
                 // descartaba al preferir el texto).
@@ -681,11 +692,11 @@ async function rxInfFilasDeTabla(idx, total, token) {
                     cr.push({ i: k, lat: +cel.y, lon: +cel.x });
                 }
             }
-            filas.push(fila); coords.push(cr);
+            filas.push(fila); coords.push(cr); vals.push(vr);
         }
         if (arr.length < (j - i + 1)) break;
     }
-    return { filas: filas, coords: coords, error: '' };
+    return { filas: filas, coords: coords, vals: vals, error: '' };
 }
 // Coge las filas del resultado ya ejecutado. Se leen TODAS las tablas con
 // filas (no solo la mas grande): asi el operador puede cambiar de tabla
@@ -709,7 +720,7 @@ async function rxInfLeeResultado(r, token) {
         }
         const cols = ((t && t.header) || []).map((c) => String(c == null ? '' : c));
         rxInfCorrigeUnidades(cols, leidas.filas);
-        salida.push({ idx: i, name: t.name || '', label: t.label || '', cols: cols, filas: leidas.filas, coords: leidas.coords || [] });
+        salida.push({ idx: i, name: t.name || '', label: t.label || '', cols: cols, filas: leidas.filas, coords: leidas.coords || [], vals: leidas.vals || [] });
     }
     if (!salida.length) return null;
     // La tabla elegida por defecto es la que mas filas tiene (suele ser el
@@ -2168,16 +2179,40 @@ function rxFuelUsaPlataforma() {
     return RX_INF.fuel.fuente !== 'sensor' && !!RX_INF.fuel._desc;
 }
 // ── Descargas de la plataforma: filas con unidad, ubicacion y duracion ──
-const RX_FUEL_DESC_COLS = ['Unidad', 'Ubicaci\u00f3n', 'Coordenadas', 'Inicio', 'Fin', 'Duraci\u00f3n', 'Litros', 'Nivel inicial', 'Nivel final', 'Sensor'];
-// Fecha/hora tolerante: "AAAA-MM-DD HH:MM:SS", "DD/MM/AAAA HH:MM:SS" o ISO.
+// 14 columnas: es el tope que pinta la tabla de la pantalla. "Veredicto" y
+// "Motivo" son lo que separa un robo de un artefacto del sensor.
+const RX_FUEL_DESC_COLS = ['Unidad', 'Ubicaci\u00f3n', 'Coordenadas', 'Inicio', 'Fin', 'Duraci\u00f3n', 'Litros', 'Nivel inicial', 'Nivel final', 'L por minuto', 'Sospecha', 'Sensor', 'Veredicto', 'Motivo'];
+const RX_FUEL_LUG_COLS = ['Coordenadas', 'Ubicaci\u00f3n', 'Unidades', 'Eventos', 'Litros', '\u00daltimo', 'Sospecha'];
+// Criterios (salen del analisis del export real de 3.562 filas):
+const RX_FUEL_TASA = 3;          // L/min: una extraccion con la unidad parada baja a este ritmo o mas
+const RX_FUEL_LARGA_S = 1800;    // mas de 30 min ya no es extraccion rapida
+const RX_FUEL_RITMO_MAX = 150;    // L/min: mas rapido que esto parece un salto del sensor, no una extraccion
+const RX_FUEL_FUSION_S = 600;    // eventos del mismo sensor a <= 10 min y con el nivel continuo = uno
+const RX_FUEL_CONT_L = 2;        // litros de diferencia para decir "nivel continuo"
+const RX_FUEL_FALLA_L = 0.5;     // nivel final por debajo = el sensor perdio la senal
+const RX_FUEL_REINC_M = 150;     // "mismo lugar"
+const RX_FUEL_CONV_M = 30;       // convergencia de unidades distintas
+const RX_FUEL_MAX_REL = 3000;    // tope para el cruce O(n^2) de lugares
+// Fecha/hora tolerante: "AAAA-MM-DD HH:MM:SS", "DD.MM.AAAA", "DD/MM/AAAA" o
+// "MM/DD/AA" (asi sale el CSV de la plataforma: 10/14/26 13:22). Cuando la
+// celda trae `v` (epoch) NO se usa esto: es solo el respaldo.
 function rxFuelParseFecha(s) {
     if (s == null) return null;
     const t = String(s).trim();
     if (!t) return null;
     let m = t.match(/(\d{4})[-.\/](\d{1,2})[-.\/](\d{1,2})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
     if (m) return new Date(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +(m[6] || 0)).getTime();
-    m = t.match(/(\d{1,2})[-.\/](\d{1,2})[-.\/](\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
-    if (m) return new Date(+m[3], +m[2] - 1, +m[1], +m[4], +m[5], +(m[6] || 0)).getTime();
+    m = t.match(/(\d{1,2})[-.\/](\d{1,2})[-.\/](\d{2,4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (m) {
+        const a = +m[1], b = +m[2];
+        const y = (m[3].length === 2) ? 2000 + (+m[3]) : +m[3];
+        let d = a, mo = b;
+        // Mes/dia si es inequivoco (el segundo no cabe como mes) o si es el
+        // formato corto con "/" y anio de 2 digitos; en lo demas, dia/mes.
+        if (a <= 12 && b > 12) { mo = a; d = b; }
+        else if (m[3].length === 2 && t.indexOf('/') >= 0 && a <= 12) { mo = a; d = b; }
+        return new Date(y, mo - 1, d, +m[4], +m[5], +(m[6] || 0)).getTime();
+    }
     const d = new Date(t);
     return isFinite(d.getTime()) ? d.getTime() : null;
 }
@@ -2208,12 +2243,300 @@ function rxFuelTablaSalida(r) {
     return (r && r.cols && r.cols.length)
         ? { cols: r.cols, filas: r.filas || [], name: 'descargas', label: 'Descargas' } : null;
 }
-// Corre la plantilla de descargas POR UNIDAD y arma las filas con lo que pide
-// el operador: unidad, ubicacion, dia/hora de inicio y fin, duracion y litros.
-async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, token) {
+// ── Descargas de la plataforma: analisis anti falsos positivos ──────────
+// El informe nativo de descargas NO se puede usar tal cual (se midio sobre un
+// export de 3.562 filas / 87 unidades):
+//   - un mismo evento sale hasta 3 veces (IZQ, DER y DIESEL TOTAL, que ya es
+//     la suma de los dos): 878 mil L reales eran 652 mil;
+//   - el sensor que "cae a 0" (se desconecta) cuenta como un tanque vaciado;
+//   - las bajadas lentas (equipo de frio, ralenti, deriva) cuentan como robo;
+//   - Excel se come las horas >= 24 y los segundos de la hora.
+// Aqui cada fila se convierte en un evento, se unen los sensores, se juzga con
+// el algoritmo propio (fragmento 56, comb*) y solo lo que parece robo va a la
+// tabla principal; lo demas queda en "Descartados" con su motivo.
+function rxFuelDist(lat1, lon1, lat2, lon2) {
+    if (lat1 == null || lon1 == null || lat2 == null || lon2 == null) return Infinity;
+    try {
+        if (typeof haversine === 'function') { const d = haversine(lat1, lon1, lat2, lon2); if (isFinite(d)) return d; }
+    } catch (_) { /* noop */ }
+    const rad = Math.PI / 180, R = 6371000;
+    const dy = (lat2 - lat1) * rad, dx = (lon2 - lon1) * rad * Math.cos(((lat1 + lat2) / 2) * rad);
+    return R * Math.sqrt(dx * dx + dy * dy);
+}
+// Duracion legible; con dias ("1d 0:29:00") porque Excel convierte "24:29:00"
+// en una hora del dia y se pierde el dia.
+function rxFuelFmtDur(seg) {
+    const s = Math.max(0, Math.round(Number(seg) || 0));
+    const d = Math.floor(s / 86400);
+    const r = rxInfFmtDur(s % 86400);
+    return d ? (d + 'd ' + r) : r;
+}
+function rxFuelFmtN(n, dec, coma) {
+    if (n == null || !isFinite(n)) return '';
+    const t = Number(n).toFixed(dec);
+    return coma ? t.replace('.', ',') : t;
+}
+// La plataforma escribe los litros con su separador ("24,55 l" o "24.55 l").
+function rxFuelUsaComa(evs) {
+    for (const e of (evs || [])) {
+        const t = String((e && e.rawL) || '');
+        if (/\d,\d{1,2}(?!\d)/.test(t)) return true;
+        if (/\d\.\d{1,2}(?!\d)/.test(t)) return false;
+    }
+    return false;
+}
+// Una fila de la tabla de descargas -> evento. Si la celda de hora trae su
+// epoch exacto (`v`) se usa ese: el texto no lleva segundos y puede venir en
+// dia/mes o mes/dia. Coordenadas: las de la celda de ubicacion.
+function rxFuelEvDesc(f, idx, cr, vr, eco) {
+    const cel = (k) => (idx[k] >= 0 && f[idx[k]] != null) ? String(f[idx[k]]) : '';
+    const epoch = (k) => {
+        if (idx[k] < 0) return null;
+        for (const p of (vr || [])) if (p && p[0] === idx[k]) return p[1] * 1000;
+        return null;
+    };
+    const ini = cel('ini'), fin = cel('fin');
+    let ms0 = epoch('ini'), ms1 = epoch('fin');
+    const exacto = (ms0 != null && ms1 != null);
+    if (ms0 == null) ms0 = rxFuelParseFecha(ini);
+    if (ms1 == null) ms1 = rxFuelParseFecha(fin);
+    let durSeg = (ms0 != null && ms1 != null && ms1 >= ms0) ? (ms1 - ms0) / 1000 : null;
+    // Sin segundos y en el mismo minuto: la plataforma redondeo; se toma 60 s
+    // (cota alta de duracion = ritmo prudente) en vez de "caida instantanea".
+    if (durSeg === 0 && !exacto) durSeg = 60;
+    const lista = cr || [];
+    const c = (idx.ubi >= 0 ? lista.filter((x) => x.i === idx.ubi)[0] : null) || lista[0];
+    return {
+        eco: eco, ubi: cel('ubi'), lat: c ? c.lat : null, lon: c ? c.lon : null,
+        ini: ini, fin: fin, ms0: ms0, ms1: ms1, durSeg: durSeg,
+        litros: rxInfNum(cel('litros')), iniNiv: rxInfNum(cel('iniNiv')), finNiv: rxInfNum(cel('finNiv')),
+        vel: rxInfNum(cel('vel')), sensor: cel('sensor'), rawL: cel('litros'),
+        n: 1, sensores: cel('sensor') ? [cel('sensor')] : [], noCuadra: false, fusion: 0
+    };
+}
+// Varios sensores de la MISMA unidad con el mismo inicio/fin (+-60 s) son un
+// solo evento. Se toma una sola cifra: DIESEL TOTAL si existe (ya es la suma
+// de IZQ y DER) o, si no, el mayor de los sensores. Si TOTAL no cuadra con
+// IZQ + DER (mas de 2 L o 5 %) los sensores se contradicen y se marca.
+function rxFuelUneSensores(evs) {
+    const porU = new Map();
+    for (const e of (evs || [])) {
+        const k = String(e.eco);
+        if (!porU.has(k)) porU.set(k, []);
+        porU.get(k).push(e);
+    }
+    const out = [];
+    for (const lista of porU.values()) {
+        lista.sort((a, b) => (a.ms0 || 0) - (b.ms0 || 0));
+        const grupos = [];
+        for (const e of lista) {
+            let g = null;
+            if (e.ms0 != null) {
+                for (let i = grupos.length - 1; i >= 0 && i >= grupos.length - 8; i--) {
+                    const x = grupos[i];
+                    if (x.ms0 != null && Math.abs(e.ms0 - x.ms0) <= 60000 &&
+                        Math.abs((e.ms1 != null ? e.ms1 : e.ms0) - (x.ms1 != null ? x.ms1 : x.ms0)) <= 60000) { g = x; break; }
+                }
+            }
+            if (g) g.m.push(e); else grupos.push({ ms0: e.ms0, ms1: e.ms1, m: [e] });
+        }
+        for (const g of grupos) {
+            const m = g.m;
+            if (m.length === 1) { out.push(m[0]); continue; }
+            const esTotal = (x) => /(TOTAL|SUMA)/.test(norm(x.sensor || ''));
+            const tot = m.filter(esTotal);
+            const comp = m.filter((x) => !esTotal(x));
+            let rep = tot[0];
+            if (!rep) rep = m.slice().sort((a, b) => (b.litros || 0) - (a.litros || 0))[0];
+            const r = Object.assign({}, rep);
+            r.n = m.length;
+            const nom = {};
+            m.forEach((x) => { if (x.sensor) nom[x.sensor] = 1; });
+            r.sensores = Object.keys(nom);
+            if (tot[0] && comp.length >= 2) {
+                const suma = comp.reduce((a, x) => a + (x.litros || 0), 0);
+                if (Math.abs(suma - (tot[0].litros || 0)) > Math.max(2, 0.05 * (tot[0].litros || 0))) r.noCuadra = true;
+            }
+            out.push(r);
+        }
+    }
+    return out;
+}
+// Una extraccion sostenida que el sensor parte en trozos (misma unidad, mismo
+// sensor, a <= 10 min y con el nivel continuo) es UN evento con su total.
+function rxFuelFusionaContiguas(evs) {
+    const porK = new Map();
+    for (const e of (evs || [])) {
+        const k = e.eco + '|' + (e.sensor || '');
+        if (!porK.has(k)) porK.set(k, []);
+        porK.get(k).push(e);
+    }
+    const out = [];
+    for (const lista of porK.values()) {
+        lista.sort((a, b) => (a.ms0 || 0) - (b.ms0 || 0));
+        let cur = null;
+        for (const e of lista) {
+            if (cur && cur.ms1 != null && e.ms0 != null &&
+                (e.ms0 - cur.ms1) / 1000 <= RX_FUEL_FUSION_S &&
+                e.iniNiv != null && cur.finNiv != null && Math.abs(e.iniNiv - cur.finNiv) <= RX_FUEL_CONT_L) {
+                cur.litros += (e.litros || 0);
+                cur.finNiv = e.finNiv;
+                cur.fin = e.fin;
+                cur.ms1 = Math.max(cur.ms1, e.ms1 != null ? e.ms1 : e.ms0);
+                cur.durSeg = (cur.ms1 - cur.ms0) / 1000;
+                cur.fusion++;
+                if (e.noCuadra) cur.noCuadra = true;
+            } else {
+                if (cur) out.push(cur);
+                cur = Object.assign({}, e);
+            }
+        }
+        if (cur) out.push(cur);
+    }
+    return out;
+}
+// Veredicto de UN evento. Pre-filtros propios (los que la plataforma no ve) y
+// despues el algoritmo del fragmento 56 (combEvaluaEvento): ruido, escalon de
+// sensor, fuga/consumo lento y descarga no autorizada, con su puntaje 0-9.
+// `ctx` trae lo que solo se sabe mirando el conjunto (recurrencia, convergencia).
+function rxFuelEvalDescarga(e, cfg, ctx) {
+    const c = cfg || {};
+    const x = ctx || {};
+    const umbral = (Number(c.litros) > 0) ? Number(c.litros) : 10;
+    const tasaMin = (Number(c.tasa) > 0) ? Number(c.tasa) : RX_FUEL_TASA;
+    const velMax = (c.vel == null || !isFinite(Number(c.vel))) ? 3 : Number(c.vel);
+    const L = (e && e.litros != null) ? e.litros : null;
+    const dur = (e && e.durSeg != null) ? e.durSeg : null;
+    const tasa = (L != null && dur != null && dur > 0) ? (L / (dur / 60)) : null;
+    const res = (ver, mot, rel, r) => ({
+        veredicto: ver, motivo: mot, relevante: !!rel, tasa: tasa,
+        nivel: r ? r.nivel : '', puntaje: r ? r.puntaje : 0, firme: !!(r && r.firme)
+    });
+    const f1 = (n) => rxInfFmt(Math.round(n * 10) / 10);
+    if (L == null || !isFinite(L) || L <= 0) return res('Sin dato', 'la plataforma no dio litros', false);
+    if (L < umbral) return res('Menor al umbral', 'baja ' + f1(L) + ' L, menos del m\u00ednimo de ' + f1(umbral) + ' L', false);
+    // El sensor que cae a 0 se desconecto: un tanque no se vacia del todo.
+    if ((e.finNiv != null && e.finNiv <= RX_FUEL_FALLA_L && (e.iniNiv == null || e.iniNiv >= umbral)) ||
+        (e.iniNiv != null && e.iniNiv > 0 && L >= e.iniNiv * 0.98)) {
+        return res('Falla de sensor', 'el nivel cae a ' + f1(e.finNiv == null ? 0 : e.finNiv) + ' L (desde ' + f1(e.iniNiv == null ? L : e.iniNiv) + ' L): el sensor perdi\u00f3 la se\u00f1al, no se vaci\u00f3 el tanque', false);
+    }
+    if (e.noCuadra) return res('Sensores no cuadran', 'DIESEL TOTAL no coincide con IZQ + DER: la lectura no es confiable', false);
+    if (e.vel != null && e.vel > velMax) {
+        return res('En movimiento', 'iba a ' + f1(e.vel) + ' km/h (l\u00edmite ' + f1(velMax) + '): el nivel se mueve con el tanque, no es extracci\u00f3n', false);
+    }
+    if (typeof combEvaluaEvento !== 'function') {
+        return res('Sospechoso', 'sin motor de veredicto', true);
+    }
+    const r = combEvaluaEvento({
+        litros: L, durSeg: (dur != null ? dur : 60), geocerca: e.ubi || '',
+        lat: e.lat, lon: e.lon, velIni: e.vel, t: (e.ms0 != null ? e.ms0 / 1000 : null)
+    }, { opts: { litrosMin: umbral }, recurrencia: x.recurrencia || 0, carnada: x.carnada || 0 });
+    const ev = r.evidencia || '';
+    if (r.veredicto === 'ruido') return res('Menor al umbral', ev, false, r);
+    if (r.veredicto === 'error_sensor') return res('Falla de sensor', ev, false, r);
+    if (r.veredicto === 'fuga') return res('Consumo o fuga lenta', ev + ' (equipo de fr\u00edo, ralent\u00ed o deriva; no es extracci\u00f3n)', false, r);
+    if (r.veredicto === 'llenado_contiguo') return res('Llenado cercano', ev, false, r);
+    // descarga_no_autorizada: robo solo si es rapida y firme; si no, a revisar.
+    if (dur != null && dur > RX_FUEL_LARGA_S) return res('Sospechoso', ev + ' (dura m\u00e1s de 30 min: revisar)', true, r);
+    if (tasa != null && tasa < tasaMin) return res('Sospechoso', ev + ' (ritmo menor a ' + f1(tasaMin) + ' L/min: revisar)', true, r);
+    // Un salto de cientos de L/min es mas probable un escalon del sensor que
+    // una bomba: se deja a revisar, no como robo probable.
+    if (tasa != null && tasa > RX_FUEL_RITMO_MAX) {
+        return res('Sospechoso', ev + ' (' + f1(tasa) + ' L/min es un ritmo muy alto: puede ser un salto del sensor)', true, r);
+    }
+    return res(r.firme ? 'Robo probable' : 'Sospechoso', ev, true, r);
+}
+// Lugares repetidos y convergencia entre las descargas que parecen robo:
+// e.lugarN = descargas a <= 150 m (incluida la propia), e.lugarU = unidades
+// distintas ahi, e.convU = OTRAS unidades a <= 30 m el mismo dia.
+function rxFuelReincidencia(rel) {
+    const lista = (rel || []).filter((e) => e.lat != null && e.lon != null).slice(0, RX_FUEL_MAX_REL);
+    for (const e of lista) {
+        let n = 0; const u = {}, cv = {};
+        for (const o of lista) {
+            const d = rxFuelDist(e.lat, e.lon, o.lat, o.lon);
+            if (d <= RX_FUEL_REINC_M) { n++; u[o.eco] = 1; }
+            if (o.eco !== e.eco && d <= RX_FUEL_CONV_M && e.ms0 != null && o.ms0 != null &&
+                Math.abs(e.ms0 - o.ms0) <= 86400000) cv[o.eco] = 1;
+        }
+        e.lugarN = n; e.lugarU = Object.keys(u).length; e.convU = Object.keys(cv).length;
+    }
+    return lista;
+}
+// Pipeline completo y puro: eventos crudos -> robos, descartados y lugares.
+function rxFuelAnalizaDescargas(evs, cfg) {
+    const crudos = (evs || []).length;
+    const base = rxFuelFusionaContiguas(rxFuelUneSensores(evs));
+    base.forEach((e) => { e.cls = rxFuelEvalDescarga(e, cfg, null); });
+    const rel = base.filter((e) => e.cls.relevante);
+    rxFuelReincidencia(rel);
+    // Segunda pasada: con la recurrencia y la convergencia el puntaje de
+    // sospecha cambia (la clase no: no se escala nada por repetirse).
+    for (const e of rel) {
+        if (e.lugarN > 1 || e.convU > 0) {
+            const c2 = rxFuelEvalDescarga(e, cfg, { recurrencia: e.lugarN, carnada: e.convU > 0 ? e.convU + 1 : 0 });
+            e.cls.nivel = c2.nivel; e.cls.puntaje = c2.puntaje;
+        }
+        const extra = [];
+        if (e.lugarN > 1) extra.push('lugar repetido: ' + e.lugarN + ' descargas de ' + e.lugarU + ' unidad(es) a ' + RX_FUEL_REINC_M + ' m');
+        if (e.convU > 0) extra.push('convergen ' + (e.convU + 1) + ' unidades a ' + RX_FUEL_CONV_M + ' m el mismo d\u00eda');
+        if (e.fusion) extra.push('une ' + (e.fusion + 1) + ' ca\u00eddas seguidas');
+        if (extra.length) e.cls.motivo += ' \u00b7 ' + extra.join(' \u00b7 ');
+    }
+    const prio = { 'Robo probable': 0, 'Sospechoso': 1 };
+    const porFecha = (a, b) => (b.ms0 || 0) - (a.ms0 || 0);
+    rel.sort((a, b) => (prio[a.cls.veredicto] - prio[b.cls.veredicto]) || porFecha(a, b));
+    const desc = base.filter((e) => !e.cls.relevante).sort(porFecha);
+    return {
+        rel: rel, desc: desc, crudos: crudos, unidos: base.length,
+        robos: rel.filter((e) => e.cls.veredicto === 'Robo probable').length,
+        sospechas: rel.filter((e) => e.cls.veredicto === 'Sospechoso').length,
+        litrosRobo: rel.reduce((a, e) => a + (e.litros || 0), 0)
+    };
+}
+// Fila de la tabla (RX_FUEL_DESC_COLS) para un evento ya evaluado.
+function rxFuelFilaDesc(e, coma) {
+    const L = (n) => (n == null ? '' : rxFuelFmtN(n, 2, coma) + ' l');
+    const cls = e.cls || {};
+    return [
+        e.eco, e.ubi, (e.lat != null && e.lon != null) ? (e.lat.toFixed(5) + ', ' + e.lon.toFixed(5)) : '',
+        e.ini, e.fin, (e.durSeg != null ? rxFuelFmtDur(e.durSeg) : '-'),
+        L(e.litros), L(e.iniNiv), L(e.finNiv),
+        (cls.tasa != null ? rxFuelFmtN(cls.tasa, 1, coma) : '-'),
+        (cls.relevante && cls.nivel) ? (cls.nivel + ' (' + cls.puntaje + ')') : '-',
+        (e.sensores && e.sensores.length > 1 && /TOTAL/.test(norm(e.sensor || '')))
+            ? e.sensor : (e.sensores && e.sensores.length ? e.sensores.join(' + ') : (e.sensor || '')),
+        cls.veredicto || '', cls.motivo || ''
+    ];
+}
+// Puntos donde se repite la perdida (>= 2 descargas a <= 150 m): es lo que
+// separa "un camion que perdio" de "un sitio donde roban".
+function rxFuelLugares(rel, coma) {
+    const grupos = [];
+    for (const e of (rel || []).slice(0, RX_FUEL_MAX_REL)) {
+        if (e.lat == null || e.lon == null) continue;
+        let g = null;
+        for (const x of grupos) { if (rxFuelDist(x.lat, x.lon, e.lat, e.lon) <= RX_FUEL_REINC_M) { g = x; break; } }
+        if (!g) { g = { lat: e.lat, lon: e.lon, n: 0, uni: {}, litros: 0, ult: -1, ultTxt: '', ubi: {}, pun: -1, nivel: '' }; grupos.push(g); }
+        g.n++; g.uni[e.eco] = 1; g.litros += (e.litros || 0);
+        if ((e.ms0 || 0) > g.ult) { g.ult = e.ms0 || 0; g.ultTxt = e.ini; }
+        if (e.ubi) g.ubi[e.ubi] = (g.ubi[e.ubi] || 0) + 1;
+        if (e.cls && e.cls.puntaje > g.pun) { g.pun = e.cls.puntaje; g.nivel = e.cls.nivel; }
+    }
+    return grupos.filter((g) => g.n >= 2).sort((a, b) => b.litros - a.litros).map((g) => {
+        const ub = Object.keys(g.ubi).sort((a, b) => g.ubi[b] - g.ubi[a])[0] || '';
+        return [g.lat.toFixed(5) + ', ' + g.lon.toFixed(5), ub, Object.keys(g.uni).length, g.n,
+            rxFuelFmtN(g.litros, 1, coma) + ' l', g.ultTxt, g.nivel ? (g.nivel + ' (' + g.pun + ')') : '-'];
+    });
+}
+// Corre la plantilla de descargas POR UNIDAD, une los sensores, juzga cada
+// evento y devuelve: tabla principal (robos y sospechas), descartados y
+// lugares repetidos.
+async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, token, cfg) {
     const t0 = Date.now();
+    const conf = cfg || RX_INF.fuel;
     const lista = (unidades || []).slice(0, RX_FUEL_MAX_U);
-    const filas = [];
+    const evs = [];
     const errores = [];
     const trozos = rxGeoInfTrozos(desde, hasta, RX_INF_DIAS_TROZO * 86400).slice(0, RX_INF_MAX_TROZOS);
     let hechas = 0, fallos = 0, conDatos = 0;
@@ -2221,7 +2544,7 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
         if (token && token.cancelado) break;
         let nUni = 0;
         for (const tr of trozos) {
-            if (token && token.cancelado || filas.length >= RX_FUEL_MAX_EV) break;
+            if (token && token.cancelado || evs.length >= RX_FUEL_MAX_EV) break;
             let r;
             try { r = await rxInfEjecuta(tpl, { id: u.id, sec: '0' }, tr[0], tr[1], token, 0, def); }
             catch (e) {
@@ -2238,38 +2561,39 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
             if (!tb) continue;
             const idx = rxFuelMapeaColsDescarga(tb.cols || []);
             const coords = tb.coords || [];
+            const vals = tb.vals || [];
             for (let fi = 0; fi < (tb.filas || []).length; fi++) {
-                const f = tb.filas[fi];
-                const cel = (k) => (idx[k] >= 0 && f[idx[k]] != null) ? String(f[idx[k]]) : '';
-                const inicio = cel('ini'), fin = cel('fin');
-                const ms0 = rxFuelParseFecha(inicio), ms1 = rxFuelParseFecha(fin);
-                const dur = (ms0 != null && ms1 != null && ms1 >= ms0) ? (ms1 - ms0) / 1000 : null;
-                // Coordenadas de la celda de ubicacion (vienen en y/x).
-                let coord = '';
                 const cr = coords[fi] || [];
-                const c = (idx.ubi >= 0 ? cr.filter((x) => x.i === idx.ubi)[0] : null) || cr[0];
-                if (c) coord = c.lat.toFixed(5) + ', ' + c.lon.toFixed(5);
-                filas.push([
-                    u.eco || String(u.id), cel('ubi'), coord, inicio, fin,
-                    (dur != null ? rxInfFmtDur(dur) : '-'), cel('litros'),
-                    cel('iniNiv'), cel('finNiv'), cel('sensor')
-                ]);
+                // Coordenadas de la celda de ubicacion (vienen en y/x).
+                const ev = rxFuelEvDesc(tb.filas[fi], idx, cr, vals[fi], u.eco || String(u.id));
+                evs.push(ev);
                 nUni++;
-                if (filas.length >= RX_FUEL_MAX_EV) break;
+                if (evs.length >= RX_FUEL_MAX_EV) break;
             }
         }
         if (nUni) conDatos++;
         hechas++;
-        if (onProg) onProg(hechas, lista.length, filas.length, u.eco);
+        if (onProg) onProg(hechas, lista.length, evs.length, u.eco);
         await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
     }
-    filas.sort((a, b) => String(b[3]).localeCompare(String(a[3])));
+    const an = rxFuelAnalizaDescargas(evs, conf);
+    const coma = rxFuelUsaComa(evs);
+    const filasRel = an.rel.map((e) => rxFuelFilaDesc(e, coma));
+    const filasDesc = an.desc.map((e) => rxFuelFilaDesc(e, coma));
+    const lug = rxFuelLugares(an.rel, coma);
+    const tablas = [];
+    if (evs.length) {
+        tablas.push({ idx: 0, name: 'robos', label: 'Robos y sospechas', cols: RX_FUEL_DESC_COLS.slice(), filas: filasRel });
+        tablas.push({ idx: 1, name: 'descartados', label: 'Descartados', cols: RX_FUEL_DESC_COLS.slice(), filas: filasDesc });
+        if (lug.length) tablas.push({ idx: 2, name: 'lugares', label: 'Lugares repetidos', cols: RX_FUEL_LUG_COLS.slice(), filas: lug });
+    }
     return {
-        cols: RX_FUEL_DESC_COLS.slice(), filas: filas,
-        tablas: filas.length ? [{ idx: 0, name: 'descargas', label: 'Descargas', cols: RX_FUEL_DESC_COLS.slice(), filas: filas }] : [],
+        cols: RX_FUEL_DESC_COLS.slice(), filas: filasRel, tablas: tablas,
         trozos: trozos.length, hechos: hechas, objetos: lista.length, alcance: 'plataforma',
-        fallos: fallos, errores: errores, cacheados: 0, lleno: filas.length >= RX_FUEL_MAX_EV,
-        conSensor: conDatos, sinSensor: lista.length - conDatos, ms: Date.now() - t0
+        fallos: fallos, errores: errores, cacheados: 0, lleno: evs.length >= RX_FUEL_MAX_EV,
+        conSensor: conDatos, sinSensor: lista.length - conDatos, ms: Date.now() - t0,
+        robos: an.robos, sospechas: an.sospechas, descartados: an.desc.length,
+        litrosRobo: an.litrosRobo, lugares: lug.length, crudos: an.crudos, unidos: an.unidos
     };
 }
 // Unidades a barrer cuando el alcance es "toda la flota". Conserva la
@@ -2576,7 +2900,15 @@ function abrirInformesPlantilla(origen) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc('Cuenta la caida de nivel con la unidad totalmente detenida (motor encendido o apagado). Perdida de referencia: 10 litros en 1-2 minutos. La pestana Sensores marca los sensores defectuosos o alterados.') +
                         '</span></div>');
-                    pasoFuel = paso(4, 'Perdida de combustible', filaFuente + filaMarca + opcionesSensor);
+                    const opcionesPlat = !usarPlat ? '' :
+                        ('<div class="rgi-row"><span class="rgi-lb">Robo</span>' +
+                        '<span class="rgi-num">desde <input type="number" min="1" step="1" id="rgi-fuel-litros" value="' + esc(String(RX_INF.fuel.litros)) + '"' + dis + '> litros</span>' +
+                        '<span class="rgi-num">a <input type="number" min="0.5" step="0.5" id="rgi-fuel-tasa" value="' + esc(String(RX_INF.fuel.tasa)) + '"' + dis + '> L/min o m\u00e1s</span>' +
+                        '<span class="rgi-num">parada a <input type="number" min="0" max="40" step="1" id="rgi-fuel-vel" value="' + esc(String(RX_INF.fuel.vel)) + '"' + dis + '> km/h</span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        esc('Rondo une los sensores (IZQ, DER y DIESEL TOTAL son el mismo evento) y descarta lo que no es robo: sensor que cae a 0, unidad en movimiento y bajadas lentas (consumo, equipo de fr\u00edo o fuga). Lo descartado queda en su pesta\u00f1a, con el motivo.') +
+                        '</span></div>');
+                    pasoFuel = paso(4, 'Perdida de combustible', filaFuente + filaMarca + opcionesSensor + opcionesPlat);
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
                 // los ajustes de formato). Es lo que antes no se podia tocar.
@@ -2624,6 +2956,13 @@ function abrirInformesPlantilla(origen) {
                 // las descargas.
                 if (esFuel && RX_INF.fuelPlat) {
                     avisos.push(esc('Descargas calculadas por la plataforma (plantilla "' + RX_INF.fuelPlat + '").'));
+                    const mm = RX_INF.meta || {};
+                    if (mm.robos != null && mm.unidos != null) {
+                        avisos.push(esc(mm.crudos + ' fila(s) de la plataforma = ' + mm.unidos + ' evento(s) \u00fanico(s) (los sensores de una misma unidad se unen).'));
+                        if (!mm.robos && !mm.sospechas && mm.descartados) {
+                            avisos.push(esc('Ninguna descarga parece robo: las ' + mm.descartados + ' detectadas se descartaron (pesta\u00f1a "Descartados", con el motivo).'));
+                        }
+                    }
                 }
                 if (RX_INF.diag && RX_INF.diag.error) {
                     avisos.push('Ultimo intento: ' + esc(RX_INF.diag.enviado
@@ -2726,9 +3065,14 @@ function abrirInformesPlantilla(origen) {
                     '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>' + (esFuel ? 'Eventos' : 'Filas') + '</span></div>' +
                     (v.iUni >= 0 ? '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' : '') +
                     (v.iZona >= 0 ? '<div class="rgi-kpi"><b>' + v.zonas + '</b><span>Geocercas</span></div>' : '') +
-                    (esFuel
-                        ? '<div class="rgi-kpi"><b>' + esc(String(RX_INF.fuel.litros)) + ' L/' + esc(String(RX_INF.fuel.min)) + 'm</b><span>Umbral</span></div>'
-                        : '<div class="rgi-kpi"><b>' + v.meta.trozos + '</b><span>Trozos</span></div>') +
+                    (esFuel && v.meta.robos != null
+                        ? '<div class="rgi-kpi vivo"><b>' + v.meta.robos + '</b><span>Robos probables</span></div>' +
+                          '<div class="rgi-kpi"><b>' + v.meta.sospechas + '</b><span>Sospechosos</span></div>' +
+                          '<div class="rgi-kpi"><b>' + esc(rxInfFmt(Math.round(v.meta.litrosRobo || 0))) + ' L</b><span>En robos y sospechas</span></div>' +
+                          '<div class="rgi-kpi"><b>' + v.meta.descartados + '</b><span>Descartados</span></div>'
+                        : (esFuel
+                            ? '<div class="rgi-kpi"><b>' + esc(String(RX_INF.fuel.litros)) + ' L/' + esc(String(RX_INF.fuel.min)) + 'm</b><span>Umbral</span></div>'
+                            : '<div class="rgi-kpi"><b>' + v.meta.trozos + '</b><span>Trozos</span></div>')) +
                     (esFuel && v.meta.sensoresFallo ? '<div class="rgi-kpi vivo"><b>' + v.meta.sensoresFallo + '</b><span>Sensores mal</span></div>' : '') +
                     '<div class="rgi-kpi"><b>' + Math.round(v.meta.ms / 1000) + ' s</b><span>Calculo</span></div>' +
                     (v.meta.cacheados ? '<div class="rgi-kpi"><b>' + v.meta.cacheados + '</b><span>En cache</span></div>' : '') +
@@ -2873,7 +3217,7 @@ function abrirInformesPlantilla(origen) {
                             if (dyn) { const p = dyn.querySelector('.rgi-kpi b'); if (p) p.textContent = String(filas); }
                         };
                         res = defThefts
-                            ? await rxFuelCorrePlataforma(desc.tpl, listaUn, r.desde, r.hasta, defThefts, prog, RX_INF._token)
+                            ? await rxFuelCorrePlataforma(desc.tpl, listaUn, r.desde, r.hasta, defThefts, prog, RX_INF._token, RX_INF.fuel)
                             : await rxInfCorre(desc.tpl, r.desde, r.hasta, listaUn, prog, RX_INF._token, 'flota');
                         RX_INF.fuelPlat = desc.tpl.nombre;
                     } else if (esFuel) {
@@ -2930,12 +3274,18 @@ function abrirInformesPlantilla(origen) {
                     filas: RX_INF.filas.length, unidades: v.unidades, trozos: res.trozos, objetos: res.objetos,
                     ms: res.ms, fallos: res.fallos, errores: res.errores, cacheados: res.cacheados,
                     lleno: res.lleno, bloqueado: res.bloqueado, recortado: res.recortado,
-                    conSensor: res.conSensor, sinSensor: res.sinSensor, sensoresFallo: res.sensoresFallo
+                    conSensor: res.conSensor, sinSensor: res.sinSensor, sensoresFallo: res.sensoresFallo,
+                    robos: res.robos, sospechas: res.sospechas, descartados: res.descartados,
+                    litrosRobo: res.litrosRobo, lugares: res.lugares, crudos: res.crudos, unidos: res.unidos
                 };
                 pinta();
                 if (res.cancelado) advice('Informe cancelado', RX_INF.filas.length + ' fila(s) hasta donde lleg\u00f3 (quedan guardadas).');
                 else if (esFuel && res.conSensor === 0 && res.sinSensor > 0 && !RX_INF.filas.length) {
                     adviceWarn('Sin sensor de combustible', 'Ninguna unidad del alcance publica nivel de combustible. Usa una plantilla de combustible de la plataforma.');
+                } else if (esFuel && res.robos != null) {
+                    adviceOk('Perdidas de combustible', res.robos + ' robo(s) probable(s), ' + res.sospechas + ' sospechoso(s), ' +
+                        res.descartados + ' descartado(s)' + (res.fallos ? ' \u00b7 ' + res.fallos + ' error(es)' : '') +
+                        ' \u00b7 ' + Math.round(res.ms / 1000) + ' s');
                 } else adviceOk(esFuel ? 'Perdidas de combustible' : 'Informe generado', RX_INF.filas.length + (esFuel ? ' perdida(s)' : ' fila(s)') +
                     ' de ' + (RX_INF.tpl ? RX_INF.tpl.nombre : '') +
                     (res.fallos ? ' \u00b7 ' + res.fallos + ' error(es)' : '') + ' \u00b7 ' + Math.round(res.ms / 1000) + ' s');
@@ -3201,6 +3551,7 @@ function abrirInformesPlantilla(origen) {
                 if (t.id === 'rgi-q') { RX_INF.q = t.value || ''; pintaResultados(); return; }
                 if (t.id === 'rgi-fuel-litros') { RX_INF.fuel.litros = Math.max(1, Number(t.value) || RX_INF.fuel.litros); return; }
                 if (t.id === 'rgi-fuel-min') { RX_INF.fuel.min = clamp(Number(t.value) || RX_INF.fuel.min, 1, 60); return; }
+                if (t.id === 'rgi-fuel-tasa') { RX_INF.fuel.tasa = clamp(Number(t.value) || RX_INF.fuel.tasa, 0.5, 1000); return; }
                 if (t.id === 'rgi-fuel-vel') { RX_INF.fuel.vel = clamp(Number(t.value) || 0, 0, 40); return; }
                 if (t.id === 'rgi-fuel-km') { RX_INF.fuel.km = clamp(Number(t.value) || RX_INF.fuel.km, 1, 2000); return; }
                 if (t.id === 'rgi-fuel-l100') { RX_INF.fuel.l100 = clamp(Number(t.value) || 0, 0, 100); return; }

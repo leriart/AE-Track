@@ -51,7 +51,15 @@ const stubs = [
     'function remoteCall(m, p){ return P_REMOTE(m, p); }'
 ].join('\n');
 
-const code = stubs + '\n' + src.slice(ini, fin) +
+// El veredicto de las descargas usa el algoritmo propio (fragmento 56, comb*):
+// se evalua en el mismo ambito, como en el script.
+const iniComb = src.indexOf('/* === BEGIN: combustible === */');
+const finComb = src.indexOf('/* === END: combustible === */');
+if (iniComb < 0 || finComb < 0) {
+    console.error('No se encontro el bloque "combustible" en ' + ARCHIVO);
+    process.exit(1);
+}
+const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, fin) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,RX_INF_MAX_OBJETOS,rxInfPlantillas,rxInfNormFilas,rxInfExtrae,' +
     'rxInfCols,rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecuta,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,' +
@@ -64,7 +72,9 @@ const code = stubs + '\n' + src.slice(ini, fin) +
     'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
     'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos,rxFuelLimpia,rxFuelAgrupa,' +
     'rxFuelTablaDescarga,rxFuelTplDescarga,rxFuelUsaPlataforma,' +
-    'rxFuelParseFecha,rxFuelMapeaColsDescarga,rxFuelTablaSalida,rxFuelCorrePlataforma,RX_FUEL_DESC_COLS};';
+    'rxFuelParseFecha,rxFuelMapeaColsDescarga,rxFuelTablaSalida,rxFuelCorrePlataforma,RX_FUEL_DESC_COLS,' +
+    'RX_FUEL_LUG_COLS,rxFuelEvDesc,rxFuelUneSensores,rxFuelFusionaContiguas,rxFuelEvalDescarga,' +
+    'rxFuelReincidencia,rxFuelAnalizaDescargas,rxFuelFilaDesc,rxFuelLugares,rxFuelFmtDur,rxFuelUsaComa};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -124,7 +134,7 @@ function remote(m, p) {
         if (tablaThefts) {
             return Promise.resolve({
                 reportResult: { tables: [
-                    { name: 'unit_thefts', label: 'Descargas de Combustible', rows: 2, columns: 8,
+                    { name: 'unit_thefts', label: 'Descargas de Combustible', rows: 7, columns: 8,
                       header: ['Comienzo', 'Posición inicial', 'Hora', 'Nivel de combustible inicial', 'Velocidad inicial', 'Descargado', 'Nivel de combustible final', 'Nombre del sensor'] }
                 ] }
             });
@@ -144,9 +154,25 @@ function remote(m, p) {
     // El contenido de la tabla se pide aparte, como en la plataforma real.
     if (m === 'report/get_result_rows') {
         if (tablaThefts) {
+            const H = (v) => ({ t: String(v), v: v });
+            const LUG = { t: 'Jal-311, Valle De Guadalupe', y: 21.14071, x: -101.73470 };
+            const LUG2 = { t: 'Jal-311, Valle De Guadalupe', y: 21.14077, x: -101.73466 };
+            const OTRO = { t: 'Patio base', y: 20.75763, x: -102.71055 };
+            const B = 1792000000;
             return Promise.resolve([
-                { n: 0, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, { t: 'GEOCERCA TESTEO STS', y: 20.84390, x: -102.70790 }, { t: '2026-10-14 13:38:25', v: 1792000705 }, '186,40 l', '0 km/h', '24,55 l', '161,85 l', 'DIESEL 1'] },
-                { n: 1, d: 0, c: [{ t: '2026-10-14 13:36:25', v: 1792000585 }, { t: 'GEOCERCA TESTEO STS', y: 20.84390, x: -102.70790 }, { t: '2026-10-14 13:38:25', v: 1792000705 }, '180,00 l', '0 km/h', '20,00 l', '160,00 l', 'DIESEL 2'] }
+                // robo: 69,92 L en 3 min, parada. El mismo evento sale otra vez en el sensor IZQ.
+                { n: 0, d: 0, c: [H(B), LUG, H(B + 180), '86,34 l', '0 km/h', '69,92 l', '16,42 l', 'DIESEL TOTAL'] },
+                { n: 1, d: 0, c: [H(B), LUG, H(B + 180), '86,34 l', '0 km/h', '69,92 l', '16,42 l', 'SENSOR COMBUSTIBLE IZQ'] },
+                // el sensor se cae a 0: no es un robo
+                { n: 2, d: 0, c: [H(B + 4000), OTRO, H(B + 4030), '66,80 l', '0 km/h', '66,82 l', '0,00 l', 'DIESEL TOTAL'] },
+                // bajada lenta de 3 h 44 min (equipo de frio): consumo
+                { n: 3, d: 0, c: [H(B + 20000), OTRO, H(B + 20000 + 13440), '77,93 l', '0 km/h', '36,31 l', '41,61 l', 'SENSOR COMBUSTIBLE THERMO'] },
+                // en movimiento: el nivel baila con el tanque
+                { n: 4, d: 0, c: [H(B + 50000), OTRO, H(B + 50120), '120,00 l', '45 km/h', '30,00 l', '90,00 l', 'DIESEL TOTAL'] },
+                // robo repetido en el mismo lugar 3 dias despues (8 min, 75,96 L)
+                { n: 5, d: 0, c: [H(B + 259200), LUG2, H(B + 259200 + 480), '92,30 l', '0 km/h', '75,96 l', '16,34 l', 'DIESEL TOTAL'] },
+                // pasada de 11 L en 60 s: robo chico
+                { n: 6, d: 0, c: [H(B + 300000), OTRO, H(B + 300060), '150,00 l', '0 km/h', '12,00 l', '138,00 l', 'DIESEL TOTAL'] }
             ]);
         }
         if (!tablaReal) return Promise.resolve([]);
@@ -587,13 +613,101 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     const rPlat = await mod.rxFuelCorrePlataforma({ rid: 3, id: 10, nombre: 'Informe de Combustible' },
         [{ id: 7, eco: '105' }], 1700000000, 1700000000 + 3600, {}, null, null);
     tablaThefts = false;
-    ok('combustible plataforma: arma filas con unidad, coordenadas, inicio/fin, duracion y sensor',
-        rPlat.cols[0] === 'Unidad' && rPlat.cols[2] === 'Coordenadas' && rPlat.cols[5] === 'Duración' &&
-        rPlat.filas.length === 2 && rPlat.filas[0][0] === '105' &&
-        rPlat.filas[0][1] === 'GEOCERCA TESTEO STS' && /^20\.84/.test(rPlat.filas[0][2]) &&
-        rPlat.filas[0][5] === '0:02:00' && rPlat.filas[0][6] === '24,55 l' && rPlat.filas[0][9] === 'DIESEL 1' &&
-        rPlat.filas[1][9] === 'DIESEL 2',
-        JSON.stringify({ cols: rPlat.cols, f0: rPlat.filas[0] }));
+    const t0r = rPlat.tablas[0], t1r = rPlat.tablas[1];
+    ok('combustible plataforma: 7 filas de la plataforma son 6 eventos unicos',
+        rPlat.crudos === 7 && rPlat.unidos === 6, JSON.stringify({ c: rPlat.crudos, u: rPlat.unidos }));
+    ok('combustible plataforma: 14 columnas con veredicto y motivo',
+        rPlat.cols.length === 14 && rPlat.cols[2] === 'Coordenadas' && rPlat.cols[5] === 'Duración' &&
+        rPlat.cols[12] === 'Veredicto' && rPlat.cols[13] === 'Motivo', JSON.stringify(rPlat.cols));
+    ok('combustible plataforma: la tabla principal solo trae lo que parece robo',
+        rPlat.filas.length === 3 && rPlat.filas.every((f) => f[12] === 'Robo probable' || f[12] === 'Sospechoso') &&
+        rPlat.robos + rPlat.sospechas === 3, JSON.stringify(rPlat.filas.map((f) => f[12])));
+    ok('combustible plataforma: el evento duplicado en IZQ cuenta una sola vez',
+        rPlat.filas.filter((f) => f[6] === '69,92 l').length === 1, JSON.stringify(rPlat.filas.map((f) => f[6])));
+    const fA = rPlat.filas.filter((f) => f[6] === '69,92 l')[0];
+    ok('combustible plataforma: fila del robo con unidad, lugar, coordenadas, duracion exacta y ritmo',
+        fA[0] === '105' && fA[1] === 'Jal-311, Valle De Guadalupe' && fA[2] === '21.14071, -101.73470' &&
+        fA[5] === '0:03:00' && fA[7] === '86,34 l' && fA[8] === '16,42 l' && fA[9] === '23,3' &&
+        fA[11] === 'DIESEL TOTAL' && fA[12] === 'Robo probable', JSON.stringify(fA));
+    ok('combustible plataforma: descartados con su motivo (falla de sensor, consumo lento, en movimiento)',
+        t1r.filas.length === 3 && rPlat.descartados === 3 &&
+        t1r.filas.some((f) => f[12] === 'Falla de sensor' && /perdi/.test(f[13])) &&
+        t1r.filas.some((f) => f[12] === 'Consumo o fuga lenta' && f[5] === '3:44:00') &&
+        t1r.filas.some((f) => f[12] === 'En movimiento' && /45/.test(f[13])),
+        JSON.stringify(t1r.filas.map((f) => [f[12], f[5]])));
+    ok('combustible plataforma: pestanas Robos y sospechas / Descartados / Lugares repetidos',
+        rPlat.tablas.map((t) => t.label).join('|') === 'Robos y sospechas|Descartados|Lugares repetidos' &&
+        rPlat.lugares === 1 && rPlat.tablas[2].filas[0][3] === 2 && rPlat.tablas[2].filas[0][2] === 1,
+        JSON.stringify(rPlat.tablas.map((t) => t.label)));
+    ok('combustible plataforma: el lugar repetido queda dicho en el motivo',
+        /lugar repetido: 2 descargas/.test(fA[13]), fA[13]);
+    ok('combustible plataforma: litros en robo suma solo robos y sospechas',
+        Math.abs(rPlat.litrosRobo - (69.92 + 75.96 + 12)) < 0.01, String(rPlat.litrosRobo));
+
+    // ── Piezas puras del analisis ──
+    ok('fecha: formato corto mes/dia/anio de la plataforma (10/14/26 13:22)', (function () {
+        const d = new Date(mod.rxFuelParseFecha('10/14/26 13:22'));
+        return d.getFullYear() === 2026 && d.getMonth() === 9 && d.getDate() === 14 && d.getHours() === 13;
+    })());
+    ok('fecha: dia/mes con anio de 4 digitos y punto', (function () {
+        const a = new Date(mod.rxFuelParseFecha('29/09/2026 7:12'));
+        const b = new Date(mod.rxFuelParseFecha('15.09.2026 09:33:49'));
+        return a.getMonth() === 8 && a.getDate() === 29 && b.getMonth() === 8 && b.getDate() === 15;
+    })());
+    ok('duracion de mas de un dia se escribe con dias (Excel no la rompe)',
+        mod.rxFuelFmtDur(88140) === '1d 0:29:00' && mod.rxFuelFmtDur(120) === '0:02:00' &&
+        mod.rxInfNum('1d 0:29:00') === 88140 && mod.rxInfNum('0:02:00') === 120);
+    const mk = (o) => Object.assign({ eco: '3686', ubi: '', lat: null, lon: null, ini: '', fin: '', ms0: 1000000, ms1: 1180000,
+        durSeg: 180, litros: 50, iniNiv: 200, finNiv: 150, vel: 0, sensor: 'DIESEL TOTAL', rawL: '50.00 l',
+        n: 1, sensores: ['DIESEL TOTAL'], noCuadra: false, fusion: 0 }, o || {});
+    // Sensores: TOTAL = IZQ + DER es UN evento, con la cifra del TOTAL.
+    const trio = mod.rxFuelUneSensores([mk({ sensor: 'SENSOR COMBUSTIBLE IZQ', litros: 30 }), mk({ sensor: 'SENSOR COMBUSTIBLE DER', litros: 20 }), mk({ litros: 50 })]);
+    ok('sensores: TOTAL, IZQ y DER se unen en un evento con la cifra del TOTAL',
+        trio.length === 1 && trio[0].litros === 50 && trio[0].n === 3 && trio[0].noCuadra === false && trio[0].sensores.length === 3);
+    const desc = mod.rxFuelUneSensores([mk({ sensor: 'SENSOR COMBUSTIBLE IZQ', litros: 10 }), mk({ sensor: 'SENSOR COMBUSTIBLE DER', litros: 10 }), mk({ litros: 50 })]);
+    ok('sensores: si TOTAL no cuadra con IZQ + DER se marca', desc.length === 1 && desc[0].noCuadra === true);
+    ok('sensores: sin TOTAL se toma el mayor de los sensores',
+        mod.rxFuelUneSensores([mk({ sensor: 'SENSOR COMBUSTIBLE IZQ', litros: 30 }), mk({ sensor: 'SENSOR COMBUSTIBLE DER', litros: 45 })])[0].litros === 45);
+    ok('sensores: eventos de unidades distintas o horas lejanas no se mezclan',
+        mod.rxFuelUneSensores([mk(), mk({ eco: '3687' }), mk({ ms0: 9000000, ms1: 9180000 })]).length === 3);
+    const cont = mod.rxFuelFusionaContiguas([
+        mk({ ms0: 0, ms1: 60000, litros: 20, iniNiv: 200, finNiv: 180 }),
+        mk({ ms0: 120000, ms1: 180000, litros: 25, iniNiv: 180.5, finNiv: 155 }),
+        mk({ ms0: 5000000, ms1: 5060000, litros: 40, iniNiv: 300, finNiv: 260 })]);
+    ok('contiguas: dos caidas seguidas con el nivel continuo son una sola (suma litros y duracion)',
+        cont.length === 2 && cont[0].litros === 45 && cont[0].finNiv === 155 && cont[0].durSeg === 180 && cont[0].fusion === 1,
+        JSON.stringify(cont.map((e) => [e.litros, e.durSeg])));
+    const cfg = { litros: 10, vel: 3, tasa: 3 };
+    const ver = (o) => mod.rxFuelEvalDescarga(mk(o), cfg, null).veredicto;
+    ok('veredicto: caida rapida con la unidad parada = Robo probable', ver({ litros: 70, iniNiv: 200, finNiv: 130, durSeg: 180, ubi: 'Jal-311, Valle' }) === 'Robo probable');
+    ok('veredicto: nivel final 0 = Falla de sensor', ver({ litros: 66.82, iniNiv: 66.8, finNiv: 0 }) === 'Falla de sensor');
+    ok('veredicto: litros iguales al nivel inicial = Falla de sensor', ver({ litros: 200, iniNiv: 200, finNiv: 2 }) === 'Falla de sensor');
+    ok('veredicto: bajada lenta de horas = Consumo o fuga lenta', ver({ litros: 36, iniNiv: 100, finNiv: 64, durSeg: 13440 }) === 'Consumo o fuga lenta');
+    ok('veredicto: en movimiento no es extraccion', ver({ vel: 40 }) === 'En movimiento');
+    ok('veredicto: por debajo del umbral', ver({ litros: 4, iniNiv: 100, finNiv: 96 }) === 'Menor al umbral');
+    ok('veredicto: sin litros = Sin dato', ver({ litros: null }) === 'Sin dato');
+    ok('veredicto: duracion cero exacta = Falla de sensor (escalon instantaneo)', ver({ durSeg: 0, litros: 40, iniNiv: 100, finNiv: 60 }) === 'Falla de sensor');
+    ok('veredicto: sensores que no cuadran', ver({ noCuadra: true }) === 'Sensores no cuadran');
+    ok('veredicto: ritmo bajo pero rapido (< 3 L/min) = Sospechoso, no robo', ver({ litros: 30, durSeg: 1200, iniNiv: 200, finNiv: 170 }) === 'Sospechoso');
+    ok('veredicto: un ritmo de cientos de L/min es posible salto del sensor = Sospechoso',
+        ver({ litros: 300, durSeg: 60, iniNiv: 900, finNiv: 600, ubi: 'Jal-311' }) === 'Sospechoso');
+    ok('veredicto: mas de 30 min con ritmo intermedio = Sospechoso', ver({ litros: 150, durSeg: 3600, iniNiv: 300, finNiv: 150 }) === 'Sospechoso');
+    ok('veredicto: la zona de prueba no sostiene un robo firme', ver({ ubi: 'GEOCERCA TESTEO STS' }) === 'Sospechoso');
+    ok('veredicto: el umbral de ritmo es configurable',
+        mod.rxFuelEvalDescarga(mk({ litros: 30, durSeg: 1200, iniNiv: 200, finNiv: 170, ubi: 'Jal-311' }), { litros: 10, vel: 3, tasa: 1 }, null).veredicto === 'Robo probable');
+    const rB = mod.rxFuelEvalDescarga(mk({ litros: 70, iniNiv: 200, finNiv: 130, ubi: 'Jal-311' }), cfg, { recurrencia: 3, carnada: 4 });
+    const rA = mod.rxFuelEvalDescarga(mk({ litros: 70, iniNiv: 200, finNiv: 130, ubi: 'Jal-311' }), cfg, null);
+    ok('veredicto: la recurrencia y la convergencia suben el puntaje de sospecha', rB.puntaje > rA.puntaje && rB.relevante, JSON.stringify([rA.puntaje, rB.puntaje]));
+    const rei = mod.rxFuelReincidencia([
+        mk({ eco: '1', lat: 21.1, lon: -101.7 }), mk({ eco: '2', lat: 21.1, lon: -101.7, ms0: 1000000 + 3600000 }),
+        mk({ eco: '3', lat: 20.0, lon: -100.0 })]);
+    ok('reincidencia: cuenta descargas, unidades y convergencia el mismo dia',
+        rei[0].lugarN === 2 && rei[0].lugarU === 2 && rei[0].convU === 1 && rei[2].lugarN === 1 && rei[2].convU === 0);
+    const lug = mod.rxFuelLugares([mk({ eco: '1', lat: 21.1, lon: -101.7, litros: 40, ubi: 'A' }), mk({ eco: '2', lat: 21.1001, lon: -101.7, litros: 60, ubi: 'A' }), mk({ eco: '3', lat: 20, lon: -100, litros: 90 })], false);
+    ok('lugares: solo puntos con 2 o mas descargas, con unidades y litros',
+        lug.length === 1 && lug[0][2] === 2 && lug[0][3] === 2 && lug[0][4] === '100.0 l', JSON.stringify(lug));
+    ok('coma decimal: se respeta el formato de la plataforma',
+        mod.rxFuelUsaComa([{ rawL: '24,55 l' }]) === true && mod.rxFuelUsaComa([{ rawL: '24.55 l' }]) === false);
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
