@@ -227,6 +227,10 @@
     {
       "file": "56-combustible-deteccion.js",
       "chunk": "ui"
+    },
+    {
+      "file": "57-convergencia-carnada.js",
+      "chunk": "ui"
     }
   ]
 }

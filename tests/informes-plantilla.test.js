@@ -48,7 +48,13 @@ const stubs = [
     'function rxFechaHora(ms){ return String(ms); }',
     'function clamp(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }',
     'function rxGeoInfYield(){ return new Promise((r) => { try { setTimeout(r, 0); } catch (_) { r(); } }); }',
-    'function remoteCall(m, p){ return P_REMOTE(m, p); }'
+    'function remoteCall(m, p){ return P_REMOTE(m, p); }',
+    'function rxMiniMapaHTML(cfg, W, H){ return "<div class=\\"mapa\\" data-l=\\"" + ((cfg && cfg.lineas) || []).length + "\\" data-m=\\"" + ((cfg && cfg.marcas) || []).length + "\\"></div>"; }',
+    'function rxInfEstilo(){ return "body{}"; }',
+    'function rxInfCabecera(t, s, m){ return "<div class=\\"cover\\">" + t + "|" + s + "|" + m + "</div>"; }',
+    'function rxInfPie(){ return "<div class=\\"pie\\"></div>"; }',
+    'let P_STOPS = null; function rxGeoInfCargaTrozo(uid, t0, t1){ return Promise.resolve({ msgs: P_STOPS ? P_STOPS(uid, t0, t1) : [], truncado: false }); }',
+    'const P_GEOS = []; function glocNombreLibre(n){ return n; } function glocGuarda(z){ P_GEOS.push(z); return z; }'
 ].join('\n');
 
 // El veredicto de las descargas usa el algoritmo propio (fragmento 56, comb*):
@@ -59,7 +65,13 @@ if (iniComb < 0 || finComb < 0) {
     console.error('No se encontro el bloque "combustible" en ' + ARCHIVO);
     process.exit(1);
 }
-const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, fin) +
+const iniCarn = src.indexOf('/* === BEGIN: carnada === */');
+const finCarn = src.indexOf('/* === END: carnada === */');
+if (iniCarn < 0 || finCarn < 0) {
+    console.error('No se encontro el bloque "carnada" en ' + ARCHIVO);
+    process.exit(1);
+}
+const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, fin) + '\n' + src.slice(iniCarn, finCarn) +
     '\nreturn {RX_INF,RX_INF_DIAS_TROZO,RX_INF_MAX_TROZOS,RX_INF_MAX_OBJETOS,rxInfPlantillas,rxInfNormFilas,rxInfExtrae,' +
     'rxInfCols,rxInfResumenUnidad,rxInfNum,rxInfFmt,rxInfFiltra,rxInfClave,rxInfTplDeClave,rxInfEjecuta,rxInfCorre,' +
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,' +
@@ -74,7 +86,11 @@ const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, 
     'rxFuelTablaDescarga,rxFuelTplDescarga,rxFuelUsaPlataforma,' +
     'rxFuelParseFecha,rxFuelMapeaColsDescarga,rxFuelTablaSalida,rxFuelCorrePlataforma,RX_FUEL_DESC_COLS,' +
     'RX_FUEL_LUG_COLS,rxFuelEvDesc,rxFuelUneSensores,rxFuelFusionaContiguas,rxFuelEvalDescarga,' +
-    'rxFuelReincidencia,rxFuelAnalizaDescargas,rxFuelFilaDesc,rxFuelLugares,rxFuelFmtDur,rxFuelUsaComa};';
+    'rxFuelReincidencia,rxFuelAnalizaDescargas,rxFuelFilaDesc,rxFuelLugares,rxFuelFmtDur,rxFuelUsaComa,' +
+    'rxInfHash,rxInfDefTablasSel,rxInfAjustesDe,rxInfTablasDe,rxFuelRecolecta,' +
+    'carnCfg,carnCirculo,carnNucleos,carnUneGrupos,carnSospecha,carnPuntos,carnVerifica,carnDetectaParadas,carnVentanas,' +
+    'carnCandidatos,carnEscaneaLlegadas,carnEvsDeSensor,carnTablas,carnCorre,carnMapaDatos,carnCreaGeocercas,carnCSVDatos,' +
+    'carnHTML,carnMapaPunto,carnBarrasSVG,carnLecturaEntorno,RX_CARN,RX_CARN_TPL,P_GEOS,setStops: (f) => { P_STOPS = f; }};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -708,6 +724,172 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         lug.length === 1 && lug[0][2] === 2 && lug[0][3] === 2 && lug[0][4] === '100.0 l', JSON.stringify(lug));
     ok('coma decimal: se respeta el formato de la plataforma',
         mod.rxFuelUsaComa([{ rawL: '24,55 l' }]) === true && mod.rxFuelUsaComa([{ rawL: '24.55 l' }]) === false);
+
+    // ══ Todos los reportes nativos: tipos de objeto, tablas, ajustes, cache ══
+    const kA = mod.rxInfCacheKey({ rid: 3, id: 11 }, { id: '7', sec: '0', def: { tbl: [{ n: 'a', p: '{"x":1}' }] } }, 1, 2);
+    const kB = mod.rxInfCacheKey({ rid: 3, id: 11 }, { id: '7', sec: '0', def: { tbl: [{ n: 'a', p: '{"x":2}' }] } }, 1, 2);
+    const kC = mod.rxInfCacheKey({ rid: 3, id: 11 }, { id: '7', sec: '0' }, 1, 2);
+    ok('cache: otro filtro o tabla = otra clave (antes devolvia lo viejo)', kA !== kB && kA !== kC && kA === mod.rxInfCacheKey({ rid: 3, id: 11 }, { id: '7', sec: '0', def: { tbl: [{ n: 'a', p: '{"x":1}' }] } }, 1, 2));
+    const datosT = [{ id: 11, n: 'Plantilla', ct: 'avl_unit', tbl: [
+        { n: 'unit_trips', l: 'Viajes', c: '[]', cl: '[]', p: '{"bind":{"avl_unit":[1]}}' },
+        { n: 'unit_stops', l: 'Paradas', c: '[]', cl: '[]', p: '{}' },
+        { n: 'unit_thefts', l: 'Descargas', c: '[]', cl: '[]', p: '{}' }] }];
+    const soloP = mod.rxInfDefTablasSel(null, datosT, 11, { unit_stops: 1 });
+    ok('tablas elegidas: la definicion lleva solo esas, sin bind y con id 0',
+        soloP && soloP.id === 0 && soloP.tbl.length === 1 && soloP.tbl[0].n === 'unit_stops', JSON.stringify(soloP));
+    ok('tablas elegidas: sin seleccion no se toca nada', mod.rxInfDefTablasSel(null, datosT, 11, {}) === null);
+    const defPrev = { id: 0, tbl: [{ n: 'a', p: '{"k":1}' }, { n: 'b', p: '{}' }] };
+    const defSel = mod.rxInfDefTablasSel(defPrev, null, 11, { b: 1 });
+    ok('tablas elegidas: se respetan los filtros ya aplicados y no se muta la original',
+        defSel.tbl.length === 1 && defSel.tbl[0].n === 'b' && defPrev.tbl.length === 2);
+    const infoAj = mod.rxInfPlantillaInfo(datosT, 11);
+    ok('tablas de la plantilla listadas', mod.rxInfTablasDe(infoAj).map((t) => t.n).join(',') === 'unit_trips,unit_stops,unit_thefts');
+    const infoAj2 = { params: [{ k: 'address_format' , v: '1' }, { k: 'units', v: '7' }, { k: 'us_units', v: '0' }, { k: 'time_format', v: '1' }] };
+    ok('ajustes de formato se listan aparte de los filtros',
+        mod.rxInfAjustesDe(infoAj2).join(',') === 'address_format,us_units,time_format' && mod.rxInfFiltrosDe(infoAj2).join(',') === 'units',
+        mod.rxInfAjustesDe(infoAj2).join(','));
+    ok('ajustes: us_units no se confunde con una unidad', mod.rxInfFiltroResuelve('us_units', '1') === '1' && mod.rxInfFiltroResuelve('address_format', '1255') === '1255');
+    // Tipos de objeto: ruta, retranslador y recurso.
+    const antes = calls.length;
+    const objRuta = await mod.rxInfObjetosTipo('avl_route', 3);
+    ok('informes de ruta se ejecutan por sus items (search_items avl_route)',
+        Array.isArray(objRuta) && calls.slice(antes).some((c) => c.m === 'core/search_items' && c.p.spec.itemsType === 'avl_route'));
+    const objRet = await mod.rxInfObjetosTipo('avl_retranslator', 3);
+    ok('informes de retranslador se ejecutan por sus items', Array.isArray(objRet) && calls.some((c) => c.m === 'core/search_items' && c.p.spec.itemsType === 'avl_retranslator'));
+    const objRes = await mod.rxInfObjetosTipo('avl_resource', 3);
+    ok('informes de recurso: el propio recurso si no hay lista', Array.isArray(objRes) && objRes.length >= 1 && objRes[0].id);
+    ok('una unidad no es un tipo especial', (await mod.rxInfObjetosTipo('avl_unit', 3)) === null);
+
+    // ══ Convergencia con carnada ══
+    const ev = (eco, lat, lon, litros, o) => Object.assign({
+        eco: eco, ubi: 'Jal-311, Valle De Guadalupe', lat: lat, lon: lon, ini: '', fin: '', ms0: 1000000, ms1: 1000000 + 180000,
+        durSeg: 180, litros: litros, iniNiv: 200, finNiv: 200 - litros, vel: 0, sensor: 'DIESEL TOTAL', rawL: '1.00 l', n: 1, sensores: [], noCuadra: false, fusion: 0
+    }, o || {});
+    const circ = mod.carnCirculo(21.0, -102.0, 30, 16);
+    ok('circulo: 17 puntos cerrado y a ~30 m del centro',
+        circ.length === 17 && circ[0].lat === circ[16].lat && Math.abs(Math.hypot((circ[4].lat - 21.0) * 111320, (circ[4].lon + 102.0) * 111320 * Math.cos(21 * Math.PI / 180)) - 30) < 1);
+    ok('config: se sanea lo que llegue de la pantalla',
+        mod.carnCfg({ radio: -5, unir: 'x', minCarnada: 0, topPuntos: 999 }).radio === 30 && mod.carnCfg({ minCarnada: 0 }).minCarnada === 2 && mod.carnCfg({ topPuntos: 999 }).topPuntos === 10);
+    // Tres unidades en el mismo punto; una sola unidad lejos; una con dos llegadas sin perdida.
+    const centro = [21.03844, -102.56107];
+    const eA = [ev('U1', centro[0], centro[1], 60), ev('U2', centro[0] + 0.00005, centro[1], 70), ev('U3', centro[0], centro[1] + 0.00005, 55)];
+    const eSolo = ev('U4', 21.5, -102.9, 90);
+    const eConLlegadas = ev('U5', 20.9, -102.4, 40);
+    const paradasC = [
+        { eco: 'U6', lat: 20.9, lon: -102.4, t0: 900000, t1: 1500000, min: 10 },
+        { eco: 'U7', lat: 20.90005, lon: -102.4, t0: 950000, t1: 1500000, min: 9 },
+        { eco: 'U6', lat: 20.9, lon: -102.4, t0: 900000, t1: 1500000, min: 10 }   // duplicada: no cuenta dos veces
+    ];
+    const rPun = mod.carnPuntos(eA.concat([eSolo, eConLlegadas]), paradasC, {});
+    ok('puntos: perdida + convergencia marca el punto; una perdida aislada no',
+        rPun.puntos.length === 2 && rPun.aislados.length === 1 && rPun.aislados[0].eco === 'U4', JSON.stringify(rPun.puntos.map((p) => [p.id, p.carnada, p.eventos])));
+    const pC01 = rPun.puntos[0];
+    ok('puntos: C01 es el de mas unidades carnada y suma sus litros',
+        pC01.id === 'C01' && pC01.carnada === 3 && pC01.eventos === 3 && Math.abs(pC01.litros - 185) < 0.001 && rPun.puntos[1].id === 'C02');
+    const pLleg = rPun.puntos[1];
+    ok('puntos: una perdida con 2 llegadas de otras unidades converge (la llegada duplicada no suma)',
+        pLleg.carnada === 3 && pLleg.eventos === 1 && pLleg.llegadas.length === 2 && pLleg.unidades.sort().join(',') === 'U5,U6,U7');
+    ok('puntos: sin llegadas ni otra unidad no hay convergencia', mod.carnPuntos([eSolo], [], {}).puntos.length === 0);
+    ok('puntos: el minimo de unidades es configurable', mod.carnPuntos([eSolo], [], { minCarnada: 1 }).puntos.length === 1);
+    // Unir tramos a 150 m: 117 m juntos, 400 m separados.
+    const unidos = mod.carnPuntos([ev('A', 21.0, -102.0, 50), ev('B', 21.0, -102.0, 50), ev('C', 21.00105, -102.0, 50), ev('D', 21.00105, -102.0, 50)], [], {});
+    ok('puntos: dos puntos a ~117 m son uno solo (mismo tramo operativo)', unidos.puntos.length === 1 && unidos.puntos[0].eventos === 4 && unidos.puntos[0].nucleos === 2);
+    const aparte = mod.carnPuntos([ev('A', 21.0, -102.0, 50), ev('B', 21.0, -102.0, 50), ev('C', 21.004, -102.0, 50), ev('D', 21.004, -102.0, 50)], [], {});
+    ok('puntos: a 440 m son dos puntos', aparte.puntos.length === 2);
+    // Sospecha: la misma escala del informe (entorno + recurrencia + volumen + convergencia).
+    const sC01 = mod.carnSospecha({ ubi: 'Jal-311, Valle De Guadalupe', zona: '', eventos: 5, litros: 185.3, carnada: 12 });
+    ok('sospecha: carretera + 5 eventos + 185 L + 12 unidades = Alta (8)', sC01.puntaje === 8 && sC01.nivel === 'Alta' && sC01.entorno === 'carretera', JSON.stringify(sC01));
+    const sC03 = mod.carnSospecha({ ubi: 'La Esperanza, Calle Morelos 138', zona: '', eventos: 1, litros: 69.2, carnada: 5 });
+    ok('sospecha: poblado + 1 evento + 69 L + 5 unidades = Media (4)', sC03.puntaje === 4 && sC03.nivel === 'Media', JSON.stringify(sC03));
+    const sC08 = mod.carnSospecha({ ubi: 'San Miguel El Alto, Jal-345', zona: '', eventos: 1, litros: 259.4, carnada: 2 });
+    ok('sospecha: un solo evento grande en carretera tambien es Alta (5)', sC08.puntaje === 5 && sC08.nivel === 'Alta');
+    const sC11 = mod.carnSospecha({ ubi: 'Calle Libramiento', zona: '', eventos: 1, litros: 20, carnada: 2 });
+    ok('sospecha: poco volumen y 2 unidades en poblado = Baja', sC11.nivel === 'Baja', JSON.stringify(sC11));
+    ok('sospecha: dentro de una geocerca propia (patio) pesa menos que la carretera',
+        mod.carnSospecha({ ubi: 'Jal-311', zona: 'PATIO BASE', eventos: 1, litros: 20, carnada: 2 }).entornoPuntos <
+        mod.carnSospecha({ ubi: 'Jal-311', zona: '', eventos: 1, litros: 20, carnada: 2 }).entornoPuntos);
+    // Paradas desde mensajes crudos.
+    const M = (t, y, x, s) => ({ t: t, pos: { y: y, x: x, s: s } });
+    const msgsP = [M(0, 20.0, -102.0, 60), M(60, 20.0001, -102.0, 50)]
+        .concat([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => M(120 + i * 60, 20.001, -102.001, 0)))
+        .concat([M(900, 20.01, -102.01, 40), M(960, 20.011, -102.01, 0), M(1020, 20.011, -102.01, 0), M(1080, 20.02, -102.02, 40)]);
+    const stops = mod.carnDetectaParadas(msgsP, 'U9', { paradaMin: 2, vel: 3 });
+    ok('paradas: una detencion de 10 min es una llegada con su centro y duracion',
+        stops.length === 1 && stops[0].eco === 'U9' && stops[0].min === 10 && Math.abs(stops[0].lat - 20.001) < 1e-6 && stops[0].t0 === 120000, JSON.stringify(stops));
+    ok('paradas: una detencion corta (1 min) no cuenta', mod.carnDetectaParadas([M(0, 20, -102, 0), M(60, 20, -102, 0)], 'U', { paradaMin: 2 }).length === 0);
+    ok('paradas: un salto de GPS de cientos de metros corta la parada',
+        mod.carnDetectaParadas([0, 1, 2, 3].map((i) => M(i * 60, 20, -102, 0)).concat([0, 1, 2, 3].map((i) => M(300 + i * 60, 20.01, -102, 0))), 'U', { paradaMin: 2 }).length === 2);
+    ok('ventanas: +-12 h de cada perdida y las que se tocan se unen',
+        JSON.stringify(mod.carnVentanas([ev('A', 1, 1, 1, { ms0: 100000000, ms1: 100000000 }), ev('B', 1, 1, 1, { ms0: 100000000 + 3600000, ms1: 100000000 + 3600000 }), ev('C', 1, 1, 1, { ms0: 900000000, ms1: 900000000 })], 12)) ===
+        JSON.stringify([[100000 - 43200, 100000 + 3600 + 43200], [900000 - 43200, 900000 + 43200]]));
+    const verif1 = mod.carnVerifica([ev('U1', 20.0, -102.0, 30, { ms0: 1000000, ms1: 1180000 }), ev('U2', 20.5, -102.5, 30)],
+        [{ eco: 'U1', lat: 20.00003, lon: -102.0, t0: 900000, t1: 1300000, min: 6 }], {});
+    ok('verificacion: parada de la misma unidad a <=50 m y solapada = coincide', verif1.total === 2 && verif1.coinciden === 1 && verif1.pct === 50 && verif1.mejor.eco === 'U1' && verif1.mejor.d < 10);
+    ok('verificacion: otra unidad o hora distinta no coincide',
+        mod.carnVerifica([ev('U1', 20.0, -102.0, 30)], [{ eco: 'U9', lat: 20.0, lon: -102.0, t0: 900000, t1: 1300000 }, { eco: 'U1', lat: 20.0, lon: -102.0, t0: 99000000, t1: 99100000 }], {}).coinciden === 0);
+    // Ejecucion completa: dos unidades carnada con las mismas descargas en el mismo punto.
+    tablaThefts = true;
+    mod.rxInfCacheLimpiar();
+    const fases = [];
+    const rCar = await mod.carnCorre({
+        usarPlat: true, tpl: { rid: 3, id: 10, nombre: 'Informe de Combustible' }, def: {}, lista: [{ id: 7, eco: '105' }, { id: 8, eco: '106' }],
+        desde: 1700000000, hasta: 1700000000 + 3600, cfgFuel: { litros: 10, vel: 3, tasa: 3 }, cfgCarn: {}, onFase: (pct, txt) => fases.push(pct), token: null
+    });
+    tablaThefts = false;
+    ok('carnada: dos unidades con perdida en el mismo punto marcan un punto (sin llegadas)',
+        rCar.carn === true && rCar.puntos.length >= 1 && rCar.puntos[0].carnada === 2 && rCar.meta.puntos === rCar.puntos.length,
+        JSON.stringify({ n: rCar.puntos.length, c: rCar.puntos[0] && rCar.puntos[0].carnada, m: rCar.meta }));
+    ok('carnada: las perdidas depuradas (sensor a 0, consumo, en movimiento) no forman puntos',
+        rCar.meta.eventos === 6 && rCar.meta.descartados === 6 && rCar.puntos.every((p) => p.evs.every((e) => e.cls && e.cls.relevante)),
+        JSON.stringify(rCar.meta));
+    ok('carnada: tablas Puntos / Perdidas en los puntos (y aisladas si las hay)',
+        rCar.tablas[0].label === 'Puntos de convergencia' && rCar.tablas[0].cols.length === 11 && rCar.tablas[1].label === 'P\u00e9rdidas en los puntos' &&
+        rCar.tablas[0].filas[0][0] === 'C01' && /^21\.14/.test(rCar.tablas[0].filas[0][1]) && rCar.tablas[1].filas.length === rCar.meta.eventosPuntos);
+    ok('carnada: el progreso avanza por fases', fases.length >= 3 && fases[0] <= fases[fases.length - 1]);
+    ok('carnada: queda el ultimo resultado para el mapa, el PDF y las geocercas', mod.RX_CARN.res === rCar);
+    const md = mod.carnMapaDatos();
+    ok('mapa: un circulo de 30 m y una marca numerada por punto',
+        md && md.lineas.length >= rCar.puntos.length && md.marcas.some((m) => m.num === 'C01') && /Alta/.test(md.leyenda));
+    const csvD = mod.carnCSVDatos(rCar);
+    ok('datos por punto: CSV con puntos y perdidas', /^"tipo","punto"/.test(csvD) && /"punto","C01"/.test(csvD) && /"perdida","C01"/.test(csvD), csvD.slice(0, 160));
+    const html = mod.carnHTML(rCar);
+    ok('PDF: portada, esencial, metodologia, hallazgo principal, tabla, volumen y acciones',
+        /Hallazgos de convergencia con unidades carnada/.test(html) && /Lo esencial/.test(html) && /Metodolog/.test(html) && /El hallazgo principal/.test(html) &&
+        /Los \d+ puntos/.test(html) && /Volumen por punto/.test(html) && /Acciones y siguientes pasos/.test(html) && /<svg/.test(html) && /C01/.test(html));
+    ok('PDF: no afirma lo que no sabe (es probable, se confirma en campo; sin historial lo dice)',
+        /probable/.test(html) && /campo/.test(html) && /No se pidieron las llegadas/.test(html));
+    ok('PDF: sin puntos dice que no hay y que hacer',
+        /Ning\u00fan punto cumple/.test(mod.carnHTML(Object.assign({}, rCar, { puntos: [], aislados: [], meta: Object.assign({}, rCar.meta, { puntos: 0, litrosPuntos: 0, eventosPuntos: 0, alta: 0, media: 0, baja: 0 }) }))));
+    ok('geocercas: un circulo de Rondo por punto, con su nombre y radio', (function () {
+        const n = mod.carnCreaGeocercas(rCar.puntos, 30, 30);
+        return n === rCar.puntos.length && mod.P_GEOS.length === n && mod.P_GEOS[0].t === 3 && mod.P_GEOS[0].w === 30 && /^Robo C01/.test(mod.P_GEOS[0].n);
+    })());
+    // Con llegadas: el historial de las unidades carnada (stub de load_interval).
+    tablaThefts = true;
+    mod.rxInfCacheLimpiar();
+    mod.setStops((uid) => {
+        // la unidad 7 estuvo parada 8 min exactamente donde perdio; la 8 paso de largo
+        if (String(uid) !== '7') return [M(1792000000 + 0, 20.0, -102.0, 60)];
+        return [0, 1, 2, 3, 4, 5, 6, 7, 8].map((i) => M(1792000000 - 60 + i * 60, 21.14071, -101.73470, 0));
+    });
+    const rLl = await mod.carnCorre({
+        usarPlat: true, tpl: { rid: 3, id: 10, nombre: 'Informe de Combustible' }, def: {}, lista: [{ id: 7, eco: '105' }, { id: 8, eco: '106' }],
+        desde: 1700000000, hasta: 1700000000 + 3600, cfgFuel: { litros: 10, vel: 3, tasa: 3 }, cfgCarn: { llegadas: true, topPuntos: 5, ventanaH: 1 }, onFase: null, token: null
+    });
+    tablaThefts = false;
+    mod.setStops(null);
+    ok('llegadas: se piden por unidad y ventana y entran como paradas del punto',
+        rLl.llegadas.length >= 1 && rLl.llegadas.every((l) => l.eco === '105') && rLl.meta.llegadasN === rLl.llegadas.length,
+        JSON.stringify({ l: rLl.llegadas.length, m: rLl.meta }));
+    ok('llegadas: contrastan las perdidas con las paradas (coincidencia)', rLl.verif && rLl.verif.total >= 1 && rLl.verif.coinciden >= 1 && rLl.tablas.some((t) => t.label === 'Llegadas'));
+    ok('llegadas: el PDF trae la verificacion con el historial', /Verificaci\u00f3n con el historial/.test(mod.carnHTML(rLl)) && /Coincidencia/.test(mod.carnHTML(rLl)));
+    const sinTok = await mod.carnEscaneaLlegadas([{ id: 7, eco: '105' }], [[1, 2]], [{ lat: 1, lon: 1 }], {}, null, { cancelado: true });
+    ok('llegadas: un token cancelado corta el escaneo sin pedir nada', sinTok.hechas === 0);
+    ok('sensor propio: sus filas se convierten a eventos con coordenadas y duracion', (function () {
+        const e = mod.carnEvsDeSensor({ filas: [['3686', '2026-10-14 13:36:25', '65', '3', '0', 'on', '21.14071, -101.73470', 'PATIO']] });
+        return e.length === 1 && e[0].eco === '3686' && e[0].litros === 65 && e[0].durSeg === 180 && Math.abs(e[0].lat - 21.14071) < 1e-9 && e[0].ms1 - e[0].ms0 === 180000;
+    })());
+    ok('plantilla integrada de carnada: lleva fuel y carnada', mod.RX_CARN_TPL.fuel === true && mod.RX_CARN_TPL.carnada === true && mod.rxFuelEsTpl(mod.RX_CARN_TPL));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
