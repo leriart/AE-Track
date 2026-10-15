@@ -799,8 +799,16 @@ ok('informes: paintTools respeta el reveal persistente',
     /function rxPintaReveal\(\)/.test(src) && /rondo-replay-informe-geo" data-reveal="informes"/.test(src));
 // V8.1: reporte extra de perdida de combustible dentro del dialogo.
 ok('informes: la plantilla integrada de combustible encabeza la lista',
-    /RX_FUEL_TPL/.test(src) && /plantillas = \[RX_FUEL_TPL\]\.concat\(plantillas\)/.test(src) &&
+    /RX_FUEL_TPL/.test(src) && /plantillas = \[RX_FUEL_TPL, RX_CARN_TPL\]\.concat\(plantillas\)/.test(src) &&
     /'Perdida de combustible'/.test(src));
+ok('informes: convergencia con carnada integrada (puntos, mapa, PDF, geocercas y datos por punto)',
+    /const RX_CARN_TPL/.test(src) && /function carnPuntos\(/.test(src) && /function carnHTML\(/.test(src) &&
+    /function carnCreaGeocercas\(/.test(src) && /function carnCSVDatos\(/.test(src) && /id="rgi-carn-lleg"/.test(src) &&
+    /id="rgi-carn-geo"/.test(src) && /res = await carnCorre\(/.test(src) && /carnMapaDatos\(\)/.test(src));
+ok('informes: todos los reportes nativos (recurso, ruta, retranslador), tablas elegibles y ajustes de formato',
+    /AVL_RESOURCE: 'avl_resource'/.test(src) && /AVL_ROUTE: 'avl_route'/.test(src) && /AVL_RETRANSLATOR: 'avl_retranslator'/.test(src) &&
+    /function rxInfDefTablasSel\(/.test(src) && /function rxInfAjustesDe\(/.test(src) && /data-tabsel=/.test(src) &&
+    /function rxInfHash\(/.test(src));
 ok('informes: el reporte de combustible detecta 10 L en 1-2 min con la unidad parada',
     /function rxFuelDetecta\(msgs, opts\)/.test(src) && /function rxFuelCorre\(unidades, desde, hasta, opts, onProg, token\)/.test(src) &&
     /id="rgi-fuel-litros"/.test(src) && /id="rgi-fuel-min"/.test(src) && /data-fuelmotor=/.test(src) &&

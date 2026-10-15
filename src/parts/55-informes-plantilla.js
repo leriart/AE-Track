@@ -55,6 +55,7 @@ const RX_INF = {
     zonas: [],           // geocercas marcadas (plantilla de geocercas)
     zonaBusca: '',       // filtro de texto del selector de geocercas
     filtros: {},         // filtros de la plantilla elegidos a mano (units, geozones...)
+    tablasSel: {},       // tablas de la plantilla a calcular (nombre interno -> 1); vacio = todas
     // V8.1: opciones del reporte extra "Perdida de combustible".
     fuel: {
         litros: 10,      // caida de nivel que ya cuenta como perdida
@@ -71,6 +72,8 @@ const RX_INF = {
         // detector propio sobre el historial. UNDEFINED = todavia no buscada.
         fuente: 'plataforma', _desc: undefined
     },
+    // Reporte "Convergencia con carnada" (fragmento 57).
+    carn: { radio: 30, unir: 150, minCarnada: 2, llegadas: false, topPuntos: 10, ventanaH: 12 },
     fuelSinSensor: false, // la ultima corrida no encontro sensor de nivel
     fuelPlat: '',        // nombre de la plantilla de plataforma usada (o '')
     uniSel: {},          // unidades marcadas para filtrar las filas (vacio = todas)
@@ -364,10 +367,20 @@ function rxInfCacheLimpiar() {
 // Clave de un trozo: plantilla + recurso dueño + objeto + intervalo. El
 // recurso dueño importa: dos geocercas de recursos distintos pueden compartir
 // id y no ser la misma.
+// Hash corto (djb2) de la definicion propia: filtros, tablas o ajustes
+// distintos son resultados distintos. Sin esto, cambiar un filtro devolvia lo
+// ya guardado de la ejecucion anterior (misma plantilla, mismo objeto).
+function rxInfHash(o) {
+    let t = '';
+    try { t = (typeof o === 'string') ? o : JSON.stringify(o); } catch (_) { t = ''; }
+    let h = 5381;
+    for (let i = 0; i < t.length; i++) h = ((h << 5) + h + t.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+}
 function rxInfCacheKey(tpl, o, desde, hasta) {
     const id = (o && o.id != null) ? o.id : (o != null ? o : 0);
     const sec = (o && o.sec != null) ? o.sec : '0';
-    return rxInfClave(tpl) + '|' + id + '|' + sec + '|' + ((o && o.def) ? 'd|' : '') + desde + '|' + hasta;
+    return rxInfClave(tpl) + '|' + id + '|' + sec + '|' + ((o && o.def) ? ('d' + rxInfHash(o.def) + '|') : '') + desde + '|' + hasta;
 }
 // ── Que declara la plantilla (report/get_report_data) ───────────────────
 // La respuesta es una lista de plantillas con su estructura de tablas:
@@ -547,7 +560,12 @@ const _rxInfItems = {};   // itemsType -> { NOMBRE: id }
 const _RX_INF_TIPOS = {
     AVL_UNIT_GROUP: 'avl_unit_group', AVL_UNITGROUPS: 'avl_unit_group', UNIT_GROUP: 'avl_unit_group',
     AVL_DRIVER: 'avl_driver', DRIVER: 'avl_driver',
-    AVL_TRAILER: 'avl_trailer', TRAILER: 'avl_trailer'
+    AVL_TRAILER: 'avl_trailer', TRAILER: 'avl_trailer',
+    // Informes de recurso (notificaciones, geocercas...), de ruta y de
+    // retranslador: se ejecutan sobre sus propios items.
+    AVL_RESOURCE: 'avl_resource', RESOURCE: 'avl_resource',
+    AVL_ROUTE: 'avl_route', ROUTE: 'avl_route',
+    AVL_RETRANSLATOR: 'avl_retranslator', RETRANSLATOR: 'avl_retranslator'
 };
 // Lee (y cachea) los items de un tipo. `conDetalle` devuelve ademas la lista
 // con recurso dueño; sin el, solo el mapa nombre -> id.
@@ -576,6 +594,11 @@ async function rxInfObjetosTipo(tipoObj, ridPlantilla) {
     const itemsType = _RX_INF_TIPOS[norm(tipoObj)];
     if (!itemsType) return null;
     const lista = await rxInfItemsTipo(itemsType, true);
+    // Un informe de recurso se ejecuta sobre el propio recurso: si la lista no
+    // se pudo leer, el recurso dueño de la plantilla es el objeto.
+    if (!lista.length && itemsType === 'avl_resource' && ridPlantilla != null) {
+        return [{ id: String(ridPlantilla), eco: 'Recurso', rid: ridPlantilla }];
+    }
     return lista.map((it) => ({ id: it.id, eco: it.eco, rid: ridPlantilla }));
 }
 // ── Ejecucion (sincrona, con particion adaptativa) ──────────────────────
@@ -794,7 +817,7 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
             };
         } catch (e) {
             err = (e && e.message) || String(e);
-            if (!/1003|1004|4/.test(err) || i === 1) break;
+            if (!/code (1003|1004|4)\b/.test(err) || i === 1) break;
             await rxInfEspera(700 * (i + 1));
         }
     }
@@ -842,6 +865,48 @@ function rxInfFiltrosDe(info) {
     (info && info.params ? info.params : []).forEach((p) => meter(p && p.k));
     return out;
 }
+// Ajustes de formato y calculo que la plantilla trae guardados (address_format,
+// time_format, us_units, averaging...). No filtran, pero cambian lo que se ve
+// (direcciones, horas, unidades de medida): son "variables" de la plantilla y
+// el operador las puede cambiar sin tocar la plataforma.
+function rxInfAjustesDe(info) {
+    const out = [], vistos = {};
+    (info && info.params ? info.params : []).forEach((p) => {
+        const k = String((p && p.k) || '').trim();
+        if (!k || vistos[k] || !RX_INF_AJUSTE.test(k)) return;
+        vistos[k] = 1;
+        out.push(k);
+    });
+    return out;
+}
+// Nombres internos de las tablas de la plantilla (las que se pueden elegir).
+function rxInfTablasDe(info) {
+    return ((info && info.tablas) ? info.tablas : []).filter((t) => t && t.n)
+        .map((t) => ({ n: t.n, l: t.l || t.n }));
+}
+// Definicion propia con SOLO las tablas elegidas (por nombre interno). Si no
+// hay seleccion, o se elige todo, devuelve la misma definicion (o null).
+function rxInfDefTablasSel(def, datos, tplId, nombres) {
+    const sel = Object.keys(nombres || {}).filter((k) => nombres[k]);
+    if (!sel.length) return def || null;
+    try {
+        let base = def;
+        if (!base) {
+            const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+            const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+            if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
+            base = JSON.parse(JSON.stringify(t));
+            base.id = 0;
+            rxInfDefSinBind(base);
+        } else {
+            base = JSON.parse(JSON.stringify(base));
+        }
+        const todas = (base.tbl || []).length;
+        base.tbl = (base.tbl || []).filter((tb) => sel.indexOf(tb.n) >= 0);
+        if (!base.tbl.length || (base.tbl.length === todas && !def)) return def || null;
+        return base;
+    } catch (_) { return def || null; }
+}
 // Precarga los items que necesitan los filtros de la plantilla (grupos,
 // conductores, remolques) para poder resolver sus NOMBRES a id. Se llama una
 // vez al leer la declaracion; sin esto, esos filtros solo admitirian ids.
@@ -871,6 +936,8 @@ function rxInfFiltroValor(info, k) {
 // al id). Los ecos pueden ser numericos, asi que se prueba primero el nombre y
 // solo despues se toma como id.
 function rxInfFiltroResuelve(k, v) {
+    // Los ajustes (us_units, address_format...) son valores, no items.
+    if (RX_INF_AJUSTE.test(String(k || ''))) return String(v == null ? '' : v).trim();
     const partes = String(v == null ? '' : v).split(/[,;]+/).map((x) => x.trim()).filter(Boolean);
     const ids = partes.map((x) => {
         const n = norm(x);
@@ -1167,7 +1234,17 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar, de
     if (unidades && unidades.length) {
         objs = unidades.map((u) => ({ id: String(u.id), sec: '0', eco: u.eco }));
         modo = 'seleccion';
-        if (defFijo) objs.forEach((o) => { o.def = defFijo; });
+        // Antes la seleccion ignoraba los filtros y las tablas elegidas: solo
+        // se respetaba la definicion fija del combustible.
+        let defSel = defFijo || null;
+        const fe = rxInfFiltrosEfectivos();
+        const hayTablas = Object.keys(RX_INF.tablasSel || {}).some((k) => RX_INF.tablasSel[k]);
+        if (!defSel && (Object.keys(fe).length || hayTablas) && tpl && tpl.id != null && !rxFuelEsTpl(tpl)) {
+            const datosSel = await rxInfDatosPlantilla(tpl);
+            defSel = rxInfDefFiltros(datosSel, tpl.id, fe);
+            defSel = rxInfDefTablasSel(defSel, datosSel, tpl.id, RX_INF.tablasSel);
+        }
+        if (defSel) objs.forEach((o) => { o.def = defSel; });
     } else {
         const datos = await rxInfDatosPlantilla(tpl);
         const info = rxInfPlantillaInfo(datos, tpl.id);
@@ -1182,6 +1259,8 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar, de
         // informe se ejecuta unidad por unidad y un filtro atado a otra unidad
         // solo provoca errores.
         if (!defBase && forzar === 'flota') defBase = rxInfDefSinUnidades(datos, tpl.id);
+        // Tablas elegidas por el operador: la plataforma solo calcula esas.
+        if (!defFijo && !rxFuelEsTpl(tpl)) defBase = rxInfDefTablasSel(defBase, datos, tpl.id, RX_INF.tablasSel);
         if (esGeo) {
             objs = await rxInfModelo(tpl, info, datos, desde, hasta, token, defBase);
             modo = 'geocercas';
@@ -1392,6 +1471,8 @@ function rxInfZonaDeNombre(nombre) {
 // Datos para pintar: contornos de las geocercas que salen y puntos de las
 // filas con coordenadas. Null si no hay nada que dibujar.
 function rxInfMapaDatos(v) {
+    // Convergencia con carnada: puntos con su radio real y su sospecha.
+    if (RX_INF.tpl && RX_INF.tpl.carnada && typeof carnMapaDatos === 'function') return carnMapaDatos();
     const c = rxInfCoords(v.cols);
     const lineas = [];
     const marcas = [];
@@ -1419,6 +1500,25 @@ function rxInfMapaDatos(v) {
             });
         }
     }
+    // Columna "Coordenadas" con el texto "lat, lon" (informes de combustible):
+    // sin lat/lon sueltas tampoco se podia situar nada.
+    if (!(c.iLat >= 0 && c.iLon >= 0)) {
+        let iC = -1;
+        const rxLL = /^\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)\s*$/;
+        for (let i = 0; i < (v.cols || []).length && iC < 0; i++) {
+            if ((v.filas || []).slice(0, 20).some((f) => rxLL.test(String((f || [])[i] == null ? '' : f[i])))) iC = i;
+        }
+        if (iC >= 0) {
+            for (const f of (v.filas || [])) {
+                if (marcas.length >= 400) break;
+                const m = String(f[iC] == null ? '' : f[iC]).match(rxLL);
+                if (!m) continue;
+                const la = +m[1], lo = +m[2];
+                if (Math.abs(la) > 90 || Math.abs(lo) > 180) continue;
+                marcas.push({ lat: la, lon: lo, color: (v.iUni >= 0 && f[v.iUni]) ? '#e65100' : '#1565c0', radio: 4, txt: (v.iUni >= 0 ? String(f[v.iUni]) : '') });
+            }
+        }
+    }
     if (!lineas.length && !marcas.length) return null;
     return { lineas: lineas, marcas: marcas };
 }
@@ -1435,15 +1535,19 @@ function rxInfPintaMapa(v) {
         return;
     }
     cont.style.display = 'block';
-    const leyenda = '<div class="rgi-mapa-ley">' +
-        (d.lineas.length ? '<span><i style="background:#1565c0"></i>Geocerca</span>' : '') +
-        (d.marcas.length ? '<span><i style="background:#e65100"></i>Unidad</span>' : '') +
+    const leyenda = '<div class="rgi-mapa-ley">' + (d.leyenda ||
+        ((d.lineas.length ? '<span><i style="background:#1565c0"></i>Geocerca</span>' : '') +
+        (d.marcas.length ? '<span><i style="background:#e65100"></i>Unidad</span>' : ''))) +
         '<span class="muted">Mapa: OpenStreetMap</span></div>';
     if (d.lineas.length && d.marcas.length) {
         try {
             if (!_rxInfMapa) _rxInfMapa = rxMiniMapa(cont, d);
             else { _rxInfMapa.lineas = d.lineas; _rxInfMapa.marcas = d.marcas; }
             _rxInfMapa.encuadrar();
+            // La leyenda va dentro del contenedor del mapa y se rehace cada vez.
+            const vieja = cont.querySelector('.rgi-mapa-ley');
+            if (vieja && vieja.parentNode) vieja.parentNode.removeChild(vieja);
+            if (d.leyenda) cont.insertAdjacentHTML('beforeend', leyenda);
         } catch (e) {
             if (APP.unlocked) console.warn('[Rondo] mapa informes', e && e.message);
         }
@@ -2529,12 +2633,10 @@ function rxFuelLugares(rel, coma) {
             rxFuelFmtN(g.litros, 1, coma) + ' l', g.ultTxt, g.nivel ? (g.nivel + ' (' + g.pun + ')') : '-'];
     });
 }
-// Corre la plantilla de descargas POR UNIDAD, une los sensores, juzga cada
-// evento y devuelve: tabla principal (robos y sospechas), descartados y
-// lugares repetidos.
-async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, token, cfg) {
-    const t0 = Date.now();
-    const conf = cfg || RX_INF.fuel;
+// Recoge los eventos crudos de la plantilla de descargas, unidad por unidad y
+// por trozos. Es la base comun del reporte de perdidas y del de convergencia
+// con carnada: cada uno los analiza a su manera.
+async function rxFuelRecolecta(tpl, unidades, desde, hasta, def, onProg, token) {
     const lista = (unidades || []).slice(0, RX_FUEL_MAX_U);
     const evs = [];
     const errores = [];
@@ -2576,6 +2678,19 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
         if (onProg) onProg(hechas, lista.length, evs.length, u.eco);
         await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
     }
+    return {
+        evs: evs, errores: errores, trozos: trozos.length, hechas: hechas, fallos: fallos,
+        conDatos: conDatos, objetos: lista.length, lleno: evs.length >= RX_FUEL_MAX_EV
+    };
+}
+// Corre la plantilla de descargas POR UNIDAD, une los sensores, juzga cada
+// evento y devuelve: tabla principal (robos y sospechas), descartados y
+// lugares repetidos.
+async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, token, cfg) {
+    const t0 = Date.now();
+    const conf = cfg || RX_INF.fuel;
+    const rec = await rxFuelRecolecta(tpl, unidades, desde, hasta, def, onProg, token);
+    const evs = rec.evs;
     const an = rxFuelAnalizaDescargas(evs, conf);
     const coma = rxFuelUsaComa(evs);
     const filasRel = an.rel.map((e) => rxFuelFilaDesc(e, coma));
@@ -2589,11 +2704,12 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
     }
     return {
         cols: RX_FUEL_DESC_COLS.slice(), filas: filasRel, tablas: tablas,
-        trozos: trozos.length, hechos: hechas, objetos: lista.length, alcance: 'plataforma',
-        fallos: fallos, errores: errores, cacheados: 0, lleno: evs.length >= RX_FUEL_MAX_EV,
-        conSensor: conDatos, sinSensor: lista.length - conDatos, ms: Date.now() - t0,
+        trozos: rec.trozos, hechos: rec.hechas, objetos: rec.objetos, alcance: 'plataforma',
+        fallos: rec.fallos, errores: rec.errores, cacheados: 0, lleno: rec.lleno,
+        conSensor: rec.conDatos, sinSensor: rec.objetos - rec.conDatos, ms: Date.now() - t0,
         robos: an.robos, sospechas: an.sospechas, descartados: an.desc.length,
-        litrosRobo: an.litrosRobo, lugares: lug.length, crudos: an.crudos, unidos: an.unidos
+        litrosRobo: an.litrosRobo, lugares: lug.length, crudos: an.crudos, unidos: an.unidos,
+        analisis: an
     };
 }
 // Unidades a barrer cuando el alcance es "toda la flota". Conserva la
@@ -2781,11 +2897,14 @@ function abrirInformesPlantilla(origen) {
                 const dis = busy ? ' disabled' : '';
                 const hay = (RX_INF.cols || []).length > 0;
                 const esFuel = rxFuelEsTpl(tpl);
+                const esCarn = !!(esFuel && tpl && tpl.carnada);
                 const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.export + '</span>' +
                     '<div class="rgi-herot"><b>' + esc(tpl ? tpl.nombre : 'Informes de la plataforma') + '</b>' +
                     '<span>' + esc(tpl
                         ? (esFuel
-                            ? 'Busca caidas de nivel con la unidad detenida (motor encendido o apagado)'
+                            ? (tpl.carnada
+                                ? 'Traza los puntos de probable robo de diesel: p\u00e9rdida de combustible + convergencia de unidades carnada'
+                                : 'Busca caidas de nivel con la unidad detenida (motor encendido o apagado)')
                             : 'Ejecutada por report/exec_report, en trozos de ' + RX_INF_DIAS_TROZO + ' d\u00edas para no chocar con el l\u00edmite de tiempo')
                         : 'Elige una plantilla de las que ya tienes en AE-Track') + '</span></div>' +
                     (tpl ? '<i class="rgi-ori' + (esFuel ? ' o-app' : '') + '">' + (esFuel ? 'Integrado' : 'API') + '</i>' : '') + '</div>';
@@ -2908,25 +3027,54 @@ function abrirInformesPlantilla(origen) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc('Rondo une los sensores (IZQ, DER y DIESEL TOTAL son el mismo evento) y descarta lo que no es robo: sensor que cae a 0, unidad en movimiento y bajadas lentas (consumo, equipo de fr\u00edo o fuga). Lo descartado queda en su pesta\u00f1a, con el motivo.') +
                         '</span></div>');
-                    pasoFuel = paso(4, 'Perdida de combustible', filaFuente + filaMarca + opcionesSensor + opcionesPlat);
+                    const cn = RX_INF.carn;
+                    const opcionesCarn = !tpl.carnada ? '' :
+                        ('<div class="rgi-row"><span class="rgi-lb">Carnada</span>' +
+                        '<span class="rgi-num">convergen <input type="number" min="1" max="50" step="1" id="rgi-carn-min" value="' + esc(String(cn.minCarnada)) + '"' + dis + '> o m\u00e1s unidades</span>' +
+                        '<span class="rgi-num">a <input type="number" min="5" max="500" step="5" id="rgi-carn-radio" value="' + esc(String(cn.radio)) + '"' + dis + '> m</span>' +
+                        '<span class="rgi-num">unir puntos a <input type="number" min="10" max="2000" step="10" id="rgi-carn-unir" value="' + esc(String(cn.unir)) + '"' + dis + '> m</span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb">Llegadas</span><div class="rgi-chips">' +
+                        '<button type="button" class="rgi-chip' + (cn.llegadas ? ' activo' : '') + '" id="rgi-carn-lleg"' + dis +
+                        ' title="Pide el historial de cada unidad carnada para contar las que se detuvieron en cada punto (lento)">Contrastar con el historial</button></div>' +
+                        (cn.llegadas ? '<span class="rgi-num">los <input type="number" min="1" max="60" step="1" id="rgi-carn-top" value="' + esc(String(cn.topPuntos)) + '"' + dis + '> puntos con m\u00e1s p\u00e9rdida</span>' +
+                        '<span class="rgi-num">\u00b1<input type="number" min="1" max="72" step="1" id="rgi-carn-vent" value="' + esc(String(cn.ventanaH)) + '"' + dis + '> h</span>' : '') + '</div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        esc('Un punto solo se marca si hay p\u00e9rdida de combustible Y convergencia de unidades carnada (las marcadas con el sensor, ej. "(SC)"). Sin el historial solo cuentan las p\u00e9rdidas; con \u00e9l tambi\u00e9n las unidades que se detuvieron all\u00ed sin perder (m\u00e1s lento: pide el historial de cada unidad).') +
+                        '</span></div>');
+                    pasoFuel = paso(4, tpl.carnada ? 'Convergencia con carnada' : 'Perdida de combustible', filaFuente + filaMarca + opcionesSensor + opcionesPlat + opcionesCarn);
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
                 // los ajustes de formato). Es lo que antes no se podia tocar.
                 const filtrosKeys = rxInfFiltrosDe(RX_INF.decl);
+                const ajustesKeys = rxInfAjustesDe(RX_INF.decl);
+                const tablasDecl = rxInfTablasDe(RX_INF.decl);
                 let pasoFiltros = '';
-                if (tpl && !esFuel && filtrosKeys.length) {
-                    pasoFiltros = paso(4, 'Filtros de la plantilla',
-                        '<div class="rgi-filtros">' +
-                        filtrosKeys.map((k) => '<label class="rgi-filtro">' +
-                            '<b>' + esc(k) + '</b>' +
-                            '<input type="text" class="filtro" data-filtro="' + esc(k) + '" value="' +
-                            esc(rxInfFiltroValor(RX_INF.decl, k)) + '" placeholder="' + esc(rxInfFiltroPista(k)) + '"' + dis + '></label>').join('') +
-                        '</div>' +
-                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
-                        esc('Aceptan ids o nombres separados por comas (ej. "CDOS.4286, 105"). Los ajustes de la plataforma (address_format, us_units, averaging...) no filtran nada y no se listan.') +
-                        '</span></div>');
+                if (tpl && !esFuel && (filtrosKeys.length || ajustesKeys.length || tablasDecl.length > 1)) {
+                    const campoFiltro = (k) => '<label class="rgi-filtro">' +
+                        '<b>' + esc(k) + '</b>' +
+                        '<input type="text" class="filtro" data-filtro="' + esc(k) + '" value="' +
+                        esc(rxInfFiltroValor(RX_INF.decl, k)) + '" placeholder="' + esc(rxInfFiltroPista(k)) + '"' + dis + '></label>';
+                    const nSel = Object.keys(RX_INF.tablasSel || {}).filter((k) => RX_INF.tablasSel[k]).length;
+                    const filaTablas = (tablasDecl.length > 1)
+                        ? '<div class="rgi-row"><span class="rgi-lb">Tablas</span><div class="rgi-chips">' +
+                          tablasDecl.map((t) => '<button type="button" class="rgi-chip' +
+                              ((!nSel || RX_INF.tablasSel[t.n]) ? ' activo' : '') + '" data-tabsel="' + esc(t.n) + '"' + dis +
+                              ' title="Calcular o no esta tabla (la plataforma solo calcula las marcadas)">' + esc(t.l) + '</button>').join('') +
+                          (nSel ? '<button type="button" class="mini" id="rgi-tabsel-todas"' + dis + '>todas</button>' : '') +
+                          '</div></div>' +
+                          '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                          esc('Calcular solo las tablas que necesitas acelera el informe: la plataforma no hace el resto.') + '</span></div>'
+                        : '';
+                    pasoFiltros = paso(4, 'Filtros y variables de la plantilla',
+                        filaTablas +
+                        (filtrosKeys.length ? '<div class="rgi-filtros">' + filtrosKeys.map(campoFiltro).join('') + '</div>' +
+                            '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                            esc('Aceptan ids o nombres separados por comas (ej. "CDOS.4286, 105").') + '</span></div>' : '') +
+                        (ajustesKeys.length ? '<div class="rgi-row"><span class="rgi-lb">Ajustes</span><span class="rgi-gen-hint">' +
+                            esc('Formato y c\u00e1lculo de la plantilla (direcciones, horas, unidades de medida). No filtran filas: cambian c\u00f3mo se muestran.') +
+                            '</span></div><div class="rgi-filtros">' + ajustesKeys.map(campoFiltro).join('') + '</div>' : ''));
                 }
-                const nRes = (esFuel || filtrosKeys.length) ? 5 : 4;
+                const nRes = (esFuel || pasoFiltros) ? 5 : 4;
                 // Avisos.
                 const avisos = [];
                 if (RX_INF.alcance === 'sel' && !nUn && !esGeo) avisos.push(esc('No hay unidades seleccionadas: usa "Toda la flota" o selecciona unidades en la lista.'));
@@ -2963,6 +3111,14 @@ function abrirInformesPlantilla(origen) {
                             avisos.push(esc('Ninguna descarga parece robo: las ' + mm.descartados + ' detectadas se descartaron (pesta\u00f1a "Descartados", con el motivo).'));
                         }
                     }
+                }
+                if (esCarn && RX_INF.meta && RX_INF.meta.carn && RX_INF.meta.carnMeta) {
+                    const c = RX_INF.meta.carnMeta;
+                    if (!c.puntos) {
+                        avisos.push(esc('Ning\u00fan punto re\u00fane p\u00e9rdida y convergencia (' + c.eventos + ' p\u00e9rdida(s) con aspecto de robo, ' + c.descartados +
+                            ' descartada(s)). Ampl\u00eda el periodo, baja el m\u00ednimo de unidades o contrasta con el historial.'));
+                    }
+                    if (c.llegadasTruncado) avisos.push(esc(c.llegadasTruncado + ' ventana(s) del historial se truncaron: las llegadas pueden estar incompletas.'));
                 }
                 if (RX_INF.diag && RX_INF.diag.error) {
                     avisos.push('Ultimo intento: ' + esc(RX_INF.diag.enviado
@@ -3065,14 +3221,19 @@ function abrirInformesPlantilla(origen) {
                     '<div class="rgi-kpi ok"><b>' + v.total + '</b><span>' + (esFuel ? 'Eventos' : 'Filas') + '</span></div>' +
                     (v.iUni >= 0 ? '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' : '') +
                     (v.iZona >= 0 ? '<div class="rgi-kpi"><b>' + v.zonas + '</b><span>Geocercas</span></div>' : '') +
-                    (esFuel && v.meta.robos != null
+                    (esFuel && v.meta.carn && v.meta.carnMeta
+                        ? '<div class="rgi-kpi vivo"><b>' + v.meta.carnMeta.puntos + '</b><span>Puntos marcados</span></div>' +
+                          '<div class="rgi-kpi"><b>' + v.meta.carnMeta.alta + '</b><span>Sospecha alta</span></div>' +
+                          '<div class="rgi-kpi"><b>' + esc(rxInfFmt(Math.round(v.meta.carnMeta.litrosPuntos))) + ' L</b><span>En los puntos</span></div>' +
+                          '<div class="rgi-kpi"><b>' + v.meta.carnMeta.eventos + '</b><span>P\u00e9rdidas con aspecto de robo</span></div>'
+                        : (esFuel && v.meta.robos != null
                         ? '<div class="rgi-kpi vivo"><b>' + v.meta.robos + '</b><span>Robos probables</span></div>' +
                           '<div class="rgi-kpi"><b>' + v.meta.sospechas + '</b><span>Sospechosos</span></div>' +
                           '<div class="rgi-kpi"><b>' + esc(rxInfFmt(Math.round(v.meta.litrosRobo || 0))) + ' L</b><span>En robos y sospechas</span></div>' +
                           '<div class="rgi-kpi"><b>' + v.meta.descartados + '</b><span>Descartados</span></div>'
                         : (esFuel
                             ? '<div class="rgi-kpi"><b>' + esc(String(RX_INF.fuel.litros)) + ' L/' + esc(String(RX_INF.fuel.min)) + 'm</b><span>Umbral</span></div>'
-                            : '<div class="rgi-kpi"><b>' + v.meta.trozos + '</b><span>Trozos</span></div>')) +
+                            : '<div class="rgi-kpi"><b>' + v.meta.trozos + '</b><span>Trozos</span></div>'))) +
                     (esFuel && v.meta.sensoresFallo ? '<div class="rgi-kpi vivo"><b>' + v.meta.sensoresFallo + '</b><span>Sensores mal</span></div>' : '') +
                     '<div class="rgi-kpi"><b>' + Math.round(v.meta.ms / 1000) + ' s</b><span>Calculo</span></div>' +
                     (v.meta.cacheados ? '<div class="rgi-kpi"><b>' + v.meta.cacheados + '</b><span>En cache</span></div>' : '') +
@@ -3090,6 +3251,12 @@ function abrirInformesPlantilla(origen) {
                     '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>' + (RX_INF.vista === 'unidad' ? 'por unidad' : 'evento a evento') + '</i></button>' +
                     '<button type="button" class="rgi-btn" id="rgi-md"' + dis + ' title="Texto para pegar">' +
                     '<span class="rondo-usym">' + UIS.copy + '</span><b>Markdown</b><i>texto para pegar</i></button>' +
+                    ((esCarn && RX_CARN.res && RX_CARN.res.puntos && RX_CARN.res.puntos.length)
+                        ? '<button type="button" class="rgi-btn" id="rgi-carn-csv"' + dis + ' title="Perdidas y llegadas de cada punto en un solo archivo">' +
+                          '<span class="rondo-usym">' + UIS.csv + '</span><b>Datos por punto</b><i>p\u00e9rdidas y llegadas</i></button>' +
+                          '<button type="button" class="rgi-btn" id="rgi-carn-geo"' + dis + ' title="Crea una geocerca de Rondo (c\u00edrculo) en cada punto">' +
+                          '<span class="rondo-usym">' + UIS.zone + '</span><b>Crear geocercas</b><i>vigilar los puntos</i></button>'
+                        : '') +
                     '</div>' +
                     '<div class="rgi-row"><span class="rgi-lb"></span>' +
                     '<button type="button" class="mini" id="rgi-cache-limpiar"' + dis + '>' +
@@ -3126,7 +3293,7 @@ function abrirInformesPlantilla(origen) {
                 try { plantillas = await rxInfPlantillas(); } catch (_) { plantillas = []; ok = false; }
                 // La plantilla integrada de combustible va primero: es el
                 // "reporte extra" del dialogo.
-                plantillas = [RX_FUEL_TPL].concat(plantillas);
+                plantillas = [RX_FUEL_TPL, RX_CARN_TPL].concat(plantillas);
                 RX_INF._cargadas = true;
                 // La lista cambio: la busqueda de la plantilla de descargas se
                 // rehace.
@@ -3186,7 +3353,40 @@ function abrirInformesPlantilla(origen) {
                 setProg(4, 'Preparando\u2026');
                 let res;
                 try {
-                    if (esFuel && rxFuelUsaPlataforma()) {
+                    if (esFuel && RX_INF.tpl && RX_INF.tpl.carnada) {
+                        // Convergencia con carnada: perdidas depuradas + puntos.
+                        const usar = rxFuelUsaPlataforma();
+                        const desc = RX_INF.fuel._desc;
+                        RX_INF.zonas = []; RX_INF.eco = ''; RX_INF.filtros = {};
+                        let defThefts = null;
+                        if (usar) {
+                            try {
+                                const datos = await rxInfDatosPlantilla(desc.tpl);
+                                defThefts = rxInfDefSoloTablas(datos, desc.tpl.id, ['unit_thefts']);
+                            } catch (_) { defThefts = null; }
+                        }
+                        const baseUn = (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde);
+                        const listaUn = rxFuelFiltraMarca(baseUn, RX_INF.fuel.marca);
+                        if (!listaUn.length) {
+                            RX_INF._buscando = false; finProg();
+                            adviceWarn('Sin unidades', RX_INF.fuel.marca
+                                ? ('Ninguna unidad coincide con la marca "' + RX_INF.fuel.marca + '".')
+                                : 'No hay unidades que revisar en ese periodo.');
+                            pinta();
+                            return;
+                        }
+                        res = await carnCorre({
+                            usarPlat: !!(usar && defThefts), tpl: usar ? desc.tpl : null, def: defThefts, lista: listaUn,
+                            desde: r.desde, hasta: r.hasta, cfgFuel: RX_INF.fuel,
+                            cfgCarn: Object.assign({}, RX_INF.carn, { vel: RX_INF.fuel.vel }),
+                            onFase: (pct, txt) => {
+                                RX_INF.prog = { activo: true, hechas: 0, total: 0, filas: 0, txt: txt, pct: pct };
+                                setProg(pct, txt);
+                            },
+                            token: RX_INF._token
+                        });
+                        RX_INF.fuelPlat = (usar && defThefts) ? desc.tpl.nombre : '';
+                    } else if (esFuel && rxFuelUsaPlataforma()) {
                         // Descargas detectadas por la plataforma: se ejecuta SU
                         // plantilla SOLO con la tabla de descargas y POR UNIDAD,
                         // y se arman las filas con unidad, ubicacion, fecha/hora
@@ -3276,12 +3476,18 @@ function abrirInformesPlantilla(origen) {
                     lleno: res.lleno, bloqueado: res.bloqueado, recortado: res.recortado,
                     conSensor: res.conSensor, sinSensor: res.sinSensor, sensoresFallo: res.sensoresFallo,
                     robos: res.robos, sospechas: res.sospechas, descartados: res.descartados,
-                    litrosRobo: res.litrosRobo, lugares: res.lugares, crudos: res.crudos, unidos: res.unidos
+                    litrosRobo: res.litrosRobo, lugares: res.lugares, crudos: res.crudos, unidos: res.unidos,
+                    carn: !!res.carn, carnMeta: res.carn ? res.meta : null
                 };
                 pinta();
                 if (res.cancelado) advice('Informe cancelado', RX_INF.filas.length + ' fila(s) hasta donde lleg\u00f3 (quedan guardadas).');
                 else if (esFuel && res.conSensor === 0 && res.sinSensor > 0 && !RX_INF.filas.length) {
                     adviceWarn('Sin sensor de combustible', 'Ninguna unidad del alcance publica nivel de combustible. Usa una plantilla de combustible de la plataforma.');
+                } else if (res.carn) {
+                    const mc = res.meta;
+                    adviceOk('Convergencia con carnada', mc.puntos + ' punto(s) marcado(s): ' + mc.alta + ' alta(s), ' + mc.media + ' media(s), ' + mc.baja +
+                        ' baja(s) \u00b7 ' + rxInfFmt(Math.round(mc.litrosPuntos)) + ' L' + (res.fallos ? ' \u00b7 ' + res.fallos + ' error(es)' : '') +
+                        ' \u00b7 ' + Math.round(res.ms / 1000) + ' s');
                 } else if (esFuel && res.robos != null) {
                     adviceOk('Perdidas de combustible', res.robos + ' robo(s) probable(s), ' + res.sospechas + ' sospechoso(s), ' +
                         res.descartados + ' descartado(s)' + (res.fallos ? ' \u00b7 ' + res.fallos + ' error(es)' : '') +
@@ -3327,6 +3533,34 @@ function abrirInformesPlantilla(origen) {
                         RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
                         adviceOk('Resultados guardados vaciados', 'La pr\u00f3xima ejecuci\u00f3n los vuelve a calcular.');
                         pinta();
+                        return;
+                    }
+                    if (btn.id === 'rgi-carn-lleg') {
+                        if (RX_INF._buscando) return;
+                        RX_INF.carn.llegadas = !RX_INF.carn.llegadas;
+                        pinta();
+                        return;
+                    }
+                    if (btn.id === 'rgi-carn-csv') {
+                        if (!RX_CARN.res) return;
+                        rxInfDescarga(carnCSVDatos(RX_CARN.res), 'rondo_convergencia_carnada_' + new Date().toISOString().slice(0, 10) + '.csv', 'text/csv;charset=utf-8;');
+                        adviceOk('Datos por punto exportados', RX_CARN.res.puntos.length + ' punto(s)');
+                        return;
+                    }
+                    if (btn.id === 'rgi-carn-geo') {
+                        if (!RX_CARN.res || !RX_CARN.res.puntos.length) return;
+                        const n = carnCreaGeocercas(RX_CARN.res.puntos, RX_CARN.res.cfg.radio, 30);
+                        if (n) adviceOk('Geocercas creadas', n + ' geocerca(s) de Rondo en los puntos (c\u00edrculos de ' + RX_CARN.res.cfg.radio + ' m).');
+                        else adviceWarn('Sin geocercas nuevas', 'No se pudo crear ninguna (l\u00edmite de geocercas de la app o puntos ya creados).');
+                        return;
+                    }
+                    if (btn.id === 'rgi-pdf' && RX_INF.tpl && RX_INF.tpl.carnada && RX_CARN.res) {
+                        try {
+                            rxImprimirHTML(carnHTML(RX_CARN.res));
+                            advice('Reporte listo', 'Elige "Guardar como PDF" en el di\u00e1logo de impresi\u00f3n.');
+                        } catch (e) {
+                            adviceErr('No se pudo preparar el reporte', (e && e.message) || 'error inesperado');
+                        }
                         return;
                     }
                     if (btn.id === 'rgi-pdf' || btn.id === 'rgi-csv' || btn.id === 'rgi-md') {
@@ -3399,7 +3633,7 @@ function abrirInformesPlantilla(origen) {
                         // filtros que dependian de sus columnas.
                         RX_INF.cols = []; RX_INF.filas = []; RX_INF.meta = null;
                         RX_INF.zonas = []; RX_INF.eco = ''; RX_INF.orden = null;
-                        RX_INF.decl = null; RX_INF._declKey = '';
+                        RX_INF.decl = null; RX_INF._declKey = ''; RX_INF.tablasSel = {};
                     }
                     pinta();
                     if (t) declara();
@@ -3496,6 +3730,28 @@ function abrirInformesPlantilla(origen) {
                 else RX_INF[b.dataset.i] = b.dataset.v;
                 pinta();
             });
+            // Tablas de la plantilla que se calculan (chips propios).
+            box.addEventListener('click', (ev) => {
+                if (ev.target.closest && ev.target.closest('#rgi-tabsel-todas')) {
+                    if (RX_INF._buscando) return;
+                    RX_INF.tablasSel = {};
+                    pinta();
+                    return;
+                }
+                const tsb = ev.target.closest && ev.target.closest('[data-tabsel]');
+                if (!tsb || !box.contains(tsb)) return;
+                if (RX_INF._buscando) return;
+                const nm = tsb.dataset.tabsel;
+                const todas = rxInfTablasDe(RX_INF.decl).map((t) => t.n);
+                // Sin seleccion = todas activas: la primera pulsacion deja solo la pulsada.
+                const act = Object.keys(RX_INF.tablasSel || {}).filter((k) => RX_INF.tablasSel[k]);
+                if (!act.length) { RX_INF.tablasSel = {}; RX_INF.tablasSel[nm] = 1; }
+                else if (RX_INF.tablasSel[nm]) { delete RX_INF.tablasSel[nm]; }
+                else { RX_INF.tablasSel[nm] = 1; }
+                const act2 = Object.keys(RX_INF.tablasSel).filter((k) => RX_INF.tablasSel[k]);
+                if (act2.length === todas.length) RX_INF.tablasSel = {};
+                pinta();
+            });
             // Estado del motor del reporte de combustible (chips propios).
             box.addEventListener('click', (ev) => {
                 const fm = ev.target.closest && ev.target.closest('[data-fuelmotor]');
@@ -3551,6 +3807,11 @@ function abrirInformesPlantilla(origen) {
                 if (t.id === 'rgi-q') { RX_INF.q = t.value || ''; pintaResultados(); return; }
                 if (t.id === 'rgi-fuel-litros') { RX_INF.fuel.litros = Math.max(1, Number(t.value) || RX_INF.fuel.litros); return; }
                 if (t.id === 'rgi-fuel-min') { RX_INF.fuel.min = clamp(Number(t.value) || RX_INF.fuel.min, 1, 60); return; }
+                if (t.id === 'rgi-carn-min') { RX_INF.carn.minCarnada = clamp(Math.round(Number(t.value) || RX_INF.carn.minCarnada), 1, 50); return; }
+                if (t.id === 'rgi-carn-radio') { RX_INF.carn.radio = clamp(Number(t.value) || RX_INF.carn.radio, 5, 500); return; }
+                if (t.id === 'rgi-carn-unir') { RX_INF.carn.unir = clamp(Number(t.value) || RX_INF.carn.unir, 10, 2000); return; }
+                if (t.id === 'rgi-carn-top') { RX_INF.carn.topPuntos = clamp(Math.round(Number(t.value) || RX_INF.carn.topPuntos), 1, 60); return; }
+                if (t.id === 'rgi-carn-vent') { RX_INF.carn.ventanaH = clamp(Number(t.value) || RX_INF.carn.ventanaH, 1, 72); return; }
                 if (t.id === 'rgi-fuel-tasa') { RX_INF.fuel.tasa = clamp(Number(t.value) || RX_INF.fuel.tasa, 0.5, 1000); return; }
                 if (t.id === 'rgi-fuel-vel') { RX_INF.fuel.vel = clamp(Number(t.value) || 0, 0, 40); return; }
                 if (t.id === 'rgi-fuel-km') { RX_INF.fuel.km = clamp(Number(t.value) || RX_INF.fuel.km, 1, 2000); return; }
