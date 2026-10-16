@@ -77,7 +77,7 @@ const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, 
     'rxInfCacheCargar,rxInfCachePoner,rxInfCacheLimpiar,rxInfCacheKey,rxInfCSVTexto,rxInfNombreArchivo,' +
     'rxInfPlantillaInfo,rxInfZonasPlataforma,rxInfUnidades,rxInfExplicaError,rxInfOrdena,rxInfPista,' +
     'rxInfEsDeGeocercas,rxInfClasifica,rxInfColumnasVacias,rxInfZonaDeFila,rxInfDatosPlantilla,rxInfZonasDisponibles,' +
-    'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS,' +
+    'rxInfFiltrosDe,rxInfFiltroValor,rxInfFiltroResuelve,rxInfDefFiltros,rxInfDefSinUnidades,rxInfDefSana,rxInfVisibles,rxInfRecortaVisible,RX_INF_MAX_TABLAS,' +
     'rxInfDefSoloTablas,' +
     'rxInfLista,rxInfItemsTipo,rxInfPrecargaItems,rxInfObjetosTipo,' +
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
@@ -939,15 +939,21 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     // la geocerca) y el informe se ejecuta POR la geocerca 1820.
     const tplGeo = [{ id: 12, n: 'GEOCERCA', ct: 'avl_geozone', tbl: [
         { n: 'geofences', l: 'Dibujar geocercas', c: '', p: '{}' },
-        { n: 'geozone_stats', l: 'Estadisticas', c: '', p: '{"address_format":"1255211008_10_5","geofence_exit_msg":"1820"}' },
+        { n: 'geozone_stats', l: 'Estadisticas', c: '', p: '{"address_format":"1255211008_10_5","time_format":"%E.%m.%Y_%H:%M:%S","us_units":0,"averaging":"none","geofence_exit_msg":"1820"}' },
         { n: 'geozone_units', l: 'Unidades', c: '["unit_name","time_begin"]', p: '{"units":"1820"}' }
     ] }];
     const defZ = mod.rxInfDefConObjeto(tplGeo, 12, { id: '1820', esZona: true }, null);
     ok('code 7 (GEOCERCA): la geocerca NO se mete en el filtro de unidades (era el valor invalido)',
         !!defZ && defZ.id === 0 && JSON.parse(defZ.tbl[2].p).units === undefined,
         JSON.stringify(defZ && defZ.tbl.map((t) => t.p)));
-    ok('code 7 (GEOCERCA): se conservan los demas parametros de la tabla y la geocerca no toca los ajustes',
-        defZ && JSON.parse(defZ.tbl[1].p).address_format === '1255211008_10_5', JSON.stringify(defZ && defZ.tbl[1].p));
+    const pStats = defZ ? JSON.parse(defZ.tbl[1].p) : {};
+    ok('code 7 (GEOCERCA): se limpia el ajuste con el id del objeto (geofence_exit_msg:"1820") y se conservan los formatos',
+        pStats.geofence_exit_msg === undefined && pStats.address_format === '1255211008_10_5' && pStats.time_format === '%E.%m.%Y_%H:%M:%S',
+        JSON.stringify(pStats));
+    // El saneo tambien va en la definicion "sin filtros" (candidato de modelo).
+    const defSin = mod.rxInfDefSinUnidades(tplGeo, 12);
+    ok('code 7 (GEOCERCA): la definicion sin filtros tambien queda saneada',
+        defSin && JSON.parse(defSin.tbl[1].p).geofence_exit_msg === undefined && JSON.parse(defSin.tbl[2].p).units === undefined);
     // Y para un objeto NO geocerca, "units" sí se rellena.
     const defU2 = mod.rxInfDefConObjeto(tplGeo, 12, { id: '7', esZona: false }, null);
     ok('code 7: si el objeto es una unidad, "units" se rellena con ella',
