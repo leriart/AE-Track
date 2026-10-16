@@ -822,7 +822,7 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
             // una definicion propia que lo rellena con el objeto que se ejecuta.
             if (/code 7/.test(err) && !probo7 && typeof rxInfDefConObjeto === 'function' && RX_INF._datos) {
                 probo7 = true;
-                const def7 = rxInfDefConObjeto(RX_INF._datos, tpl.id, { id: objId }, null);
+                const def7 = rxInfDefConObjeto(RX_INF._datos, tpl.id, { id: objId, esZona: !!(o && o.esZona) }, null, d);
                 if (def7) {
                     d = def7;
                     enviado.reportTemplateId = 0;
@@ -1100,26 +1100,37 @@ function rxInfDefSinUnidades(datos, tplId) {
 // (units, geozones, unit_groups, drivers, trailers, routes...) con el objeto
 // que se esta ejecutando. Es el remedio del "code 7": una plantilla guardada
 // sin ese filtro lo exige y no se le estaba mandando.
-function rxInfDefConObjeto(datos, tplId, o, extra) {
+function rxInfDefConObjeto(datos, tplId, o, extra, base) {
     try {
-        const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
-        const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
-        if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
-        const def = JSON.parse(JSON.stringify(t));
-        def.id = 0;
-        rxInfDefSinBind(def);
+        let def;
+        if (base && Array.isArray(base.tbl) && base.tbl.length) {
+            // Sobre la definicion que ya venia (p. ej. la de "sin filtros"):
+            // reconstruirla desde cero perdia esos ajustes y volvia a meter
+            // el id equivocado.
+            def = JSON.parse(JSON.stringify(base));
+        } else {
+            const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+            const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+            if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
+            def = JSON.parse(JSON.stringify(t));
+            def.id = 0;
+            rxInfDefSinBind(def);
+        }
         const id = String((o && o.id != null) ? o.id : '');
+        const esZona = !!(o && o.esZona);
         def.tbl.forEach((tb) => {
             let p = {};
             try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
             Object.keys(p).forEach((k) => {
                 const n = norm(k);
                 if (!id) return;
-                if (/^(UNITS?|UNIDADES?)$/.test(n) ||
-                    /(GEOZON|GEOFENCE|^ZONA|ZONES?)/.test(n) ||
-                    /(UNIT_?GROUPS?|GRUPOS?)/.test(n) ||
-                    /(DRIVERS?|CONDUCTORES?)/.test(n) ||
-                    /(TRAILERS?|REMOLQUES?|ROUTES?|RUTAS?)/.test(n)) p[k] = id;
+                const esUnidad = /^(UNITS?|UNIDADES?)$/.test(n);
+                const esZonaKey = /(GEOZON|GEOFENCE|^ZONAS?|^ZONES?|ZONES)/.test(n);
+                // El objeto decide: una geocerca rellena su filtro y NO el de
+                // unidades (meter el id de la geocerca en "units" es justo el
+                // "code 7"), y una unidad al reves.
+                if (esZonaKey) { if (esZona) p[k] = id; else delete p[k]; }
+                else if (esUnidad) { if (esZona) delete p[k]; else p[k] = id; }
             });
             if (extra) Object.keys(extra).forEach((k) => { if (extra[k] == null || extra[k] === '') delete p[k]; else p[k] = extra[k]; });
             tb.p = JSON.stringify(p);
@@ -1172,7 +1183,11 @@ function rxInfCandidatos(tpl, info, datos, defBase) {
     const zs = rxInfZonasPlataforma();
     const mkZona = (z, def) => meter(z.id, '0', z.eco + (def ? ' (sin filtro)' : ''), true, def);
     const marcadas = (RX_INF.zonas || []);
-    let usar = zs;
+    // Un informe de geocercas solo vale con geocercas que el recurso de la
+    // plantilla tenga: usar la de otro recurso da code 4/7. Si el recurso
+    // tiene propias, se usan esas.
+    const propiasZ = zs.filter((z) => z.rid != null && String(z.rid) === String(tpl.rid));
+    let usar = propiasZ.length ? propiasZ : zs;
     if (zs.length && marcadas.length) {
         const set = {};
         marcadas.forEach((z) => { set[norm(z)] = 1; });
@@ -1244,6 +1259,8 @@ async function rxInfModelo(tpl, info, datos, desde, hasta, token, defBase) {
     // Modelo por geocerca: se ejecuta por TODAS las geocercas a usar.
     if (elegido.esZona) {
         let zs = rxInfZonasPlataforma();
+        const propiasZ = zs.filter((z) => z.rid != null && String(z.rid) === String(tpl.rid));
+        if (propiasZ.length) zs = propiasZ;
         const marcadas = (RX_INF.zonas || []);
         if (marcadas.length) {
             const set = {};
