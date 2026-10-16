@@ -809,6 +809,9 @@ ok('informes: todos los reportes nativos (recurso, ruta, retranslador), tablas e
     /AVL_RESOURCE: 'avl_resource'/.test(src) && /AVL_ROUTE: 'avl_route'/.test(src) && /AVL_RETRANSLATOR: 'avl_retranslator'/.test(src) &&
     /function rxInfDefTablasSel\(/.test(src) && /function rxInfAjustesDe\(/.test(src) && /data-tabsel=/.test(src) &&
     /function rxInfHash\(/.test(src));
+ok('informes: informe de geocercas se prueba por varias formas (objeto, recurso+secundario, 0+secundario) y la plantilla propia se sanea',
+    /function rxInfDefSana\(/.test(src) && /'c', 'cl', 'cp', 's', 'sl', 'sp'/.test(src) &&
+    /recurso \+ /.test(src) && /geocerca secundaria/.test(src) && /info\.esGeo/.test(src));
 ok('informes: el code 7 (plantilla que exige un filtro) reintenta con la definicion que lo rellena',
     /function rxInfDefConObjeto\(/.test(src) && /code 7\/\.test\(err\)/.test(src) &&
     /probo7 = true/.test(src) && /RX_INF\._datos = datos/.test(src));

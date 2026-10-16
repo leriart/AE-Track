@@ -380,7 +380,7 @@ function rxInfHash(o) {
 function rxInfCacheKey(tpl, o, desde, hasta) {
     const id = (o && o.id != null) ? o.id : (o != null ? o : 0);
     const sec = (o && o.sec != null) ? o.sec : '0';
-    return rxInfClave(tpl) + '|' + id + '|' + sec + '|' + ((o && o.def) ? ('d' + rxInfHash(o.def) + '|') : '') + desde + '|' + hasta;
+    return rxInfClave(tpl) + '|' + ((o && o.rid != null) ? o.rid : '') + '|' + id + '|' + sec + '|' + ((o && o.def) ? ('d' + rxInfHash(o.def) + '|') : '') + desde + '|' + hasta;
 }
 // ── Que declara la plantilla (report/get_report_data) ───────────────────
 // La respuesta es una lista de plantillas con su estructura de tablas:
@@ -787,7 +787,8 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
     const secId = (o && o.sec != null) ? String(o.sec) : '0';
     let d = def || (o && o.def) || null;
     const enviado = {
-        reportResourceId: tpl.rid,
+        // La geocerca puede pertenecer a otro recurso; si se conoce, se usa.
+        reportResourceId: (o && o.rid != null) ? o.rid : tpl.rid,
         reportTemplateId: d ? 0 : tpl.id,
         reportTemplate: d || null,
         reportObjectId: objId, reportObjectSecId: secId,
@@ -1069,7 +1070,7 @@ function rxInfDefFiltros(datos, tplId, filtros) {
             });
             tb.p = JSON.stringify(p);
         });
-        return def;
+        return rxInfDefSana(def);
     } catch (_) { return null; }
 }
 // Definicion propia de la plantilla (reportTemplateId 0 + reportTemplate) con
@@ -1103,6 +1104,10 @@ function rxInfDefSinUnidades(datos, tplId) {
 function rxInfDefSana(def) {
     if (!def || !Array.isArray(def.tbl)) return def;
     def.tbl.forEach((tb) => {
+        // report/get_report_data devuelve c/cl/cp como "" en las tablas sin
+        // columnas (geofences, stats...); al reenviarlas la plataforma espera
+        // JSON valido, no texto vacio.
+        ['c', 'cl', 'cp', 's', 'sl', 'sp'].forEach((f) => { if (tb[f] === '') tb[f] = '[]'; });
         let p = {};
         try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
         Object.keys(p).forEach((k) => {
@@ -1200,12 +1205,12 @@ function rxInfCandidatos(tpl, info, datos, defBase) {
     const visto = {};
     // `item` es el reportObjectId (unidad/geocerca) y `sec` el reportObjectSecId
     // (conductor/remolque; '0' si no hay).
-    const meter = (item, sec, eco, esZona, def) => {
+    const meter = (item, sec, eco, esZona, def, rid) => {
         if (item == null) return;
-        const k = String(item) + '|' + String(sec) + (def ? '|d' : '');
+        const k = String(item) + '|' + String(sec) + (def ? '|d' : '') + '|' + (rid == null ? '' : rid);
         if (visto[k]) return;
         visto[k] = 1;
-        out.push({ id: String(item), sec: String(sec == null ? '0' : sec), eco: eco || '', esZona: !!esZona, def: def || null });
+        out.push({ id: String(item), sec: String(sec == null ? '0' : sec), eco: eco || '', esZona: !!esZona, def: def || null, rid: (rid == null ? null : rid) });
     };
     const zs = rxInfZonasPlataforma();
     const mkZona = (z, def) => meter(z.id, '0', z.eco + (def ? ' (sin filtro)' : ''), true, def);
@@ -1249,6 +1254,22 @@ function rxInfCandidatos(tpl, info, datos, defBase) {
     if (def) {
         prueba.forEach((z) => mkZona(z, def));
         meter(tpl.rid, '0', 'informe (sin filtro)', false, def);
+    }
+    // Un informe de geocercas se puede direccionar de varias formas y no todas
+    // valen en todas las versiones: la geocerca como objeto (lo normal), el
+    // recurso como objeto con la geocerca de secundario, o 0 + geocerca. Se
+    // prueban todas y gana la que la plataforma acepte.
+    if (info && info.esGeo) {
+        const zz = (usar.length ? usar : zs).slice(0, 3);
+        zz.forEach((z) => {
+            meter(tpl.rid, z.id, 'recurso + ' + z.eco, false);
+            meter('0', z.id, 'geocerca secundaria ' + z.eco, true);
+            // Si la geocerca es de OTRO recurso, se ejecuta con ESE recurso y
+            // la plantilla propia (inline).
+            if (z.rid != null && String(z.rid) !== String(tpl.rid) && def) {
+                meter(z.id, '0', z.eco + ' (recurso ' + z.rid + ')', true, def, z.rid);
+            }
+        });
     }
     // El tipo que DECLARA la plantilla manda: probar primero geocercas en un
     // informe de unidades (o al reves) gasta peticiones y llena la traza de
