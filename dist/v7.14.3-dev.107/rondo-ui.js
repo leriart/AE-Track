@@ -14110,8 +14110,26 @@ function rxInfDefSinUnidades(datos, tplId) {
             });
             tb.p = JSON.stringify(p);
         });
-        return def;
+        return rxInfDefSana(def);
     } catch (_) { return null; }
+}
+// Un ajuste guardado con un numero grande (un id de objeto) suele ser un error
+// de guardado de la plantilla -- p. ej. geofence_exit_msg:"1820" -- y hace que
+// la plataforma rechace la ejecucion con code 7. Se quita al construir la
+// definicion propia.
+function rxInfDefSana(def) {
+    if (!def || !Array.isArray(def.tbl)) return def;
+    def.tbl.forEach((tb) => {
+        let p = {};
+        try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
+        Object.keys(p).forEach((k) => {
+            // Solo los ajustes de tipo mensaje de geocerca guardan a veces un
+            // id de objeto por error (address_format, time_format... no).
+            if (/geofence_(exit|enter)_msg/i.test(k) && /^\d+$/.test(String(p[k])) && Number(p[k]) > 1) delete p[k];
+        });
+        tb.p = JSON.stringify(p);
+    });
+    return def;
 }
 // Definicion propia que RELLENA el filtro de objeto que la plantilla declara
 // (units, geozones, unit_groups, drivers, trailers, routes...) con el objeto
@@ -14139,10 +14157,19 @@ function rxInfDefConObjeto(datos, tplId, o, extra, base) {
             let p = {};
             try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
             Object.keys(p).forEach((k) => {
+                // Los ajustes NO son filtros: geofence_exit_msg no es un filtro
+                // de geocerca aunque su nombre lleve "geofence".
+                if (RX_INF_AJUSTE.test(k)) {
+                    // Un ajuste que guarda el id del objeto es un error de
+                    // guardado (geofence_exit_msg:"1820"); los formatos
+                    // numericos legitimas (address_format:"1255") se conservan.
+                    if (String(p[k]) === id || (/geofence_(exit|enter)_msg/i.test(k) && /^\d+$/.test(String(p[k])) && Number(p[k]) > 1)) { delete p[k]; }
+                    return;
+                }
                 const n = norm(k);
                 if (!id) return;
                 const esUnidad = /^(UNITS?|UNIDADES?)$/.test(n);
-                const esZonaKey = /(GEOZON|GEOFENCE|^ZONAS?|^ZONES?|ZONES)/.test(n);
+                const esZonaKey = /(GEOZON|GEOFENCE|^ZONAS?|^ZONES?)/.test(n);
                 // El objeto decide: una geocerca rellena su filtro y NO el de
                 // unidades (meter el id de la geocerca en "units" es justo el
                 // "code 7"), y una unidad al reves.
@@ -14182,7 +14209,7 @@ function rxInfDefSoloTablas(datos, tplId, nombres) {
             p.sensor_name = '*';
             tb.p = JSON.stringify(p);
         });
-        return def.tbl.length ? def : null;
+        return def.tbl.length ? rxInfDefSana(def) : null;
     } catch (_) { return null; }
 }
 function rxInfCandidatos(tpl, info, datos, defBase) {
