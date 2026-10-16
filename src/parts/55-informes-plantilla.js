@@ -73,7 +73,7 @@ const RX_INF = {
         fuente: 'plataforma', _desc: undefined
     },
     // Reporte "Convergencia con carnada" (fragmento 57).
-    carn: { radio: 30, unir: 150, minCarnada: 2, llegadas: false, topPuntos: 10, ventanaH: 12 },
+    carn: { radio: 50, unir: 150, minCarnada: 2, maxUnid: 15, geoDescarta: true, llegadas: false, topPuntos: 10, ventanaH: 2 },
     fuelSinSensor: false, // la ultima corrida no encontro sensor de nivel
     fuelPlat: '',        // nombre de la plantilla de plataforma usada (o '')
     uniSel: {},          // unidades marcadas para filtrar las filas (vacio = todas)
@@ -785,7 +785,7 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
     // `sec` (subitem).
     const objId = (o && o.id != null) ? o.id : tpl.rid;
     const secId = (o && o.sec != null) ? String(o.sec) : '0';
-    const d = def || (o && o.def) || null;
+    let d = def || (o && o.def) || null;
     const enviado = {
         reportResourceId: tpl.rid,
         reportTemplateId: d ? 0 : tpl.id,
@@ -793,8 +793,8 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
         reportObjectId: objId, reportObjectSecId: secId,
         interval: { from: desde, to: hasta, flags: 0 }
     };
-    let err = '';
-    for (let i = 0; i < 2; i++) {
+    let err = '', probo7 = false;
+    for (let i = 0; i < 3; i++) {
         if (token && token.cancelado) return { filas: [], error: 'cancelado' };
         try {
             await rxInfLimpiarInforme();
@@ -817,6 +817,20 @@ async function rxInfEjecuta(tpl, o, desde, hasta, token, prof, def) {
             };
         } catch (e) {
             err = (e && e.message) || String(e);
+            // code 7 = la plantilla pide un filtro que no se le manda (tipico de
+            // una plantilla guardada sin el filtro de objeto): se reintenta con
+            // una definicion propia que lo rellena con el objeto que se ejecuta.
+            if (/code 7/.test(err) && !probo7 && typeof rxInfDefConObjeto === 'function' && RX_INF._datos) {
+                probo7 = true;
+                const def7 = rxInfDefConObjeto(RX_INF._datos, tpl.id, { id: objId }, null);
+                if (def7) {
+                    d = def7;
+                    enviado.reportTemplateId = 0;
+                    enviado.reportTemplate = def7;
+                    await rxInfEspera(300);
+                    continue;
+                }
+            }
             if (!/code (1003|1004|4)\b/.test(err) || i === 1) break;
             await rxInfEspera(700 * (i + 1));
         }
@@ -1082,6 +1096,37 @@ function rxInfDefSinUnidades(datos, tplId) {
         return def;
     } catch (_) { return null; }
 }
+// Definicion propia que RELLENA el filtro de objeto que la plantilla declara
+// (units, geozones, unit_groups, drivers, trailers, routes...) con el objeto
+// que se esta ejecutando. Es el remedio del "code 7": una plantilla guardada
+// sin ese filtro lo exige y no se le estaba mandando.
+function rxInfDefConObjeto(datos, tplId, o, extra) {
+    try {
+        const lista = Array.isArray(datos) ? datos : (datos && Array.isArray(datos.items) ? datos.items : []);
+        const t = lista.filter((x) => x && String(x.id) === String(tplId))[0] || lista[0];
+        if (!t || !Array.isArray(t.tbl) || !t.tbl.length) return null;
+        const def = JSON.parse(JSON.stringify(t));
+        def.id = 0;
+        rxInfDefSinBind(def);
+        const id = String((o && o.id != null) ? o.id : '');
+        def.tbl.forEach((tb) => {
+            let p = {};
+            try { p = JSON.parse(tb.p || '{}') || {}; } catch (_) { p = {}; }
+            Object.keys(p).forEach((k) => {
+                const n = norm(k);
+                if (!id) return;
+                if (/^(UNITS?|UNIDADES?)$/.test(n) ||
+                    /(GEOZON|GEOFENCE|^ZONA|ZONES?)/.test(n) ||
+                    /(UNIT_?GROUPS?|GRUPOS?)/.test(n) ||
+                    /(DRIVERS?|CONDUCTORES?)/.test(n) ||
+                    /(TRAILERS?|REMOLQUES?|ROUTES?|RUTAS?)/.test(n)) p[k] = id;
+            });
+            if (extra) Object.keys(extra).forEach((k) => { if (extra[k] == null || extra[k] === '') delete p[k]; else p[k] = extra[k]; });
+            tb.p = JSON.stringify(p);
+        });
+        return def;
+    } catch (_) { return null; }
+}
 // Definicion propia con SOLO las tablas pedidas (por nombre interno). Sirve
 // para ejecutar una plantilla pesada (viajes + paradas + chart + stats) con
 // unicamente la tabla que interesa: en combustible, `unit_thefts` (Descargas).
@@ -1163,6 +1208,14 @@ function rxInfCandidatos(tpl, info, datos, defBase) {
         prueba.forEach((z) => mkZona(z, def));
         meter(tpl.rid, '0', 'informe (sin filtro)', false, def);
     }
+    // El tipo que DECLARA la plantilla manda: probar primero geocercas en un
+    // informe de unidades (o al reves) gasta peticiones y llena la traza de
+    // "code 4/7" que despistan. Solo se reordena: no se quita ninguno.
+    if (info && !info.esGeo) {
+        const resto = [], zonas = [];
+        out.forEach((c) => (c.esZona ? zonas : resto).push(c));
+        return resto.concat(zonas);
+    }
     return out;
 }
 // Devuelve la lista de objetos con la que ejecutar el informe. Prueba los
@@ -1170,6 +1223,7 @@ function rxInfCandidatos(tpl, info, datos, defBase) {
 // (y, si ninguno trae, con el primero ACEPTADO por la plataforma: code 0 con
 // cero filas es valido; code 4/7 es un modelo invalido).
 async function rxInfModelo(tpl, info, datos, desde, hasta, token, defBase) {
+    RX_INF._datos = datos;
     const cands = rxInfCandidatos(tpl, info, datos, defBase);
     const h = hasta, d = Math.max(desde, hasta - (RX_INF_DIAS_TROZO * 86400));
     let primeroOk = null, conFilas = null;
@@ -1239,14 +1293,20 @@ async function rxInfCorre(tpl, desde, hasta, unidades, onProg, token, forzar, de
         let defSel = defFijo || null;
         const fe = rxInfFiltrosEfectivos();
         const hayTablas = Object.keys(RX_INF.tablasSel || {}).some((k) => RX_INF.tablasSel[k]);
-        if (!defSel && (Object.keys(fe).length || hayTablas) && tpl && tpl.id != null && !rxFuelEsTpl(tpl)) {
+        if (!defSel && tpl && tpl.id != null && !rxFuelEsTpl(tpl)) {
+            // Los datos de la plantilla se leen siempre (barato): ademas de los
+            // filtros/tablas, son lo que necesita el reintento del "code 7".
             const datosSel = await rxInfDatosPlantilla(tpl);
-            defSel = rxInfDefFiltros(datosSel, tpl.id, fe);
-            defSel = rxInfDefTablasSel(defSel, datosSel, tpl.id, RX_INF.tablasSel);
+            RX_INF._datos = datosSel;
+            if (Object.keys(fe).length || hayTablas) {
+                defSel = rxInfDefFiltros(datosSel, tpl.id, fe);
+                defSel = rxInfDefTablasSel(defSel, datosSel, tpl.id, RX_INF.tablasSel);
+            }
         }
         if (defSel) objs.forEach((o) => { o.def = defSel; });
     } else {
         const datos = await rxInfDatosPlantilla(tpl);
+        RX_INF._datos = datos;
         const info = rxInfPlantillaInfo(datos, tpl.id);
         // `forzar` = 'flota' obliga el modelo por unidad. Es lo correcto para
         // las plantillas de combustible (su tabla de nivel es por unidad), que
@@ -3035,7 +3095,10 @@ function abrirInformesPlantilla(origen) {
                         '<span class="rgi-num">unir puntos a <input type="number" min="10" max="2000" step="10" id="rgi-carn-unir" value="' + esc(String(cn.unir)) + '"' + dis + '> m</span></div>' +
                         '<div class="rgi-row"><span class="rgi-lb">Llegadas</span><div class="rgi-chips">' +
                         '<button type="button" class="rgi-chip' + (cn.llegadas ? ' activo' : '') + '" id="rgi-carn-lleg"' + dis +
-                        ' title="Pide el historial de cada unidad carnada para contar las que se detuvieron en cada punto (lento)">Contrastar con el historial</button></div>' +
+                        ' title="Pide el historial de TODA la flota para contar las unidades que se detuvieron en cada punto (lento)">Contrastar con el historial</button>' +
+                        '<button type="button" class="rgi-chip' + (cn.geoDescarta ? ' activo' : '') + '" id="rgi-carn-geodesc"' + dis +
+                        ' title="Descarta las p\u00e9rdidas dentro de una geocerca (patio, planta, taller): ahi el consumo es normal">Fuera de geocercas</button>' +
+                        '<span class="rgi-num">base si llegan mas de <input type="number" min="1" max="200" step="1" id="rgi-carn-max" value="' + esc(String(cn.maxUnid)) + '"' + dis + '> unidades</span></div>' +
                         (cn.llegadas ? '<span class="rgi-num">los <input type="number" min="1" max="60" step="1" id="rgi-carn-top" value="' + esc(String(cn.topPuntos)) + '"' + dis + '> puntos con m\u00e1s p\u00e9rdida</span>' +
                         '<span class="rgi-num">\u00b1<input type="number" min="1" max="72" step="1" id="rgi-carn-vent" value="' + esc(String(cn.ventanaH)) + '"' + dis + '> h</span>' : '') + '</div>' +
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
@@ -3116,7 +3179,7 @@ function abrirInformesPlantilla(origen) {
                     const c = RX_INF.meta.carnMeta;
                     if (!c.puntos) {
                         avisos.push(esc('Ning\u00fan punto re\u00fane p\u00e9rdida y convergencia (' + c.eventos + ' p\u00e9rdida(s) con aspecto de robo, ' + c.descartados +
-                            ' descartada(s)). Ampl\u00eda el periodo, baja el m\u00ednimo de unidades o contrasta con el historial.'));
+                            ' descartada(s), ' + (c.geoDescartadas || 0) + ' fuera de geocercas y ' + (c.bases || 0) + ' base(s)). Ampl\u00eda el periodo, baja el m\u00ednimo de unidades o contrasta con el historial.'));
                     }
                     if (c.llegadasTruncado) avisos.push(esc(c.llegadasTruncado + ' ventana(s) del historial se truncaron: las llegadas pueden estar incompletas.'));
                 }
@@ -3377,6 +3440,7 @@ function abrirInformesPlantilla(origen) {
                         }
                         res = await carnCorre({
                             usarPlat: !!(usar && defThefts), tpl: usar ? desc.tpl : null, def: defThefts, lista: listaUn,
+                            flota: (RX_INF.alcance === 'sel') ? (sel || []) : rxFuelUnidadesTodas(r.desde),
                             desde: r.desde, hasta: r.hasta, cfgFuel: RX_INF.fuel,
                             cfgCarn: Object.assign({}, RX_INF.carn, { vel: RX_INF.fuel.vel }),
                             onFase: (pct, txt) => {
@@ -3538,6 +3602,12 @@ function abrirInformesPlantilla(origen) {
                     if (btn.id === 'rgi-carn-lleg') {
                         if (RX_INF._buscando) return;
                         RX_INF.carn.llegadas = !RX_INF.carn.llegadas;
+                        pinta();
+                        return;
+                    }
+                    if (btn.id === 'rgi-carn-geodesc') {
+                        if (RX_INF._buscando) return;
+                        RX_INF.carn.geoDescarta = !RX_INF.carn.geoDescarta;
                         pinta();
                         return;
                     }
@@ -3807,6 +3877,7 @@ function abrirInformesPlantilla(origen) {
                 if (t.id === 'rgi-q') { RX_INF.q = t.value || ''; pintaResultados(); return; }
                 if (t.id === 'rgi-fuel-litros') { RX_INF.fuel.litros = Math.max(1, Number(t.value) || RX_INF.fuel.litros); return; }
                 if (t.id === 'rgi-fuel-min') { RX_INF.fuel.min = clamp(Number(t.value) || RX_INF.fuel.min, 1, 60); return; }
+                if (t.id === 'rgi-carn-max') { RX_INF.carn.maxUnid = clamp(Math.round(Number(t.value) || RX_INF.carn.maxUnid), 1, 200); return; }
                 if (t.id === 'rgi-carn-min') { RX_INF.carn.minCarnada = clamp(Math.round(Number(t.value) || RX_INF.carn.minCarnada), 1, 50); return; }
                 if (t.id === 'rgi-carn-radio') { RX_INF.carn.radio = clamp(Number(t.value) || RX_INF.carn.radio, 5, 500); return; }
                 if (t.id === 'rgi-carn-unir') { RX_INF.carn.unir = clamp(Number(t.value) || RX_INF.carn.unir, 10, 2000); return; }

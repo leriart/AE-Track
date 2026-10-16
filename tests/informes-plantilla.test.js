@@ -87,7 +87,7 @@ const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, 
     'rxFuelParseFecha,rxFuelMapeaColsDescarga,rxFuelTablaSalida,rxFuelCorrePlataforma,RX_FUEL_DESC_COLS,' +
     'RX_FUEL_LUG_COLS,rxFuelEvDesc,rxFuelUneSensores,rxFuelFusionaContiguas,rxFuelEvalDescarga,' +
     'rxFuelReincidencia,rxFuelAnalizaDescargas,rxFuelFilaDesc,rxFuelLugares,rxFuelFmtDur,rxFuelUsaComa,' +
-    'rxInfHash,rxInfDefTablasSel,rxInfAjustesDe,rxInfTablasDe,rxFuelRecolecta,' +
+    'rxInfHash,rxInfDefTablasSel,rxInfDefConObjeto,rxInfAjustesDe,rxInfTablasDe,rxFuelRecolecta,' +
     'carnCfg,carnCirculo,carnNucleos,carnUneGrupos,carnSospecha,carnPuntos,carnVerifica,carnDetectaParadas,carnVentanas,' +
     'carnCandidatos,carnEscaneaLlegadas,carnEvsDeSensor,carnTablas,carnCorre,carnMapaDatos,carnCreaGeocercas,carnCSVDatos,' +
     'carnHTML,carnMapaPunto,carnBarrasSVG,carnLecturaEntorno,RX_CARN,RX_CARN_TPL,P_GEOS,setStops: (f) => { P_STOPS = f; }};';
@@ -104,6 +104,7 @@ let soloObjeto = null; // si se fija, solo ese reportObjectId devuelve filas
 let soloDef = false;   // si se activa, solo la plantilla propia (sin filtros) devuelve filas
 let tablaReal = false; // exec_report responde con TABLAS y el contenido va en get_result_rows
 let tablaThefts = false; // exec_report responde con la tabla unit_thefts (Descargas)
+let codigo7 = false;     // exec_report rechaza con code 7 salvo si se manda una definicion propia
 let fuelMsgs = null;   // historial que devuelve messages/load_interval (combustible)
 function remote(m, p) {
     calls.push({ m: m, p: p });
@@ -134,6 +135,9 @@ function remote(m, p) {
         }]);
     }
     if (m === 'report/exec_report') {
+        if (codigo7 && p.reportTemplateId !== 0) {
+            return Promise.reject(new Error('report/exec_report -> code 7'));
+        }
         if (umbral1004 && (p.interval.to - p.interval.from) > umbral1004) {
             return Promise.reject(new Error('report/exec_report -> code 1004'));
         }
@@ -769,7 +773,10 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('circulo: 17 puntos cerrado y a ~30 m del centro',
         circ.length === 17 && circ[0].lat === circ[16].lat && Math.abs(Math.hypot((circ[4].lat - 21.0) * 111320, (circ[4].lon + 102.0) * 111320 * Math.cos(21 * Math.PI / 180)) - 30) < 1);
     ok('config: se sanea lo que llegue de la pantalla',
-        mod.carnCfg({ radio: -5, unir: 'x', minCarnada: 0, topPuntos: 999 }).radio === 30 && mod.carnCfg({ minCarnada: 0 }).minCarnada === 2 && mod.carnCfg({ topPuntos: 999 }).topPuntos === 10);
+        mod.carnCfg({ radio: -5, unir: 'x', minCarnada: 0, topPuntos: 999 }).radio === 50 && mod.carnCfg({ minCarnada: 0 }).minCarnada === 2 && mod.carnCfg({ topPuntos: 999 }).topPuntos === 10);
+    ok('config: por defecto se descartan las geocercas y las bases (>15 unidades), radio 50 m y ventana 2 h',
+        (function () { const c = mod.carnCfg({}); return c.geoDescarta === true && c.maxUnid === 15 && c.radio === 50 && c.ventanaH === 2; })() &&
+        mod.carnCfg({ geoDescarta: false }).geoDescarta === false && mod.carnCfg({ maxUnid: 0 }).maxUnid === 15);
     // Tres unidades en el mismo punto; una sola unidad lejos; una con dos llegadas sin perdida.
     const centro = [21.03844, -102.56107];
     const eA = [ev('U1', centro[0], centro[1], 60), ev('U2', centro[0] + 0.00005, centro[1], 70), ev('U3', centro[0], centro[1] + 0.00005, 55)];
@@ -805,6 +812,21 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('sospecha: un solo evento grande en carretera tambien es Alta (5)', sC08.puntaje === 5 && sC08.nivel === 'Alta');
     const sC11 = mod.carnSospecha({ ubi: 'Calle Libramiento', zona: '', eventos: 1, litros: 20, carnada: 2 });
     ok('sospecha: poco volumen y 2 unidades en poblado = Baja', sC11.nivel === 'Baja', JSON.stringify(sC11));
+    ok('puntos: un punto por donde pasa media flota es una base y no se marca', (function () {
+        const evs = [];
+        for (let i = 0; i < 20; i++) evs.push(ev(('U' + i), 21.0, -102.0, 40));
+        const rr = mod.carnPuntos(evs, [], { maxUnid: 5, minCarnada: 2 });
+        return rr.puntos.length === 0 && rr.bases === 1;
+    })());
+    ok('puntos: una llegada fuera de la ventana de horas no cuenta como convergencia', (function () {
+        const e1 = ev('A', 21.0, -102.0, 60, { ms0: 1000000000, ms1: 1000180000 });
+        const e2 = ev('B', 21.0, -102.0, 60, { ms0: 1000000000, ms1: 1000180000 });
+        // parada a 3 h de la perdida con ventana de 2 h -> no converge; con 4 h -> converge
+        const lejos = [{ eco: 'C', lat: 21.0, lon: -102.0, t0: 1000000000 + 10800000, t1: 1000000000 + 11400000, min: 10 }];
+        const sinWin = mod.carnPuntos([e1, e2], lejos, { minCarnada: 3, ventanaH: 2 });
+        const conWin = mod.carnPuntos([e1, e2], lejos, { minCarnada: 3, ventanaH: 4 });
+        return sinWin.puntos.length === 0 && conWin.puntos.length === 1;
+    })());
     ok('sospecha: dentro de una geocerca propia (patio) pesa menos que la carretera',
         mod.carnSospecha({ ubi: 'Jal-311', zona: 'PATIO BASE', eventos: 1, litros: 20, carnada: 2 }).entornoPuntos <
         mod.carnSospecha({ ubi: 'Jal-311', zona: '', eventos: 1, litros: 20, carnada: 2 }).entornoPuntos);
@@ -890,6 +912,17 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
         return e.length === 1 && e[0].eco === '3686' && e[0].litros === 65 && e[0].durSeg === 180 && Math.abs(e[0].lat - 21.14071) < 1e-9 && e[0].ms1 - e[0].ms0 === 180000;
     })());
     ok('plantilla integrada de carnada: lleva fuel y carnada', mod.RX_CARN_TPL.fuel === true && mod.RX_CARN_TPL.carnada === true && mod.rxFuelEsTpl(mod.RX_CARN_TPL));
+
+    // code 7: reintento con la definicion que rellena el filtro del objeto.
+    const def7 = mod.rxInfDefConObjeto([{ id: 10, tbl: [{ n: 't', p: '{"units":"999","address_format":"1255"}' }] }], 10, { id: '7' }, null);
+    ok('code 7: la definicion rellena el filtro de objeto con la unidad y deja id 0',
+        def7 && def7.id === 0 && JSON.parse(def7.tbl[0].p).units === '7' && JSON.parse(def7.tbl[0].p).address_format === '1255');
+    codigo7 = true; tablaThefts = true; mod.rxInfCacheLimpiar();
+    const r7 = await mod.rxInfCorre({ rid: 3, id: 11, nombre: 'Resumen diario' }, 1700000000, 1700000000 + 3600, [{ id: 7, eco: '105' }], null, null);
+    const usoDef7 = calls.some((c) => c.m === 'report/exec_report' && c.p.reportTemplateId === 0 && c.p.reportTemplate);
+    codigo7 = false; tablaThefts = false;
+    ok('code 7: al reintentar con la definicion propia la plataforma responde y salen filas',
+        usoDef7 && (r7.filas || []).length > 0, JSON.stringify({ uso: usoDef7, n: (r7.filas || []).length }));
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

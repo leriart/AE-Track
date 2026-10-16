@@ -37,10 +37,14 @@ function carnCfg(c) {
     const o = c || {};
     const n = (v, d, lo, hi) => { const x = Number(v); return (isFinite(x) && x >= lo && x <= hi) ? x : d; };
     return {
-        radio: n(o.radio, 30, 5, 500), unir: n(o.unir, 150, 10, 2000),
-        minCarnada: Math.round(n(o.minCarnada, 2, 1, 50)), llegadas: !!o.llegadas,
-        topPuntos: Math.round(n(o.topPuntos, 10, 1, 60)), ventanaH: n(o.ventanaH, 12, 1, 72),
-        paradaMin: n(o.paradaMin, 2, 0.5, 120), vel: n(o.vel, 3, 0, 40), verifM: n(o.verifM, 50, 10, 500)
+        radio: n(o.radio, 50, 5, 500), unir: n(o.unir, 150, 10, 2000),
+        minCarnada: Math.round(n(o.minCarnada, 2, 1, 50)), maxUnid: Math.round(n(o.maxUnid, 15, 1, 200)),
+        // Dentro de una geocerca (patio, planta, taller) el consumo o el
+        // drenado es normal o no se puede probar: la carnada es de la calle.
+        geoDescarta: (o.geoDescarta == null) ? true : !!o.geoDescarta,
+        llegadas: !!o.llegadas,
+        topPuntos: Math.round(n(o.topPuntos, 10, 1, 60)), ventanaH: n(o.ventanaH, 2, 1, 72),
+        paradaMin: n(o.paradaMin, 2, 0.5, 120), vel: n(o.vel, 5, 0, 40), verifM: n(o.verifM, 50, 10, 500)
     };
 }
 function carnPad(i) { return (i < 9 ? '0' : '') + (i + 1); }
@@ -156,12 +160,16 @@ function carnAgregaPunto(g, cfg) {
 function carnPuntos(evs, paradas, cfgIn) {
     const cfg = carnCfg(cfgIn);
     const nucleos = carnNucleos(evs, cfg.radio);
+    // Una parada cuenta solo si cae cerca del punto Y a la hora de una
+    // perdida: no vale que la unidad pasara por alli cualquier dia del ano.
+    const vent = cfg.ventanaH * 3600 * 1000;
     for (const p of (paradas || [])) {
         if (!p || p.lat == null || p.lon == null) continue;
         for (const n of nucleos) {
-            if (rxFuelDist(n.lat, n.lon, p.lat, p.lon) <= cfg.radio) {
-                if (!n.llegadas.some((l) => l.eco === p.eco && l.t0 === p.t0)) n.llegadas.push(p);
-            }
+            if (rxFuelDist(n.lat, n.lon, p.lat, p.lon) > cfg.radio) continue;
+            const enHora = n.evs.some((e) => e.ms0 != null && p.t1 != null && p.t1 >= e.ms0 - vent && p.t0 <= (e.ms1 != null ? e.ms1 : e.ms0) + vent);
+            if (!enHora) continue;
+            if (!n.llegadas.some((l) => l.eco === p.eco && l.t0 === p.t0)) n.llegadas.push(p);
         }
     }
     nucleos.forEach((n) => {
@@ -170,15 +178,17 @@ function carnPuntos(evs, paradas, cfgIn) {
         n.llegadas.forEach((l) => { u[l.eco] = 1; });
         n.unidades = Object.keys(u);
     });
-    // Perdida + convergencia: las dos condiciones.
-    const marcados = nucleos.filter((n) => n.evs.length >= 1 && n.unidades.length >= cfg.minCarnada);
+    // Perdida + convergencia. Un punto por donde pasa media flota es una base
+    // (patio, planta, taller): no se marca, se cuenta aparte.
+    const bases = nucleos.filter((n) => n.unidades.length > cfg.maxUnid);
+    const marcados = nucleos.filter((n) => n.evs.length >= 1 && n.unidades.length >= cfg.minCarnada && n.unidades.length <= cfg.maxUnid);
     const puntos = carnUneGrupos(marcados, cfg.unir).map((g) => carnAgregaPunto(g, cfg));
     puntos.sort((a, b) => (b.carnada - a.carnada) || (b.litros - a.litros));
     puntos.forEach((p, i) => { p.id = 'C' + carnPad(i); });
     const enPunto = new Set();
     puntos.forEach((p) => p.evs.forEach((e) => enPunto.add(e)));
     const aislados = (evs || []).filter((e) => e && !enPunto.has(e));
-    return { puntos: puntos, aislados: aislados, nucleos: nucleos.length, cfg: cfg };
+    return { puntos: puntos, aislados: aislados, nucleos: nucleos.length, bases: bases.length, cfg: cfg };
 }
 // Por que una perdida NO forma punto (para la tabla de aislados).
 function carnMotivoAislado(e, cfg) {
@@ -265,7 +275,7 @@ function carnCandidatos(evs, cfgIn) {
     const top = nucleos.slice(0, cfg.topPuntos);
     const eventos = [];
     top.forEach((n) => n.evs.forEach((e) => eventos.push(e)));
-    return { centros: top.map((n) => ({ lat: n.lat, lon: n.lon })), eventos: eventos, ventanas: carnVentanas(eventos, cfg.ventanaH) };
+    return { centros: top.map((n) => ({ lat: n.lat, lon: n.lon, ts: n.evs.map((e) => e.ms0).filter((t) => t != null) })), eventos: eventos, ventanas: carnVentanas(eventos, cfg.ventanaH) };
 }
 // Pide el historial de cada unidad carnada en las ventanas y se queda con las
 // paradas cercanas a algun centro. Cacheado en memoria por unidad y ventana.
@@ -310,7 +320,7 @@ async function carnEscaneaLlegadas(unidades, ventanas, centros, cfgIn, onProg, t
             await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
         }
     };
-    const n = Math.max(1, Math.min(4, total || 1));
+    const n = Math.max(1, Math.min(6, total || 1));
     const tareas = [];
     for (let i = 0; i < n; i++) tareas.push(obrero());
     await Promise.all(tareas);
@@ -391,11 +401,21 @@ async function carnCorre(p) {
     }
     // Solo lo que parece robo (sin falla de sensor, consumo ni movimiento).
     const an = rxFuelAnalizaDescargas(evs, cfgF);
-    const rel = an.rel.filter((e) => e.lat != null && e.lon != null);
+    let rel = an.rel.filter((e) => e.lat != null && e.lon != null);
+    // Dentro de una geocerca (patio, planta, taller) el consumo o el drenado
+    // es normal o no se puede probar: se descarta.
+    let geoDescartadas = 0;
+    if (cfg.geoDescarta) {
+        const antes = rel.length;
+        rel = rel.filter((e) => { let z = ''; try { z = rxFuelZona(e.lat, e.lon) || ''; } catch (_) { z = ''; } return !z; });
+        geoDescartadas = antes - rel.length;
+    }
     let llegadas = null;
     if (cfg.llegadas && rel.length && !(p.token && p.token.cancelado)) {
         const cand = carnCandidatos(rel, cfg);
-        const unis = (p.lista || []).filter((u) => u && u.id != null);
+        // La convergencia mira TODA la flota (no solo las carnada): la unidad
+        // que llega a robar puede no tener sensor.
+        const unis = ((p.flota && p.flota.length) ? p.flota : (p.lista || [])).filter((u) => u && u.id != null);
         fase(52, 'Llegadas \u00b7 ' + unis.length + ' unidades en ' + cand.ventanas.length + ' ventana(s)\u2026');
         llegadas = await carnEscaneaLlegadas(unis, cand.ventanas, cand.centros, cfg, (h, t, eco) => {
             fase(52 + Math.round((h / Math.max(1, t)) * 42), 'Llegadas \u00b7 ' + h + '/' + t + (eco ? ' \u00b7 ' + eco : ''));
@@ -417,7 +437,7 @@ async function carnCorre(p) {
         conSensor: rec ? rec.conDatos : (p.lista || []).length, sinSensor: rec ? (rec.objetos - rec.conDatos) : 0,
         ms: Date.now() - t0,
         // Para la pantalla y el PDF
-        carn: true, cfg: cfg, desde: p.desde, hasta: p.hasta, puntos: pts, aislados: r.aislados, llegadas: llegadas ? llegadas.paradas : [],
+        carn: true, cfg: cfg, desde: p.desde, hasta: p.hasta, puntos: pts, geoDescartadas: geoDescartadas, aislados: r.aislados, llegadas: llegadas ? llegadas.paradas : [],
         verif: verif, analisis: an, coma: coma,
         meta: {
             puntos: pts.length, litrosPuntos: sum((x) => x.litros), eventosPuntos: sum((x) => x.eventos),
@@ -426,7 +446,7 @@ async function carnCorre(p) {
             eventos: rel.length, litros: rel.reduce((a, e) => a + (e.litros || 0), 0),
             unidadesAfectadas: Object.keys(rel.reduce((a, e) => { a[e.eco] = 1; return a; }, {})).length,
             crudos: an.crudos, descartados: an.desc.length, llegadasN: llegadas ? llegadas.paradas.length : 0,
-            llegadasTruncado: llegadas ? llegadas.truncados : 0
+            llegadasTruncado: llegadas ? llegadas.truncados : 0, geoDescartadas: geoDescartadas, bases: r.bases
         }
     };
     RX_CARN.res = res;
@@ -591,7 +611,8 @@ function carnHTML(r) {
         ' filas quedan ' + m.eventos + ' p\u00e9rdidas con aspecto de robo (' + m.descartados + ' descartadas).</li>' +
         '<li><b>Triangulaci\u00f3n:</b> las p\u00e9rdidas a ' + cfg.radio + ' m se agrupan; el punto se marca si coincidieron ' + cfg.minCarnada + ' o m\u00e1s unidades distintas' +
         (cfg.llegadas ? ' (perdieron combustible o se detuvieron all\u00ed, seg\u00fan el historial de la plataforma)' : ' con p\u00e9rdida') + '.</li>' +
-        '<li><b>Unificaci\u00f3n:</b> los puntos marcados a ' + cfg.unir + ' m o menos entre s\u00ed se presentan como uno solo (mismo tramo operativo).</li>' +
+        '<li><b>Fuera de geocercas:</b> las p\u00e9rdidas dentro de un patio, planta o taller se descartan (' + (r.geoDescartadas || 0) + ' descartada(s)): ahi el consumo es normal o no se puede probar.</li>' +
+        '<li><b>Unificaci\u00f3n:</b> los puntos marcados a ' + cfg.unir + ' m o menos entre s\u00ed se presentan como uno solo (mismo tramo operativo). Los puntos con m\u00e1s de ' + cfg.maxUnid + ' unidades (bases o patios) quedan fuera' + ((r.meta && r.meta.bases) ? ' (' + r.meta.bases + ')' : '') + '.</li>' +
         '<li><b>Sospecha 0-9:</b> entorno (0-2) + recurrencia (0-2) + volumen (0-3) + convergencia (0-2). Alta desde 5, Media desde 3.</li></ul>';
     h += sec('El periodo en n\u00fameros', 'Panorama general');
     h += '<div class="kpis">' + kpi(m.eventos, 'Descargas con la unidad detenida') + kpi(L1(m.litros) + ' L', 'Litros perdidos') +
