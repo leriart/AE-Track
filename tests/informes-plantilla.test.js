@@ -106,6 +106,7 @@ let soloDef = false;   // si se activa, solo la plantilla propia (sin filtros) d
 let tablaReal = false; // exec_report responde con TABLAS y el contenido va en get_result_rows
 let tablaThefts = false; // exec_report responde con la tabla unit_thefts (Descargas)
 let codigo7 = false;     // exec_report rechaza con code 7 salvo si se manda una definicion propia
+let codigo7units = false; // exec_report rechaza con code 7 mientras la tabla traiga el filtro 'units'
 let fuelMsgs = null;   // historial que devuelve messages/load_interval (combustible)
 function remote(m, p) {
     calls.push({ m: m, p: p });
@@ -136,6 +137,11 @@ function remote(m, p) {
         }]);
     }
     if (m === 'report/exec_report') {
+        if (codigo7units) {
+            const tabs = ((p.reportTemplate || {}).tbl) || [];
+            const tieneUnits = tabs.some((tb) => { try { const pp = JSON.parse(tb.p || '{}'); return pp.units != null && String(pp.units) !== ''; } catch (_) { return false; } });
+            if (tieneUnits) return Promise.reject(new Error('report/exec_report -> code 7'));
+        }
         if (codigo7 && p.reportTemplateId !== 0) {
             return Promise.reject(new Error('report/exec_report -> code 7'));
         }
@@ -915,10 +921,42 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     })());
     ok('plantilla integrada de carnada: lleva fuel y carnada', mod.RX_CARN_TPL.fuel === true && mod.RX_CARN_TPL.carnada === true && mod.rxFuelEsTpl(mod.RX_CARN_TPL));
 
+    // El caso REAL de la plantilla GEOCERCA: la tabla trae units:"1820" (la
+    // geocerca) y eso es un parametro invalido (code 7). El reintento, al
+    // ejecutarse por la geocerca, QUITA ese filtro y la plataforma responde.
+    mod.RX_INF._datos = await mod.rxInfDatosPlantilla({ rid: 3, id: 12 });
+    codigo7units = true; tablaThefts = true; mod.rxInfCacheLimpiar();
+    const ejGeo = await mod.rxInfEjecuta({ rid: 3, id: 12, nombre: 'GEOCERCA' },
+        { id: '1820', sec: '0', eco: 'geozona', esZona: true }, 1700000000, 1700000000 + 3600, null, 0, null);
+    codigo7units = false; tablaThefts = false;
+    ok('code 7 (GEOCERCA): el reintento quita el filtro de unidades invalido y salen filas',
+        (ejGeo.filas || []).length > 0 && !ejGeo.error, JSON.stringify({ n: (ejGeo.filas || []).length, e: ejGeo.error }));
     // code 7: reintento con la definicion que rellena el filtro del objeto.
-    const def7 = mod.rxInfDefConObjeto([{ id: 10, tbl: [{ n: 't', p: '{"units":"999","address_format":"1255"}' }] }], 10, { id: '7' }, null);
-    ok('code 7: la definicion rellena el filtro de objeto con la unidad y deja id 0',
+    const def7 = mod.rxInfDefConObjeto([{ id: 10, tbl: [{ n: 't', p: '{"units":"999","address_format":"1255"}' }] }], 10, { id: '7', esZona: false }, null);
+    ok('code 7: con una unidad, la definicion rellena "units" con ella y deja id 0',
         def7 && def7.id === 0 && JSON.parse(def7.tbl[0].p).units === '7' && JSON.parse(def7.tbl[0].p).address_format === '1255');
+    // Plantilla GEOCERCA real: la tabla geozone_units trae units:"1820" (que es
+    // la geocerca) y el informe se ejecuta POR la geocerca 1820.
+    const tplGeo = [{ id: 12, n: 'GEOCERCA', ct: 'avl_geozone', tbl: [
+        { n: 'geofences', l: 'Dibujar geocercas', c: '', p: '{}' },
+        { n: 'geozone_stats', l: 'Estadisticas', c: '', p: '{"address_format":"1255211008_10_5","geofence_exit_msg":"1820"}' },
+        { n: 'geozone_units', l: 'Unidades', c: '["unit_name","time_begin"]', p: '{"units":"1820"}' }
+    ] }];
+    const defZ = mod.rxInfDefConObjeto(tplGeo, 12, { id: '1820', esZona: true }, null);
+    ok('code 7 (GEOCERCA): la geocerca NO se mete en el filtro de unidades (era el valor invalido)',
+        !!defZ && defZ.id === 0 && JSON.parse(defZ.tbl[2].p).units === undefined,
+        JSON.stringify(defZ && defZ.tbl.map((t) => t.p)));
+    ok('code 7 (GEOCERCA): se conservan los demas parametros de la tabla y la geocerca no toca los ajustes',
+        defZ && JSON.parse(defZ.tbl[1].p).address_format === '1255211008_10_5', JSON.stringify(defZ && defZ.tbl[1].p));
+    // Y para un objeto NO geocerca, "units" sí se rellena.
+    const defU2 = mod.rxInfDefConObjeto(tplGeo, 12, { id: '7', esZona: false }, null);
+    ok('code 7: si el objeto es una unidad, "units" se rellena con ella',
+        defU2 && JSON.parse(defU2.tbl[2].p).units === '7');
+    // El reintento parte de la definicion que ya venia (no la reinicia).
+    const defKeep = mod.rxInfDefConObjeto(null, 12, { id: '1820', esZona: true }, null,
+        { id: 0, tbl: [{ n: 'geozone_units', p: '{}' }] });
+    ok('code 7: el reintento respeta la definicion que ya venia (no la reinicia)',
+        defKeep && defKeep.tbl.length === 1 && JSON.parse(defKeep.tbl[0].p).units === undefined);
     codigo7 = true; tablaThefts = true; mod.rxInfCacheLimpiar();
     const r7 = await mod.rxInfCorre({ rid: 3, id: 11, nombre: 'Resumen diario' }, 1700000000, 1700000000 + 3600, [{ id: 7, eco: '105' }], null, null);
     const usoDef7 = calls.some((c) => c.m === 'report/exec_report' && c.p.reportTemplateId === 0 && c.p.reportTemplate);
