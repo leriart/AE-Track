@@ -950,6 +950,15 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     ok('code 7 (GEOCERCA): se limpia el ajuste con el id del objeto (geofence_exit_msg:"1820") y se conservan los formatos',
         pStats.geofence_exit_msg === undefined && pStats.address_format === '1255211008_10_5' && pStats.time_format === '%E.%m.%Y_%H:%M:%S',
         JSON.stringify(pStats));
+    // Ida y vuelta: report/get_report_data devuelve c/cl/cp/s/sl/sp como "" en
+    // las tablas sin columnas; al reenviar hay que mandar JSON valido.
+    const defSana = mod.rxInfDefSana({ id: 0, tbl: [
+        { n: 'geofences', c: '', cl: '', cp: '', s: '["group_markers"]', sl: '["Agrupar"]', sp: '', p: '{}' },
+        { n: 'geozone_units', c: '["unit_name"]', cl: '["Unidad"]', cp: '[{}]', s: '', sl: '', sp: '', p: '{}' }
+    ] });
+    ok('plantilla propia: c/cl/cp/s/sl/sp vacios quedan como JSON valido (ida y vuelta)',
+        defSana.tbl[0].c === '[]' && defSana.tbl[0].cl === '[]' && defSana.tbl[0].cp === '[]' && defSana.tbl[0].sp === '[]' &&
+        defSana.tbl[0].s === '["group_markers"]' && defSana.tbl[1].s === '[]' && defSana.tbl[1].c === '["unit_name"]');
     // El saneo tambien va en la definicion "sin filtros" (candidato de modelo).
     const defSin = mod.rxInfDefSinUnidades(tplGeo, 12);
     ok('code 7 (GEOCERCA): la definicion sin filtros tambien queda saneada',
