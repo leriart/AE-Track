@@ -43,7 +43,7 @@ const stubs = [
     'function unitState(u){ const p=(u&&u.pos)||{}; return {t:Number(p.t||0),lat:p.y,lon:p.x,vel:0}; }',
     'function rxGeoInfAnillo(z){ return (z && z.puntos) ? z.puntos : []; }',
     'function glocOrigen(z){ return { id: (z && z.app) ? "app" : "plat" }; }',
-    'function zoneAt(lat, lon){ return (lat != null && Math.abs(lat - 19.4) < 0.01) ? "PATIO" : ""; }',
+    'function zoneAt(lat, lon){ if (P_STATE.zona && lat != null && Math.abs(lat - P_STATE.zona.lat) < P_STATE.zona.d) return P_STATE.zona.n; return (lat != null && Math.abs(lat - 19.4) < 0.01) ? "PATIO" : ""; }',
     'function haversine(y1, x1, y2, x2){ const dy = (y2 - y1), dx = (x2 - x1); return Math.sqrt(dy * dy + dx * dx) * 111320; }',
     'function rxFechaHora(ms){ return String(ms); }',
     'function clamp(v, lo, hi){ return Math.min(Math.max(v, lo), hi); }',
@@ -90,7 +90,8 @@ const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, 
     'rxInfHash,rxInfDefTablasSel,rxInfDefConObjeto,rxInfAjustesDe,rxInfTablasDe,rxFuelRecolecta,' +
     'carnCfg,carnCirculo,carnNucleos,carnUneGrupos,carnSospecha,carnPuntos,carnVerifica,carnDetectaParadas,carnVentanas,' +
     'carnCandidatos,carnEscaneaLlegadas,carnEvsDeSensor,carnTablas,carnCorre,carnMapaDatos,carnCreaGeocercas,carnCSVDatos,' +
-    'carnHTML,carnMapaPunto,carnBarrasSVG,carnLecturaEntorno,RX_CARN,RX_CARN_TPL,P_GEOS,setStops: (f) => { P_STOPS = f; }};';
+    'carnHTML,carnMapaPunto,carnBarrasSVG,carnLecturaEntorno,RX_CARN,RX_CARN_TPL,P_GEOS,estado: P_STATE,' +
+    'setStops: (f) => { P_STOPS = f; }};';
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -208,7 +209,8 @@ function remote(m, p) {
 }
 
 const APP = { zonas: [], unidades: [], historial: [], viajes: {}, config: {}, unlocked: false };
-const mod = new Function('P_STORE', 'P_LS', 'P_APP', 'P_REMOTE', code)(store, LS, APP, remote);
+const estado = { zona: null };
+const mod = new Function('P_STORE', 'P_LS', 'P_APP', 'P_REMOTE', 'P_STATE', code)(store, LS, APP, remote, estado);
 
 function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
 
@@ -923,6 +925,32 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     codigo7 = false; tablaThefts = false;
     ok('code 7: al reintentar con la definicion propia la plataforma responde y salen filas',
         usoDef7 && (r7.filas || []).length > 0, JSON.stringify({ uso: usoDef7, n: (r7.filas || []).length }));
+
+    // Descarte por geocerca dentro de carnCorre: si el punto cae dentro de una
+    // geocerca (patio/planta), la perdida NO forma punto.
+    tablaThefts = true; mod.rxInfCacheLimpiar();
+    mod.estado.zona = { lat: 21.14071, d: 0.01, n: 'PLANTA VALLE' };
+    const rGeo = await mod.carnCorre({
+        usarPlat: true, tpl: { rid: 3, id: 10, nombre: 'Informe de Combustible' }, def: {}, lista: [{ id: 7, eco: '105' }, { id: 8, eco: '106' }],
+        desde: 1700000000, hasta: 1700000000 + 3600, cfgFuel: { litros: 10, vel: 3, tasa: 3 }, cfgCarn: { geoDescarta: true }, onFase: null, token: null
+    });
+    mod.estado.zona = null; tablaThefts = false;
+    // El script pone 7 filas; 2 unidades. En la zona hay 2 robos por unidad
+    // (LUG y LUG2, a ~7 m) => 4 eventos fuera. Queda el robo chico en OTRO.
+    ok('carnada: las perdidas dentro de una geocerca se descartan (patio o planta)',
+        rGeo.puntos.length === 1 && rGeo.geoDescartadas === 4 && rGeo.meta.geoDescartadas === 4 &&
+        /^20\.75/.test(rGeo.puntos[0].lat.toFixed(5)),
+        JSON.stringify({ puntos: rGeo.puntos.length, geo: rGeo.geoDescartadas, p0: rGeo.puntos[0] && rGeo.puntos[0].lat }));
+    // Sin descartar geocercas, ese mismo punto si se marca (control).
+    tablaThefts = true; mod.rxInfCacheLimpiar();
+    mod.estado.zona = { lat: 21.14071, d: 0.01, n: 'PLANTA VALLE' };
+    const rGeo2 = await mod.carnCorre({
+        usarPlat: true, tpl: { rid: 3, id: 10, nombre: 'Informe de Combustible' }, def: {}, lista: [{ id: 7, eco: '105' }, { id: 8, eco: '106' }],
+        desde: 1700000000, hasta: 1700000000 + 3600, cfgFuel: { litros: 10, vel: 3, tasa: 3 }, cfgCarn: { geoDescarta: false }, onFase: null, token: null
+    });
+    mod.estado.zona = null; tablaThefts = false;
+    ok('carnada: con el descarte de geocercas apagado el punto si se marca',
+        rGeo2.puntos.length >= 1 && rGeo2.meta.geoDescartadas === 0);
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);
