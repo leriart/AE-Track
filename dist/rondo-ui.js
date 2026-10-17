@@ -13079,6 +13079,8 @@ const RX_INF = {
         min: 2,          // ventana (min) en la que se produce la caida
         vel: 3,          // km/h: por debajo, la unidad esta detenida
         tasa: 3,         // L/min: ritmo minimo de una extraccion (fuente plataforma)
+        recuperaMin: 30, // min: si el nivel vuelve al de antes, se descarta
+        recuperaPlat: true, // verificar la recuperacion leyendo el historial (plataforma)
         motor: 'todos',  // 'todos' | 'on' (encendido) | 'off' (apagado)
         marca: '(SC)',   // solo unidades cuyo nombre contenga esta marca
         sensor: '',      // clave/nombre exacto del parametro de nivel (override)
@@ -15081,16 +15083,50 @@ function rxFuelMotor(m, sens) {
     }
     return null;
 }
-// Una muestra del historial: tiempo, posicion, velocidad, nivel y motor.
+// Nivel principal y su clave: se prueba primero el catalogo y despues el
+// nombre del parametro (misma prioridad que rxFuelNivel).
+function rxFuelNivelDe(m, sens, claves) {
+    const p = (m && (m.params || m.p)) || null;
+    if (!p || typeof p !== 'object') return null;
+    if (claves) {
+        for (const k of Object.keys(p)) {
+            if (!claves[k]) continue;
+            const v = rxFuelNum(p[k]);
+            if (v != null) return { v: v, k: k };
+        }
+    }
+    for (const k of Object.keys(p)) {
+        if (!RX_FUEL_RE.test(norm(rxFuelNombre(k, sens)))) continue;
+        const v = rxFuelNum(p[k]);
+        if (v != null) return { v: v, k: k };
+    }
+    return null;
+}
+// TODOS los niveles de combustible del mensaje (clave de parametro -> nivel).
+// Sirve para ver si, mientras un tanque baja, otro sube (trasvase).
+function rxFuelNiveles(m, sens, claves) {
+    const p = (m && (m.params || m.p)) || null;
+    const out = {};
+    if (!p || typeof p !== 'object') return out;
+    for (const k of Object.keys(p)) {
+        if (!(claves && claves[k]) && !RX_FUEL_RE.test(norm(rxFuelNombre(k, sens)))) continue;
+        const v = rxFuelNum(p[k]);
+        if (v != null) out[k] = v;
+    }
+    return out;
+}
+// Una muestra del historial: tiempo, posicion, velocidad, nivel(es) y motor.
 function rxFuelMsg(m, sens, claves) {
     if (!m || !m.pos) return null;
     const t = Number(m.t) || 0;
     if (!t) return null;
+    const nd = rxFuelNivelDe(m, sens, claves);
     return {
         t: t, lat: (m.pos.y != null && isFinite(+m.pos.y)) ? +m.pos.y : null,
         lon: (m.pos.x != null && isFinite(+m.pos.x)) ? +m.pos.x : null,
         s: Number(m.pos.s) || 0,
-        fuel: rxFuelNivel(m, sens, claves), motor: rxFuelMotor(m, sens)
+        fuel: nd ? nd.v : null, fuelKey: nd ? nd.k : null,
+        niv: rxFuelNiveles(m, sens, claves), motor: rxFuelMotor(m, sens)
     };
 }
 // Claves de parametro vistas en los mensajes (para el diagnostico cuando no
@@ -15164,14 +15200,42 @@ function rxFuelDetecta(msgs, opts) {
         const mot = (cur.motor == null) ? r.motor : cur.motor;
         if (motor === 'on' && mot !== true) { ref = k; continue; }
         if (motor === 'off' && mot !== false) { ref = k; continue; }
-        // Anti-rebote: si en la ventana siguiente el nivel vuelve a la banda
-        // alta, era un pico del sensor y no una perdida real.
+        // Anti-rebote corto: un pico que vuelve en la misma ventana.
+        const fKey = cur.fuelKey || r.fuelKey || null;
         let rebote = false;
         for (let j = k + 1; j < arr.length; j++) {
             if (arr[j].t - cur.t > win) break;
             if (arr[j].fuel >= r.fuel - th / 2) { rebote = true; break; }
         }
+        // Recuperacion: si el nivel vuelve al de antes dentro de recuperaMin,
+        // era un desnivel (rebote lento, movimiento del tanque o trasvase).
+        // Esto es lo que pide el operador: descartar la perdida si sube de nuevo.
+        const recSeg = ((Number(o.recuperaMin) > 0) ? Number(o.recuperaMin) : 30) * 60;
+        const tolRec = (Number(o.recuperaTol) > 0) ? Number(o.recuperaTol) : Math.max(2, caida * 0.05);
+        let recupera = false;
         if (!rebote) {
+            for (let j = k; j < arr.length; j++) {
+                if (arr[j].t - cur.t > recSeg) break;
+                if (arr[j].fuel != null && arr[j].fuel >= r.fuel - tolRec) { recupera = true; break; }
+            }
+        }
+        // Trasvase entre tanques: mientras este baja, otro del mismo vehiculo
+        // sube (casi) lo mismo. El total no cambio: no es una perdida.
+        let transfer = false;
+        if (!rebote && !recupera && fKey && r.niv) {
+            for (const kk of Object.keys(r.niv)) {
+                if (kk === fKey) continue;
+                const v0 = r.niv[kk];
+                if (v0 == null) continue;
+                for (let j = k; j < arr.length; j++) {
+                    if (arr[j].t - r.t > recSeg) break;
+                    const v1 = arr[j].niv ? arr[j].niv[kk] : null;
+                    if (v1 != null && (v1 - v0) >= caida * 0.8) { transfer = true; break; }
+                }
+                if (transfer) break;
+            }
+        }
+        if (!rebote && !recupera && !transfer) {
             out.push({
                 desde: r.t, hasta: cur.t, litros: caida, min: Math.round(dt / 60),
                 vel: Math.max(0, Math.round(r.s)), lat: cur.lat, lon: cur.lon, motor: mot
@@ -15534,7 +15598,7 @@ function rxFuelUsaComa(evs) {
 // Una fila de la tabla de descargas -> evento. Si la celda de hora trae su
 // epoch exacto (`v`) se usa ese: el texto no lleva segundos y puede venir en
 // dia/mes o mes/dia. Coordenadas: las de la celda de ubicacion.
-function rxFuelEvDesc(f, idx, cr, vr, eco) {
+function rxFuelEvDesc(f, idx, cr, vr, eco, uid) {
     const cel = (k) => (idx[k] >= 0 && f[idx[k]] != null) ? String(f[idx[k]]) : '';
     const epoch = (k) => {
         if (idx[k] < 0) return null;
@@ -15553,7 +15617,7 @@ function rxFuelEvDesc(f, idx, cr, vr, eco) {
     const lista = cr || [];
     const c = (idx.ubi >= 0 ? lista.filter((x) => x.i === idx.ubi)[0] : null) || lista[0];
     return {
-        eco: eco, ubi: cel('ubi'), lat: c ? c.lat : null, lon: c ? c.lon : null,
+        eco: eco, uid: (uid == null ? null : String(uid)), ubi: cel('ubi'), lat: c ? c.lat : null, lon: c ? c.lon : null,
         ini: ini, fin: fin, ms0: ms0, ms1: ms1, durSeg: durSeg,
         litros: rxInfNum(cel('litros')), iniNiv: rxInfNum(cel('iniNiv')), finNiv: rxInfNum(cel('finNiv')),
         vel: rxInfNum(cel('vel')), sensor: cel('sensor'), rawL: cel('litros'),
@@ -15809,7 +15873,7 @@ async function rxFuelRecolecta(tpl, unidades, desde, hasta, def, onProg, token) 
             for (let fi = 0; fi < (tb.filas || []).length; fi++) {
                 const cr = coords[fi] || [];
                 // Coordenadas de la celda de ubicacion (vienen en y/x).
-                const ev = rxFuelEvDesc(tb.filas[fi], idx, cr, vals[fi], u.eco || String(u.id));
+                const ev = rxFuelEvDesc(tb.filas[fi], idx, cr, vals[fi], u.eco || String(u.id), u.id);
                 evs.push(ev);
                 nUni++;
                 if (evs.length >= RX_FUEL_MAX_EV) break;
@@ -15825,6 +15889,123 @@ async function rxFuelRecolecta(tpl, unidades, desde, hasta, def, onProg, token) 
         conDatos: conDatos, objetos: lista.length, lleno: evs.length >= RX_FUEL_MAX_EV
     };
 }
+// ¿Una descarga se recupero? Puro: recibe la serie de la unidad
+// ({ t (s), niv: { clave: nivel } }) y mira si el nivel vuelve al de antes, o
+// si otro tanque sube lo mismo (trasvase entre los dos depositos).
+function rxFuelRecuperado(e, muestras, recMin) {
+    const ini = (e && e.iniNiv != null) ? e.iniNiv : null;
+    const ms0 = (e && e.ms0 != null) ? e.ms0 : null;
+    const ms1 = (e && e.ms1 != null) ? e.ms1 : ms0;
+    if (ini == null || ms0 == null) return { recuperado: false, transferencia: false, motivo: '' };
+    const seg = Math.max(60, ((Number(recMin) > 0) ? Number(recMin) : 30) * 60);
+    const tol = Math.max(2, Math.abs(Number(e.litros) || 0) * 0.05);
+    const arr = (muestras || []).filter((x) => x && x.niv && x.t != null).slice().sort((a, b) => a.t - b.t);
+    if (!arr.length) return { recuperado: false, transferencia: false, motivo: '' };
+    // Muestra justo antes del evento: de que sensor habla.
+    let pre = null;
+    for (const x of arr) { if (x.t * 1000 <= ms0 + 60000) pre = x; else break; }
+    if (!pre) return { recuperado: false, transferencia: false, motivo: '' };
+    let key = null, best = Infinity;
+    for (const k of Object.keys(pre.niv)) {
+        const d = Math.abs(pre.niv[k] - ini);
+        if (d < best) { best = d; key = k; }
+    }
+    if (key == null || best > Math.max(5, Math.abs(ini) * 0.15)) key = null;
+    const fin = ms1 + seg * 1000;
+    let recuperado = false, transferencia = false;
+    for (const x of arr) {
+        const t = x.t * 1000;
+        if (t < ms1) continue;
+        if (t > fin) break;
+        if (key != null && x.niv[key] != null && x.niv[key] >= ini - tol) { recuperado = true; break; }
+        if (key != null) {
+            for (const k of Object.keys(pre.niv)) {
+                if (k === key) continue;
+                const v0 = pre.niv[k], v1 = x.niv[k];
+                if (v0 != null && v1 != null && (v1 - v0) >= (Number(e.litros) || 0) * 0.8) { transferencia = true; break; }
+            }
+            if (transferencia) break;
+        }
+    }
+    return {
+        recuperado: recuperado, transferencia: transferencia,
+        motivo: recuperado ? ('el nivel vuelve a ' + rxInfFmt(Math.round(ini * 10) / 10) + ' L') :
+            (transferencia ? 'otro tanque sube lo mismo (trasvase)' : '')
+    };
+}
+// Marca los eventos de descarga cuyo nivel se recupero (o fue un trasvase),
+// leyendo el historial del sensor alrededor de cada uno. Cacheado y acotado;
+// si no se puede leer, el evento se conserva.
+async function rxFuelMarcaRecuperacion(evs, cfg, token) {
+    const recMin = (cfg && cfg.recuperaMin) || 30;
+    const lista = (evs || []).filter((e) => e && e.uid != null && e.ms0 != null && e.iniNiv != null);
+    const out = { recuperados: [], vistos: 0, fallos: 0, truncado: false };
+    if (!lista.length || typeof rxGeoInfCargaTrozo !== 'function') return out;
+    let cat = {};
+    try { cat = await rxFuelCatalogo(); } catch (_) { cat = {}; }
+    const porU = new Map();
+    for (const e of lista) { const k = String(e.uid); if (!porU.has(k)) porU.set(k, []); porU.get(k).push(e); }
+    const MAXU = 250, MAXW = 60, MAXFETCH = 1200;   // tope de consultas de historial
+    const uni = Array.from(porU.keys()).slice(0, MAXU);
+    if (porU.size > MAXU) out.truncado = true;
+    let fetchs = 0;
+    const set = new Set();
+    for (const uid of uni) {
+        if (token && token.cancelado) break;
+        const evsU = porU.get(uid);
+        const sens = cat[uid] || null;
+        const claves = rxFuelClaves(sens);
+        const w = evsU.map((e) => [Math.floor(e.ms0 / 1000) - 60, Math.floor((e.ms1 != null ? e.ms1 : e.ms0) / 1000) + recMin * 60])
+            .sort((a, b) => a[0] - b[0]);
+        const win = [];
+        for (const x of w) { const u = win[win.length - 1]; if (u && x[0] <= u[1]) u[1] = Math.max(u[1], x[1]); else win.push([x[0], x[1]]); }
+        if (win.length > MAXW) { out.truncado = true; win.length = MAXW; }
+        const muestras = [];
+        for (const t of win) {
+            if (token && token.cancelado) break;
+            if (fetchs >= MAXFETCH) { out.truncado = true; break; }
+            fetchs++;
+            let r = null;
+            try { r = await rxGeoInfCargaTrozo(uid, t[0], t[1], token); }
+            catch (e) { r = { msgs: [], error: (e && e.message) || String(e) }; }
+            if (r.error && r.error !== 'cancelado') { out.fallos++; continue; }
+            for (const m of (r.msgs || [])) {
+                const sm = rxFuelMsg(m, sens, claves);
+                if (sm) muestras.push({ t: sm.t, niv: sm.niv });
+            }
+        }
+        for (const e of evsU) {
+            out.vistos++;
+            const r = rxFuelRecuperado(e, muestras, recMin);
+            if (r.recuperado || r.transferencia) {
+                set.add(e);
+                e.cls = {
+                    veredicto: r.transferencia ? 'Trasvase entre tanques' : 'Nivel recuperado',
+                    motivo: r.motivo, relevante: false, tasa: (e.cls ? e.cls.tasa : null),
+                    nivel: '', puntaje: 0, firme: false
+                };
+            }
+        }
+        await (typeof rxGeoInfYield === 'function' ? rxGeoInfYield() : new Promise((x) => setTimeout(x, 0)));
+    }
+    out.recuperados = Array.from(set);
+    return out;
+}
+// Pasa a descartados los eventos recuperados (compartido por la perdida y la
+// convergencia con carnada).
+async function rxFuelAplicaRecuperacion(an, cfg, token) {
+    if (!an || !an.rel || !an.rel.length) return { n: 0, truncado: false };
+    if (cfg && cfg.recuperaPlat === false) return { n: 0, truncado: false };
+    const r = await rxFuelMarcaRecuperacion(an.rel, cfg, token);
+    if (!r.recuperados.length) return { n: 0, truncado: r.truncado };
+    const set = new Set(r.recuperados);
+    an.desc = an.desc.concat(an.rel.filter((e) => set.has(e)));
+    an.rel = an.rel.filter((e) => !set.has(e));
+    an.robos = an.rel.filter((e) => e.cls && e.cls.veredicto === 'Robo probable').length;
+    an.sospechas = an.rel.filter((e) => e.cls && e.cls.veredicto === 'Sospechoso').length;
+    an.litrosRobo = an.rel.reduce((a, e) => a + (e.litros || 0), 0);
+    return { n: r.recuperados.length, truncado: r.truncado };
+}
 // Corre la plantilla de descargas POR UNIDAD, une los sensores, juzga cada
 // evento y devuelve: tabla principal (robos y sospechas), descartados y
 // lugares repetidos.
@@ -15834,6 +16015,9 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
     const rec = await rxFuelRecolecta(tpl, unidades, desde, hasta, def, onProg, token);
     const evs = rec.evs;
     const an = rxFuelAnalizaDescargas(evs, conf);
+    // Recuperacion: descarta lo que vuelve a subir al nivel (desniveles,
+    // movimiento del tanque o trasvase entre los dos depositos).
+    const recup = await rxFuelAplicaRecuperacion(an, conf, token);
     const coma = rxFuelUsaComa(evs);
     const filasRel = an.rel.map((e) => rxFuelFilaDesc(e, coma));
     const filasDesc = an.desc.map((e) => rxFuelFilaDesc(e, coma));
@@ -15851,7 +16035,7 @@ async function rxFuelCorrePlataforma(tpl, unidades, desde, hasta, def, onProg, t
         conSensor: rec.conDatos, sinSensor: rec.objetos - rec.conDatos, ms: Date.now() - t0,
         robos: an.robos, sospechas: an.sospechas, descartados: an.desc.length,
         litrosRobo: an.litrosRobo, lugares: lug.length, crudos: an.crudos, unidos: an.unidos,
-        analisis: an
+        recuperados: recup.n, recuperacionTruncada: recup.truncado, analisis: an
     };
 }
 // Unidades a barrer cuando el alcance es "toda la flota". Conserva la
@@ -16169,6 +16353,11 @@ function abrirInformesPlantilla(origen) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc('Rondo une los sensores (IZQ, DER y DIESEL TOTAL son el mismo evento) y descarta lo que no es robo: sensor que cae a 0, unidad en movimiento y bajadas lentas (consumo, equipo de fr\u00edo o fuga). Lo descartado queda en su pesta\u00f1a, con el motivo.') +
                         '</span></div>');
+                    const filaRecup = '<div class="rgi-row"><span class="rgi-lb">Recuperaci\u00f3n</span>' +
+                        '<span class="rgi-num">si el nivel vuelve en <input type="number" min="2" max="180" step="1" id="rgi-fuel-recup" value="' + esc(String(RX_INF.fuel.recuperaMin)) + '"' + dis + '> min se descarta</span>' +
+                        (usarPlat ? '<button type="button" class="rgi-chip' + (RX_INF.fuel.recuperaPlat ? ' activo' : '') + '" id="rgi-fuel-recup-plat"' + dis +
+                            ' title="Lee el historial del sensor despues de cada descarga y descarta la que vuelve al nivel o el trasvase entre tanques (mas lento)">Verificar en el historial</button>' : '<span class="rgi-gen-hint">Se descarta tambien el trasvase: un tanque baja y el otro sube lo mismo.</span>') +
+                        '</div>';
                     const cn = RX_INF.carn;
                     const opcionesCarn = !tpl.carnada ? '' :
                         ('<div class="rgi-row"><span class="rgi-lb">Carnada</span>' +
@@ -16186,7 +16375,7 @@ function abrirInformesPlantilla(origen) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc('Un punto solo se marca si hay p\u00e9rdida de combustible Y convergencia de unidades carnada (las marcadas con el sensor, ej. "(SC)"). Sin el historial solo cuentan las p\u00e9rdidas; con \u00e9l tambi\u00e9n las unidades que se detuvieron all\u00ed sin perder (m\u00e1s lento: pide el historial de cada unidad).') +
                         '</span></div>');
-                    pasoFuel = paso(4, tpl.carnada ? 'Convergencia con carnada' : 'Perdida de combustible', filaFuente + filaMarca + opcionesSensor + opcionesPlat + opcionesCarn);
+                    pasoFuel = paso(4, tpl.carnada ? 'Convergencia con carnada' : 'Perdida de combustible', filaFuente + filaMarca + opcionesSensor + opcionesPlat + filaRecup + opcionesCarn);
                 }
                 // Paso 4: filtros de la plantilla (todo lo que admite, menos
                 // los ajustes de formato). Es lo que antes no se podia tocar.
@@ -16687,6 +16876,12 @@ function abrirInformesPlantilla(origen) {
                         pinta();
                         return;
                     }
+                    if (btn.id === 'rgi-fuel-recup-plat') {
+                        if (RX_INF._buscando) return;
+                        RX_INF.fuel.recuperaPlat = !RX_INF.fuel.recuperaPlat;
+                        pinta();
+                        return;
+                    }
                     if (btn.id === 'rgi-carn-geodesc') {
                         if (RX_INF._buscando) return;
                         RX_INF.carn.geoDescarta = !RX_INF.carn.geoDescarta;
@@ -16965,6 +17160,7 @@ function abrirInformesPlantilla(origen) {
                 if (t.id === 'rgi-carn-unir') { RX_INF.carn.unir = clamp(Number(t.value) || RX_INF.carn.unir, 10, 2000); return; }
                 if (t.id === 'rgi-carn-top') { RX_INF.carn.topPuntos = clamp(Math.round(Number(t.value) || RX_INF.carn.topPuntos), 1, 60); return; }
                 if (t.id === 'rgi-carn-vent') { RX_INF.carn.ventanaH = clamp(Number(t.value) || RX_INF.carn.ventanaH, 1, 72); return; }
+                if (t.id === 'rgi-fuel-recup') { RX_INF.fuel.recuperaMin = clamp(Math.round(Number(t.value) || RX_INF.fuel.recuperaMin), 2, 180); return; }
                 if (t.id === 'rgi-fuel-tasa') { RX_INF.fuel.tasa = clamp(Number(t.value) || RX_INF.fuel.tasa, 0.5, 1000); return; }
                 if (t.id === 'rgi-fuel-vel') { RX_INF.fuel.vel = clamp(Number(t.value) || 0, 0, 40); return; }
                 if (t.id === 'rgi-fuel-km') { RX_INF.fuel.km = clamp(Number(t.value) || RX_INF.fuel.km, 1, 2000); return; }
@@ -17956,6 +18152,9 @@ async function carnCorre(p) {
     }
     // Solo lo que parece robo (sin falla de sensor, consumo ni movimiento).
     const an = rxFuelAnalizaDescargas(evs, cfgF);
+    // Recuperacion: si el nivel vuelve a subir, no es una perdida (desnivel,
+    // movimiento del tanque o trasvase entre los dos depositos).
+    const recup = (typeof rxFuelAplicaRecuperacion === 'function') ? await rxFuelAplicaRecuperacion(an, cfgF, p.token) : { n: 0, truncado: false };
     let rel = an.rel.filter((e) => e.lat != null && e.lon != null);
     // Dentro de una geocerca (patio, planta, taller) el consumo o el drenado
     // es normal o no se puede probar: se descarta.
@@ -18001,7 +18200,8 @@ async function carnCorre(p) {
             eventos: rel.length, litros: rel.reduce((a, e) => a + (e.litros || 0), 0),
             unidadesAfectadas: Object.keys(rel.reduce((a, e) => { a[e.eco] = 1; return a; }, {})).length,
             crudos: an.crudos, descartados: an.desc.length, llegadasN: llegadas ? llegadas.paradas.length : 0,
-            llegadasTruncado: llegadas ? llegadas.truncados : 0, geoDescartadas: geoDescartadas, bases: r.bases
+            llegadasTruncado: llegadas ? llegadas.truncados : 0, geoDescartadas: geoDescartadas, bases: r.bases,
+            recuperados: recup.n, recuperacionTruncada: recup.truncado
         }
     };
     RX_CARN.res = res;
