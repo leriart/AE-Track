@@ -801,6 +801,10 @@ ok('informes: paintTools respeta el reveal persistente',
 ok('informes: la plantilla integrada de combustible encabeza la lista',
     /RX_FUEL_TPL/.test(src) && /plantillas = \[RX_FUEL_TPL, RX_CARN_TPL\]\.concat\(plantillas\)/.test(src) &&
     /'Perdida de combustible'/.test(src));
+ok('informes: descarta la perdida si el nivel vuelve a subir o si es trasvase entre tanques',
+    /recuperaMin/.test(src) && /recuperaPlat/.test(src) && /function rxFuelRecuperado\(/.test(src) &&
+    /function rxFuelMarcaRecuperacion\(/.test(src) && /function rxFuelAplicaRecuperacion\(/.test(src) &&
+    /trasvase/i.test(src) && /id="rgi-fuel-recup"/.test(src) && /rxFuelAplicaRecuperacion\(an, cfgF/.test(src));
 ok('informes: convergencia con carnada integrada (puntos, mapa, PDF, geocercas y datos por punto)',
     /const RX_CARN_TPL/.test(src) && /function carnPuntos\(/.test(src) && /function carnHTML\(/.test(src) &&
     /function carnCreaGeocercas\(/.test(src) && /function carnCSVDatos\(/.test(src) && /id="rgi-carn-lleg"/.test(src) &&
