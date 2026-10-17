@@ -83,6 +83,7 @@ const code = stubs + '\n' + src.slice(iniComb, finComb) + '\n' + src.slice(ini, 
     'rxFuelNivel,rxFuelMotor,rxFuelMsg,rxFuelDetecta,rxFuelCorre,rxFuelSensores,rxFuelUnidadesTodas,' +
     'rxFuelTplCombustible,rxFuelEsTpl,RX_FUEL_TPL,rxFuelTieneMarca,rxFuelFiltraMarca,' +
     'rxFuelMetricas,rxFuelVeredicto,rxFuelClaves,rxFuelCatalogo,rxFuelParamsVistos,rxFuelLimpia,rxFuelAgrupa,' +
+    'rxFuelNivelDe,rxFuelNiveles,rxFuelRecuperado,rxFuelMarcaRecuperacion,rxFuelAplicaRecuperacion,' +
     'rxFuelTablaDescarga,rxFuelTplDescarga,rxFuelUsaPlataforma,' +
     'rxFuelParseFecha,rxFuelMapeaColsDescarga,rxFuelTablaSalida,rxFuelCorrePlataforma,RX_FUEL_DESC_COLS,' +
     'RX_FUEL_LUG_COLS,rxFuelEvDesc,rxFuelUneSensores,rxFuelFusionaContiguas,rxFuelEvalDescarga,' +
@@ -1004,6 +1005,42 @@ function execs() { return calls.filter((c) => c.m === 'report/exec_report'); }
     mod.estado.zona = null; tablaThefts = false;
     ok('carnada: con el descarte de geocercas apagado el punto si se marca',
         rGeo2.puntos.length >= 1 && rGeo2.meta.geoDescartadas === 0);
+
+    // ══ Recuperacion del nivel y trasvase entre tanques ══
+    const M2 = (t, fuel, niv, s) => ({ t: t, lat: 20, lon: -102, s: (s == null ? 0 : s), fuel: fuel, fuelKey: 'a', niv: niv || { a: fuel }, motor: null });
+    const sube = [0, 60, 120, 180, 240, 300].map((t) => M2(t, 200))
+        .concat([360, 420, 480].map((t) => M2(t, 150)))
+        .concat([540, 600, 660].map((t) => M2(t, 200)));
+    ok('recuperacion: una caida que vuelve al nivel en minutos NO cuenta como perdida',
+        mod.rxFuelDetecta(sube, { litros: 10, min: 2, vel: 3 }).length === 0);
+    const queda = [0, 60, 120, 180, 240, 300].map((t) => M2(t, 200))
+        .concat([360, 420, 480, 540, 600, 660].map((t) => M2(t, 150)));
+    const evQueda = mod.rxFuelDetecta(queda, { litros: 10, min: 2, vel: 3 });
+    ok('recuperacion: una caida que NO vuelve si cuenta (50 L)',
+        evQueda.length === 1 && evQueda[0].litros === 50, JSON.stringify(evQueda));
+    ok('recuperacion: la ventana es configurable (con 1 min deja de descartar la que tarda 4)',
+        mod.rxFuelDetecta(sube, { litros: 10, min: 2, vel: 3, recuperaMin: 1 }).length === 1);
+    // Trasvase: el tanque A baja 50 L y el B sube 50 L al mismo tiempo.
+    const trasvase = [0, 60, 120, 180, 240, 300].map((t) => M2(t, 200, { a: 200, b: 50 }))
+        .concat([360, 420, 480, 540, 600, 660].map((t) => M2(t, 150, { a: 150, b: 100 })));
+    ok('dos tanques: si un tanque baja y el otro sube lo mismo, no es perdida',
+        mod.rxFuelDetecta(trasvase, { litros: 10, min: 2, vel: 3 }).length === 0);
+    const dosTanquesPerdida = [0, 60, 120, 180, 240, 300].map((t) => M2(t, 200, { a: 200, b: 50 }))
+        .concat([360, 420, 480, 540, 600, 660].map((t) => M2(t, 150, { a: 150, b: 50 })));
+    ok('dos tanques: si el otro NO sube, la perdida se mantiene',
+        mod.rxFuelDetecta(dosTanquesPerdida, { litros: 10, min: 2, vel: 3 }).length === 1);
+    // Funcion pura de recuperacion (plataforma): el nivel vuelve tras el evento.
+    const evR = { ms0: 0, ms1: 60000, iniNiv: 200, litros: 50 };
+    ok('recuperacion (plataforma): vuelve al nivel -> recuperado',
+        mod.rxFuelRecuperado(evR, [{ t: 0, niv: { a: 200 } }, { t: 30, niv: { a: 200 } }, { t: 90, niv: { a: 150 } }, { t: 300, niv: { a: 200 } }], 30).recuperado === true);
+    ok('recuperacion (plataforma): no vuelve -> no recuperado',
+        mod.rxFuelRecuperado(evR, [{ t: 0, niv: { a: 200 } }, { t: 90, niv: { a: 150 } }, { t: 300, niv: { a: 150 } }], 30).recuperado === false);
+    ok('recuperacion (plataforma): fuera de la ventana no cuenta',
+        mod.rxFuelRecuperado(evR, [{ t: 0, niv: { a: 200 } }, { t: 90, niv: { a: 150 } }, { t: 60 + 30 * 60 + 60, niv: { a: 200 } }], 30).recuperado === false);
+    ok('recuperacion (plataforma): trasvase entre tanques',
+        mod.rxFuelRecuperado(evR, [{ t: 0, niv: { a: 200, b: 50 } }, { t: 90, niv: { a: 150, b: 100 } }], 30).transferencia === true);
+    ok('recuperacion (plataforma): sin muestras o sin nivel inicial no concluye nada',
+        mod.rxFuelRecuperado(evR, [], 30).recuperado === false && mod.rxFuelRecuperado({ ms0: 0, iniNiv: null }, [{ t: 0, niv: { a: 1 } }], 30).recuperado === false);
 
     console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasan');
     process.exit(fallos ? 1 : 0);

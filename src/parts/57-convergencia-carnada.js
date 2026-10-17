@@ -401,6 +401,9 @@ async function carnCorre(p) {
     }
     // Solo lo que parece robo (sin falla de sensor, consumo ni movimiento).
     const an = rxFuelAnalizaDescargas(evs, cfgF);
+    // Recuperacion: si el nivel vuelve a subir, no es una perdida (desnivel,
+    // movimiento del tanque o trasvase entre los dos depositos).
+    const recup = (typeof rxFuelAplicaRecuperacion === 'function') ? await rxFuelAplicaRecuperacion(an, cfgF, p.token) : { n: 0, truncado: false };
     let rel = an.rel.filter((e) => e.lat != null && e.lon != null);
     // Dentro de una geocerca (patio, planta, taller) el consumo o el drenado
     // es normal o no se puede probar: se descarta.
@@ -446,7 +449,8 @@ async function carnCorre(p) {
             eventos: rel.length, litros: rel.reduce((a, e) => a + (e.litros || 0), 0),
             unidadesAfectadas: Object.keys(rel.reduce((a, e) => { a[e.eco] = 1; return a; }, {})).length,
             crudos: an.crudos, descartados: an.desc.length, llegadasN: llegadas ? llegadas.paradas.length : 0,
-            llegadasTruncado: llegadas ? llegadas.truncados : 0, geoDescartadas: geoDescartadas, bases: r.bases
+            llegadasTruncado: llegadas ? llegadas.truncados : 0, geoDescartadas: geoDescartadas, bases: r.bases,
+            recuperados: recup.n, recuperacionTruncada: recup.truncado
         }
     };
     RX_CARN.res = res;
