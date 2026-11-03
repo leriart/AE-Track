@@ -184,72 +184,94 @@
                     .sort((a, b) => String(a.eco).localeCompare(String(b.eco), 'es', { numeric: true }));
                 const zonas = () => (APP.zonas || []).map((z) => rxGeoInfNombre(z)).filter(Boolean)
                     .sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+                // Paso numerado, igual que el resto de dialogos de Rondo.
+                const paso = (n, tit, cont) => '<div class="rgi-cfg"><div class="rgi-paso-c"><i>' + n + '</i><b>' +
+                    esc(tit) + '</b></div>' + cont + '</div>';
                 const cuerpo = () => {
                     const us = unidades();
                     const zs = zonas();
-                    let h = '<div class="rgi-hero"><b>Rendimiento entre paradas</b><span>' +
-                        'Elige la unidad y su punto de partida (geocerca o punto con radio). ' +
-                        'Desde cada salida del origen se miden los km y el tiempo en movimiento hasta cada parada.</span></div>';
-                    h += '<div class="rgi-paso-c"><b>1. Unidad</b><div class="rgi-row">' +
-                        '<select id="rrnd-unidad" class="filtro"><option value="">Elige una unidad</option>' +
+                    const dis = RX_REND._busy ? ' disabled' : '';
+                    const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.route + '</span>' +
+                        '<div class="rgi-herot"><b>Rendimiento entre paradas</b><span>Km y tiempo en movimiento entre cada parada, contados desde cada salida del punto de partida</span></div>' +
+                        '<i class="rgi-ori">Historial</i></div>';
+                    const paso1 = paso(1, 'Unidad',
+                        '<div class="rgi-row"><span class="rgi-lb">Unidad</span>' +
+                        '<select id="rrnd-unidad" class="filtro"' + dis + '><option value="">Elige una unidad</option>' +
                         us.map((u) => '<option value="' + esc(u.id) + '"' + (RX_REND.unidad === u.id ? ' selected' : '') + '>' + esc(u.eco) + '</option>').join('') +
-                        '</select></div></div>';
-                    h += '<div class="rgi-paso-c"><b>2. Punto de partida</b>' +
-                        '<div class="rgi-chips">' +
-                        '<button class="rgi-chip' + (RX_REND.modo === 'zona' ? ' on' : '') + '" data-rr="modo" data-v="zona">Geocerca</button>' +
-                        '<button class="rgi-chip' + (RX_REND.modo === 'punto' ? ' on' : '') + '" data-rr="modo" data-v="punto">Punto y radio</button>' +
-                        '</div>';
-                    if (RX_REND.modo === 'zona') {
-                        h += '<div class="rgi-row"><select id="rrnd-zona" class="filtro"><option value="">Elige una geocerca</option>' +
-                            zs.map((z) => '<option value="' + esc(z) + '"' + (RX_REND.zona === z ? ' selected' : '') + '>' + esc(z) + '</option>').join('') +
-                            '</select></div>';
-                    } else {
-                        h += '<div class="rgi-row">' +
-                            '<label class="rgi-lb">Latitud <input id="rrnd-lat" class="filtro" type="number" step="any" value="' + esc(RX_REND.lat) + '" placeholder="20.6597"></label>' +
-                            '<label class="rgi-lb">Longitud <input id="rrnd-lon" class="filtro" type="number" step="any" value="' + esc(RX_REND.lon) + '" placeholder="-103.3496"></label>' +
-                            '<label class="rgi-lb">Radio (m) <input id="rrnd-radio" class="filtro" type="number" min="10" max="5000" value="' + esc(RX_REND.radio) + '"></label>' +
-                            '</div>';
-                    }
-                    h += '</div>';
-                    h += '<div class="rgi-paso-c"><b>3. Periodo y parada</b><div class="rgi-row">' +
-                        '<label class="rgi-lb">Desde <input type="date" id="rrnd-desde" class="filtro" value="' + esc(RX_REND.desde) + '"></label>' +
-                        '<label class="rgi-lb">Hasta <input type="date" id="rrnd-hasta" class="filtro" value="' + esc(RX_REND.hasta) + '"></label>' +
-                        '<label class="rgi-lb">Parada (min) <input id="rrnd-parada" class="filtro" type="number" min="1" max="240" value="' + esc(RX_REND.paradaMin) + '"></label>' +
-                        '<label class="rgi-lb">Quieta bajo (km/h) <input id="rrnd-vel" class="filtro" type="number" min="0" max="80" value="' + esc(RX_REND.vel) + '"></label>' +
-                        '</div></div>';
-                    h += '<div class="rgi-generar">' +
-                        '<button class="rgi-btn pri" id="rrnd-generar"' + (RX_REND._busy ? ' disabled' : '') + '>Generar</button>' +
-                        '<button class="rgi-btn" id="rrnd-cancel"' + (RX_REND._busy ? '' : ' style="display:none"') + '>Cancelar</button>' +
-                        '</div>';
-                    h += '<div class="rgi-carga" id="rrnd-prog"' + (RX_REND.prog.activo ? ' style="display:flex"' : '') + '>' +
+                        '</select></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        'Se baja el historial de la unidad en el periodo y se detectan sus paradas.</span></div>');
+                    const paso2 = paso(2, 'Punto de partida',
+                        '<div class="rgi-row"><span class="rgi-lb">Origen</span><div class="rgi-chips">' +
+                        '<button type="button" class="rgi-chip' + (RX_REND.modo === 'zona' ? ' activo' : '') + '" data-rr="modo" data-v="zona"' + dis + '>Geocerca</button>' +
+                        '<button type="button" class="rgi-chip' + (RX_REND.modo === 'punto' ? ' activo' : '') + '" data-rr="modo" data-v="punto"' + dis + '>Punto y radio</button>' +
+                        '</div></div>' +
+                        (RX_REND.modo === 'zona'
+                            ? '<div class="rgi-row"><span class="rgi-lb">Geocerca</span>' +
+                              '<select id="rrnd-zona" class="filtro"' + dis + '><option value="">Elige una geocerca</option>' +
+                              zs.map((z) => '<option value="' + esc(z) + '"' + (RX_REND.zona === z ? ' selected' : '') + '>' + esc(z) + '</option>').join('') +
+                              '</select></div>'
+                            : '<div class="rgi-row"><span class="rgi-lb">Coordenadas</span>' +
+                              '<span class="rgi-num">lat <input type="number" step="any" id="rrnd-lat" value="' + esc(RX_REND.lat) + '" placeholder="20.6597"' + dis + '></span>' +
+                              '<span class="rgi-num">lon <input type="number" step="any" id="rrnd-lon" value="' + esc(RX_REND.lon) + '" placeholder="-103.3496"' + dis + '></span>' +
+                              '<span class="rgi-num">radio <input type="number" min="10" max="5000" id="rrnd-radio" value="' + esc(String(RX_REND.radio)) + '"' + dis + '> m</span>' +
+                              '</div>') +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        esc(RX_REND.modo === 'zona'
+                            ? 'Cada salida de la geocerca inicia un tramo nuevo.'
+                            : 'El circulo del radio indicado es el punto de partida.') +
+                        '</span></div>');
+                    const paso3 = paso(3, 'Periodo y parada',
+                        '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
+                        '<input type="date" id="rrnd-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_REND.desde) + '"' + dis + '>' +
+                        '<span class="sep">\u2192</span>' +
+                        '<input type="date" id="rrnd-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_REND.hasta) + '"' + dis + '>' +
+                        '</span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb">Parada</span>' +
+                        '<span class="rgi-num"><input type="number" min="1" max="240" id="rrnd-parada" value="' + esc(String(RX_REND.paradaMin)) + '"' + dis + '> min o mas</span>' +
+                        '<span class="rgi-num">quieta bajo <input type="number" min="0" max="80" id="rrnd-vel" value="' + esc(String(RX_REND.vel)) + '"' + dis + '> km/h</span>' +
+                        '</div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        'Una parada empieza cuando la unidad lleva esos minutos bajo esa velocidad.</span></div>');
+                    const ejecutar = RX_REND._busy
+                        ? '<button type="button" class="rgi-btn gen busy" id="rrnd-cancel">' +
+                          '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar</b><i>descarta lo calculado</i></button>'
+                        : '<button type="button" class="rgi-btn gen pulsa" id="rrnd-generar">' +
+                          '<span class="rondo-usym">' + UIS.play + '</span><b>Generar</b><i>km y tiempo entre paradas</i></button>';
+                    const barra = '<div class="rgi-generar">' + ejecutar +
+                        '<span class="rgi-gen-hint">' + esc(RX_REND._busy
+                            ? 'Leyendo el historial de la unidad\u2026'
+                            : 'Un clic y el reporte queda listo para descargar.') + '</span></div>';
+                    const prog = '<div class="rgi-carga" id="rrnd-prog"' + (RX_REND.prog.activo ? ' style="display:flex"' : '') + '>' +
                         '<span id="rrnd-prog-t">' + esc(RX_REND.prog.txt || '') + '</span>' +
-                        '<span class="rgi-barra"><i id="rrnd-prog-b" style="width:' + (RX_REND.prog.pct || 0) + '%"></i></span></div>';
-                    h += '<div id="rrnd-dyn">' + resultados() + '</div>';
-                    return h;
+                        '<span class="rgi-barra"><i id="rrnd-prog-b" style="width:' + Math.max(2, RX_REND.prog.pct || 0) + '%"></i></span></div>';
+                    return '<div class="rgi">' + hero + paso1 + paso2 + paso3 + prog + barra +
+                        '<div id="rrnd-dyn">' + resultados() + '</div></div>';
                 };
                 const resultados = () => {
                     const r = RX_REND.res;
-                    if (!r) return '';
+                    if (!r) return '<p class="rgi-more">Sin resultados todav\u00eda. Elige unidad, origen y periodo, y pulsa "Generar".</p>';
                     if (!r.filas.length) {
                         return '<div class="rgi-aviso">Sin paradas fuera del origen en el periodo. ' +
-                            'Prueba con otro rango o baja el minimo de parada.</div>';
+                            'Prueba con otro rango o baja el m\u00ednimo de parada.</div>';
                     }
                     let h = '<div class="rgi-kpis">' +
-                        '<div class="rgi-kpi"><b>' + r.filas.length + '</b><span>Paradas</span></div>' +
+                        '<div class="rgi-kpi ok"><b>' + r.filas.length + '</b><span>Paradas</span></div>' +
                         '<div class="rgi-kpi"><b>' + rxInfFmt(r.kmTotal) + '</b><span>km entre paradas</span></div>' +
                         '<div class="rgi-kpi"><b>' + rxInfFmt(r.minTotal) + '</b><span>min en movimiento</span></div>' +
                         '<div class="rgi-kpi"><b>' + r.salidas + '</b><span>Salidas del origen</span></div></div>';
-                    h += '<div class="rgi-res"><table><thead><tr>' +
-                        '<th>#</th><th>Llegada</th><th>Salida</th><th>Parada</th><th>km</th><th>Min mov.</th><th>Ubicacion</th>' +
+                    h += '<div class="rgi-prev"><table><thead><tr>' +
+                        '<th>#</th><th>Llegada</th><th>Salida</th><th>Parada</th><th>km</th><th>Min mov.</th><th>Ubicaci\u00f3n</th>' +
                         '</tr></thead><tbody>';
                     for (const f of r.filas.slice(0, 500)) {
                         h += '<tr><td>' + f.n + '</td><td>' + esc(rxFechaHora(f.llegada)) + '</td><td>' + esc(rxFechaHora(f.salida)) + '</td>' +
-                            '<td>' + esc(rxInfFmtDur(f.paradaSeg)) + '</td><td>' + esc(rxInfFmt(f.km)) + '</td>' +
-                            '<td>' + esc(rxInfFmt(f.minMov)) + '</td><td>' + esc(rxRendLugar(f.lat, f.lon) || '-') + '</td></tr>';
+                            '<td>' + esc(rxInfFmtDur(f.paradaSeg)) + '</td><td class="num">' + esc(rxInfFmt(f.km)) + '</td>' +
+                            '<td class="num">' + esc(rxInfFmt(f.minMov)) + '</td><td>' + esc(rxRendLugar(f.lat, f.lon) || '-') + '</td></tr>';
                     }
-                    h += '</tbody></table></div>' +
-                        (r.filas.length > 500 ? '<div class="rgi-more">Se listan 500 paradas; el CSV lleva todas.</div>' : '') +
-                        '<div class="rgi-generar"><button class="rgi-btn" id="rrnd-csv"><span class="rondo-usym">' + UIS.csv + '</span> Descargar CSV</button></div>';
+                    h += '</tbody></table>' +
+                        (r.filas.length > 500 ? '<p class="rgi-more">Primeras 500 paradas de ' + r.filas.length + '. El CSV lleva todas.</p>' : '') + '</div>';
+                    h += '<div class="rgi-io"><button type="button" class="rgi-btn primary" id="rrnd-csv">' +
+                        '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>una fila por parada</i></button></div>';
                     return h;
                 };
                 const pinta = () => { if (box && box.isConnected !== false) setHtml(box, cuerpo()); };

@@ -31,12 +31,34 @@ const stubs = [
         ' return L.join("\\n"); }',
     'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/);' +
         ' const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
-    'const APP = { unidades: [] };'
+    'const APP = { unidades: [] };',
+    // Stubs de UI y de la API de plantillas para montar el dialogo.
+    'const UIS = new Proxy({}, { get: function(){ return "<svg></svg>"; } });',
+    'const nodos = {};',
+    'function fakeEl(id){ return { id:id, style:{}, innerHTML:"", textContent:"", value:"", isConnected:true,' +
+        ' children:{}, handlers:{}, dataset:{},' +
+        ' classList:{add:function(){},remove:function(){},toggle:function(){},contains:function(){return true;}},' +
+        ' addEventListener:function(t,h){ (this.handlers[t]=this.handlers[t]||[]).push(h); },' +
+        ' querySelector:function(sel){ var k=String(sel).replace(/^#/,""); return this.children[k]||nodos[k]||null; },' +
+        ' querySelectorAll:function(){ return []; }, contains:function(){ return true; },' +
+        ' focus:function(){}, click:function(){}, closest:function(){ return null; } }; }',
+    'function byId(id){ return id ? (nodos[id]||(nodos[id]=fakeEl(id))) : null; }',
+    'function setHtml(el, html){ if(!el) return false; if(el.innerHTML===html) return false; el.innerHTML=html; return true; }',
+    'function abrirDialogo(o){ global.__rmasDlg = o; }',
+    'function rxInfPlantillas(){ return Promise.resolve([{rid:7,id:3,nombre:"Recorridos diarios"}]); }',
+    'function rxInfClave(t){ return (t&&t.rid!=null) ? (t.rid+":"+t.id) : ""; }',
+    'function rxInfTplDeClave(v){ var p=String(v||"").split(":"); return p.length===2?{rid:p[0],id:p[1],nombre:"Plantilla "+p[1]}:null; }',
+    'function rxInfExplicaError(m){ return String(m||""); }'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
-    '\nreturn { RX_MAS, RX_MAS_ESPERA_DESCARGA, rxMasUnidades, rxMasNombreArchivo, rxMasCSV, rxMasCorre, setUnidades:function(l){ APP.unidades = l; } };';
+    '\nreturn { RX_MAS, RX_MAS_ESPERA_DESCARGA, rxMasUnidades, rxMasNombreArchivo, rxMasCSV, rxMasCorre, abrirReportesMasivos, fakeEl,' +
+    ' setUnidades:function(l){ APP.unidades = l; } };';
 const mod = new Function(code)();
+global.document = {
+    body: { appendChild() {}, removeChild() {} },
+    createElement(tag) { return mod.fakeEl(tag); }
+};
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -145,6 +167,44 @@ ok('unidades: {id, eco} ordenadas por economico',
             [{ id: '1', eco: 'A' }, { id: '2', eco: 'B' }],
             null, null, ejecuta, () => { throw new Error('bloqueada'); });
         ok('lote: una descarga fallida no detiene el lote', res.length === 2 && res.every((x) => x.filas === 1));
+    }
+
+    // ── Montaje del dialogo: maquetado con las clases de Rondo ──────────
+    {
+        mod.abrirReportesMasivos();
+        const dlg = global.__rmasDlg;
+        ok('ui: titulo y ancho del dialogo', dlg && /Reportes masivos/.test(dlg.titulo) && dlg.ancho >= 700);
+        const raiz = global.document.createElement('raiz');
+        const box = global.document.createElement('rmas-box');
+        raiz.children['rmas-box'] = box;
+        dlg.onOpen(raiz);
+        await new Promise((r) => setTimeout(r, 0));   // espera al catalogo
+        let h = box.innerHTML;
+        ok('ui: hero con icono y badge', /class="rgi-hero"/.test(h) && /rgi-heroico/.test(h) && /rgi-ori/.test(h));
+        ok('ui: pasos numerados', /rgi-paso-c"><i>1<\/i>/.test(h) && /rgi-paso-c"><i>3<\/i>/.test(h));
+        ok('ui: lista de plantillas con el estilo de Rondo',
+            /class="rgi-tpls"/.test(h) && /class="rgi-tpl/.test(h) && /rgi-tpl-sel/.test(h));
+        ok('ui: buscadores con icono y contador',
+            /class="rgi-busca"/.test(h) && /id="rmas-tpl-n"/.test(h) && /id="rmas-uni-n"/.test(h));
+        ok('ui: unidades en chips y rango de fechas',
+            /class="rgi-chips rgi-unis"/.test(h) && /class="rgi-rango"/.test(h));
+        ok('ui: aviso de descargas multiples', /class="rgi-aviso"/.test(h));
+        ok('ui: boton generar pulsable', /class="rgi-btn gen pulsa" id="rmas-generar"/.test(h));
+        ok('ui: no quedan clases fuera de estilo', !/rgi-btn pri/.test(h) && !/rgi-chip on/.test(h));
+        // Elegir plantilla marca el elemento y actualiza el hero.
+        const btn = global.document.createElement('btn');
+        btn.dataset = { tpl: '7:3' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => btn } });
+        h = box.innerHTML;
+        ok('ui: la plantilla elegida queda activa y en el hero',
+            /class="rgi-tpl activo"/.test(h) && /Recorridos diarios/.test(h));
+        // Marcar una unidad actualiza el chip y el contador del boton.
+        const uni = global.document.createElement('uni');
+        uni.dataset = { uni: '1' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => uni } });
+        h = box.innerHTML;
+        ok('ui: la unidad marcada queda activa', /class="rgi-chip activo" data-uni="1"/.test(h));
+        ok('ui: el boton indica cuantas unidades', /1 unidad\(es\)/.test(h));
     }
 
     console.log(fallos ? ('FALLO - ' + fallos + ' checks') : 'Todos los tests pasaron');

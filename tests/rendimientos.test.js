@@ -36,12 +36,29 @@ const stubs = [
         ' return L.join("\\n"); }',
     'function zoneAt(){ return ""; }',
     'function municipioEn(){ return null; }',
-    'const APP = { zonas: [], unidades: [] };'
+    'const APP = { zonas: [], unidades: [] };',
+    // Stubs de UI para montar el dialogo como lo haria Rondo.
+    'const UIS = new Proxy({}, { get: function(){ return "<svg></svg>"; } });',
+    'const nodos = {};',
+    'function fakeEl(id){ return { id:id, style:{}, innerHTML:"", textContent:"", value:"", isConnected:true,' +
+        ' children:{}, handlers:{}, dataset:{},' +
+        ' classList:{add:function(){},remove:function(){},toggle:function(){},contains:function(){return true;}},' +
+        ' addEventListener:function(t,h){ (this.handlers[t]=this.handlers[t]||[]).push(h); },' +
+        ' querySelector:function(sel){ var k=String(sel).replace(/^#/,""); return this.children[k]||nodos[k]||null; },' +
+        ' querySelectorAll:function(){ return []; }, contains:function(){ return true; },' +
+        ' focus:function(){}, click:function(){}, closest:function(){ return null; } }; }',
+    'function byId(id){ return id ? (nodos[id]||(nodos[id]=fakeEl(id))) : null; }',
+    'function setHtml(el, html){ if(!el) return false; if(el.innerHTML===html) return false; el.innerHTML=html; return true; }',
+    'function abrirDialogo(o){ global.__rrendDlg = o; }'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
-    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV };';
+    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV, abrirRendimientos, fakeEl };';
 const mod = new Function(code)();
+global.document = {
+    body: { appendChild() {}, removeChild() {} },
+    createElement(tag) { return mod.fakeEl(tag); }
+};
 
 let fallos = 0;
 function ok(nombre, cond, extra) {
@@ -196,6 +213,30 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     ok('csv: trae cabecera y metadatos',
         csv.indexOf('Llegada') >= 0 && csv.indexOf('Rendimientos') >= 0 && csv.indexOf('ECO 105') >= 0);
     ok('csv: una fila por parada', csv.split('\n').length === 3, csv.split('\n').length);
+}
+
+// ── Montaje del dialogo: maquetado con las clases de Rondo ──────────────
+{
+    mod.abrirRendimientos();
+    const dlg = global.__rrendDlg;
+    ok('ui: titulo y ancho del dialogo', dlg && /Rendimientos/.test(dlg.titulo) && dlg.ancho >= 700);
+    const raiz = global.document.createElement('raiz');
+    const box = global.document.createElement('rrnd-box');
+    raiz.children['rrnd-box'] = box;
+    dlg.onOpen(raiz);
+    const h = box.innerHTML;
+    ok('ui: hero con icono y badge', /class="rgi-hero"/.test(h) && /rgi-heroico/.test(h) && /rgi-ori/.test(h));
+    ok('ui: pasos numerados', /rgi-paso-c"><i>1<\/i>/.test(h) && /rgi-paso-c"><i>2<\/i>/.test(h) && /rgi-paso-c"><i>3<\/i>/.test(h));
+    ok('ui: chip activo con la clase de Rondo', /class="rgi-chip activo"[^>]*data-rr="modo" data-v="zona"/.test(h));
+    ok('ui: rango de fechas con estilo', /class="rgi-rango"/.test(h) && /id="rrnd-desde"/.test(h) && /id="rrnd-hasta"/.test(h));
+    ok('ui: boton generar pulsable', /class="rgi-btn gen pulsa" id="rrnd-generar"/.test(h));
+    ok('ui: no quedan clases fuera de estilo', !/rgi-btn pri/.test(h) && !/rgi-chip on/.test(h));
+    // Cambiar a "Punto y radio" repinta con los campos numericos.
+    const chip = global.document.createElement('chip');
+    chip.dataset = { rr: 'modo', v: 'punto' };
+    for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => chip } });
+    ok('ui: el origen por punto muestra lat/lon/radio',
+        /id="rrnd-lat"/.test(box.innerHTML) && /id="rrnd-lon"/.test(box.innerHTML) && /class="rgi-num"/.test(box.innerHTML));
 }
 
 console.log(fallos ? ('FALLO - ' + fallos + ' checks') : 'Todos los tests pasaron');

@@ -18654,72 +18654,94 @@ function carnHTML(r) {
                     .sort((a, b) => String(a.eco).localeCompare(String(b.eco), 'es', { numeric: true }));
                 const zonas = () => (APP.zonas || []).map((z) => rxGeoInfNombre(z)).filter(Boolean)
                     .sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+                // Paso numerado, igual que el resto de dialogos de Rondo.
+                const paso = (n, tit, cont) => '<div class="rgi-cfg"><div class="rgi-paso-c"><i>' + n + '</i><b>' +
+                    esc(tit) + '</b></div>' + cont + '</div>';
                 const cuerpo = () => {
                     const us = unidades();
                     const zs = zonas();
-                    let h = '<div class="rgi-hero"><b>Rendimiento entre paradas</b><span>' +
-                        'Elige la unidad y su punto de partida (geocerca o punto con radio). ' +
-                        'Desde cada salida del origen se miden los km y el tiempo en movimiento hasta cada parada.</span></div>';
-                    h += '<div class="rgi-paso-c"><b>1. Unidad</b><div class="rgi-row">' +
-                        '<select id="rrnd-unidad" class="filtro"><option value="">Elige una unidad</option>' +
+                    const dis = RX_REND._busy ? ' disabled' : '';
+                    const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.route + '</span>' +
+                        '<div class="rgi-herot"><b>Rendimiento entre paradas</b><span>Km y tiempo en movimiento entre cada parada, contados desde cada salida del punto de partida</span></div>' +
+                        '<i class="rgi-ori">Historial</i></div>';
+                    const paso1 = paso(1, 'Unidad',
+                        '<div class="rgi-row"><span class="rgi-lb">Unidad</span>' +
+                        '<select id="rrnd-unidad" class="filtro"' + dis + '><option value="">Elige una unidad</option>' +
                         us.map((u) => '<option value="' + esc(u.id) + '"' + (RX_REND.unidad === u.id ? ' selected' : '') + '>' + esc(u.eco) + '</option>').join('') +
-                        '</select></div></div>';
-                    h += '<div class="rgi-paso-c"><b>2. Punto de partida</b>' +
-                        '<div class="rgi-chips">' +
-                        '<button class="rgi-chip' + (RX_REND.modo === 'zona' ? ' on' : '') + '" data-rr="modo" data-v="zona">Geocerca</button>' +
-                        '<button class="rgi-chip' + (RX_REND.modo === 'punto' ? ' on' : '') + '" data-rr="modo" data-v="punto">Punto y radio</button>' +
-                        '</div>';
-                    if (RX_REND.modo === 'zona') {
-                        h += '<div class="rgi-row"><select id="rrnd-zona" class="filtro"><option value="">Elige una geocerca</option>' +
-                            zs.map((z) => '<option value="' + esc(z) + '"' + (RX_REND.zona === z ? ' selected' : '') + '>' + esc(z) + '</option>').join('') +
-                            '</select></div>';
-                    } else {
-                        h += '<div class="rgi-row">' +
-                            '<label class="rgi-lb">Latitud <input id="rrnd-lat" class="filtro" type="number" step="any" value="' + esc(RX_REND.lat) + '" placeholder="20.6597"></label>' +
-                            '<label class="rgi-lb">Longitud <input id="rrnd-lon" class="filtro" type="number" step="any" value="' + esc(RX_REND.lon) + '" placeholder="-103.3496"></label>' +
-                            '<label class="rgi-lb">Radio (m) <input id="rrnd-radio" class="filtro" type="number" min="10" max="5000" value="' + esc(RX_REND.radio) + '"></label>' +
-                            '</div>';
-                    }
-                    h += '</div>';
-                    h += '<div class="rgi-paso-c"><b>3. Periodo y parada</b><div class="rgi-row">' +
-                        '<label class="rgi-lb">Desde <input type="date" id="rrnd-desde" class="filtro" value="' + esc(RX_REND.desde) + '"></label>' +
-                        '<label class="rgi-lb">Hasta <input type="date" id="rrnd-hasta" class="filtro" value="' + esc(RX_REND.hasta) + '"></label>' +
-                        '<label class="rgi-lb">Parada (min) <input id="rrnd-parada" class="filtro" type="number" min="1" max="240" value="' + esc(RX_REND.paradaMin) + '"></label>' +
-                        '<label class="rgi-lb">Quieta bajo (km/h) <input id="rrnd-vel" class="filtro" type="number" min="0" max="80" value="' + esc(RX_REND.vel) + '"></label>' +
-                        '</div></div>';
-                    h += '<div class="rgi-generar">' +
-                        '<button class="rgi-btn pri" id="rrnd-generar"' + (RX_REND._busy ? ' disabled' : '') + '>Generar</button>' +
-                        '<button class="rgi-btn" id="rrnd-cancel"' + (RX_REND._busy ? '' : ' style="display:none"') + '>Cancelar</button>' +
-                        '</div>';
-                    h += '<div class="rgi-carga" id="rrnd-prog"' + (RX_REND.prog.activo ? ' style="display:flex"' : '') + '>' +
+                        '</select></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        'Se baja el historial de la unidad en el periodo y se detectan sus paradas.</span></div>');
+                    const paso2 = paso(2, 'Punto de partida',
+                        '<div class="rgi-row"><span class="rgi-lb">Origen</span><div class="rgi-chips">' +
+                        '<button type="button" class="rgi-chip' + (RX_REND.modo === 'zona' ? ' activo' : '') + '" data-rr="modo" data-v="zona"' + dis + '>Geocerca</button>' +
+                        '<button type="button" class="rgi-chip' + (RX_REND.modo === 'punto' ? ' activo' : '') + '" data-rr="modo" data-v="punto"' + dis + '>Punto y radio</button>' +
+                        '</div></div>' +
+                        (RX_REND.modo === 'zona'
+                            ? '<div class="rgi-row"><span class="rgi-lb">Geocerca</span>' +
+                              '<select id="rrnd-zona" class="filtro"' + dis + '><option value="">Elige una geocerca</option>' +
+                              zs.map((z) => '<option value="' + esc(z) + '"' + (RX_REND.zona === z ? ' selected' : '') + '>' + esc(z) + '</option>').join('') +
+                              '</select></div>'
+                            : '<div class="rgi-row"><span class="rgi-lb">Coordenadas</span>' +
+                              '<span class="rgi-num">lat <input type="number" step="any" id="rrnd-lat" value="' + esc(RX_REND.lat) + '" placeholder="20.6597"' + dis + '></span>' +
+                              '<span class="rgi-num">lon <input type="number" step="any" id="rrnd-lon" value="' + esc(RX_REND.lon) + '" placeholder="-103.3496"' + dis + '></span>' +
+                              '<span class="rgi-num">radio <input type="number" min="10" max="5000" id="rrnd-radio" value="' + esc(String(RX_REND.radio)) + '"' + dis + '> m</span>' +
+                              '</div>') +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        esc(RX_REND.modo === 'zona'
+                            ? 'Cada salida de la geocerca inicia un tramo nuevo.'
+                            : 'El circulo del radio indicado es el punto de partida.') +
+                        '</span></div>');
+                    const paso3 = paso(3, 'Periodo y parada',
+                        '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
+                        '<input type="date" id="rrnd-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_REND.desde) + '"' + dis + '>' +
+                        '<span class="sep">\u2192</span>' +
+                        '<input type="date" id="rrnd-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_REND.hasta) + '"' + dis + '>' +
+                        '</span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb">Parada</span>' +
+                        '<span class="rgi-num"><input type="number" min="1" max="240" id="rrnd-parada" value="' + esc(String(RX_REND.paradaMin)) + '"' + dis + '> min o mas</span>' +
+                        '<span class="rgi-num">quieta bajo <input type="number" min="0" max="80" id="rrnd-vel" value="' + esc(String(RX_REND.vel)) + '"' + dis + '> km/h</span>' +
+                        '</div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        'Una parada empieza cuando la unidad lleva esos minutos bajo esa velocidad.</span></div>');
+                    const ejecutar = RX_REND._busy
+                        ? '<button type="button" class="rgi-btn gen busy" id="rrnd-cancel">' +
+                          '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar</b><i>descarta lo calculado</i></button>'
+                        : '<button type="button" class="rgi-btn gen pulsa" id="rrnd-generar">' +
+                          '<span class="rondo-usym">' + UIS.play + '</span><b>Generar</b><i>km y tiempo entre paradas</i></button>';
+                    const barra = '<div class="rgi-generar">' + ejecutar +
+                        '<span class="rgi-gen-hint">' + esc(RX_REND._busy
+                            ? 'Leyendo el historial de la unidad\u2026'
+                            : 'Un clic y el reporte queda listo para descargar.') + '</span></div>';
+                    const prog = '<div class="rgi-carga" id="rrnd-prog"' + (RX_REND.prog.activo ? ' style="display:flex"' : '') + '>' +
                         '<span id="rrnd-prog-t">' + esc(RX_REND.prog.txt || '') + '</span>' +
-                        '<span class="rgi-barra"><i id="rrnd-prog-b" style="width:' + (RX_REND.prog.pct || 0) + '%"></i></span></div>';
-                    h += '<div id="rrnd-dyn">' + resultados() + '</div>';
-                    return h;
+                        '<span class="rgi-barra"><i id="rrnd-prog-b" style="width:' + Math.max(2, RX_REND.prog.pct || 0) + '%"></i></span></div>';
+                    return '<div class="rgi">' + hero + paso1 + paso2 + paso3 + prog + barra +
+                        '<div id="rrnd-dyn">' + resultados() + '</div></div>';
                 };
                 const resultados = () => {
                     const r = RX_REND.res;
-                    if (!r) return '';
+                    if (!r) return '<p class="rgi-more">Sin resultados todav\u00eda. Elige unidad, origen y periodo, y pulsa "Generar".</p>';
                     if (!r.filas.length) {
                         return '<div class="rgi-aviso">Sin paradas fuera del origen en el periodo. ' +
-                            'Prueba con otro rango o baja el minimo de parada.</div>';
+                            'Prueba con otro rango o baja el m\u00ednimo de parada.</div>';
                     }
                     let h = '<div class="rgi-kpis">' +
-                        '<div class="rgi-kpi"><b>' + r.filas.length + '</b><span>Paradas</span></div>' +
+                        '<div class="rgi-kpi ok"><b>' + r.filas.length + '</b><span>Paradas</span></div>' +
                         '<div class="rgi-kpi"><b>' + rxInfFmt(r.kmTotal) + '</b><span>km entre paradas</span></div>' +
                         '<div class="rgi-kpi"><b>' + rxInfFmt(r.minTotal) + '</b><span>min en movimiento</span></div>' +
                         '<div class="rgi-kpi"><b>' + r.salidas + '</b><span>Salidas del origen</span></div></div>';
-                    h += '<div class="rgi-res"><table><thead><tr>' +
-                        '<th>#</th><th>Llegada</th><th>Salida</th><th>Parada</th><th>km</th><th>Min mov.</th><th>Ubicacion</th>' +
+                    h += '<div class="rgi-prev"><table><thead><tr>' +
+                        '<th>#</th><th>Llegada</th><th>Salida</th><th>Parada</th><th>km</th><th>Min mov.</th><th>Ubicaci\u00f3n</th>' +
                         '</tr></thead><tbody>';
                     for (const f of r.filas.slice(0, 500)) {
                         h += '<tr><td>' + f.n + '</td><td>' + esc(rxFechaHora(f.llegada)) + '</td><td>' + esc(rxFechaHora(f.salida)) + '</td>' +
-                            '<td>' + esc(rxInfFmtDur(f.paradaSeg)) + '</td><td>' + esc(rxInfFmt(f.km)) + '</td>' +
-                            '<td>' + esc(rxInfFmt(f.minMov)) + '</td><td>' + esc(rxRendLugar(f.lat, f.lon) || '-') + '</td></tr>';
+                            '<td>' + esc(rxInfFmtDur(f.paradaSeg)) + '</td><td class="num">' + esc(rxInfFmt(f.km)) + '</td>' +
+                            '<td class="num">' + esc(rxInfFmt(f.minMov)) + '</td><td>' + esc(rxRendLugar(f.lat, f.lon) || '-') + '</td></tr>';
                     }
-                    h += '</tbody></table></div>' +
-                        (r.filas.length > 500 ? '<div class="rgi-more">Se listan 500 paradas; el CSV lleva todas.</div>' : '') +
-                        '<div class="rgi-generar"><button class="rgi-btn" id="rrnd-csv"><span class="rondo-usym">' + UIS.csv + '</span> Descargar CSV</button></div>';
+                    h += '</tbody></table>' +
+                        (r.filas.length > 500 ? '<p class="rgi-more">Primeras 500 paradas de ' + r.filas.length + '. El CSV lleva todas.</p>' : '') + '</div>';
+                    h += '<div class="rgi-io"><button type="button" class="rgi-btn primary" id="rrnd-csv">' +
+                        '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>una fila por parada</i></button></div>';
                     return h;
                 };
                 const pinta = () => { if (box && box.isConnected !== false) setHtml(box, cuerpo()); };
@@ -18934,16 +18956,21 @@ function carnHTML(r) {
                 const nMarcadas = () => Object.keys(RX_MAS.uni).filter((k) => RX_MAS.uni[k]).length;
                 const resumen = () => {
                     const r = RX_MAS.res;
-                    if (!r) return '';
+                    if (!r) return '<p class="rgi-more">A\u00fan no se ha generado ning\u00fan lote. Elige plantilla, unidades y periodo y pulsa "Generar y descargar".</p>';
                     const ok = r.filter((x) => x.filas > 0).length;
+                    const vacias = r.filter((x) => !x.filas && !x.error).length;
                     const err = r.filter((x) => x.error).length;
                     let h = '<div class="rgi-kpis">' +
                         '<div class="rgi-kpi"><b>' + r.length + '</b><span>Unidades</span></div>' +
-                        '<div class="rgi-kpi"><b>' + ok + '</b><span>Descargadas</span></div>' +
-                        (err ? '<div class="rgi-kpi"><b>' + err + '</b><span>Con error</span></div>' : '') +
+                        '<div class="rgi-kpi ok"><b>' + ok + '</b><span>Descargadas</span></div>' +
+                        (vacias ? '<div class="rgi-kpi"><b>' + vacias + '</b><span>Sin filas</span></div>' : '') +
+                        (err ? '<div class="rgi-kpi vivo"><b>' + err + '</b><span>Con error</span></div>' : '') +
                         '</div>';
+                    h += '<p class="rgi-res">' + esc(ok + ' de ' + r.length + ' unidades descargadas' +
+                        (vacias ? ', ' + vacias + ' sin filas en el periodo' : '') +
+                        (err ? ', ' + err + ' con error' : '') + '.') + '</p>';
                     if (err) {
-                        h += '<div class="rgi-res"><table><thead><tr><th>Unidad</th><th>Detalle</th></tr></thead><tbody>';
+                        h += '<div class="rgi-prev"><table><thead><tr><th>Unidad</th><th>Detalle</th></tr></thead><tbody>';
                         for (const x of r) {
                             if (!x.error) continue;
                             h += '<tr><td>' + esc(x.eco) + '</td><td>' + esc(rxInfExplicaError(x.error)) + '</td></tr>';
@@ -18952,43 +18979,80 @@ function carnHTML(r) {
                     }
                     return h;
                 };
+                // Paso numerado, igual que el resto de dialogos de Rondo.
+                const paso = (n, tit, cont) => '<div class="rgi-cfg"><div class="rgi-paso-c"><i>' + n + '</i><b>' +
+                    esc(tit) + '</b></div>' + cont + '</div>';
+                const listaTplHtml = () => {
+                    if (!RX_MAS._cargadas) {
+                        return '<div class="rgi-tpls" id="rmas-tpls"><p class="rgi-more">Se est\u00e1n leyendo las plantillas de la plataforma\u2026</p></div>';
+                    }
+                    const lista = tplsFiltradas();
+                    if (!lista.length) {
+                        return '<div class="rgi-tpls" id="rmas-tpls"><p class="rgi-more">Sin plantillas con ese nombre.</p></div>';
+                    }
+                    const dis = RX_MAS._busy ? ' disabled' : '';
+                    return '<div class="rgi-tpls" id="rmas-tpls">' + lista.map((p) =>
+                        '<div class="rgi-tpl' + (RX_MAS.tpl && rxInfClave(RX_MAS.tpl) === rxInfClave(p) ? ' activo' : '') + '">' +
+                        '<button type="button" class="rgi-tpl-sel" data-tpl="' + esc(rxInfClave(p)) + '"' + dis + '>' +
+                        '<b>' + esc(p.nombre) + '</b><i>Plantilla ' + esc(String(p.id)) + '</i></button>' +
+                        '</div>').join('') + '</div>';
+                };
+                const listaUniHtml = () => {
+                    const dis = RX_MAS._busy ? ' disabled' : '';
+                    return unisFiltradas().map((u) =>
+                        '<button type="button" class="rgi-chip' + (RX_MAS.uni[u.id] ? ' activo' : '') +
+                        '" data-uni="' + esc(u.id) + '"' + dis + '>' + esc(u.eco) + '</button>').join('');
+                };
                 const cuerpo = () => {
-                    let h = '<div class="rgi-hero"><b>Un informe por unidad, descargado solo</b><span>' +
-                        'Elige la plantilla nativa de recorridos, las unidades y el periodo. ' +
-                        'Cada unidad se ejecuta con el reporte de la plataforma y su CSV se descarga automaticamente al terminar. ' +
-                        'El navegador puede pedir permiso para descargas multiples.</span></div>';
-                    h += '<div class="rgi-paso-c"><b>1. Plantilla de recorridos</b>' +
-                        '<input id="rmas-tpl-busca" class="filtro rgi-busca" placeholder="Buscar plantilla" value="' + esc(RX_MAS.buscaTpl) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' +
-                        (RX_MAS._cargadas
-                            ? (tplsFiltradas().length
-                                ? '<div class="rgi-chips">' + tplsFiltradas().map((p) =>
-                                    '<button class="rgi-chip' + (RX_MAS.tpl && rxInfClave(RX_MAS.tpl) === rxInfClave(p) ? ' on' : '') +
-                                    '" data-tpl="' + esc(rxInfClave(p)) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' + esc(p.nombre) + '</button>').join('') + '</div>'
-                                : '<div class="rgi-aviso">Sin plantillas con ese nombre.</div>')
-                            : '<div class="rgi-aviso">Cargando plantillas de la plataforma…</div>') +
-                        '</div>';
-                    h += '<div class="rgi-paso-c"><b>2. Unidades</b> <span>(' + nMarcadas() + ' marcadas)</span>' +
-                        '<div class="rgi-row">' +
-                        '<input id="rmas-uni-busca" class="filtro rgi-busca" placeholder="Buscar unidad" value="' + esc(RX_MAS.uniBusca) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' +
-                        '<button class="rgi-btn" id="rmas-unis-todas"' + (RX_MAS._busy ? ' disabled' : '') + '>Todas</button>' +
-                        '<button class="rgi-btn" id="rmas-unis-ninguna"' + (RX_MAS._busy ? ' disabled' : '') + '>Ninguna</button>' +
-                        '</div>' +
-                        '<div class="rgi-chips rgi-unis">' + unisFiltradas().map((u) =>
-                            '<button class="rgi-chip' + (RX_MAS.uni[u.id] ? ' on' : '') + '" data-uni="' + esc(u.id) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' + esc(u.eco) + '</button>').join('') +
-                        '</div></div>';
-                    h += '<div class="rgi-paso-c"><b>3. Periodo</b><div class="rgi-row">' +
-                        '<label class="rgi-lb">Desde <input type="date" id="rmas-desde" class="filtro" value="' + esc(RX_MAS.desde) + '"' + (RX_MAS._busy ? ' disabled' : '') + '></label>' +
-                        '<label class="rgi-lb">Hasta <input type="date" id="rmas-hasta" class="filtro" value="' + esc(RX_MAS.hasta) + '"' + (RX_MAS._busy ? ' disabled' : '') + '></label>' +
-                        '</div></div>';
-                    h += '<div class="rgi-generar">' +
-                        '<button class="rgi-btn pri" id="rmas-generar"' + (RX_MAS._busy ? ' disabled' : '') + '>Generar y descargar</button>' +
-                        '<button class="rgi-btn" id="rmas-cancel"' + (RX_MAS._busy ? '' : ' style="display:none"') + '>Cancelar</button>' +
-                        '</div>';
-                    h += '<div class="rgi-carga" id="rmas-prog"' + (RX_MAS.prog.activo ? ' style="display:flex"' : '') + '>' +
+                    const dis = RX_MAS._busy ? ' disabled' : '';
+                    const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.export + '</span>' +
+                        '<div class="rgi-herot"><b>' + esc(RX_MAS.tpl ? RX_MAS.tpl.nombre : 'Reportes masivos de recorridos') + '</b>' +
+                        '<span>' + esc(RX_MAS.tpl
+                            ? 'Un informe nativo por unidad en el periodo elegido; cada CSV se descarga al terminar'
+                            : 'Elige la plantilla nativa de recorridos de la plataforma') + '</span></div>' +
+                        '<i class="rgi-ori">API</i></div>';
+                    const paso1 = paso(1, 'Plantilla de recorridos',
+                        '<div class="rgi-row"><span class="rgi-lb">Buscar</span>' +
+                        '<span class="rgi-busca"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rmas-tpl-busca" class="filtro" placeholder="Buscar plantilla\u2026" value="' + esc(RX_MAS.buscaTpl) + '"' + dis + '>' +
+                        '<i id="rmas-tpl-n">' + tplsFiltradas().length + '/' + (RX_MAS.tpls || []).length + '</i></span>' +
+                        '<button type="button" class="mini" id="rmas-tpl-cargar"' + dis + '>' +
+                        '<span class="rondo-usym">' + UIS.refresh + '</span> Leer plantillas</button></div>' +
+                        listaTplHtml() +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        'Usa la plantilla de recorridos que ya tienes definida en la plataforma (con sus filtros y columnas).</span></div>');
+                    const paso2 = paso(2, 'Unidades',
+                        '<div class="rgi-row"><span class="rgi-lb">Buscar</span>' +
+                        '<span class="rgi-busca"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rmas-uni-busca" class="filtro" placeholder="Buscar unidad\u2026" value="' + esc(RX_MAS.uniBusca) + '"' + dis + '>' +
+                        '<i id="rmas-uni-n">' + nMarcadas() + ' marcada(s)</i></span>' +
+                        '<button type="button" class="mini" id="rmas-unis-todas"' + dis + '>todas</button>' +
+                        '<button type="button" class="mini" id="rmas-unis-ninguna"' + dis + '>ninguna</button></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><div class="rgi-chips rgi-unis" id="rmas-unis">' +
+                        listaUniHtml() + '</div></div>');
+                    const paso3 = paso(3, 'Periodo',
+                        '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
+                        '<input type="date" id="rmas-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_MAS.desde) + '"' + dis + '>' +
+                        '<span class="sep">\u2192</span>' +
+                        '<input type="date" id="rmas-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_MAS.hasta) + '"' + dis + '>' +
+                        '</span></div>');
+                    const aviso = '<div class="rgi-aviso">Se descarga <b>un archivo por unidad</b>. ' +
+                        'El navegador puede pedir permiso para descargas m\u00faltiples: conc\u00e9delo para no perder ninguno.</div>';
+                    const ejecutar = RX_MAS._busy
+                        ? '<button type="button" class="rgi-btn gen busy" id="rmas-cancel">' +
+                          '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar</b><i>lo descargado se conserva</i></button>'
+                        : '<button type="button" class="rgi-btn gen pulsa" id="rmas-generar">' +
+                          '<span class="rondo-usym">' + UIS.play + '</span><b>Generar y descargar</b><i>' +
+                          (nMarcadas() ? (nMarcadas() + ' unidad(es)') : 'marca unidades') + '</i></button>';
+                    const barra = '<div class="rgi-generar">' + ejecutar +
+                        '<span class="rgi-gen-hint">' + esc(RX_MAS._busy
+                            ? 'La plataforma calcula un informe a la vez; no cierres el di\u00e1logo.'
+                            : 'Se ejecuta la plantilla unidad por unidad y cada resultado se descarga.') + '</span></div>';
+                    const prog = '<div class="rgi-carga" id="rmas-prog"' + (RX_MAS.prog.activo ? ' style="display:flex"' : '') + '>' +
                         '<span id="rmas-prog-t">' + esc(RX_MAS.prog.txt || '') + '</span>' +
-                        '<span class="rgi-barra"><i id="rmas-prog-b" style="width:' + (RX_MAS.prog.pct || 0) + '%"></i></span></div>';
-                    h += '<div id="rmas-dyn">' + resumen() + '</div>';
-                    return h;
+                        '<span class="rgi-barra"><i id="rmas-prog-b" style="width:' + Math.max(2, RX_MAS.prog.pct || 0) + '%"></i></span></div>';
+                    return '<div class="rgi">' + hero + paso1 + paso2 + paso3 + aviso + prog + barra +
+                        '<div id="rmas-dyn">' + resumen() + '</div></div>';
                 };
                 const pinta = () => { if (box && box.isConnected !== false) setHtml(box, cuerpo()); };
                 const setProg = (pct, txt, hechas, total) => {
@@ -19044,11 +19108,12 @@ function carnHTML(r) {
                         pinta();
                     }
                 };
-                if (!box) return;
-                pinta();
                 // Catalogo de plantillas: la misma via que los informes por
                 // plantilla (core/search_items sobre avl_resource).
-                if (!RX_MAS._cargadas) {
+                const cargarTpls = () => {
+                    if (RX_MAS._busy) return;
+                    RX_MAS._cargadas = false;
+                    pinta();
                     rxInfPlantillas().then((lista) => {
                         RX_MAS.tpls = lista || [];
                         RX_MAS._cargadas = true;
@@ -19059,10 +19124,14 @@ function carnHTML(r) {
                         if (!RX_MAS.tpl && pista.length === 1) RX_MAS.tpl = pista[0];
                         pinta();
                     }).catch(() => { RX_MAS._cargadas = true; pinta(); });
-                }
+                };
+                if (!box) return;
+                pinta();
+                if (!RX_MAS._cargadas) cargarTpls();
                 box.addEventListener('click', (e) => {
                     const b = e.target && e.target.closest ? e.target.closest('button') : null;
                     if (!b || RX_MAS._busy) return;
+                    if (b.id === 'rmas-tpl-cargar') { cargarTpls(); return; }
                     if (b.id === 'rmas-generar') { generar(); return; }
                     if (b.id === 'rmas-cancel') {
                         if (RX_MAS._token) RX_MAS._token.cancelado = true;
@@ -19099,14 +19168,25 @@ function carnHTML(r) {
                     if (t.id === 'rmas-desde') RX_MAS.desde = String(t.value || '');
                     else if (t.id === 'rmas-hasta') RX_MAS.hasta = String(t.value || '');
                 });
-                // Los buscadores repintan solo la lista que filtran para no
-                // perder el foco del input (el memo de setHtml deja intacto el
-                // resto del cuerpo).
+                // Los buscadores repintan SOLO la lista que filtran: repintar
+                // el cuerpo entero perderia el foco (y una tecla) en cada
+                // pulsacion.
                 box.addEventListener('input', (e) => {
                     const t = e.target;
                     if (!t || !t.id) return;
-                    if (t.id === 'rmas-tpl-busca') { RX_MAS.buscaTpl = String(t.value || ''); pinta(); }
-                    else if (t.id === 'rmas-uni-busca') { RX_MAS.uniBusca = String(t.value || ''); pinta(); }
+                    if (t.id === 'rmas-tpl-busca') {
+                        RX_MAS.buscaTpl = String(t.value || '');
+                        const cont = byId('rmas-tpls');
+                        if (cont) setHtml(cont, listaTplHtml());
+                        else pinta();
+                        const n = byId('rmas-tpl-n');
+                        if (n) n.textContent = tplsFiltradas().length + '/' + (RX_MAS.tpls || []).length;
+                    } else if (t.id === 'rmas-uni-busca') {
+                        RX_MAS.uniBusca = String(t.value || '');
+                        const cont = byId('rmas-unis');
+                        if (cont) setHtml(cont, listaUniHtml());
+                        else pinta();
+                    }
                 });
             }
         });

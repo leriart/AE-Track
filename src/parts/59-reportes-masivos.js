@@ -107,16 +107,21 @@
                 const nMarcadas = () => Object.keys(RX_MAS.uni).filter((k) => RX_MAS.uni[k]).length;
                 const resumen = () => {
                     const r = RX_MAS.res;
-                    if (!r) return '';
+                    if (!r) return '<p class="rgi-more">A\u00fan no se ha generado ning\u00fan lote. Elige plantilla, unidades y periodo y pulsa "Generar y descargar".</p>';
                     const ok = r.filter((x) => x.filas > 0).length;
+                    const vacias = r.filter((x) => !x.filas && !x.error).length;
                     const err = r.filter((x) => x.error).length;
                     let h = '<div class="rgi-kpis">' +
                         '<div class="rgi-kpi"><b>' + r.length + '</b><span>Unidades</span></div>' +
-                        '<div class="rgi-kpi"><b>' + ok + '</b><span>Descargadas</span></div>' +
-                        (err ? '<div class="rgi-kpi"><b>' + err + '</b><span>Con error</span></div>' : '') +
+                        '<div class="rgi-kpi ok"><b>' + ok + '</b><span>Descargadas</span></div>' +
+                        (vacias ? '<div class="rgi-kpi"><b>' + vacias + '</b><span>Sin filas</span></div>' : '') +
+                        (err ? '<div class="rgi-kpi vivo"><b>' + err + '</b><span>Con error</span></div>' : '') +
                         '</div>';
+                    h += '<p class="rgi-res">' + esc(ok + ' de ' + r.length + ' unidades descargadas' +
+                        (vacias ? ', ' + vacias + ' sin filas en el periodo' : '') +
+                        (err ? ', ' + err + ' con error' : '') + '.') + '</p>';
                     if (err) {
-                        h += '<div class="rgi-res"><table><thead><tr><th>Unidad</th><th>Detalle</th></tr></thead><tbody>';
+                        h += '<div class="rgi-prev"><table><thead><tr><th>Unidad</th><th>Detalle</th></tr></thead><tbody>';
                         for (const x of r) {
                             if (!x.error) continue;
                             h += '<tr><td>' + esc(x.eco) + '</td><td>' + esc(rxInfExplicaError(x.error)) + '</td></tr>';
@@ -125,43 +130,80 @@
                     }
                     return h;
                 };
+                // Paso numerado, igual que el resto de dialogos de Rondo.
+                const paso = (n, tit, cont) => '<div class="rgi-cfg"><div class="rgi-paso-c"><i>' + n + '</i><b>' +
+                    esc(tit) + '</b></div>' + cont + '</div>';
+                const listaTplHtml = () => {
+                    if (!RX_MAS._cargadas) {
+                        return '<div class="rgi-tpls" id="rmas-tpls"><p class="rgi-more">Se est\u00e1n leyendo las plantillas de la plataforma\u2026</p></div>';
+                    }
+                    const lista = tplsFiltradas();
+                    if (!lista.length) {
+                        return '<div class="rgi-tpls" id="rmas-tpls"><p class="rgi-more">Sin plantillas con ese nombre.</p></div>';
+                    }
+                    const dis = RX_MAS._busy ? ' disabled' : '';
+                    return '<div class="rgi-tpls" id="rmas-tpls">' + lista.map((p) =>
+                        '<div class="rgi-tpl' + (RX_MAS.tpl && rxInfClave(RX_MAS.tpl) === rxInfClave(p) ? ' activo' : '') + '">' +
+                        '<button type="button" class="rgi-tpl-sel" data-tpl="' + esc(rxInfClave(p)) + '"' + dis + '>' +
+                        '<b>' + esc(p.nombre) + '</b><i>Plantilla ' + esc(String(p.id)) + '</i></button>' +
+                        '</div>').join('') + '</div>';
+                };
+                const listaUniHtml = () => {
+                    const dis = RX_MAS._busy ? ' disabled' : '';
+                    return unisFiltradas().map((u) =>
+                        '<button type="button" class="rgi-chip' + (RX_MAS.uni[u.id] ? ' activo' : '') +
+                        '" data-uni="' + esc(u.id) + '"' + dis + '>' + esc(u.eco) + '</button>').join('');
+                };
                 const cuerpo = () => {
-                    let h = '<div class="rgi-hero"><b>Un informe por unidad, descargado solo</b><span>' +
-                        'Elige la plantilla nativa de recorridos, las unidades y el periodo. ' +
-                        'Cada unidad se ejecuta con el reporte de la plataforma y su CSV se descarga automaticamente al terminar. ' +
-                        'El navegador puede pedir permiso para descargas multiples.</span></div>';
-                    h += '<div class="rgi-paso-c"><b>1. Plantilla de recorridos</b>' +
-                        '<input id="rmas-tpl-busca" class="filtro rgi-busca" placeholder="Buscar plantilla" value="' + esc(RX_MAS.buscaTpl) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' +
-                        (RX_MAS._cargadas
-                            ? (tplsFiltradas().length
-                                ? '<div class="rgi-chips">' + tplsFiltradas().map((p) =>
-                                    '<button class="rgi-chip' + (RX_MAS.tpl && rxInfClave(RX_MAS.tpl) === rxInfClave(p) ? ' on' : '') +
-                                    '" data-tpl="' + esc(rxInfClave(p)) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' + esc(p.nombre) + '</button>').join('') + '</div>'
-                                : '<div class="rgi-aviso">Sin plantillas con ese nombre.</div>')
-                            : '<div class="rgi-aviso">Cargando plantillas de la plataforma…</div>') +
-                        '</div>';
-                    h += '<div class="rgi-paso-c"><b>2. Unidades</b> <span>(' + nMarcadas() + ' marcadas)</span>' +
-                        '<div class="rgi-row">' +
-                        '<input id="rmas-uni-busca" class="filtro rgi-busca" placeholder="Buscar unidad" value="' + esc(RX_MAS.uniBusca) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' +
-                        '<button class="rgi-btn" id="rmas-unis-todas"' + (RX_MAS._busy ? ' disabled' : '') + '>Todas</button>' +
-                        '<button class="rgi-btn" id="rmas-unis-ninguna"' + (RX_MAS._busy ? ' disabled' : '') + '>Ninguna</button>' +
-                        '</div>' +
-                        '<div class="rgi-chips rgi-unis">' + unisFiltradas().map((u) =>
-                            '<button class="rgi-chip' + (RX_MAS.uni[u.id] ? ' on' : '') + '" data-uni="' + esc(u.id) + '"' + (RX_MAS._busy ? ' disabled' : '') + '>' + esc(u.eco) + '</button>').join('') +
-                        '</div></div>';
-                    h += '<div class="rgi-paso-c"><b>3. Periodo</b><div class="rgi-row">' +
-                        '<label class="rgi-lb">Desde <input type="date" id="rmas-desde" class="filtro" value="' + esc(RX_MAS.desde) + '"' + (RX_MAS._busy ? ' disabled' : '') + '></label>' +
-                        '<label class="rgi-lb">Hasta <input type="date" id="rmas-hasta" class="filtro" value="' + esc(RX_MAS.hasta) + '"' + (RX_MAS._busy ? ' disabled' : '') + '></label>' +
-                        '</div></div>';
-                    h += '<div class="rgi-generar">' +
-                        '<button class="rgi-btn pri" id="rmas-generar"' + (RX_MAS._busy ? ' disabled' : '') + '>Generar y descargar</button>' +
-                        '<button class="rgi-btn" id="rmas-cancel"' + (RX_MAS._busy ? '' : ' style="display:none"') + '>Cancelar</button>' +
-                        '</div>';
-                    h += '<div class="rgi-carga" id="rmas-prog"' + (RX_MAS.prog.activo ? ' style="display:flex"' : '') + '>' +
+                    const dis = RX_MAS._busy ? ' disabled' : '';
+                    const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.export + '</span>' +
+                        '<div class="rgi-herot"><b>' + esc(RX_MAS.tpl ? RX_MAS.tpl.nombre : 'Reportes masivos de recorridos') + '</b>' +
+                        '<span>' + esc(RX_MAS.tpl
+                            ? 'Un informe nativo por unidad en el periodo elegido; cada CSV se descarga al terminar'
+                            : 'Elige la plantilla nativa de recorridos de la plataforma') + '</span></div>' +
+                        '<i class="rgi-ori">API</i></div>';
+                    const paso1 = paso(1, 'Plantilla de recorridos',
+                        '<div class="rgi-row"><span class="rgi-lb">Buscar</span>' +
+                        '<span class="rgi-busca"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rmas-tpl-busca" class="filtro" placeholder="Buscar plantilla\u2026" value="' + esc(RX_MAS.buscaTpl) + '"' + dis + '>' +
+                        '<i id="rmas-tpl-n">' + tplsFiltradas().length + '/' + (RX_MAS.tpls || []).length + '</i></span>' +
+                        '<button type="button" class="mini" id="rmas-tpl-cargar"' + dis + '>' +
+                        '<span class="rondo-usym">' + UIS.refresh + '</span> Leer plantillas</button></div>' +
+                        listaTplHtml() +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
+                        'Usa la plantilla de recorridos que ya tienes definida en la plataforma (con sus filtros y columnas).</span></div>');
+                    const paso2 = paso(2, 'Unidades',
+                        '<div class="rgi-row"><span class="rgi-lb">Buscar</span>' +
+                        '<span class="rgi-busca"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rmas-uni-busca" class="filtro" placeholder="Buscar unidad\u2026" value="' + esc(RX_MAS.uniBusca) + '"' + dis + '>' +
+                        '<i id="rmas-uni-n">' + nMarcadas() + ' marcada(s)</i></span>' +
+                        '<button type="button" class="mini" id="rmas-unis-todas"' + dis + '>todas</button>' +
+                        '<button type="button" class="mini" id="rmas-unis-ninguna"' + dis + '>ninguna</button></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><div class="rgi-chips rgi-unis" id="rmas-unis">' +
+                        listaUniHtml() + '</div></div>');
+                    const paso3 = paso(3, 'Periodo',
+                        '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
+                        '<input type="date" id="rmas-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_MAS.desde) + '"' + dis + '>' +
+                        '<span class="sep">\u2192</span>' +
+                        '<input type="date" id="rmas-hasta" class="filtro" title="Dia final (incluido)" value="' + esc(RX_MAS.hasta) + '"' + dis + '>' +
+                        '</span></div>');
+                    const aviso = '<div class="rgi-aviso">Se descarga <b>un archivo por unidad</b>. ' +
+                        'El navegador puede pedir permiso para descargas m\u00faltiples: conc\u00e9delo para no perder ninguno.</div>';
+                    const ejecutar = RX_MAS._busy
+                        ? '<button type="button" class="rgi-btn gen busy" id="rmas-cancel">' +
+                          '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar</b><i>lo descargado se conserva</i></button>'
+                        : '<button type="button" class="rgi-btn gen pulsa" id="rmas-generar">' +
+                          '<span class="rondo-usym">' + UIS.play + '</span><b>Generar y descargar</b><i>' +
+                          (nMarcadas() ? (nMarcadas() + ' unidad(es)') : 'marca unidades') + '</i></button>';
+                    const barra = '<div class="rgi-generar">' + ejecutar +
+                        '<span class="rgi-gen-hint">' + esc(RX_MAS._busy
+                            ? 'La plataforma calcula un informe a la vez; no cierres el di\u00e1logo.'
+                            : 'Se ejecuta la plantilla unidad por unidad y cada resultado se descarga.') + '</span></div>';
+                    const prog = '<div class="rgi-carga" id="rmas-prog"' + (RX_MAS.prog.activo ? ' style="display:flex"' : '') + '>' +
                         '<span id="rmas-prog-t">' + esc(RX_MAS.prog.txt || '') + '</span>' +
-                        '<span class="rgi-barra"><i id="rmas-prog-b" style="width:' + (RX_MAS.prog.pct || 0) + '%"></i></span></div>';
-                    h += '<div id="rmas-dyn">' + resumen() + '</div>';
-                    return h;
+                        '<span class="rgi-barra"><i id="rmas-prog-b" style="width:' + Math.max(2, RX_MAS.prog.pct || 0) + '%"></i></span></div>';
+                    return '<div class="rgi">' + hero + paso1 + paso2 + paso3 + aviso + prog + barra +
+                        '<div id="rmas-dyn">' + resumen() + '</div></div>';
                 };
                 const pinta = () => { if (box && box.isConnected !== false) setHtml(box, cuerpo()); };
                 const setProg = (pct, txt, hechas, total) => {
@@ -217,11 +259,12 @@
                         pinta();
                     }
                 };
-                if (!box) return;
-                pinta();
                 // Catalogo de plantillas: la misma via que los informes por
                 // plantilla (core/search_items sobre avl_resource).
-                if (!RX_MAS._cargadas) {
+                const cargarTpls = () => {
+                    if (RX_MAS._busy) return;
+                    RX_MAS._cargadas = false;
+                    pinta();
                     rxInfPlantillas().then((lista) => {
                         RX_MAS.tpls = lista || [];
                         RX_MAS._cargadas = true;
@@ -232,10 +275,14 @@
                         if (!RX_MAS.tpl && pista.length === 1) RX_MAS.tpl = pista[0];
                         pinta();
                     }).catch(() => { RX_MAS._cargadas = true; pinta(); });
-                }
+                };
+                if (!box) return;
+                pinta();
+                if (!RX_MAS._cargadas) cargarTpls();
                 box.addEventListener('click', (e) => {
                     const b = e.target && e.target.closest ? e.target.closest('button') : null;
                     if (!b || RX_MAS._busy) return;
+                    if (b.id === 'rmas-tpl-cargar') { cargarTpls(); return; }
                     if (b.id === 'rmas-generar') { generar(); return; }
                     if (b.id === 'rmas-cancel') {
                         if (RX_MAS._token) RX_MAS._token.cancelado = true;
@@ -272,14 +319,25 @@
                     if (t.id === 'rmas-desde') RX_MAS.desde = String(t.value || '');
                     else if (t.id === 'rmas-hasta') RX_MAS.hasta = String(t.value || '');
                 });
-                // Los buscadores repintan solo la lista que filtran para no
-                // perder el foco del input (el memo de setHtml deja intacto el
-                // resto del cuerpo).
+                // Los buscadores repintan SOLO la lista que filtran: repintar
+                // el cuerpo entero perderia el foco (y una tecla) en cada
+                // pulsacion.
                 box.addEventListener('input', (e) => {
                     const t = e.target;
                     if (!t || !t.id) return;
-                    if (t.id === 'rmas-tpl-busca') { RX_MAS.buscaTpl = String(t.value || ''); pinta(); }
-                    else if (t.id === 'rmas-uni-busca') { RX_MAS.uniBusca = String(t.value || ''); pinta(); }
+                    if (t.id === 'rmas-tpl-busca') {
+                        RX_MAS.buscaTpl = String(t.value || '');
+                        const cont = byId('rmas-tpls');
+                        if (cont) setHtml(cont, listaTplHtml());
+                        else pinta();
+                        const n = byId('rmas-tpl-n');
+                        if (n) n.textContent = tplsFiltradas().length + '/' + (RX_MAS.tpls || []).length;
+                    } else if (t.id === 'rmas-uni-busca') {
+                        RX_MAS.uniBusca = String(t.value || '');
+                        const cont = byId('rmas-unis');
+                        if (cont) setHtml(cont, listaUniHtml());
+                        else pinta();
+                    }
                 });
             }
         });
