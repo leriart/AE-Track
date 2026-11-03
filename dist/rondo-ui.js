@@ -18556,12 +18556,24 @@ function carnHTML(r) {
         out.sort((a, b) => a.t - b.t);
         return out;
     }
+    // Letra de un punto del recorrido: A = origen, B = primera parada,
+    // C = segunda... (tras Z sigue AA, AB). Asi cada fila se lee como un
+    // tramo "A -> B", "B -> C", "C -> A" sin ambiguedad.
+    function rxRendLetra(i) {
+        let n = Math.max(0, Math.floor(Number(i) || 0));
+        let s = '';
+        do { s = String.fromCharCode(65 + (n % 26)) + s; n = Math.floor(n / 26) - 1; } while (n >= 0);
+        return s;
+    }
     // Nucleo puro. `dentroDe(p)` dice si un punto esta en el origen (geocerca
     // o circulo). Cada transicion dentro->fuera re-ancla el tramo: el km y el
     // tiempo de la siguiente parada se miden desde ESA salida. Las paradas
     // cuyo centro cae dentro del origen no se listan (son la estancia en el
     // punto de partida, no una parada del recorrido). Los saltos de GPS
     // mayores a `saltoM` no suman distancia (teleportaciones del receptor).
+    // Cada fila es un TRAMO entre dos puntos: `desde` -> `hasta`, con la
+    // distancia (km), el tiempo en movimiento (min) y la velocidad media
+    // (km/h) de ese tramo.
     function rxRendCalcula(puntos, dentroDe, opts) {
         const o = opts || {};
         const paradaSeg = Math.max(30, (Number(o.paradaMin) || 5) * 60);
@@ -18586,6 +18598,8 @@ function carnHTML(r) {
         let qIni = -1, qUlt = -1, qLat = 0, qLon = 0, qN = 0; // grupo quieto abierto
         let estabaDentro = !!dentro(pts[0]);
         let salio = false;                              // ya salio del origen alguna vez
+        let nPunto = 0;                                 // 0 = A (origen)
+        let puntoActual = 'A';                          // punto donde arranca el tramo
         const cerrar = () => {
             if (qIni < 0) return;
             const dur = pts[qUlt].t - pts[qIni].t;
@@ -18598,12 +18612,17 @@ function carnHTML(r) {
                 }
                 const km = m / 1000;
                 const minMov = Math.max(0, (pts[qIni].t - pts[ancla].t) / 60);
+                const kmh = minMov > 0 ? (km / (minMov / 60)) : 0;
+                nPunto++;
+                const letra = rxRendLetra(nPunto);
                 filas.push({
                     n: filas.length + 1,
+                    desde: puntoActual, hasta: letra,
                     llegada: pts[qIni].t, salida: pts[qUlt].t, paradaSeg: dur,
-                    km: km, minMov: minMov, lat: clat, lon: clon
+                    km: km, minMov: minMov, kmh: kmh, lat: clat, lon: clon
                 });
                 kmTotal += km; minTotal += minMov;
+                puntoActual = letra;
                 // El siguiente tramo arranca donde cerro esta parada.
                 ancla = qUlt;
             }
@@ -18623,12 +18642,15 @@ function carnHTML(r) {
                 }
                 const km = m / 1000;
                 const minMov = Math.max(0, (p.t - pts[ancla].t) / 60);
+                const kmh = minMov > 0 ? (km / (minMov / 60)) : 0;
                 filas.push({
                     n: filas.length + 1,
+                    desde: puntoActual, hasta: 'A',
                     llegada: p.t, salida: p.t, paradaSeg: 0,
-                    km: km, minMov: minMov, lat: p.lat, lon: p.lon, regreso: true
+                    km: km, minMov: minMov, kmh: kmh, lat: p.lat, lon: p.lon, regreso: true
                 });
                 kmTotal += km; minTotal += minMov;
+                puntoActual = 'A';
                 ancla = i;
             }
             if (estabaDentro && !ahoraDentro) { salidas++; ancla = i; salio = true; }
@@ -18678,25 +18700,37 @@ function carnHTML(r) {
         } catch (_) { /* noop */ }
         return '';
     }
+    // Coordenadas legibles "lat, lon" (la misma funcion que el resto de Rondo).
+    function rxRendCoords(lat, lon) {
+        if (lat == null || lon == null || !isFinite(+lat) || !isFinite(+lon)) return '';
+        try { if (typeof rxCoord === 'function') return rxCoord(lat, lon, 5); } catch (_) { /* noop */ }
+        return (+lat).toFixed(5) + ', ' + (+lon).toFixed(5);
+    }
     function rxRendNombreArchivo(eco, d, h) {
         const e = String(eco || 'unidad').replace(/[^\w\-]+/g, '_').slice(0, 30);
         return 'rondo_rendimientos_' + e + '_' + (d || '') + '_a_' + (h || '') + '.csv';
     }
     function rxRendCSV(eco, res) {
-        const cols = ['#', 'Llegada', 'Salida', 'Parada', 'km', 'Min en movimiento', 'Ubicacion', 'Lat', 'Lon'];
+        const cols = ['#', 'Tramo', 'Llegada', 'Distancia km', 'Tiempo min', 'Vel. media km/h',
+            'Parada', 'Geocerca / municipio', 'Coordenadas'];
         const filas = (res && res.filas ? res.filas : []).map((f) => [
-            f.n, rxFechaHora(f.llegada), rxFechaHora(f.salida),
+            f.n, (f.desde || '-') + ' -> ' + (f.hasta || '-'), rxFechaHora(f.llegada),
+            rxInfFmt(f.km), rxInfFmt(f.minMov), rxInfFmt(f.kmh),
             f.regreso ? '-' : rxInfFmtDur(f.paradaSeg),
-            rxInfFmt(f.km), rxInfFmt(f.minMov),
             f.regreso ? 'Regreso al origen' : rxRendLugar(f.lat, f.lon),
-            (f.lat != null ? (+f.lat).toFixed(5) : ''), (f.lon != null ? (+f.lon).toFixed(5) : '')
+            rxRendCoords(f.lat, f.lon)
         ]);
-        return rxInfCSVTexto(cols, filas, [
+        const vel = (res && res.minTotal > 0) ? (res.kmTotal / (res.minTotal / 60)) : 0;
+        const o = RX_REND.origen || null;
+        const meta = [
             'Rendimientos', 'Unidad: ' + (eco || ''),
             'Periodo: ' + (RX_REND.desde || '') + ' a ' + (RX_REND.hasta || ''),
             'km totales: ' + rxInfFmt(res ? res.kmTotal : 0),
-            'Minutos en movimiento: ' + rxInfFmt(res ? res.minTotal : 0)
-        ]);
+            'Minutos en movimiento: ' + rxInfFmt(res ? res.minTotal : 0),
+            'Velocidad media: ' + rxInfFmt(vel) + ' km/h'
+        ];
+        if (o) meta.push('Punto de partida y regreso: ' + (o.txt || '') + ' ' + rxRendCoords(o.lat, o.lon));
+        return rxInfCSVTexto(cols, filas, meta);
     }
     // Coordenadas del origen elegido (geocerca o punto), para el mapa del PDF.
     function rxRendOrigen() {
@@ -18719,12 +18753,15 @@ function carnHTML(r) {
     // origen va marcado como partida y regreso) y la tabla del detalle.
     function rxRendHTML(eco, res, origen) {
         const o = origen || null;
-        const cab = ['#', 'Llegada', 'Salida', 'Parada', 'km', 'Min mov.', 'Ubicaci\u00f3n'];
+        const cab = ['#', 'Tramo', 'Llegada', 'Distancia km', 'Tiempo min', 'Vel. media km/h',
+            'Parada', 'Geocerca / municipio', 'Coordenadas'];
         const filas = (res.filas || []).slice(0, 400).map((f) => [
-            esc(String(f.n)), esc(rxFechaHora(f.llegada)), esc(rxFechaHora(f.salida)),
+            esc(String(f.n)), esc((f.desde || '-') + ' \u2192 ' + (f.hasta || '-')),
+            esc(rxFechaHora(f.llegada)),
+            esc(rxInfFmt(f.km)), esc(rxInfFmt(f.minMov)), esc(rxInfFmt(f.kmh)),
             esc(f.regreso ? '-' : rxInfFmtDur(f.paradaSeg)),
-            esc(rxInfFmt(f.km)), esc(rxInfFmt(f.minMov)),
-            esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-'))
+            esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-')),
+            esc(rxRendCoords(f.lat, f.lon) || '-')
         ]);
         const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
         const lineas = [];
@@ -18732,12 +18769,12 @@ function carnHTML(r) {
             lineas.push({ pts: res.traza, color: '#850D22', width: 3, opacity: 0.9, glow: true });
         }
         const marcas = [];
-        if (o) marcas.push({ lat: o.lat, lon: o.lon, color: '#2e7d32', radio: 7, txt: 'Origen / Regreso' });
+        if (o) marcas.push({ lat: o.lat, lon: o.lon, color: '#2e7d32', radio: 7, txt: 'A \u00b7 Origen / Regreso' });
         (res.filas || []).slice(0, 120).forEach((f) => {
             marcas.push({
                 lat: f.lat, lon: f.lon,
                 color: f.regreso ? '#f9a825' : '#1565c0', radio: 5,
-                txt: f.regreso ? 'Regreso al origen' : ('Parada ' + f.n)
+                txt: f.regreso ? 'A \u00b7 Regreso' : ((f.hasta || '') + ' \u00b7 Parada')
             });
         });
         const mapa = (lineas.length || marcas.length)
@@ -18749,11 +18786,13 @@ function carnHTML(r) {
             esc(eco) + '</title><style>' + rxInfEstilo() + '</style></head><body>' +
             rxInfCabecera('Rondo', 'Rendimientos entre paradas',
                 'Unidad ' + esc(eco) + ' \u00b7 ' + esc(RX_REND.desde || '') + ' a ' + esc(RX_REND.hasta || '') +
-                (o ? '<br>Punto de partida y regreso: ' + esc(o.txt) : '')) +
+                (o ? '<br>Punto de partida y regreso: ' + esc(o.txt) +
+                    (rxRendCoords(o.lat, o.lon) ? ' \u00b7 ' + esc(rxRendCoords(o.lat, o.lon)) : '') : '')) +
             '<div class="kpis">' +
-            kpi((res.filas || []).length, 'Paradas') +
-            kpi(rxInfFmt(res.kmTotal), 'km entre paradas') +
+            kpi((res.filas || []).length, 'Tramos') +
+            kpi(rxInfFmt(res.kmTotal), 'km entre puntos') +
             kpi(rxInfFmt(res.minTotal), 'min en movimiento') +
+            kpi(rxInfFmt(res.minTotal > 0 ? (res.kmTotal / (res.minTotal / 60)) : 0), 'vel. media km/h') +
             kpi(res.salidas, 'Salidas del origen') +
             '</div>' + mapa +
             '<h2 class="seccion">' + (mapa ? '2' : '1') + '. Detalle</h2>' + mas +
@@ -18830,8 +18869,9 @@ function carnHTML(r) {
                     esc(tit) + '</b></div>' + cont + '</div>';
                 const cuerpo = () => {
                     const dis = RX_REND._busy ? ' disabled' : '';
+                    const org = rxRendOrigen();
                     const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.route + '</span>' +
-                        '<div class="rgi-herot"><b>Rendimiento entre paradas</b><span>Km y tiempo en movimiento entre cada parada, contados desde cada salida del punto de partida</span></div>' +
+                        '<div class="rgi-herot"><b>Rendimiento entre puntos</b><span>Distancia y velocidad media de cada tramo (A→B, B→C…) entre paradas, contados desde cada salida del punto de partida</span></div>' +
                         '<i class="rgi-ori">Historial</i></div>';
                     const paso1 = paso(1, 'Unidad',
                         '<div class="rgi-row"><span class="rgi-lb">Buscar</span>' +
@@ -18864,9 +18904,14 @@ function carnHTML(r) {
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc(RX_REND.modo === 'zona'
                             ? (RX_REND.zona
-                                ? ('Partida: ' + RX_REND.zona + '. Cada salida inicia un tramo nuevo.')
+                                ? ('Partida: ' + RX_REND.zona +
+                                    (org ? ' (' + rxRendCoords(org.lat, org.lon) + ')' : '') +
+                                    '. Cada salida inicia un tramo nuevo.')
                                 : 'Escribe para filtrar y pulsa la geocerca de partida.')
-                            : 'El circulo del radio indicado es el punto de partida.') +
+                            : (org
+                                ? ('Punto de partida: ' + rxRendCoords(org.lat, org.lon) +
+                                    '. El circulo del radio indicado es el origen y el regreso.')
+                                : 'El circulo del radio indicado es el punto de partida.')) +
                         '</span></div>');
                     const paso3 = paso(3, 'Periodo y parada',
                         '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
@@ -18884,7 +18929,7 @@ function carnHTML(r) {
                         ? '<button type="button" class="rgi-btn gen busy" id="rrnd-cancel">' +
                           '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar</b><i>descarta lo calculado</i></button>'
                         : '<button type="button" class="rgi-btn gen pulsa" id="rrnd-generar">' +
-                          '<span class="rondo-usym">' + UIS.play + '</span><b>Generar</b><i>km y tiempo entre paradas</i></button>';
+                          '<span class="rondo-usym">' + UIS.play + '</span><b>Generar</b><i>tramos A→B→C</i></button>';
                     const barra = '<div class="rgi-generar">' + ejecutar +
                         '<span class="rgi-gen-hint">' + esc(RX_REND._busy
                             ? 'Leyendo el historial de la unidad\u2026'
@@ -18899,30 +18944,38 @@ function carnHTML(r) {
                     const r = RX_REND.res;
                     if (!r) return '<p class="rgi-more">Sin resultados todav\u00eda. Elige unidad, origen y periodo, y pulsa "Generar".</p>';
                     if (!r.filas.length) {
-                        return '<div class="rgi-aviso">Sin paradas fuera del origen en el periodo. ' +
+                        return '<div class="rgi-aviso">Sin tramos fuera del origen en el periodo. ' +
                             'Prueba con otro rango o baja el m\u00ednimo de parada.</div>';
                     }
+                    const vel = r.minTotal > 0 ? (r.kmTotal / (r.minTotal / 60)) : 0;
                     let h = '<div class="rgi-kpis">' +
-                        '<div class="rgi-kpi ok"><b>' + r.filas.length + '</b><span>Paradas</span></div>' +
-                        '<div class="rgi-kpi"><b>' + rxInfFmt(r.kmTotal) + '</b><span>km entre paradas</span></div>' +
+                        '<div class="rgi-kpi ok"><b>' + r.filas.length + '</b><span>Tramos</span></div>' +
+                        '<div class="rgi-kpi"><b>' + rxInfFmt(r.kmTotal) + '</b><span>km entre puntos</span></div>' +
                         '<div class="rgi-kpi"><b>' + rxInfFmt(r.minTotal) + '</b><span>min en movimiento</span></div>' +
+                        '<div class="rgi-kpi"><b>' + rxInfFmt(vel) + '</b><span>vel. media km/h</span></div>' +
                         '<div class="rgi-kpi"><b>' + r.salidas + '</b><span>Salidas del origen</span></div></div>';
                     h += '<div class="rgi-prev"><table><thead><tr>' +
-                        '<th>#</th><th>Llegada</th><th>Salida</th><th>Parada</th><th>km</th><th>Min mov.</th><th>Ubicaci\u00f3n</th>' +
+                        '<th>#</th><th>Tramo</th><th>Llegada</th><th>Distancia km</th><th>Tiempo min</th>' +
+                        '<th>Vel. media km/h</th><th>Parada</th><th>Geocerca / municipio</th><th>Coordenadas</th>' +
                         '</tr></thead><tbody>';
                     for (const f of r.filas.slice(0, 500)) {
-                        h += '<tr><td>' + f.n + '</td><td>' + esc(rxFechaHora(f.llegada)) + '</td><td>' + esc(rxFechaHora(f.salida)) + '</td>' +
-                            '<td>' + esc(f.regreso ? '-' : rxInfFmtDur(f.paradaSeg)) + '</td><td class="num">' + esc(rxInfFmt(f.km)) + '</td>' +
-                            '<td class="num">' + esc(rxInfFmt(f.minMov)) + '</td><td>' +
-                            esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-')) + '</td></tr>';
+                        h += '<tr><td>' + f.n + '</td>' +
+                            '<td><b>' + esc((f.desde || '-') + ' \u2192 ' + (f.hasta || '-')) + '</b></td>' +
+                            '<td>' + esc(rxFechaHora(f.llegada)) + '</td>' +
+                            '<td class="num">' + esc(rxInfFmt(f.km)) + '</td>' +
+                            '<td class="num">' + esc(rxInfFmt(f.minMov)) + '</td>' +
+                            '<td class="num">' + esc(rxInfFmt(f.kmh)) + '</td>' +
+                            '<td>' + esc(f.regreso ? '-' : rxInfFmtDur(f.paradaSeg)) + '</td>' +
+                            '<td>' + esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-')) + '</td>' +
+                            '<td>' + esc(rxRendCoords(f.lat, f.lon) || '-') + '</td></tr>';
                     }
                     h += '</tbody></table>' +
-                        (r.filas.length > 500 ? '<p class="rgi-more">Primeras 500 paradas de ' + r.filas.length + '. El CSV lleva todas.</p>' : '') + '</div>';
+                        (r.filas.length > 500 ? '<p class="rgi-more">Primeros 500 tramos de ' + r.filas.length + '. El CSV lleva todos.</p>' : '') + '</div>';
                     h += '<div class="rgi-io">' +
                         '<button type="button" class="rgi-btn primary" id="rrnd-pdf" title="Reporte imprimible con mapa (Guardar como PDF)">' +
                         '<span class="rondo-usym">' + UIS.export + '</span><b>PDF</b><i>mapa y paradas</i></button>' +
                         '<button type="button" class="rgi-btn" id="rrnd-csv" title="Una fila por parada">' +
-                        '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>una fila por parada</i></button></div>';
+                        '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>una fila por tramo</i></button></div>';
                     return h;
                 };
                 const pinta = () => { if (box && box.isConnected !== false) setHtml(box, cuerpo()); };

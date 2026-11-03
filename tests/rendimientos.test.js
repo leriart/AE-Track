@@ -143,6 +143,9 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     ok('calculo: totales acumulados', Math.round(r.kmTotal * 100) === Math.round((f1.km + f2.km) * 100) &&
         Math.round(r.minTotal) === 5);
     ok('calculo: numeracion correlativa', f1.n === 1 && f2.n === 2);
+    ok('calculo: tramos A->B y B->C', f1.desde === 'A' && f1.hasta === 'B' && f2.desde === 'B' && f2.hasta === 'C',
+        (f1.desde + '->' + f1.hasta + ' ' + f2.desde + '->' + f2.hasta));
+    ok('calculo: velocidad media del tramo (km/h)', f1.kmh > 25 && f1.kmh < 40, f1.kmh);
 }
 
 // ── rxRendCalcula: parada mas corta que el minimo no cuenta ─────────────
@@ -210,6 +213,7 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
         r3.salidas === 2 && r3.filas.length === 3,
         'salidas=' + r3.salidas + ' filas=' + r3.filas.length);
     ok('calculo: el regreso al origen se marca', r3.filas[1] && r3.filas[1].regreso === true);
+    ok('calculo: el tramo de regreso termina en A', r3.filas[1] && r3.filas[1].hasta === 'A' && r3.filas[1].kmh > 0);
     ok('calculo: la segunda vuelta mide desde su propia salida',
         r3.filas[2] && r3.filas[2].km > 0.3 && r3.filas[2].km < 0.8, r3.filas[2] && r3.filas[2].km);
     // La vuelta cuenta km y tiempo aunque la unidad NO se detenga al llegar.
@@ -246,7 +250,8 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     ], dentroOrigen, OPTS);
     const csv = mod.rxRendCSV('ECO 105', res);
     ok('csv: trae cabecera y metadatos',
-        csv.indexOf('Llegada') >= 0 && csv.indexOf('Rendimientos') >= 0 && csv.indexOf('ECO 105') >= 0);
+        csv.indexOf('Tramo') >= 0 && csv.indexOf('Vel. media') >= 0 && csv.indexOf('Coordenadas') >= 0 &&
+        csv.indexOf('Rendimientos') >= 0 && csv.indexOf('ECO 105') >= 0);
     ok('csv: una fila por parada', csv.split('\n').length === 3, csv.split('\n').length);
 }
 
@@ -297,6 +302,12 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => chip } });
     ok('ui: el origen por punto muestra lat/lon/radio',
         /id="rrnd-lat"/.test(box.innerHTML) && /id="rrnd-lon"/.test(box.innerHTML) && /class="rgi-num"/.test(box.innerHTML));
+    // Punto de partida con coordenadas en el aviso del paso.
+    mod.RX_REND.lat = '20.6'; mod.RX_REND.lon = '-103.3';
+    const chipPunto2 = global.document.createElement('chip2');
+    chipPunto2.dataset = { rr: 'modo', v: 'punto' };
+    for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => chipPunto2 } });
+    ok('ui: muestra las coordenadas del punto de partida', /Punto de partida: 20\.60000, -103\.30000/.test(box.innerHTML));
     // Reabrir: el memo de setHtml se invalida (si no, el cuerpo sale vacio).
     ok('ui: el dialogo invalida el memo al abrir', /invalidarHtml\('rrnd-box'\)/.test(src));
     // PDF: se arma el documento con mapa y con el regreso al origen.
@@ -305,8 +316,8 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     mod.RX_REND.origen = { lat: 0, lon: 0, txt: 'PATIO' };
     mod.RX_REND.res = {
         filas: [
-            { n: 1, llegada: 100, salida: 200, paradaSeg: 60, km: 1.2, minMov: 2, lat: 0.01, lon: 0 },
-            { n: 2, llegada: 300, salida: 300, paradaSeg: 0, km: 1.1, minMov: 2, lat: 0, lon: 0, regreso: true }
+            { n: 1, desde: 'A', hasta: 'B', llegada: 100, salida: 200, paradaSeg: 60, km: 1.2, minMov: 2, kmh: 36, lat: 0.01, lon: 0 },
+            { n: 2, desde: 'B', hasta: 'A', llegada: 300, salida: 300, paradaSeg: 0, km: 1.1, minMov: 2, kmh: 33, lat: 0, lon: 0, regreso: true }
         ],
         kmTotal: 2.3, minTotal: 4, salidas: 1,
         traza: [{ lat: 0, lon: 0 }, { lat: 0.01, lon: 0 }]
@@ -316,7 +327,8 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     const doc = global.__rrendPrints[0] || '';
     ok('ui: el PDF incluye el mapa de paradas', /m-mapa/.test(doc) && /3 marcas/.test(doc));
     ok('ui: el PDF marca el regreso al origen', /Regreso al origen/.test(doc) && /partida y regreso/i.test(doc));
-    ok('ui: el PDF trae la tabla de detalle', /Llegada/.test(doc) && /Min mov/.test(doc));
+    ok('ui: el PDF trae la tabla de detalle', /Llegada/.test(doc) && /Vel. media/.test(doc) && /A . B|A \u2192 B|A → B/.test(doc));
+    ok('ui: el PDF trae las coordenadas de las paradas', /0\.01000, 0\.00000/.test(doc) && /Coordenadas/.test(doc));
 }
 
 console.log(fallos ? ('FALLO - ' + fallos + ' checks') : 'Todos los tests pasaron');
