@@ -231,6 +231,14 @@
     {
       "file": "57-convergencia-carnada.js",
       "chunk": "ui"
+    },
+    {
+      "file": "58-rendimientos.js",
+      "chunk": "ui"
+    },
+    {
+      "file": "59-reportes-masivos.js",
+      "chunk": "ui"
     }
   ]
 }

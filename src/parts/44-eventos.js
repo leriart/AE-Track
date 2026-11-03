@@ -204,6 +204,10 @@
         if (informeMd) informeMd.addEventListener('click', exportInforme);
         const informeGeo = byId('rondo-informe-geo');
         if (informeGeo) informeGeo.addEventListener('click', () => abrirInformesPlantilla());
+        const rendBtn = byId('rondo-rendimientos');
+        if (rendBtn) rendBtn.addEventListener('click', () => abrirRendimientos());
+        const masivoBtn = byId('rondo-masivo');
+        if (masivoBtn) masivoBtn.addEventListener('click', () => abrirReportesMasivos());
         const listaRutasEl = byId('rondo-lista-rutas');
         if (listaRutasEl) {
             listaRutasEl.addEventListener('click', (e) => {
