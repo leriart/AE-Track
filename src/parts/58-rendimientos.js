@@ -68,12 +68,15 @@
     // Cada fila es un TRAMO entre dos puntos: `desde` -> `hasta`, con la
     // distancia (km), el tiempo en movimiento (min) y la velocidad media
     // (km/h) de ese tramo.
-    function rxRendCalcula(puntos, dentroDe, opts) {
+    function rxRendCalcula(puntos, dentroDe, opts, zonaDe) {
         const o = opts || {};
         const paradaSeg = Math.max(30, (Number(o.paradaMin) || 5) * 60);
         const vel = (o.vel != null && isFinite(+o.vel)) ? +o.vel : 3;
         const salto = (o.saltoM != null && isFinite(+o.saltoM)) ? +o.saltoM : 5000;
         const dentro = (typeof dentroDe === 'function') ? dentroDe : function () { return false; };
+        // `zonaDe(lat, lon)` devuelve el nombre de la geocerca mas cercana a
+        // la parada (lo calcula el llamador; el nucleo sigue siendo puro).
+        const zona = (typeof zonaDe === 'function') ? zonaDe : null;
         const pts = (puntos || []).filter((p) => p && isFinite(+p.t) && isFinite(+p.lat) && isFinite(+p.lon))
             .sort((a, b) => a.t - b.t);
         const filas = [];
@@ -113,7 +116,8 @@
                     n: filas.length + 1,
                     desde: puntoActual, hasta: letra,
                     llegada: pts[qIni].t, salida: pts[qUlt].t, paradaSeg: dur,
-                    km: km, minMov: minMov, kmh: kmh, lat: clat, lon: clon
+                    km: km, minMov: minMov, kmh: kmh, lat: clat, lon: clon,
+                    zona: zona ? (zona(clat, clon) || '') : ''
                 });
                 kmTotal += km; minTotal += minMov;
                 puntoActual = letra;
@@ -141,7 +145,8 @@
                     n: filas.length + 1,
                     desde: puntoActual, hasta: 'A',
                     llegada: p.t, salida: p.t, paradaSeg: 0,
-                    km: km, minMov: minMov, kmh: kmh, lat: p.lat, lon: p.lon, regreso: true
+                    km: km, minMov: minMov, kmh: kmh, lat: p.lat, lon: p.lon, regreso: true,
+                    zona: zona ? (zona(p.lat, p.lon) || '') : ''
                 });
                 kmTotal += km; minTotal += minMov;
                 puntoActual = 'A';
@@ -182,8 +187,113 @@
         if (!id) return null;
         return (APP.unidades || []).find((u) => u && String(u.id) === id) || null;
     }
-    // Texto del lugar de una parada: geocerca que la contiene o municipio.
-    function rxRendLugar(lat, lon) {
+    // Margen alrededor del borde de una geocerca: una parada a pocos metros
+    // del limite (jitter del GPS) tambien cuenta como "en" esa geocerca.
+    const RX_REND_ZONA_MARGEN = 200;
+    const RX_REND_M_LAT = 110540;      // metros por grado (prefiltro por bbox)
+    const RX_REND_M_LON_EQ = 111320;
+    // Distancia (m) del punto al BORDE de una geocerca. 0 si esta dentro.
+    function rxRendDistZona(lat, lon, z, centro) {
+        if (!z) return null;
+        let p = z.p;
+        if (typeof p === 'string') { try { p = JSON.parse(p); } catch (_) { p = null; } }
+        // Circulo: |distancia al centro - radio|.
+        const radio = (z.w != null) ? +z.w : ((z.r != null) ? +z.r : null);
+        if ((z.t === 3 || (z.t == null && radio != null)) && centro && radio != null && radio > 0) {
+            return Math.abs(rxDistM(lat, lon, centro.lat, centro.lon) - radio);
+        }
+        // Poligono/linea: distancia a la arista mas cercana.
+        if (Array.isArray(p) && p.length >= 2) {
+            const px = (a) => (a.x != null) ? +a.x : +a[0];
+            const py = (a) => (a.y != null) ? +a.y : +a[1];
+            let mejor = Infinity;
+            for (let i = 0; i < p.length - 1; i++) {
+                let d = null;
+                try { d = distPuntoSegmento(lat, lon, py(p[i]), px(p[i]), py(p[i + 1]), px(p[i + 1])); }
+                catch (_) { d = null; }
+                const dd = (d && isFinite(d.dist)) ? d.dist : null;
+                if (dd != null && dd < mejor) mejor = dd;
+            }
+            return isFinite(mejor) ? mejor : null;
+        }
+        return null;
+    }
+    // Ranking: primero las que CONTIENEN la parada; luego borde mas cercano,
+    // centro mas cercano y, por ultimo, la mas pequena (mas especifica).
+    function rxRendZonaMejor(a, b) {
+        // Dentro gana a "cerca": la parada esta realmente en esa zona.
+        if (a.dentro !== b.dentro) return a.dentro;
+        if (a.dentro) {
+            // Entre varias que la contienen, la MAS PEQUENA es la especifica
+            // (un patio dentro de una zona industrial, no la industrial).
+            if (a.area !== b.area) return a.area < b.area;
+            if (a.cDist !== b.cDist) return a.cDist < b.cDist;
+            return a.nombre < b.nombre;
+        }
+        // Fuera de todas: la de borde mas cercano; desempates por centro y
+        // tamano.
+        if (a.dist !== b.dist) return a.dist < b.dist;
+        if (a.cDist !== b.cDist) return a.cDist < b.cDist;
+        if (a.area !== b.area) return a.area < b.area;
+        return a.nombre < b.nombre;
+    }
+    // Geocerca mas cercana a un punto (o '' si ninguna queda dentro del
+    // margen). Descarte rapido por bounding box y geometria fina solo para
+    // las candidatas: con muchas geocercas no se recorre cada poligono.
+    function rxRendZonaCercana(lat, lon, margen) {
+        if (lat == null || lon == null) return '';
+        const mg = (margen == null) ? RX_REND_ZONA_MARGEN : Math.max(0, +margen || 0);
+        const zs = APP.zonas || [];
+        const mx = RX_REND_M_LON_EQ * Math.cos(lat * Math.PI / 180) || RX_REND_M_LON_EQ;
+        let mejor = null;
+        for (let i = 0; i < zs.length; i++) {
+            const z = zs[i];
+            if (!z) continue;
+            const nombre = rxGeoInfNombre(z);
+            if (!nombre) continue;
+            const b = z.b || {};
+            // Distancia al rectangulo (0 si el punto cae dentro); salta la
+            // geometria de las zonas lejanas.
+            let dBbox = 0;
+            const hayBbox = (b.min_x != null && b.max_x != null && b.min_y != null && b.max_y != null);
+            if (hayBbox) {
+                const dx = Math.max(b.min_x - lon, 0, lon - b.max_x) * mx;
+                const dy = Math.max(b.min_y - lat, 0, lat - b.max_y) * RX_REND_M_LAT;
+                dBbox = Math.sqrt(dx * dx + dy * dy);
+                if (dBbox > mg) continue;
+            }
+            let dentro = false;
+            try { dentro = !!inZone(lat, lon, z); } catch (_) { dentro = false; }
+            let centro = null;
+            try { centro = centroDeZona(z); } catch (_) { centro = null; }
+            let d;
+            if (dentro) d = 0;
+            else {
+                d = rxRendDistZona(lat, lon, z, centro);
+                if (d == null || d > mg) {
+                    // Sin geometria fina, el bbox sirve de aproximacion.
+                    if (hayBbox && dBbox <= mg) d = dBbox;
+                    else continue;
+                }
+            }
+            let area = 0;
+            try { area = (typeof zonaAreaM2 === 'function') ? (+zonaAreaM2(z) || 0) : 0; } catch (_) { area = 0; }
+            const cDist = (centro && centro.lat != null && centro.lon != null)
+                ? rxDistM(lat, lon, centro.lat, centro.lon) : d;
+            const cand = { nombre: nombre, dist: d, cDist: cDist, area: area, dentro: dentro };
+            if (!mejor || rxRendZonaMejor(cand, mejor)) mejor = cand;
+        }
+        return mejor ? mejor.nombre : '';
+    }
+    // Texto del lugar de una parada: la geocerca mas cercana si se detecto o,
+    // si no, la que la contiene / el municipio.
+    function rxRendLugar(f) {
+        if (f && typeof f === 'object') {
+            if (f.zona) return f.zona;
+            if (f.lat == null || f.lon == null) return '';
+        }
+        const lat = (f && typeof f === 'object') ? f.lat : f;
+        const lon = (f && typeof f === 'object') ? f.lon : arguments[1];
         if (lat == null || lon == null) return '';
         try { const z = zoneAt(lat, lon); if (z) return z; } catch (_) { /* noop */ }
         try {
@@ -211,7 +321,7 @@
             f.n, (f.desde || '-') + ' -> ' + (f.hasta || '-'), rxFechaHora(f.llegada),
             rxInfFmt(f.km), rxInfFmt(f.minMov), rxInfFmt(f.kmh),
             f.regreso ? '-' : rxInfFmtDur(f.paradaSeg),
-            f.regreso ? 'Regreso al origen' : rxRendLugar(f.lat, f.lon),
+            f.regreso ? 'Regreso al origen' : (rxRendLugar(f) || ''),
             rxRendCoords(f.lat, f.lon)
         ]);
         const vel = (res && res.minTotal > 0) ? (res.kmTotal / (res.minTotal / 60)) : 0;
@@ -254,7 +364,7 @@
             esc(rxFechaHora(f.llegada)),
             esc(rxInfFmt(f.km)), esc(rxInfFmt(f.minMov)), esc(rxInfFmt(f.kmh)),
             esc(f.regreso ? '-' : rxInfFmtDur(f.paradaSeg)),
-            esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-')),
+            esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f) || '-')),
             esc(rxRendCoords(f.lat, f.lon) || '-')
         ]);
         const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
@@ -268,7 +378,7 @@
             marcas.push({
                 lat: f.lat, lon: f.lon,
                 color: f.regreso ? '#f9a825' : '#1565c0', radio: 5,
-                txt: f.regreso ? 'A \u00b7 Regreso' : ((f.hasta || '') + ' \u00b7 Parada')
+                txt: f.regreso ? 'A \u00b7 Regreso' : ((f.hasta || '') + ' \u00b7 ' + (f.zona || 'Parada'))
             });
         });
         const mapa = (lineas.length || marcas.length)
@@ -460,7 +570,7 @@
                             '<td class="num">' + esc(rxInfFmt(f.minMov)) + '</td>' +
                             '<td class="num">' + esc(rxInfFmt(f.kmh)) + '</td>' +
                             '<td>' + esc(f.regreso ? '-' : rxInfFmtDur(f.paradaSeg)) + '</td>' +
-                            '<td>' + esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-')) + '</td>' +
+                            '<td>' + esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f) || '-')) + '</td>' +
                             '<td>' + esc(rxRendCoords(f.lat, f.lon) || '-') + '</td></tr>';
                     }
                     h += '</tbody></table>' +
@@ -510,7 +620,8 @@
                         if (got.error) throw new Error(got.error);
                         setProg(70, 'Calculando paradas…');
                         const pts = rxRendPuntos(got.msgs);
-                        const res = rxRendCalcula(pts, dentroDe, { paradaMin: RX_REND.paradaMin, vel: RX_REND.vel });
+                        const res = rxRendCalcula(pts, dentroDe, { paradaMin: RX_REND.paradaMin, vel: RX_REND.vel },
+                            (la, lo) => rxRendZonaCercana(la, lo));
                         RX_REND.res = res;
                         RX_REND.eco = eco;
                         RX_REND.origen = rxRendOrigen();

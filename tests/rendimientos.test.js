@@ -41,6 +41,17 @@ const stubs = [
     'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/);' +
         ' const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
     'function rxGeoInfNombre(z){ return (z && (z.n || z.nombre)) || (z ? ("Zona " + z.id) : ""); }',
+    // Geometria minima para probar la geocerca mas cercana.
+    'function inZone(lat, lon, z){ const b=z&&z.b; if(!b) return false;' +
+        ' if(lon<b.min_x||lon>b.max_x||lat<b.min_y||lat>b.max_y) return false;' +
+        ' const r=+(z.w||0); if(!(r>0)) return false;' +
+        ' const cx=(b.cen_x!=null?b.cen_x:(b.min_x+b.max_x)/2), cy=(b.cen_y!=null?b.cen_y:(b.min_y+b.max_y)/2);' +
+        ' const mx=111320*Math.cos(lat*Math.PI/180), my=110540;' +
+        ' const dx=(lon-cx)*mx, dy=(lat-cy)*my; return Math.sqrt(dx*dx+dy*dy)<=r; }',
+    'function centroDeZona(z){ const b=z&&z.b; if(!b||b.min_x==null) return null;' +
+        ' return {lat:(b.cen_y!=null?b.cen_y:(b.min_y+b.max_y)/2), lon:(b.cen_x!=null?b.cen_x:(b.min_x+b.max_x)/2)}; }',
+    'function zonaAreaM2(z){ const r=+(z&&z.w)||0; return r>0?Math.PI*r*r:0; }',
+    'function distPuntoSegmento(){ return {dist:0,t:0}; }',
     'const APP = { zonas: [], unidades: [] };',
     // Stubs de UI para montar el dialogo como lo haria Rondo.
     'const UIS = new Proxy({}, { get: function(){ return "<svg></svg>"; } });',
@@ -67,7 +78,7 @@ const stubs = [
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
-    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV, rxRendHTML, abrirRendimientos, fakeEl, APP, nodos };';
+    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV, rxRendHTML, rxRendZonaCercana, rxRendDistZona, rxRendLugar, abrirRendimientos, fakeEl, APP, nodos };';
 const mod = new Function(code)();
 global.document = {
     body: { appendChild() {}, removeChild() {} },
@@ -234,6 +245,34 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     // Traza simplificada para el mapa del PDF.
     ok('calculo: traza para el mapa', Array.isArray(r3.traza) && r3.traza.length >= 2 &&
         r3.traza.length <= 501 && r3.traza[0].lat != null);
+    // Geocerca detectada por parada (callback del llamador).
+    const rz = mod.rxRendCalcula([
+        moviendo(0, 0.010, 0),
+        quieto(60, 0.020, 0), quieto(300, 0.020, 0),
+        moviendo(360, 0.025, 0)
+    ], dentroOrigen, OPTS, (la) => (la > 0.015 ? 'ZONA-B' : 'ZONA-A'));
+    ok('calculo: guarda la geocerca de la parada', rz.filas[0] && rz.filas[0].zona === 'ZONA-B',
+        rz.filas[0] && rz.filas[0].zona);
+}
+
+// ── Geocerca mas cercana a la parada ────────────────────────────────────
+{
+    const cir = (n, lon, lat, radio) => ({
+        id: 1, n: n, t: 3, w: radio,
+        b: { min_x: lon - 0.01, max_x: lon + 0.01, min_y: lat - 0.01, max_y: lat + 0.01, cen_x: lon, cen_y: lat }
+    });
+    mod.APP.zonas = [cir('LEJOS', 0.05, 0, 100), cir('CERCA', 0.003, 0, 100), cir('DENTRO', 0.001, 0, 500)];
+    ok('zona: prefiere la que contiene la parada', mod.rxRendZonaCercana(0, 0) === 'DENTRO',
+        mod.rxRendZonaCercana(0, 0));
+    mod.APP.zonas = [cir('GRANDE', 0, 0, 2000), cir('PATIO', 0, 0, 300)];
+    ok('zona: entre varias que contienen, la mas especifica',
+        mod.rxRendZonaCercana(0, 0.001) === 'PATIO', mod.rxRendZonaCercana(0, 0.001));
+    mod.APP.zonas = [cir('CERCA', 0, 0, 100), cir('LEJOS', 0.05, 0, 100)];
+    ok('zona: elige la mas cercana por borde', mod.rxRendZonaCercana(0, 0.0015) === 'CERCA',
+        mod.rxRendZonaCercana(0, 0.0015));
+    ok('zona: sin geocercas cerca devuelve vacio', mod.rxRendZonaCercana(1, 1) === '');
+    ok('zona: el lugar usa la geocerca detectada',
+        mod.rxRendLugar({ lat: 0, lon: 0.0015, zona: 'CERCA' }) === 'CERCA');
 }
 
 // ── Salidas ─────────────────────────────────────────────────────────────
