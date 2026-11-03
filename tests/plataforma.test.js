@@ -697,8 +697,8 @@ ok('reestilizado real: usa los tokens --rondo-* reales',
         '--rondo-fg': '#0a0b0c'
     })));
 
-// v6.19.5: capa de rendimiento CSS (opt-in).
-ok('DEFAULTS declara rendimientoPagina apagado', /rendimientoPagina: false,/.test(src));
+// Capa de rendimiento de la pagina (activa por defecto, apagable).
+ok('DEFAULTS declara rendimientoPagina activo', /rendimientoPagina: true,/.test(src));
 ok('Ajustes guarda rendimientoPagina', /cf\.rendimientoPagina = !!\(cRendPag2 && cRendPag2\.checked\)/.test(src));
 ok('rendimiento: se aplica desde applyTheme', /try \{ rxAplicarRendimientoPagina\(\); \}/.test(src));
 const cssPerf = generarRendimiento({});
@@ -711,6 +711,19 @@ ok('rendimiento: apagado no emite hoja', generarRendimiento({ rendimientoPagina:
 ok('rendimiento: controles nativos y scrollbar finos',
     /color-scheme:/.test(cssPerf) && /scrollbar-width:thin/.test(cssPerf) &&
     /scrollbar-color:var\(--rondo-border\)/.test(cssPerf));
+ok('rendimiento: listas grandes marcadas en ejecucion',
+    /\.rondo-perf-lista>li/.test(cssPerf) && /function rxPerfMarcaListas/.test(src) &&
+    /RX_PERF_MIN_HIJOS/.test(src));
+ok('rendimiento: imagenes fuera de pantalla diferidas',
+    /function rxPerfLazyImgs/.test(src) && /setAttribute\('loading', 'lazy'\)/.test(src) &&
+    /setAttribute\('decoding', 'async'\)/.test(src));
+ok('rendimiento: nunca toca los nodos de Rondo',
+    /RX_PERF_RONDO_SEL/.test(src) && /el\.closest\(RX_PERF_RONDO_SEL\)/.test(src));
+ok('rendimiento: vigila el DOM con MutationObserver y lo apaga al desactivar',
+    /new MutationObserver/.test(src) && /rxPerfVigilar\(false\)/.test(src) &&
+    /requestIdleCallback/.test(src));
+ok('rendimiento: analisis de peso disponible para Diagnostico',
+    /function rxPerfResumen/.test(src) && /perf: \(typeof rxPerfResumen === 'function'\)/.test(src));
 ok('rendimiento: pausa el refresh con la pestana oculta',
     /APP\.config\.rendimientoPagina && document\.hidden/.test(src));
 ok('bajo nivel: preconnect a los origenes que usa la app',

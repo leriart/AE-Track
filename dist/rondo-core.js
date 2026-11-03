@@ -715,10 +715,11 @@
         // (experimental, opt-in). Cubre acento, superficies, texto y bordes; se
         // aplica con !important sobre :root,html,body y respeta el tema claro/oscuro.
         estiloPagina: false,
-        // v6.19.5: capa de rendimiento CSS sobre la plataforma (opt-in): menos
-        // repintado y composicion (fuera desenfoques, filas fuera de pantalla
-        // no se pintan, transiciones baratas). No toca la red ni su JS.
-        rendimientoPagina: false,
+        // Capa de rendimiento sobre la plataforma: menos repintado y
+        // composicion (fuera desenfoques, filas/listas fuera de pantalla no se
+        // pintan, imagenes diferidas, transiciones baratas). No toca la red ni
+        // el JS de la plataforma; se apaga desde Ajustes.
+        rendimientoPagina: true,
         idiomaPlataforma: false,
         escalaUI: 1,
         contornos: true,

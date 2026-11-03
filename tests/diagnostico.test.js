@@ -67,6 +67,16 @@ if (fns) {
         /2 en toda la flota/.test(txt2) && txt2.indexOf('2 dentro ahora') >= 0,
         txt2.split('\n').filter((x) => /geocercas: activa/.test(x))[0]);
     ok('texto: incluye el tamano en KB', txt.indexOf('2.0 KB') >= 0);
+    // Peso del DOM de la plataforma (solo si el snapshot lo trae).
+    ok('texto: sin datos de pagina no inventa la linea', txt.indexOf('Pagina:') < 0);
+    const d3 = Object.assign({}, d, {
+        perf: { nodos: 1234, imgs: 5, lazy: 4, canvas: 2, iframes: 1, svg: 9, listas: 3, capa: true }
+    });
+    const txt3 = fns.rxDiagTexto(d3);
+    ok('texto: linea de peso de la pagina',
+        /Pagina: 1234 nodos/.test(txt3) && /5 imgs \(4 diferidas\)/.test(txt3) &&
+        /2 canvas/.test(txt3) && /3 lista\(s\) optimizada\(s\)/.test(txt3) && /capa activa/.test(txt3),
+        txt3.split('\n').filter((x) => /^Pagina:/.test(x))[0]);
 }
 
 ok('la part de diagnostico esta en el bundle',

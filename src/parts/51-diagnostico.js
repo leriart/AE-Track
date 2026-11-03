@@ -56,6 +56,9 @@
                 pos: rxPlatPosDefecto()
             },
             storage: rxDiagStorage(),
+            // Peso del DOM de la plataforma: nodos, imagenes, canvas, iframes
+            // y cuantas listas se optimizaron. Sirve para ver que consume.
+            perf: (typeof rxPerfResumen === 'function') ? rxPerfResumen() : null,
             caches: {
                 memo: Object.keys(APP.memo || {}).length,
                 geoCache: Object.keys(APP.geoCache || {}).length,
@@ -108,6 +111,12 @@
             (plat.pos ? ' \u00b7 pos ' + plat.pos : '') +
             (plat.api ? ' \u00b7 ' + plat.api : ''));
         L.push('Unidades: ' + d.unidades + ' \u00b7 avisos: ' + d.historial + ' \u00b7 geocercas: ' + d.zonas);
+        if (d.perf) {
+            const p = d.perf;
+            L.push('Pagina: ' + p.nodos + ' nodos \u00b7 ' + p.imgs + ' imgs (' + p.lazy + ' diferidas) \u00b7 ' +
+                p.canvas + ' canvas \u00b7 ' + p.iframes + ' iframes \u00b7 ' + p.svg + ' svg \u00b7 ' +
+                p.listas + ' lista(s) optimizada(s) \u00b7 capa ' + (p.capa ? 'activa' : 'apagada'));
+        }
         L.push('Storage local: ' + rxDiagBytes(d.storage.totalLocal) + ' (' + d.storage.local.length +
             ' claves) \u00b7 sesion: ' + rxDiagBytes(d.storage.totalSession) + ' (' + d.storage.session.length + ' claves)');
         L.push('Caches: memo ' + d.caches.memo + ' \u00b7 geo ' + d.caches.geoCache + ' \u00b7 snap ' +

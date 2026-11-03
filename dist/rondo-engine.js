@@ -5445,13 +5445,132 @@ ta.value = '';
         // que la plataforma declare en cualquiera de esos niveles.
         el.textContent = ':root,html,body{\n' + decl.join('\n') + '\n}\n' + comp + '\n';
     }
-    // v6.19.5: capa de rendimiento CSS. No toca JS ni red: reduce el trabajo de
-    // pintado/composicion del navegador sobre la plataforma, que es lo que
-    // produce el "trabado" al hacer scroll o animar. Es opt-in y reversible.
+    // ── Capa de rendimiento de la pagina (CSS + DOM) ───────────────────
+    // No toca la red ni el JS de la plataforma. Ataca lo que de verdad
+    // consume en Wialon/AE-Track: listas enormes, imagenes fuera de pantalla,
+    // desenfoques y animaciones de propiedades caras. Todo con APIs estandar
+    // y degradacion limpia: donde el navegador no soporta una regla, la
+    // ignora y la pagina se ve igual.
+    //
+    // Nunca toca los nodos de Rondo (selector de exclusion por closest).
+    const RX_PERF_RONDO_SEL = '#rondo-panel,#rondo-barra,#rondo-dialog,#rondo-toasts,#rondo-aviso,' +
+        '#rondo-contexto,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-rail,#rondo-replay,#rondo-captura';
+    // El mapa gestiona sus propias imagenes/animaciones: no se le toca.
+    const RX_PERF_MAPA_SEL = '.leaflet-container,.leaflet-pane,.MicrosoftMap,.wln-map,#map,.map,.map-container';
+    // A partir de cuantos hijos una lista se considera "grande".
+    const RX_PERF_MIN_HIJOS = 40;
+    let _rxPerfObs = null, _rxPerfUltimo = 0, _rxPerfDatos = null;
+    function rxPerfEsRondo(el) {
+        try { return !!(el && el.closest && el.closest(RX_PERF_RONDO_SEL)); } catch (_) { return false; }
+    }
+    // Ejecuta en tiempo ocioso: el escaneo no compite con el pintado del
+    // primer frame ni con el mapa.
+    function rxPerfIdle(fn) {
+        try {
+            if (typeof requestIdleCallback === 'function') requestIdleCallback(fn, { timeout: 1500 });
+            else setTimeout(fn, 300);
+        } catch (_) { try { setTimeout(fn, 300); } catch (_) { /* noop */ } }
+    }
+    // Imagenes fuera de pantalla: el navegador no las descarga hasta que se
+    // acercan (menos red, menos memoria de imagenes decodificadas). Si el
+    // navegador no soporta loading/decoding, los ignora sin romper nada.
+    function rxPerfLazyImgs(raiz) {
+        if (!raiz || !raiz.querySelectorAll) return 0;
+        let n = 0;
+        const imgs = raiz.querySelectorAll('img:not([loading])');
+        for (let i = 0; i < imgs.length; i++) {
+            const img = imgs[i];
+            if (rxPerfEsRondo(img)) continue;
+            try { if (img.closest && img.closest(RX_PERF_MAPA_SEL)) continue; } catch (_) { continue; }
+            img.setAttribute('loading', 'lazy');
+            if (!img.getAttribute('decoding')) img.setAttribute('decoding', 'async');
+            n++;
+        }
+        return n;
+    }
+    // Listas largas -> content-visibility:auto. Solo listas (no tablas: la
+    // contencion puede alterar el ancho de columnas). En navegadores sin
+    // soporte la clase no hace nada.
+    function rxPerfMarcaListas(raiz) {
+        if (!raiz || !raiz.querySelectorAll) return 0;
+        let n = 0;
+        const nodos = raiz.querySelectorAll('ul,ol,[role="list"],.wui2-list,.wui-list');
+        for (let i = 0; i < nodos.length; i++) {
+            const el = nodos[i];
+            if (el._rondoPerfLista || rxPerfEsRondo(el)) continue;
+            if (el.childElementCount < RX_PERF_MIN_HIJOS) continue;
+            el.classList.add('rondo-perf-lista');
+            el._rondoPerfLista = 1;
+            n++;
+        }
+        return n;
+    }
+    function rxPerfLimpiar() {
+        try {
+            const l = document.querySelectorAll('.rondo-perf-lista');
+            for (let i = 0; i < l.length; i++) {
+                l[i].classList.remove('rondo-perf-lista');
+                l[i]._rondoPerfLista = 0;
+            }
+        } catch (_) { /* noop */ }
+    }
+    // Una pasada (en reposo) sobre el documento.
+    function rxPerfOptimizaDom() {
+        if (!(APP.config && APP.config.rendimientoPagina) || !document.body) return;
+        const imgs = rxPerfLazyImgs(document.body);
+        const listas = rxPerfMarcaListas(document.body);
+        _rxPerfDatos = rxPerfResumen();
+        if (_rxPerfDatos) { _rxPerfDatos.imgsNuevas = imgs; _rxPerfDatos.listasNuevas = listas; }
+    }
+    // Analisis del "peso" de la pagina. Lo muestra Diagnostico: nodos,
+    // imagenes (y cuantas quedan diferidas), canvas, iframes y svg son los
+    // indicadores de memoria/CPU del DOM.
+    function rxPerfResumen() {
+        try {
+            const d = document;
+            const todos = d.getElementsByTagName('*');
+            const total = todos.length;
+            let imgs = 0, canv = 0, ifr = 0, svg = 0;
+            for (let i = 0; i < total; i++) {
+                const t = todos[i].tagName;
+                if (t === 'IMG') imgs++;
+                else if (t === 'CANVAS') canv++;
+                else if (t === 'IFRAME') ifr++;
+                else if (t === 'SVG') svg++;
+            }
+            return {
+                nodos: total, imgs: imgs, canvas: canv, iframes: ifr, svg: svg,
+                listas: d.querySelectorAll('.rondo-perf-lista').length,
+                lazy: d.querySelectorAll('img[loading="lazy"]').length,
+                capa: !!(APP.config && APP.config.rendimientoPagina)
+            };
+        } catch (_) { return null; }
+    }
+    // Vigila altas de nodos (listas que se llenan, tarjetas nuevas) con
+    // debounce. Un MutationObserver desenchufado al apagar la capa.
+    function rxPerfVigilar(activar) {
+        try {
+            if (!activar) {
+                if (_rxPerfObs) { _rxPerfObs.disconnect(); _rxPerfObs = null; }
+                return;
+            }
+            if (_rxPerfObs || typeof MutationObserver !== 'function' || !document.body) return;
+            _rxPerfObs = new MutationObserver(() => {
+                const t = Date.now();
+                if (t - _rxPerfUltimo < 1500) return;
+                _rxPerfUltimo = t;
+                rxPerfIdle(rxPerfOptimizaDom);
+            });
+            _rxPerfObs.observe(document.body, { childList: true, subtree: true });
+        } catch (_) { /* noop */ }
+    }
+    // Capa de rendimiento. Ademas del CSS, activa el escaneo de imagenes/listas
+    // y su vigilancia. Reversible al desactivar el ajuste.
     function rxAplicarRendimientoPagina() {
         const elPrev = document.getElementById('rondo-rendimiento-pagina');
         if (!(APP.config && APP.config.rendimientoPagina)) {
             if (elPrev && elPrev.parentNode) elPrev.parentNode.removeChild(elPrev);
+            try { rxPerfVigilar(false); rxPerfLimpiar(); } catch (_) { /* noop */ }
             return;
         }
         let el = elPrev;
@@ -5476,12 +5595,17 @@ ta.value = '';
                 '.ant-table-tbody>tr,.wui2-list_group-row{content-visibility:auto;contain-intrinsic-size:auto 38px;}',
             // Cada fila se pinta aislada: un cambio dentro no refluye el resto.
             '.wui2-list_row,.wui-list_item,.ant-table-row{contain:layout style paint;}',
+            // Listas grandes detectadas en tiempo de ejecucion (cualquier
+            // plataforma, no solo las clases conocidas).
+            '.rondo-perf-lista>li,.rondo-perf-lista>[role="listitem"],.rondo-perf-lista>*{' +
+                'content-visibility:auto;contain-intrinsic-size:auto 34px;contain:layout style paint;}',
             // Transiciones cortas y solo de propiedades que no repintan.
             '.wui-button,.wui-icon,.ant-btn,.wui2-button{transition:background-color .1s,color .1s,border-color .1s,opacity .1s !important;}',
             // Respeta "reducir movimiento" del sistema.
             '@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}'
         ].join('\n');
         el.textContent = reglas + '\n';
+        try { rxPerfVigilar(true); rxPerfIdle(rxPerfOptimizaDom); } catch (_) { /* noop */ }
     }
     /* --- Remapeo de colores literales (v6.19.6) -------------------------
      * Solo ~9% de las reglas de la plataforma traen color literal, pero son
