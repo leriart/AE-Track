@@ -20,7 +20,9 @@ if (ini < 0 || fin < 0 || fin <= ini) {
 const stubs = [
     // Distancia equirectangular en metros (fiel a haversine a estas escalas).
     'function haversine(a,b,c,d){ const l0=(a+c)/2, mx=111320*Math.cos(l0*Math.PI/180), my=110540;' +
-        ' const dx=(d-b)*mx, dy=(c-a)*my; return Math.sqrt(dx*dx+dy*dy); }',
+        ' const dx=(d-b)*mx, dy=(c-a)*my; return Math.sqrt(dx*dx+dy*dy); }' +
+        'function rxDistM(a,b,c,d){ return haversine(a,b,c,d); }' +
+        'function rxDist2M(a,b,c,d){ const d0=rxDistM(a,b,c,d); return d0*d0; }',
     'function clamp(v,a,b){ return Math.min(b, Math.max(a, v)); }',
     'function esc(s){ return String(s==null?"":s); }',
     'function norm(s){ return String(s==null?"":s).normalize("NFKD").replace(/[\\u0300-\\u036f]/g,"").toUpperCase().trim(); }',

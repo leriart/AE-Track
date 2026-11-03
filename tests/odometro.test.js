@@ -22,6 +22,7 @@ const code =
     'const RADIO_TIERRA = 6371008.8;\n' +
     'function rad(d){return d*Math.PI/180;}\n' +
     'function haversine(a,b,c,d){const x=rad(c-a),y=rad(d-b);const s=Math.sin(x/2)*Math.sin(x/2)+Math.cos(rad(a))*Math.cos(rad(c))*Math.sin(y/2)*Math.sin(y/2);return 2*RADIO_TIERRA*Math.asin(Math.min(1,Math.sqrt(s)));}\n' +
+    'function rxDistM(a,b,c,d){const mx=111320*Math.cos((a+c)/2*Math.PI/180),dx=(d-b)*mx,dy=(c-a)*110540;return Math.sqrt(dx*dx+dy*dy);}\n' +
     src.slice(ini, fin) +
     '\nreturn {actualizarOdometro, odometroDe, ODOMETRO_MAX_SALTO_M};';
 const mod = new Function(code)();

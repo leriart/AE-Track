@@ -7,9 +7,9 @@
             const b = z.b;
             // Descarte rapido por bounding box (si viene).
             if (b && b.min_x != null && (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y)) return false;
-            // Puntos: pueden venir como array o como string JSON.
-            let p = z.p;
-            if (typeof p === 'string') { try { p = JSON.parse(p); } catch (_) { p = null; } }
+            // Puntos: pueden venir como array o como string JSON. Se parsean
+            // UNA vez por texto (cache) y no en cada punto consultado.
+            const p = _rxZonaPuntos(z);
             const t = z.t;
             // Circulo (t=3) o cualquier zona con centro (c o b.cen_x/cen_y) + radio.
             const cenX = (z.c && z.c.x != null) ? +z.c.x : (b && b.cen_x != null ? +b.cen_x : null);
@@ -17,7 +17,10 @@
             const radio = (z.w != null) ? +z.w : (z.r != null ? +z.r : null);
             if (t === 3 || (t == null && cenX != null && cenY != null && radio != null)) {
                 if (cenX != null && cenY != null && radio != null) {
-                    return _geoDistM(y, x, cenY, cenX) <= radio;
+                    // Distancia al cuadrado: sqrt es monotona, asi que la
+                    // decision "dentro/fuera" es identica y se ahorra una
+                    // raiz por punto (miles por refresco).
+                    return _geoDist2M(y, x, cenY, cenX) <= radio * radio;
                 }
             }
             if (Array.isArray(p) && p.length >= 2) {
@@ -71,6 +74,38 @@
         const dx = (lon2 - lon1) * mx, dy = (lat2 - lat1) * my;
         return Math.sqrt(dx * dx + dy * dy);
     }
+    // Igual que _geoDistM pero SIN la raiz: mismo calculo, para comparar
+    // contra un umbral con umbral^2.
+    function _geoDist2M(lat1, lon1, lat2, lon2) {
+        const lat0 = (lat1 + lat2) / 2;
+        const mx = 111320 * Math.cos(lat0 * Math.PI / 180), my = 110540;
+        const dx = (lon2 - lon1) * mx, dy = (lat2 - lat1) * my;
+        return dx * dx + dy * dy;
+    }
+    // Cache de geometria serializada: inZone se llama por cada punto de cada
+    // traza y z.p puede venir como JSON; parsearlo en cada llamada creaba
+    // miles de arrays por minuto (CPU y presion de GC). El texto es la clave
+    // y el tope evita crecer sin control.
+    const _rxZonaPText = new Map();
+    function _rxZonaPuntos(z) {
+        if (!z) return null;
+        const p = z.p;
+        if (typeof p !== 'string') return p;
+        const hit = _rxZonaPText.get(p);
+        if (hit !== undefined) return hit;
+        let out = null;
+        try { out = JSON.parse(p); } catch (_) { out = null; }
+        if (_rxZonaPText.size >= 500) _rxZonaPText.clear();
+        _rxZonaPText.set(p, out);
+        return out;
+    }
+    // Clave entera de una celda del indice espacial. Los indices reales
+    // caben holgados en 16 bits con signo (+-9000), asi que se desplazan a
+    // positivo y se combinan en un entero exacto: mismo resultado que la
+    // cadena "cx|cy", sin asignar una string por consulta.
+    function _rxCeldaKey(cx, cy) {
+        return (cx + 32768) * 65536 + (cy + 32768);
+    }
     // v6.0.2: indice espacial de geocercas por celdas (~2 km). Acelera
     // zoneAt cuando hay muchas zonas y se consulta por unidad/refresco. Si
     // alguna zona no tiene bounding box (o es enorme), se desactiva y se usa
@@ -91,7 +126,10 @@
             if (celdas > 20000) { sinIndice(); return; }
             for (let cx = x0; cx <= x1; cx++) {
                 for (let cy = y0; cy <= y1; cy++) {
-                    const k = cx + '|' + cy;
+                    // Clave NUMERICA en vez de "cx|cy": zoneAt se consulta por
+                    // cada unidad y cada punto; concatenar dos numeros por
+                    // consulta generaba miles de strings efimeras por refresco.
+                    const k = _rxCeldaKey(cx, cy);
                     let arr = mapa.get(k);
                     if (!arr) { arr = []; mapa.set(k, arr); }
                     arr.push(i);
@@ -108,7 +146,7 @@
         if (!idx || idx.arr !== zs) construirIndiceZonas();
         const ix = APP.zonasIndex;
         if (ix && ix.mapa) {
-            const arr = ix.mapa.get(Math.floor(lon / ix.celda) + '|' + Math.floor(lat / ix.celda));
+            const arr = ix.mapa.get(_rxCeldaKey(Math.floor(lon / ix.celda), Math.floor(lat / ix.celda)));
             if (!arr) return '';
             for (let i = 0; i < arr.length; i++) {
                 const z = zs[arr[i]];

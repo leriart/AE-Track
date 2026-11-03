@@ -58,6 +58,9 @@
             APP.kpi.offline = APP.kpi.offline.concat(watched.length - onNow).slice(-180);
             writeSession(SS.kpi, APP.kpi);
 
+            // Sello de version de los datos: el intervalo de 1 s repinta la
+            // pestaña solo cuando cambia, no en cada tic (ver 39).
+            APP.rev = (APP.rev || 0) + 1;
             paintPanel();
             revalidarContornos();
         } catch (e) {

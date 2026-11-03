@@ -2,9 +2,20 @@
     // Parsea nombre/id de una unidad. Nunca revienta con una entrada
     // incompleta: se llama en bucles sobre toda la flota y una unidad
     // corrupta no debe detener el refresco ni el analisis.
+    // Cache de parseo por (id, nombre): el refresco, la tabla y el motor
+    // llaman a parseUnitName decenas de veces sobre las mismas unidades cada
+    // ciclo, y cada llamada compilaba 3 expresiones regulares y creaba un
+    // objeto. Un Map acotado corta ese trabajo y el GC sin crecer sin control.
+    const _rxUnitNameCache = new Map();
     function parseUnitName(u) {
         const src = (u && typeof u === 'object') ? u : {};
         const nombre = String(src.nm || String(src.id == null ? '' : src.id)).trim();
+        // Clave por id (sin convertir a string: Map distingue numero de
+        // texto) y comprobacion del nombre por si la unidad se renombro.
+        // Sin id se usa el nombre; asi nunca se mezclan unidades distintas.
+        const claveCache = (src.id != null) ? src.id : ('#' + nombre);
+        const hit = _rxUnitNameCache.get(claveCache);
+        if (hit && hit.nombre === nombre) return hit;
         let eco = '';
         const mEco = nombre.match(/\.\s*0*(\d{3,5})(?!\d)/);
         if (mEco) eco = mEco[1];
@@ -15,7 +26,10 @@
         let placa = '';
         const mPlaca = nombre.match(/\b([A-Z]{2,4}[-\s]?\d{2,4}[A-Z]{0,3})\b/);
         if (mPlaca) placa = mPlaca[1];
-        return { id: src.id, nombre, eco, placa, clave: eco || placa || String(src.id) };
+        const info = { id: src.id, nombre, eco, placa, clave: eco || placa || String(src.id) };
+        if (_rxUnitNameCache.size >= 3000) _rxUnitNameCache.clear();
+        _rxUnitNameCache.set(claveCache, info);
+        return info;
     }
     function unitState(u) {
         const src = (u && typeof u === 'object') ? u : {};
@@ -109,7 +123,10 @@
         const od = APP.odometro[clave] || (APP.odometro[clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null });
         if (od.ultimoLat != null && od.ultimoLon != null && st.t && od.ultimoT) {
             const dt = Math.max(1, st.t - od.ultimoT);
-            const d = haversine(od.ultimoLat, od.ultimoLon, st.lat, st.lon);
+            // Un refresco = un tramo corto: la distancia local (sin
+            // trigonometria pesada) es exacta para este uso y evita una
+            // haversine por unidad y por ciclo.
+            const d = rxDistM(od.ultimoLat, od.ultimoLon, st.lat, st.lon);
             if (d <= ODOMETRO_MAX_SALTO_M) od.m += d;
         }
         od.ultimoLat = st.lat;

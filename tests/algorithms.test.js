@@ -26,7 +26,7 @@ const bloqueInZone = (iniInZone >= 0 && finInZone > iniInZone) ? src.slice(iniIn
 const code = 'const clamp=(v,lo,hi)=>Math.min(Math.max(v,lo),hi);\n' +
     bloqueInZone + '\n' +
     src.slice(ini, fin) +
-    '\nreturn {haversine,bearing,difAngulo,alphaEMA,distPuntoSegmento,simplificarRuta,precomputarRuta,snapRuta,MinHeap,aEstrella,sentidoOneWay,parseMaxspeed,VEL_POR_TIPO,inZone};';
+    '\nreturn {haversine,bearing,difAngulo,alphaEMA,distPuntoSegmento,simplificarRuta,precomputarRuta,snapRuta,MinHeap,aEstrella,sentidoOneWay,parseMaxspeed,VEL_POR_TIPO,inZone,rxDist2M,rxDistM,_geoDist2M,_rxCeldaKey};';
 const mod = new Function(code)();
 
 let fallos = 0;
@@ -38,6 +38,29 @@ function casi(a, b, tol) { return Math.abs(a - b) <= (tol == null ? 1 : tol); }
 
 const h = mod.haversine(19.4326, -99.1332, 19.4426, -99.1332);
 ok('haversine: 0.01 grados de latitud ~1113 m', casi(h, 1113, 8), h.toFixed(1));
+
+// ── Aritmetica de bajo nivel ────────────────────────────────────────────
+// Distancia al cuadrado: evita la raiz en las comparaciones (DBSCAN, inZone).
+const d2 = Math.sqrt(mod.rxDist2M(0, 0, 0.001, 0));
+ok('rxDist2M: 0.001 grados de latitud ~111.2 m', casi(d2, 111.2, 0.5), d2.toFixed(2));
+ok('rxDist2M: punto consigo mismo = 0', mod.rxDist2M(19.4, -99.1, 19.4, -99.1) === 0);
+ok('rxDist2M: monoticidad (mas lejos, mayor cuadrado)',
+    mod.rxDist2M(0, 0, 0, 0.001) < mod.rxDist2M(0, 0, 0, 0.002));
+// Distancia local en metros: para tramos cortos coincide con haversine.
+const dm = mod.rxDistM(19.4326, -99.1332, 19.4336, -99.1332);
+const hm = mod.haversine(19.4326, -99.1332, 19.4336, -99.1332);
+ok('rxDistM: tramo corto ~111 m', casi(dm, 111, 3), dm.toFixed(1));
+ok('rxDistM: error < 0.05 % frente a haversine', Math.abs(dm - hm) / hm < 0.0005,
+    Math.abs(dm - hm).toFixed(3) + ' m');
+ok('rxDistM: punto consigo mismo = 0', mod.rxDistM(1, 2, 1, 2) === 0);
+// La clave de celda entera no colisiona en el rango real del indice.
+ok('_rxCeldaKey: celdas distintas dan claves distintas',
+    mod._rxCeldaKey(0, 0) !== mod._rxCeldaKey(1, 0) &&
+    mod._rxCeldaKey(-9000, 9000) !== mod._rxCeldaKey(9000, -9000));
+// inZone usa distancia al cuadrado: el borde sigue siendo el borde.
+const zCirc = { id: 1, n: 'C', t: 3, w: 100, b: { min_x: -0.002, min_y: -0.002, max_x: 0.002, max_y: 0.002, cen_x: 0, cen_y: 0 } };
+ok('inZone: dentro del circulo', mod.inZone(0, 0.0005, zCirc) === true);
+ok('inZone: fuera del circulo', mod.inZone(0, 0.002, zCirc) === false);
 
 ok('bearing: norte ~0', casi(mod.bearing(0, 0, 1, 0), 0, 0.5));
 ok('bearing: este ~90', casi(mod.bearing(0, 0, 0, 1), 90, 0.5));

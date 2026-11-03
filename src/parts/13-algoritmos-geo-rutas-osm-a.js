@@ -10,6 +10,37 @@
     // la misma consulta a Nominatim dentro de la sesion.
     const RX_GEOCODE_CACHE = new Map();
 
+    // ── Aritmetica de bajo nivel ────────────────────────────────────────
+    // Constantes precalculadas: multiplicar es mas barato que llamar a rad()
+    // en los bucles que recorren miles de mensajes (replay, odometro, snap).
+    const RX_DEG2RAD = Math.PI / 180;
+    // Metros por grado sobre la esfera de RADIO_TIERRA. Con el valor exacto
+    // (no el redondeo 110540/111320) rxDistM queda a < 0.01 % de haversine,
+    // asi que los km acumulados no derivan.
+    const RX_M_LAT = RADIO_TIERRA * RX_DEG2RAD;
+    const RX_M_LON_EQ = RX_M_LAT;   // un grado de longitud mide esto en el ecuador
+    // NOTA de rendimiento: el truco de la raiz cuadrada inversa de Quake III
+    // se probo y en V8 actual es ~3x MAS LENTO que Math.sqrt (que baja a una
+    // instruccion de CPU). Lo que si gana es no calcular la raiz: para decidir
+    // "esta a menos de X metros" se compara la distancia AL CUADRADO con X*X.
+    // Distancia local al cuadrado (metros^2) con proyeccion equirectangular.
+    // A escalas de decenas de km el error frente a haversine es < 0.05 %.
+    function rxDist2M(lat1, lon1, lat2, lon2) {
+        const lat0 = (lat1 + lat2) * 0.5;
+        const mx = RX_M_LON_EQ * Math.cos(lat0 * RX_DEG2RAD);
+        const dx = (lon2 - lon1) * mx;
+        const dy = (lat2 - lat1) * RX_M_LAT;
+        return dx * dx + dy * dy;
+    }
+    // Distancia local en metros (equirectangular). Mucho mas barata que
+    // haversine (un cos + una sqrt, sin 3 sin ni asin) y con error < 0.01 %
+    // para tramos de GPS consecutivos (decenas o cientos de metros). Se usa
+    // en los bucles de acumulacion (odometro, replay, rendimientos), donde la
+    // precision de haversine no aporta nada frente al ruido del GPS.
+    function rxDistM(lat1, lon1, lat2, lon2) {
+        return Math.sqrt(rxDist2M(lat1, lon1, lat2, lon2));
+    }
+
     // fetch + JSON con timeout. Nominatim/OSRM/Overpass pueden colgarse o
     // devolver HTML de error; centralizar el parseo y el corte por tiempo
     // evita promesas que nunca resuelven y detecta respuestas no-JSON.

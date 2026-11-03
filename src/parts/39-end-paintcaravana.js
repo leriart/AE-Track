@@ -292,10 +292,25 @@
         }
     }
 
+    // Re-pintado ligero. Antes se reconstruia la pestaña activa ENTERA cada
+    // segundo aunque los datos solo cambian con el refresco (10 s por
+    // defecto): mismo HTML, mismo resultado, pero decenas de miles de nodos y
+    // cadenas por minuto. Ahora el reloj sigue a 1 s y el resto se repinta
+    // solo cuando APP.rev cambia (cada refresco) o cada 15 s para refrescar
+    // las edades relativas ("hace N min").
+    const RX_PAINT_EDAD_MS = 15000;
     setInterval(() => {
         // Ventanas ocultas: oculta tambien las que se abran despues.
         try { if (typeof rxVentanasSync === 'function') rxVentanasSync(); } catch (_) { /* noop */ }
-        if (panelEl.style.display === 'none') return;
+        if (panelEl.style.display === 'none' || document.hidden) return;
+        // Reloj: lo unico que cambia de verdad cada segundo.
+        byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
+        if (nmActivo()) updateNoMolestar();
+        const ahora = Date.now();
+        const rev = APP.rev || 0;
+        if (APP._paintRev === rev && (ahora - (APP._paintT || 0)) < RX_PAINT_EDAD_MS) return;
+        APP._paintRev = rev;
+        APP._paintT = ahora;
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();
         if (APP.tab === 'rutas') paintRutas();
@@ -303,8 +318,6 @@
         if (APP.tab === 'caravana') paintCaravana();
         // Riesgo NO se repinta cada segundo para evitar parpadeo: solo se
         // re-pinta cuando cambian los datos, los filtros o se carga el dataset.
-        byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
-        if (nmActivo()) updateNoMolestar();
         paintStateBadge();
         paintInfo();
     }, 1000);

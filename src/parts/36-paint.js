@@ -27,6 +27,11 @@
         paintCounters();
         paintStateBadge();
         paintInfo();
+        // Marca esta pestaña como recien pintada: evita que el intervalo de
+        // 1 s la reconstruya otra vez solo porque APP.rev avanzo en el
+        // refresco que acaba de llamar a setTab().
+        APP._paintRev = APP.rev || 0;
+        APP._paintT = Date.now();
     }
     // Muestra solo las herramientas relevantes a la pestaña activa. Cada
     // boton/select/input de la barra .tools lleva data-tabs con las pestañas

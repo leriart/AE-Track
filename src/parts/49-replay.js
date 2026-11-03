@@ -813,7 +813,10 @@
             let acum = 0;
             msgs[0].km = 0;
             for (let i = 1; i < msgs.length; i++) {
-                const d = haversine(msgs[i - 1].lat, msgs[i - 1].lon, msgs[i].lat, msgs[i].lon);
+                // Distancia local (equirectangular): con muestras de GPS
+                // consecutivas el error es < 0.01 % y se evita haversine
+                // (3 trigonometrias) en un bucle de miles de mensajes.
+                const d = rxDistM(msgs[i - 1].lat, msgs[i - 1].lon, msgs[i].lat, msgs[i].lon);
                 if (d <= 5000) acum += d;
                 msgs[i].km = acum;
             }

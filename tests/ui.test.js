@@ -1307,6 +1307,13 @@ ok('cabecera: el titulo es el logo RONDO (Ndot)',
     /class="rondo-nlogo"/.test(src) && /rondoLogoSVG\('currentColor'\)/.test(src));
 ok('diagnostico: incluye la identidad de la plataforma',
     /plataforma: \{/.test(src) && /Plataforma: ' \+ \(plat\.nombre/.test(src));
+// Rendimiento: el repintado de 1 s ya no reconstruye la pestaña si los datos
+// no cambiaron (antes era el mayor generador de basura del script).
+ok('rendimiento: el refresco marca APP.rev', /APP\.rev = \(APP\.rev \|\| 0\) \+ 1/.test(src));
+ok('rendimiento: el intervalo de 1 s repinta por cambio de datos',
+    /RX_PAINT_EDAD_MS/.test(src) && /APP\._paintRev === rev/.test(src) && /document\.hidden/.test(src));
+ok('rendimiento: no se pinta la pestaña si el panel esta oculto',
+    /panelEl\.style\.display === 'none' \|\| document\.hidden/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

@@ -2699,6 +2699,11 @@
         paintCounters();
         paintStateBadge();
         paintInfo();
+        // Marca esta pestaña como recien pintada: evita que el intervalo de
+        // 1 s la reconstruya otra vez solo porque APP.rev avanzo en el
+        // refresco que acaba de llamar a setTab().
+        APP._paintRev = APP.rev || 0;
+        APP._paintT = Date.now();
     }
     // Muestra solo las herramientas relevantes a la pestaña activa. Cada
     // boton/select/input de la barra .tools lleva data-tabs con las pestañas
@@ -4326,10 +4331,25 @@
         }
     }
 
+    // Re-pintado ligero. Antes se reconstruia la pestaña activa ENTERA cada
+    // segundo aunque los datos solo cambian con el refresco (10 s por
+    // defecto): mismo HTML, mismo resultado, pero decenas de miles de nodos y
+    // cadenas por minuto. Ahora el reloj sigue a 1 s y el resto se repinta
+    // solo cuando APP.rev cambia (cada refresco) o cada 15 s para refrescar
+    // las edades relativas ("hace N min").
+    const RX_PAINT_EDAD_MS = 15000;
     setInterval(() => {
         // Ventanas ocultas: oculta tambien las que se abran despues.
         try { if (typeof rxVentanasSync === 'function') rxVentanasSync(); } catch (_) { /* noop */ }
-        if (panelEl.style.display === 'none') return;
+        if (panelEl.style.display === 'none' || document.hidden) return;
+        // Reloj: lo unico que cambia de verdad cada segundo.
+        byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
+        if (nmActivo()) updateNoMolestar();
+        const ahora = Date.now();
+        const rev = APP.rev || 0;
+        if (APP._paintRev === rev && (ahora - (APP._paintT || 0)) < RX_PAINT_EDAD_MS) return;
+        APP._paintRev = rev;
+        APP._paintT = ahora;
         if (APP.tab === 'unidades') paintTabla();
         if (APP.tab === 'dash') paintKPI();
         if (APP.tab === 'rutas') paintRutas();
@@ -4337,8 +4357,6 @@
         if (APP.tab === 'caravana') paintCaravana();
         // Riesgo NO se repinta cada segundo para evitar parpadeo: solo se
         // re-pinta cuando cambian los datos, los filtros o se carga el dataset.
-        byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
-        if (nmActivo()) updateNoMolestar();
         paintStateBadge();
         paintInfo();
     }, 1000);
@@ -8302,7 +8320,10 @@
             let acum = 0;
             msgs[0].km = 0;
             for (let i = 1; i < msgs.length; i++) {
-                const d = haversine(msgs[i - 1].lat, msgs[i - 1].lon, msgs[i].lat, msgs[i].lon);
+                // Distancia local (equirectangular): con muestras de GPS
+                // consecutivas el error es < 0.01 % y se evita haversine
+                // (3 trigonometrias) en un bucle de miles de mensajes.
+                const d = rxDistM(msgs[i - 1].lat, msgs[i - 1].lon, msgs[i].lat, msgs[i].lon);
                 if (d <= 5000) acum += d;
                 msgs[i].km = acum;
             }
@@ -18544,7 +18565,7 @@ function carnHTML(r) {
             if (dur >= paradaSeg && clat != null && !dentro({ lat: clat, lon: clon })) {
                 let m = 0;
                 for (let i = ancla; i < qIni; i++) {
-                    const d = haversine(pts[i].lat, pts[i].lon, pts[i + 1].lat, pts[i + 1].lon);
+                    const d = rxDistM(pts[i].lat, pts[i].lon, pts[i + 1].lat, pts[i + 1].lon);
                     if (d <= salto) m += d;
                 }
                 const km = m / 1000;
@@ -18582,7 +18603,8 @@ function carnHTML(r) {
             const lat = +RX_REND.lat, lon = +RX_REND.lon;
             const r = clamp(+RX_REND.radio || 100, 10, 5000);
             if (!isFinite(lat) || !isFinite(lon)) return null;
-            return (p) => haversine(lat, lon, p.lat, p.lon) <= r;
+            // Comparacion al cuadrado: se llama por cada punto del historial.
+            return (p) => rxDist2M(lat, lon, p.lat, p.lon) <= r * r;
         }
         const z = (APP.zonas || []).find((x) => rxGeoInfNombre(x) === RX_REND.zona);
         if (!z) return null;

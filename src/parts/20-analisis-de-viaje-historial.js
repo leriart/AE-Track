@@ -102,6 +102,7 @@
         // perder vecinos reales (el radio se evalua igual con haversine).
         const cosLat = Math.max(0.2, Math.cos(puntos[i].lat * Math.PI / 180));
         const rangoLon = Math.max(1, Math.ceil(1 / cosLat));
+        const eps2 = eps * eps;
         const out = [];
         for (let dx = -1; dx <= 1; dx++) {
             for (let dy = -rangoLon; dy <= rangoLon; dy++) {
@@ -110,7 +111,10 @@
                 for (let m = 0; m < cell.length; m++) {
                     const j = cell[m];
                     if (j === i) continue;
-                    if (haversine(puntos[i].lat, puntos[i].lon, puntos[j].lat, puntos[j].lon) <= eps) {
+                    // Al cuadrado y equirectangular: DBSCAN solo pregunta
+                    // "a menos de eps?". Evita una haversine (2 sin + 2 cos +
+                    // asin) por cada par de puntos candidatos.
+                    if (rxDist2M(puntos[i].lat, puntos[i].lon, puntos[j].lat, puntos[j].lon) <= eps2) {
                         out.push(j);
                     }
                 }
@@ -170,7 +174,7 @@
         const paradas = analizarParadas(puntos, desde, paradaMin, partidaHoras * 3600);
         let dist = 0;
         for (let i = 1; i < trayecto.length; i++) {
-            dist += haversine(trayecto[i - 1].lat, trayecto[i - 1].lon, trayecto[i].lat, trayecto[i].lon);
+            dist += rxDistM(trayecto[i - 1].lat, trayecto[i - 1].lon, trayecto[i].lat, trayecto[i].lon);
         }
         let salida = null;
         for (let i = desde; i < puntos.length; i++) { if (puntos[i].s > 3) { salida = puntos[i]; break; } }

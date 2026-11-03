@@ -1540,9 +1540,9 @@ function _extraerZonasDe(items) {
             const b = z.b;
             // Descarte rapido por bounding box (si viene).
             if (b && b.min_x != null && (x < b.min_x || x > b.max_x || y < b.min_y || y > b.max_y)) return false;
-            // Puntos: pueden venir como array o como string JSON.
-            let p = z.p;
-            if (typeof p === 'string') { try { p = JSON.parse(p); } catch (_) { p = null; } }
+            // Puntos: pueden venir como array o como string JSON. Se parsean
+            // UNA vez por texto (cache) y no en cada punto consultado.
+            const p = _rxZonaPuntos(z);
             const t = z.t;
             // Circulo (t=3) o cualquier zona con centro (c o b.cen_x/cen_y) + radio.
             const cenX = (z.c && z.c.x != null) ? +z.c.x : (b && b.cen_x != null ? +b.cen_x : null);
@@ -1550,7 +1550,10 @@ function _extraerZonasDe(items) {
             const radio = (z.w != null) ? +z.w : (z.r != null ? +z.r : null);
             if (t === 3 || (t == null && cenX != null && cenY != null && radio != null)) {
                 if (cenX != null && cenY != null && radio != null) {
-                    return _geoDistM(y, x, cenY, cenX) <= radio;
+                    // Distancia al cuadrado: sqrt es monotona, asi que la
+                    // decision "dentro/fuera" es identica y se ahorra una
+                    // raiz por punto (miles por refresco).
+                    return _geoDist2M(y, x, cenY, cenX) <= radio * radio;
                 }
             }
             if (Array.isArray(p) && p.length >= 2) {
@@ -1604,6 +1607,38 @@ function _extraerZonasDe(items) {
         const dx = (lon2 - lon1) * mx, dy = (lat2 - lat1) * my;
         return Math.sqrt(dx * dx + dy * dy);
     }
+    // Igual que _geoDistM pero SIN la raiz: mismo calculo, para comparar
+    // contra un umbral con umbral^2.
+    function _geoDist2M(lat1, lon1, lat2, lon2) {
+        const lat0 = (lat1 + lat2) / 2;
+        const mx = 111320 * Math.cos(lat0 * Math.PI / 180), my = 110540;
+        const dx = (lon2 - lon1) * mx, dy = (lat2 - lat1) * my;
+        return dx * dx + dy * dy;
+    }
+    // Cache de geometria serializada: inZone se llama por cada punto de cada
+    // traza y z.p puede venir como JSON; parsearlo en cada llamada creaba
+    // miles de arrays por minuto (CPU y presion de GC). El texto es la clave
+    // y el tope evita crecer sin control.
+    const _rxZonaPText = new Map();
+    function _rxZonaPuntos(z) {
+        if (!z) return null;
+        const p = z.p;
+        if (typeof p !== 'string') return p;
+        const hit = _rxZonaPText.get(p);
+        if (hit !== undefined) return hit;
+        let out = null;
+        try { out = JSON.parse(p); } catch (_) { out = null; }
+        if (_rxZonaPText.size >= 500) _rxZonaPText.clear();
+        _rxZonaPText.set(p, out);
+        return out;
+    }
+    // Clave entera de una celda del indice espacial. Los indices reales
+    // caben holgados en 16 bits con signo (+-9000), asi que se desplazan a
+    // positivo y se combinan en un entero exacto: mismo resultado que la
+    // cadena "cx|cy", sin asignar una string por consulta.
+    function _rxCeldaKey(cx, cy) {
+        return (cx + 32768) * 65536 + (cy + 32768);
+    }
     // v6.0.2: indice espacial de geocercas por celdas (~2 km). Acelera
     // zoneAt cuando hay muchas zonas y se consulta por unidad/refresco. Si
     // alguna zona no tiene bounding box (o es enorme), se desactiva y se usa
@@ -1624,7 +1659,10 @@ function _extraerZonasDe(items) {
             if (celdas > 20000) { sinIndice(); return; }
             for (let cx = x0; cx <= x1; cx++) {
                 for (let cy = y0; cy <= y1; cy++) {
-                    const k = cx + '|' + cy;
+                    // Clave NUMERICA en vez de "cx|cy": zoneAt se consulta por
+                    // cada unidad y cada punto; concatenar dos numeros por
+                    // consulta generaba miles de strings efimeras por refresco.
+                    const k = _rxCeldaKey(cx, cy);
                     let arr = mapa.get(k);
                     if (!arr) { arr = []; mapa.set(k, arr); }
                     arr.push(i);
@@ -1641,7 +1679,7 @@ function _extraerZonasDe(items) {
         if (!idx || idx.arr !== zs) construirIndiceZonas();
         const ix = APP.zonasIndex;
         if (ix && ix.mapa) {
-            const arr = ix.mapa.get(Math.floor(lon / ix.celda) + '|' + Math.floor(lat / ix.celda));
+            const arr = ix.mapa.get(_rxCeldaKey(Math.floor(lon / ix.celda), Math.floor(lat / ix.celda)));
             if (!arr) return '';
             for (let i = 0; i < arr.length; i++) {
                 const z = zs[arr[i]];
@@ -1690,6 +1728,37 @@ function _extraerZonasDe(items) {
     // Cache de geocodificacion directa (texto -> coordenadas) para no repetir
     // la misma consulta a Nominatim dentro de la sesion.
     const RX_GEOCODE_CACHE = new Map();
+
+    // ── Aritmetica de bajo nivel ────────────────────────────────────────
+    // Constantes precalculadas: multiplicar es mas barato que llamar a rad()
+    // en los bucles que recorren miles de mensajes (replay, odometro, snap).
+    const RX_DEG2RAD = Math.PI / 180;
+    // Metros por grado sobre la esfera de RADIO_TIERRA. Con el valor exacto
+    // (no el redondeo 110540/111320) rxDistM queda a < 0.01 % de haversine,
+    // asi que los km acumulados no derivan.
+    const RX_M_LAT = RADIO_TIERRA * RX_DEG2RAD;
+    const RX_M_LON_EQ = RX_M_LAT;   // un grado de longitud mide esto en el ecuador
+    // NOTA de rendimiento: el truco de la raiz cuadrada inversa de Quake III
+    // se probo y en V8 actual es ~3x MAS LENTO que Math.sqrt (que baja a una
+    // instruccion de CPU). Lo que si gana es no calcular la raiz: para decidir
+    // "esta a menos de X metros" se compara la distancia AL CUADRADO con X*X.
+    // Distancia local al cuadrado (metros^2) con proyeccion equirectangular.
+    // A escalas de decenas de km el error frente a haversine es < 0.05 %.
+    function rxDist2M(lat1, lon1, lat2, lon2) {
+        const lat0 = (lat1 + lat2) * 0.5;
+        const mx = RX_M_LON_EQ * Math.cos(lat0 * RX_DEG2RAD);
+        const dx = (lon2 - lon1) * mx;
+        const dy = (lat2 - lat1) * RX_M_LAT;
+        return dx * dx + dy * dy;
+    }
+    // Distancia local en metros (equirectangular). Mucho mas barata que
+    // haversine (un cos + una sqrt, sin 3 sin ni asin) y con error < 0.01 %
+    // para tramos de GPS consecutivos (decenas o cientos de metros). Se usa
+    // en los bucles de acumulacion (odometro, replay, rendimientos), donde la
+    // precision de haversine no aporta nada frente al ruido del GPS.
+    function rxDistM(lat1, lon1, lat2, lon2) {
+        return Math.sqrt(rxDist2M(lat1, lon1, lat2, lon2));
+    }
 
     // fetch + JSON con timeout. Nominatim/OSRM/Overpass pueden colgarse o
     // devolver HTML de error; centralizar el parseo y el corte por tiempo
@@ -3275,6 +3344,7 @@ function _extraerZonasDe(items) {
         // perder vecinos reales (el radio se evalua igual con haversine).
         const cosLat = Math.max(0.2, Math.cos(puntos[i].lat * Math.PI / 180));
         const rangoLon = Math.max(1, Math.ceil(1 / cosLat));
+        const eps2 = eps * eps;
         const out = [];
         for (let dx = -1; dx <= 1; dx++) {
             for (let dy = -rangoLon; dy <= rangoLon; dy++) {
@@ -3283,7 +3353,10 @@ function _extraerZonasDe(items) {
                 for (let m = 0; m < cell.length; m++) {
                     const j = cell[m];
                     if (j === i) continue;
-                    if (haversine(puntos[i].lat, puntos[i].lon, puntos[j].lat, puntos[j].lon) <= eps) {
+                    // Al cuadrado y equirectangular: DBSCAN solo pregunta
+                    // "a menos de eps?". Evita una haversine (2 sin + 2 cos +
+                    // asin) por cada par de puntos candidatos.
+                    if (rxDist2M(puntos[i].lat, puntos[i].lon, puntos[j].lat, puntos[j].lon) <= eps2) {
                         out.push(j);
                     }
                 }
@@ -3343,7 +3416,7 @@ function _extraerZonasDe(items) {
         const paradas = analizarParadas(puntos, desde, paradaMin, partidaHoras * 3600);
         let dist = 0;
         for (let i = 1; i < trayecto.length; i++) {
-            dist += haversine(trayecto[i - 1].lat, trayecto[i - 1].lon, trayecto[i].lat, trayecto[i].lon);
+            dist += rxDistM(trayecto[i - 1].lat, trayecto[i - 1].lon, trayecto[i].lat, trayecto[i].lon);
         }
         let salida = null;
         for (let i = desde; i < puntos.length; i++) { if (puntos[i].s > 3) { salida = puntos[i]; break; } }
@@ -3422,9 +3495,20 @@ function _extraerZonasDe(items) {
     // Parsea nombre/id de una unidad. Nunca revienta con una entrada
     // incompleta: se llama en bucles sobre toda la flota y una unidad
     // corrupta no debe detener el refresco ni el analisis.
+    // Cache de parseo por (id, nombre): el refresco, la tabla y el motor
+    // llaman a parseUnitName decenas de veces sobre las mismas unidades cada
+    // ciclo, y cada llamada compilaba 3 expresiones regulares y creaba un
+    // objeto. Un Map acotado corta ese trabajo y el GC sin crecer sin control.
+    const _rxUnitNameCache = new Map();
     function parseUnitName(u) {
         const src = (u && typeof u === 'object') ? u : {};
         const nombre = String(src.nm || String(src.id == null ? '' : src.id)).trim();
+        // Clave por id (sin convertir a string: Map distingue numero de
+        // texto) y comprobacion del nombre por si la unidad se renombro.
+        // Sin id se usa el nombre; asi nunca se mezclan unidades distintas.
+        const claveCache = (src.id != null) ? src.id : ('#' + nombre);
+        const hit = _rxUnitNameCache.get(claveCache);
+        if (hit && hit.nombre === nombre) return hit;
         let eco = '';
         const mEco = nombre.match(/\.\s*0*(\d{3,5})(?!\d)/);
         if (mEco) eco = mEco[1];
@@ -3435,7 +3519,10 @@ function _extraerZonasDe(items) {
         let placa = '';
         const mPlaca = nombre.match(/\b([A-Z]{2,4}[-\s]?\d{2,4}[A-Z]{0,3})\b/);
         if (mPlaca) placa = mPlaca[1];
-        return { id: src.id, nombre, eco, placa, clave: eco || placa || String(src.id) };
+        const info = { id: src.id, nombre, eco, placa, clave: eco || placa || String(src.id) };
+        if (_rxUnitNameCache.size >= 3000) _rxUnitNameCache.clear();
+        _rxUnitNameCache.set(claveCache, info);
+        return info;
     }
     function unitState(u) {
         const src = (u && typeof u === 'object') ? u : {};
@@ -3529,7 +3616,10 @@ function _extraerZonasDe(items) {
         const od = APP.odometro[clave] || (APP.odometro[clave] = { m: 0, ultimoLat: null, ultimoLon: null, ultimoT: null });
         if (od.ultimoLat != null && od.ultimoLon != null && st.t && od.ultimoT) {
             const dt = Math.max(1, st.t - od.ultimoT);
-            const d = haversine(od.ultimoLat, od.ultimoLon, st.lat, st.lon);
+            // Un refresco = un tramo corto: la distancia local (sin
+            // trigonometria pesada) es exacta para este uso y evita una
+            // haversine por unidad y por ciclo.
+            const d = rxDistM(od.ultimoLat, od.ultimoLon, st.lat, st.lon);
             if (d <= ODOMETRO_MAX_SALTO_M) od.m += d;
         }
         od.ultimoLat = st.lat;

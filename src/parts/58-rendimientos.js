@@ -74,7 +74,7 @@
             if (dur >= paradaSeg && clat != null && !dentro({ lat: clat, lon: clon })) {
                 let m = 0;
                 for (let i = ancla; i < qIni; i++) {
-                    const d = haversine(pts[i].lat, pts[i].lon, pts[i + 1].lat, pts[i + 1].lon);
+                    const d = rxDistM(pts[i].lat, pts[i].lon, pts[i + 1].lat, pts[i + 1].lon);
                     if (d <= salto) m += d;
                 }
                 const km = m / 1000;
@@ -112,7 +112,8 @@
             const lat = +RX_REND.lat, lon = +RX_REND.lon;
             const r = clamp(+RX_REND.radio || 100, 10, 5000);
             if (!isFinite(lat) || !isFinite(lon)) return null;
-            return (p) => haversine(lat, lon, p.lat, p.lon) <= r;
+            // Comparacion al cuadrado: se llama por cada punto del historial.
+            return (p) => rxDist2M(lat, lon, p.lat, p.lon) <= r * r;
         }
         const z = (APP.zonas || []).find((x) => rxGeoInfNombre(x) === RX_REND.zona);
         if (!z) return null;
