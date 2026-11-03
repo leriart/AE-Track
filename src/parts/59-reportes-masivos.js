@@ -63,6 +63,10 @@
     function rxMasApiBase() {
         let u = '';
         try { u = rxPlatApiUrl() || ''; } catch (_) { u = ''; }
+        // El metadato puede traer la URL del SDK (wialon.js), no la del API:
+        // en ese caso se usa el origen de la pagina, que es donde vive el
+        // endpoint de la plataforma.
+        if (/\.js(\?|$)/i.test(u) || /\/wsdk\//i.test(u)) u = '';
         if (!u) { try { u = (PAGE.location && PAGE.location.origin) || ''; } catch (_) { u = ''; } }
         if (!u) return '';
         if (/ajax\.html/i.test(u)) return u;
@@ -77,7 +81,8 @@
         return '';
     }
     // URL de exportacion. format 2 = PDF (1 HTML, 32 CSV, 4 XLS, 8 XLSX).
-    // attachMap incluye el mapa nativo del informe; pageWidth 1 = compacto.
+    // compress 0: el PDF viaja tal cual (con compresion llegaba un archivo
+    // comprimido que el visor no puede abrir). attachMap = mapa nativo.
     function rxMasExportUrl(nombre) {
         const base = rxMasApiBase();
         const sid = rxMasSid();
@@ -90,7 +95,7 @@
             attachMap: 1,
             extendBounds: 1,
             hideMapBasis: 0,
-            compress: 1,
+            compress: 0,
             outputFileName: String(nombre || 'recorridos').replace(/\.pdf$/i, '')
         };
         return base + (base.indexOf('?') >= 0 ? '&' : '?') +
@@ -106,33 +111,94 @@
             setTimeout(() => { try { URL.revokeObjectURL(url); } catch (_) { /* noop */ } }, 4000);
         } catch (_) { /* noop */ }
     }
-    // Baja el archivo nativo. Primero por peticion binaria (permite saber
-    // cuando termino, sin que la limpieza del siguiente informe corte la
-    // descarga a medias); si el gestor no la soporta, navega un iframe oculto
-    // (el servidor responde con Content-Disposition: attachment).
+    // Firma del archivo: un PDF de verdad empieza por "%PDF-". Si la
+    // plataforma devuelve HTML/JSON (sesion caducada, servicio no disponible)
+    // o un comprimido, NO se guarda como PDF: se explica el motivo.
+    function rxMasBytesTipo(u8) {
+        if (!u8 || !u8.length) return 'vacio';
+        if (u8[0] === 0x25 && u8[1] === 0x50 && u8[2] === 0x44 && u8[3] === 0x46) return 'pdf';
+        if (u8[0] === 0x1f && u8[1] === 0x8b) return 'gzip';
+        if (u8[0] === 0x50 && u8[1] === 0x4b && u8[2] === 0x03 && u8[3] === 0x04) return 'zip';
+        let s = '';
+        for (let i = 0; i < Math.min(u8.length, 64); i++) s += String.fromCharCode(u8[i]);
+        s = s.replace(/^\s+/, '');
+        if (s.charAt(0) === '{' || s.charAt(0) === '[') return 'json';
+        if (s.charAt(0) === '<') return 'html';
+        return 'otro';
+    }
+    function rxMasTexto(u8) {
+        try {
+            if (typeof TextDecoder === 'function') return new TextDecoder('utf-8').decode(u8.slice(0, 4096));
+        } catch (_) { /* noop */ }
+        let s = '';
+        for (let i = 0; i < Math.min(u8.length, 4096); i++) s += String.fromCharCode(u8[i]);
+        return s;
+    }
+    // Motivo legible cuando el archivo no es un PDF (util para el resumen).
+    function rxMasMotivoError(tipo, u8) {
+        const txt = u8 ? rxMasTexto(u8) : '';
+        let det = '';
+        if (tipo === 'json') {
+            try {
+                const o = JSON.parse(txt);
+                det = o.error || o.message || o.reason || o.err || '';
+                if (det && typeof det === 'object') det = JSON.stringify(det);
+            } catch (_) { det = ''; }
+        } else if (tipo === 'html') {
+            const m = txt.match(/<title[^>]*>([^<]{0,120})<\/title>/i);
+            det = m ? m[1].trim() : txt.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+        }
+        if (!det && tipo !== 'vacio') det = txt.replace(/\s+/g, ' ').trim().slice(0, 100);
+        const nombres = {
+            html: 'una pagina HTML', json: 'una respuesta JSON',
+            gzip: 'un archivo comprimido (gzip)', zip: 'un archivo comprimido (zip)',
+            otro: 'un archivo desconocido', vacio: 'una respuesta vacia'
+        };
+        return 'la plataforma devolvio ' + (nombres[tipo] || tipo) +
+            (det ? (' ("' + det + '")') : '') + ' en vez del PDF';
+    }
+    function rxMasABytes(resp) {
+        if (!resp) return Promise.resolve(null);
+        if (resp instanceof Uint8Array) return Promise.resolve(resp);
+        if (typeof ArrayBuffer !== 'undefined' && resp instanceof ArrayBuffer) return Promise.resolve(new Uint8Array(resp));
+        if (resp && typeof resp.arrayBuffer === 'function') {
+            return resp.arrayBuffer().then((b) => new Uint8Array(b)).catch(() => null);
+        }
+        return Promise.resolve(null);
+    }
+    // Valida y guarda. Un gzip (algun servidor comprime igual) se descomprime
+    // con DecompressionStream si el navegador lo soporta; lo demas es error.
+    function rxMasGuardaPdf(u8, nombre) {
+        if (!u8 || !u8.length) return Promise.reject(new Error(rxMasMotivoError('vacio', u8)));
+        const tipo = rxMasBytesTipo(u8);
+        if (tipo === 'pdf') {
+            rxMasDescargaBlob(new Blob([u8], { type: 'application/pdf' }), nombre);
+            return Promise.resolve(true);
+        }
+        if (tipo === 'gzip' && typeof DecompressionStream === 'function' && typeof Blob === 'function') {
+            let p;
+            try {
+                const ds = new DecompressionStream('gzip');
+                p = new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
+            } catch (_) { p = Promise.reject(new Error('sin descompresor')); }
+            return p.then((ab) => {
+                const u2 = new Uint8Array(ab);
+                if (rxMasBytesTipo(u2) !== 'pdf') throw new Error(rxMasMotivoError(rxMasBytesTipo(u2), u2));
+                rxMasDescargaBlob(new Blob([u2], { type: 'application/pdf' }), nombre);
+                return true;
+            }).catch(() => { throw new Error(rxMasMotivoError(tipo, u8)); });
+        }
+        return Promise.reject(new Error(rxMasMotivoError(tipo, u8)));
+    }
+    // Baja el archivo nativo. Primero por peticion binaria (valida la firma y
+    // permite saber cuando termino); si el gestor no la soporta, navega un
+    // iframe oculto (el servidor responde con Content-Disposition: attachment).
     function rxMasBajaNativo(url, nombre) {
-        if (!url) return Promise.resolve(false);
-        return new Promise((resolve) => {
+        if (!url) return Promise.reject(new Error('sin URL de exportacion (sesion no disponible)'));
+        return new Promise((resolve, reject) => {
             let hecho = false;
-            const fin = (ok) => { if (!hecho) { hecho = true; resolve(!!ok); } };
-            const gm = (typeof gmXhr === 'function') ? gmXhr() : null;
-            if (gm) {
-                try {
-                    gm({
-                        method: 'GET', url: url, responseType: 'blob', timeout: 60000,
-                        onload: (r) => {
-                            if (r.status >= 200 && r.status < 300 && r.response && r.response.size) {
-                                rxMasDescargaBlob(r.response, nombre); fin(true);
-                            } else fin(false);
-                        },
-                        onerror: () => fin(false),
-                        ontimeout: () => fin(false)
-                    });
-                } catch (_) { fin(false); }
-                return;
-            }
-            // Ultimo recurso: navegar un iframe oculto. El servidor responde
-            // con Content-Disposition: attachment y el navegador lo guarda.
+            const ok = () => { if (!hecho) { hecho = true; resolve(true); } };
+            const falla = (e) => { if (!hecho) { hecho = true; reject(e instanceof Error ? e : new Error(String(e))); } };
             const porIframe = () => {
                 try {
                     const fr = document.createElement('iframe');
@@ -140,14 +206,36 @@
                     fr.src = url;
                     document.body.appendChild(fr);
                     setTimeout(() => { try { fr.remove(); } catch (_) { /* noop */ } }, 60000);
-                    setTimeout(() => fin(true), 3000);
-                } catch (_) { fin(false); }
+                    setTimeout(ok, 3000);
+                } catch (_) { falla(new Error('no se pudo iniciar la descarga del PDF')); }
             };
+            const gm = (typeof gmXhr === 'function') ? gmXhr() : null;
+            if (gm) {
+                try {
+                    gm({
+                        method: 'GET', url: url, responseType: 'arraybuffer', timeout: 60000,
+                        onload: (r) => {
+                            if (!(r.status >= 200 && r.status < 300)) {
+                                falla(new Error('HTTP ' + r.status + ' al pedir el PDF'));
+                                return;
+                            }
+                            rxMasABytes(r.response).then((u8) => rxMasGuardaPdf(u8, nombre)).then(ok).catch(falla);
+                        },
+                        onerror: () => falla(new Error('fallo de red al pedir el PDF')),
+                        ontimeout: () => falla(new Error('la plataforma tardo demasiado en generar el PDF'))
+                    });
+                } catch (e) { falla(e); }
+                return;
+            }
             if (typeof fetch === 'function') {
                 fetch(url).then((r) => {
-                    if (!r.ok) { porIframe(); return null; }
-                    return r.blob().then((b) => { rxMasDescargaBlob(b, nombre); fin(true); });
-                }).catch(() => porIframe());
+                    if (!r.ok) throw new Error('HTTP ' + r.status + ' al pedir el PDF');
+                    return r.arrayBuffer();
+                }).then((b) => rxMasGuardaPdf(new Uint8Array(b), nombre)).then(ok)
+                    .catch((e) => {
+                        // Error del servidor: se informa. Fallo de red/CORS: iframe.
+                        if (/HTTP \d/.test(String(e && e.message))) falla(e); else porIframe();
+                    });
                 return;
             }
             porIframe();

@@ -58,7 +58,7 @@ const stubs = [
 
 const code = stubs + '\n' + src.slice(ini, fin) +
     '\nreturn { RX_MAS, RX_MAS_ESPERA_DESCARGA, rxMasUnidades, rxMasNombreArchivo, rxMasCSV, rxMasCorre,' +
-    ' rxMasExportUrl, rxMasApiBase, rxMasSid, abrirReportesMasivos, fakeEl,' +
+    ' rxMasExportUrl, rxMasApiBase, rxMasSid, rxMasBytesTipo, rxMasMotivoError, rxMasGuardaPdf, abrirReportesMasivos, fakeEl,' +
     ' setUnidades:function(l){ APP.unidades = l; } };';
 const mod = new Function(code)();
 global.document = {
@@ -98,10 +98,25 @@ const url = mod.rxMasExportUrl('rondo_recorridos_x_105.pdf');
 ok('export: URL con el servicio, sid y formato PDF',
     url.indexOf('svc=report/export_result') > 0 && url.indexOf('sid=SID123') > 0 &&
     url.indexOf(encodeURIComponent('"format":2')) > 0);
-ok('export: pide mapa y nombre de archivo',
+ok('export: pide mapa, sin comprimir y nombre de archivo',
     url.indexOf(encodeURIComponent('"attachMap":1')) > 0 &&
+    url.indexOf(encodeURIComponent('"compress":0')) > 0 &&
     url.indexOf(encodeURIComponent('"outputFileName":"rondo_recorridos_x_105"')) > 0);
 ok('export: sin nombre sigue armando la URL', /svc=report\/export_result/.test(mod.rxMasExportUrl('')));
+
+// ── Validacion del archivo nativo ──────────────────────────────────────
+const bytes = (txt) => new Uint8Array(Array.from(txt).map((c) => c.charCodeAt(0)));
+ok('pdf: detecta la firma %PDF-', mod.rxMasBytesTipo(bytes('%PDF-1.7 ...')) === 'pdf');
+ok('pdf: detecta HTML, JSON, gzip y zip',
+    mod.rxMasBytesTipo(bytes('<html><title>x</title></html>')) === 'html' &&
+    mod.rxMasBytesTipo(bytes('{"error":"sesion"}')) === 'json' &&
+    mod.rxMasBytesTipo(new Uint8Array([0x1f, 0x8b, 0, 0])) === 'gzip' &&
+    mod.rxMasBytesTipo(new Uint8Array([0x50, 0x4b, 0x03, 0x04])) === 'zip');
+ok('pdf: respuesta vacia', mod.rxMasBytesTipo(new Uint8Array(0)) === 'vacio');
+ok('pdf: explica un HTML (titulo)', /pagina HTML/.test(mod.rxMasMotivoError('html', bytes('<html><title>No autorizado</title></html>'))) &&
+    /No autorizado/.test(mod.rxMasMotivoError('html', bytes('<html><title>No autorizado</title></html>'))));
+ok('pdf: explica un JSON (mensaje)', /respuesta JSON/.test(mod.rxMasMotivoError('json', bytes('{"error":"SID invalido"}'))) &&
+    /SID invalido/.test(mod.rxMasMotivoError('json', bytes('{"error":"SID invalido"}'))) );
 
 // ── Lista de unidades ───────────────────────────────────────────────────
 mod.setUnidades([
@@ -210,6 +225,15 @@ ok('unidades: {id, eco} ordenadas por economico',
             null, null, ejecuta, descarga);
         ok('lote PDF: la descarga fallida no tira el lote',
             res.length === 2 && /sin PDF/.test(res[0].error) && res[0].nativo === false);
+    }
+    // No se guarda como PDF si el contenido no lo es.
+    {
+        let err = null;
+        await mod.rxMasGuardaPdf(bytes('<html>error</html>'), 'x.pdf').catch((e) => { err = e; });
+        ok('pdf: un HTML no se guarda como PDF', !!err && /HTML/i.test(err.message));
+        err = null;
+        await mod.rxMasGuardaPdf(new Uint8Array(0), 'x.pdf').catch((e) => { err = e; });
+        ok('pdf: una respuesta vacia no se guarda', !!err && /vacia/.test(err.message));
     }
     // Reabrir: el memo de setHtml se invalida (si no, el cuerpo sale vacio).
     ok('ui: el dialogo invalida el memo al abrir', /invalidarHtml\('rmas-box'\)/.test(src));
