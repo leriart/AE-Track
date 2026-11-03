@@ -15,6 +15,8 @@
         unidad: '',           // id de la unidad elegida
         modo: 'zona',         // 'zona' (geocerca) | 'punto' (lat/lon + radio)
         zona: '',             // nombre de la geocerca de partida
+        uniBusca: '',         // filtro del buscador de unidades
+        zonaBusca: '',        // filtro del buscador de geocercas
         lat: '', lon: '', radio: 100,
         desde: '', hasta: '', // fechas YYYY-MM-DD
         paradaMin: 5,         // minutos quieto que ya cuentan como parada
@@ -185,33 +187,69 @@
                     .sort((a, b) => String(a.eco).localeCompare(String(b.eco), 'es', { numeric: true }));
                 const zonas = () => (APP.zonas || []).map((z) => rxGeoInfNombre(z)).filter(Boolean)
                     .sort((a, b) => String(a).localeCompare(String(b), 'es', { numeric: true }));
+                // Listas fijas mientras el dialogo esta abierto: buscar y
+                // repintar sugerencias no vuelve a recorrer la flota.
+                const US = unidades();
+                const ZS = zonas();
+                // Buscador con sugerencias, igual que "Informes de la
+                // plataforma": se escribe y la lista de chips se filtra; la
+                // eleccion queda marcada (una sola, este informe es por
+                // unidad).
+                const filtra = (lista, texto, clave) => {
+                    const q = norm(texto || '');
+                    return lista.filter((x) => !q || norm(clave(x)).indexOf(q) >= 0);
+                };
+                const unisFiltradas = () => filtra(US, RX_REND.uniBusca, (u) => u.eco).slice(0, 120);
+                const zonasFiltradas = () => filtra(ZS, RX_REND.zonaBusca, (z) => z).slice(0, 120);
+                const uniEco = () => {
+                    const u = US.filter((x) => x.id === RX_REND.unidad)[0];
+                    return u ? u.eco : '';
+                };
+                const listaUniHtml = () => {
+                    const l = unisFiltradas();
+                    const dis = RX_REND._busy ? ' disabled' : '';
+                    if (!l.length) return '<p class="rgi-more">Sin unidades con ese nombre.</p>';
+                    return l.map((u) => '<button type="button" class="rgi-chip' + (RX_REND.unidad === u.id ? ' activo' : '') +
+                        '" data-uni="' + esc(u.id) + '"' + dis + '>' + esc(u.eco) + '</button>').join('');
+                };
+                const listaZonaHtml = () => {
+                    const l = zonasFiltradas();
+                    const dis = RX_REND._busy ? ' disabled' : '';
+                    if (!l.length) return '<p class="rgi-more">Sin geocercas con ese nombre.</p>';
+                    return l.map((z) => '<button type="button" class="rgi-chip' + (RX_REND.zona === z ? ' activo' : '') +
+                        '" data-zona="' + esc(z) + '"' + dis + '>' + esc(z) + '</button>').join('');
+                };
                 // Paso numerado, igual que el resto de dialogos de Rondo.
                 const paso = (n, tit, cont) => '<div class="rgi-cfg"><div class="rgi-paso-c"><i>' + n + '</i><b>' +
                     esc(tit) + '</b></div>' + cont + '</div>';
                 const cuerpo = () => {
-                    const us = unidades();
-                    const zs = zonas();
                     const dis = RX_REND._busy ? ' disabled' : '';
                     const hero = '<div class="rgi-hero"><span class="rgi-heroico rondo-usym">' + UIS.route + '</span>' +
                         '<div class="rgi-herot"><b>Rendimiento entre paradas</b><span>Km y tiempo en movimiento entre cada parada, contados desde cada salida del punto de partida</span></div>' +
                         '<i class="rgi-ori">Historial</i></div>';
                     const paso1 = paso(1, 'Unidad',
-                        '<div class="rgi-row"><span class="rgi-lb">Unidad</span>' +
-                        '<select id="rrnd-unidad" class="filtro"' + dis + '><option value="">Elige una unidad</option>' +
-                        us.map((u) => '<option value="' + esc(u.id) + '"' + (RX_REND.unidad === u.id ? ' selected' : '') + '>' + esc(u.eco) + '</option>').join('') +
-                        '</select></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb">Buscar</span>' +
+                        '<span class="rgi-busca"><span class="rondo-usym">' + UIS.filter + '</span>' +
+                        '<input type="text" id="rrnd-uni-busca" class="filtro" placeholder="Buscar unidad\u2026" value="' + esc(RX_REND.uniBusca || '') + '"' + dis + '>' +
+                        '<i id="rrnd-uni-n">' + unisFiltradas().length + '/' + US.length + '</i></span></div>' +
+                        '<div class="rgi-row"><span class="rgi-lb"></span><div class="rgi-chips rgi-unis" id="rrnd-unis">' +
+                        listaUniHtml() + '</div></div>' +
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
-                        'Se baja el historial de la unidad en el periodo y se detectan sus paradas.</span></div>');
+                        esc(uniEco()
+                            ? ('Seleccionada: ' + uniEco() + '. Se baja su historial en el periodo y se detectan sus paradas.')
+                            : 'Escribe para filtrar y pulsa la unidad.') + '</span></div>');
                     const paso2 = paso(2, 'Punto de partida',
                         '<div class="rgi-row"><span class="rgi-lb">Origen</span><div class="rgi-chips">' +
                         '<button type="button" class="rgi-chip' + (RX_REND.modo === 'zona' ? ' activo' : '') + '" data-rr="modo" data-v="zona"' + dis + '>Geocerca</button>' +
                         '<button type="button" class="rgi-chip' + (RX_REND.modo === 'punto' ? ' activo' : '') + '" data-rr="modo" data-v="punto"' + dis + '>Punto y radio</button>' +
                         '</div></div>' +
                         (RX_REND.modo === 'zona'
-                            ? '<div class="rgi-row"><span class="rgi-lb">Geocerca</span>' +
-                              '<select id="rrnd-zona" class="filtro"' + dis + '><option value="">Elige una geocerca</option>' +
-                              zs.map((z) => '<option value="' + esc(z) + '"' + (RX_REND.zona === z ? ' selected' : '') + '>' + esc(z) + '</option>').join('') +
-                              '</select></div>'
+                            ? '<div class="rgi-row"><span class="rgi-lb">Buscar</span>' +
+                              '<span class="rgi-busca"><span class="rondo-usym">' + UIS.zone + '</span>' +
+                              '<input type="text" id="rrnd-zona-busca" class="filtro" placeholder="Buscar geocerca\u2026" value="' + esc(RX_REND.zonaBusca || '') + '"' + dis + '>' +
+                              '<i id="rrnd-zona-n">' + zonasFiltradas().length + '/' + ZS.length + '</i></span></div>' +
+                              '<div class="rgi-row"><span class="rgi-lb"></span><div class="rgi-chips rgi-zonas" id="rrnd-zonas">' +
+                              listaZonaHtml() + '</div></div>'
                             : '<div class="rgi-row"><span class="rgi-lb">Coordenadas</span>' +
                               '<span class="rgi-num">lat <input type="number" step="any" id="rrnd-lat" value="' + esc(RX_REND.lat) + '" placeholder="20.6597"' + dis + '></span>' +
                               '<span class="rgi-num">lon <input type="number" step="any" id="rrnd-lon" value="' + esc(RX_REND.lon) + '" placeholder="-103.3496"' + dis + '></span>' +
@@ -219,7 +257,9 @@
                               '</div>') +
                         '<div class="rgi-row"><span class="rgi-lb"></span><span class="rgi-gen-hint">' +
                         esc(RX_REND.modo === 'zona'
-                            ? 'Cada salida de la geocerca inicia un tramo nuevo.'
+                            ? (RX_REND.zona
+                                ? ('Partida: ' + RX_REND.zona + '. Cada salida inicia un tramo nuevo.')
+                                : 'Escribe para filtrar y pulsa la geocerca de partida.')
                             : 'El circulo del radio indicado es el punto de partida.') +
                         '</span></div>');
                     const paso3 = paso(3, 'Periodo y parada',
@@ -348,6 +388,21 @@
                         }
                         return;
                     }
+                    // Sugerencias: elegir unidad o geocerca marca el chip.
+                    if (b.dataset && b.dataset.uni != null) {
+                        if (RX_REND._busy) return;
+                        RX_REND.unidad = String(b.dataset.uni);
+                        RX_REND.res = null;
+                        pinta();
+                        return;
+                    }
+                    if (b.dataset && b.dataset.zona != null) {
+                        if (RX_REND._busy) return;
+                        RX_REND.zona = String(b.dataset.zona);
+                        RX_REND.res = null;
+                        pinta();
+                        return;
+                    }
                     if (b.dataset && b.dataset.rr === 'modo') {
                         RX_REND.modo = (b.dataset.v === 'punto') ? 'punto' : 'zona';
                         RX_REND.res = null;
@@ -357,19 +412,30 @@
                 box.addEventListener('change', (e) => {
                     const t = e.target;
                     if (!t || !t.id) return;
-                    if (t.id === 'rrnd-unidad') RX_REND.unidad = String(t.value || '');
-                    else if (t.id === 'rrnd-zona') RX_REND.zona = String(t.value || '');
-                    else if (t.id === 'rrnd-desde') RX_REND.desde = String(t.value || '');
+                    if (t.id === 'rrnd-desde') RX_REND.desde = String(t.value || '');
                     else if (t.id === 'rrnd-hasta') RX_REND.hasta = String(t.value || '');
                     else return;
                     RX_REND.res = null;
                 });
-                // Los numericos no repintan: el input conserva su valor y el
-                // foco; solo se acota lo que guardan.
+                // Buscadores: repintan SOLO su lista de sugerencias para no
+                // perder el foco ni una pulsacion. Los numericos no repintan:
+                // el input conserva su valor y el foco; solo se acota.
                 box.addEventListener('input', (e) => {
                     const t = e.target;
                     if (!t || !t.id) return;
-                    if (t.id === 'rrnd-lat') RX_REND.lat = String(t.value || '');
+                    if (t.id === 'rrnd-uni-busca') {
+                        RX_REND.uniBusca = String(t.value || '');
+                        const cont = byId('rrnd-unis');
+                        if (cont) setHtml(cont, listaUniHtml()); else pinta();
+                        const n = byId('rrnd-uni-n');
+                        if (n) n.textContent = unisFiltradas().length + '/' + US.length;
+                    } else if (t.id === 'rrnd-zona-busca') {
+                        RX_REND.zonaBusca = String(t.value || '');
+                        const cont = byId('rrnd-zonas');
+                        if (cont) setHtml(cont, listaZonaHtml()); else pinta();
+                        const n = byId('rrnd-zona-n');
+                        if (n) n.textContent = zonasFiltradas().length + '/' + ZS.length;
+                    } else if (t.id === 'rrnd-lat') RX_REND.lat = String(t.value || '');
                     else if (t.id === 'rrnd-lon') RX_REND.lon = String(t.value || '');
                     else if (t.id === 'rrnd-radio') RX_REND.radio = clamp(+t.value || 100, 10, 5000);
                     else if (t.id === 'rrnd-parada') RX_REND.paradaMin = clamp(+t.value || 5, 1, 240);

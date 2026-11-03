@@ -38,6 +38,9 @@ const stubs = [
         ' return L.join("\\n"); }',
     'function zoneAt(){ return ""; }',
     'function municipioEn(){ return null; }',
+    'function parseUnitName(u){ const n=String((u&&u.nm)||""); const m=n.match(/\\b0*(\\d{3,5})\\b/);' +
+        ' const e=m?m[1]:""; return {id:u&&u.id,nombre:n,eco:e,placa:"",clave:e||n}; }',
+    'function rxGeoInfNombre(z){ return (z && (z.n || z.nombre)) || (z ? ("Zona " + z.id) : ""); }',
     'const APP = { zonas: [], unidades: [] };',
     // Stubs de UI para montar el dialogo como lo haria Rondo.
     'const UIS = new Proxy({}, { get: function(){ return "<svg></svg>"; } });',
@@ -55,7 +58,7 @@ const stubs = [
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
-    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV, abrirRendimientos, fakeEl };';
+    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV, abrirRendimientos, fakeEl, APP, nodos };';
 const mod = new Function(code)();
 global.document = {
     body: { appendChild() {}, removeChild() {} },
@@ -219,6 +222,8 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
 
 // ── Montaje del dialogo: maquetado con las clases de Rondo ──────────────
 {
+    mod.APP.unidades = [{ id: 1, nm: 'TRACTO 105' }, { id: 2, nm: 'TRACTO 205' }];
+    mod.APP.zonas = [{ id: 9, n: 'PATIO' }, { id: 10, n: 'CEDIS' }];
     mod.abrirRendimientos();
     const dlg = global.__rrendDlg;
     ok('ui: titulo y ancho del dialogo', dlg && /Rendimientos/.test(dlg.titulo) && dlg.ancho >= 700);
@@ -233,6 +238,29 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     ok('ui: rango de fechas con estilo', /class="rgi-rango"/.test(h) && /id="rrnd-desde"/.test(h) && /id="rrnd-hasta"/.test(h));
     ok('ui: boton generar pulsable', /class="rgi-btn gen pulsa" id="rrnd-generar"/.test(h));
     ok('ui: no quedan clases fuera de estilo', !/rgi-btn pri/.test(h) && !/rgi-chip on/.test(h));
+    // Sin desplegables: buscador con sugerencias (como Informes de la plataforma).
+    ok('ui: unidad y geocerca son buscadores, no <select>',
+        !/<select/.test(h) && /id="rrnd-uni-busca"/.test(h) && /id="rrnd-zona-busca"/.test(h) && /class="rgi-busca"/.test(h));
+    ok('ui: sugerencias de unidades y geocercas en chips',
+        /data-uni="1"/.test(h) && /data-zona="PATIO"/.test(h) && /id="rrnd-unis"/.test(h) && /id="rrnd-zonas"/.test(h));
+    ok('ui: contador de sugerencias', /id="rrnd-uni-n">2\/2</.test(h) && /id="rrnd-zona-n">2\/2</.test(h));
+    // Elegir una unidad desde las sugerencias la marca y la muestra.
+    const uni = global.document.createElement('uni');
+    uni.dataset = { uni: '1' };
+    for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => uni } });
+    ok('ui: la unidad elegida queda activa', /class="rgi-chip activo" data-uni="1"/.test(box.innerHTML));
+    ok('ui: el paso indica la unidad elegida', /Seleccionada: 105/.test(box.innerHTML));
+    // Escribir en el buscador filtra las sugerencias sin repintar el cuerpo.
+    for (const fn of (box.handlers.input || [])) fn({ target: { id: 'rrnd-uni-busca', value: '205' } });
+    const listaUni = mod.nodos['rrnd-unis'] ? mod.nodos['rrnd-unis'].innerHTML : '';
+    ok('ui: el buscador filtra las sugerencias de unidad',
+        /data-uni="2"/.test(listaUni) && !/data-uni="1"/.test(listaUni), listaUni);
+    // Elegir la geocerca de partida.
+    const zona = global.document.createElement('zona');
+    zona.dataset = { zona: 'PATIO' };
+    for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => zona } });
+    ok('ui: la geocerca elegida queda activa y se muestra',
+        /class="rgi-chip activo" data-zona="PATIO"/.test(box.innerHTML) && /Partida: PATIO/.test(box.innerHTML));
     // Cambiar a "Punto y radio" repinta con los campos numericos.
     const chip = global.document.createElement('chip');
     chip.dataset = { rr: 'modo', v: 'punto' };
