@@ -21,7 +21,8 @@
         desde: '', hasta: '', // fechas YYYY-MM-DD
         paradaMin: 5,         // minutos quieto que ya cuentan como parada
         vel: 3,               // km/h por debajo de los cuales esta "quieta"
-        res: null,            // ultimo calculo {filas, kmTotal, minTotal, salidas}
+        res: null,            // ultimo calculo {filas, kmTotal, minTotal, salidas, traza}
+        origen: null,         // {lat, lon, txt} del punto de partida (mapa del PDF)
         eco: '',              // eco de la unidad del ultimo calculo
         prog: { activo: false, pct: 0, txt: '' },
         _token: null, _busy: false
@@ -65,10 +66,20 @@
             .sort((a, b) => a.t - b.t);
         const filas = [];
         let salidas = 0, kmTotal = 0, minTotal = 0;
-        if (pts.length < 2) return { filas: filas, kmTotal: kmTotal, minTotal: minTotal, salidas: salidas };
+        // Traza simplificada para el mapa del PDF (tope fijo: no retiene el
+        // historial completo en memoria).
+        const MAXT = 500;
+        const paso = Math.max(1, Math.ceil(pts.length / MAXT));
+        const traza = [];
+        for (let i = 0; i < pts.length; i += paso) traza.push({ lat: pts[i].lat, lon: pts[i].lon });
+        if (pts.length && (pts.length - 1) % paso !== 0) {
+            traza.push({ lat: pts[pts.length - 1].lat, lon: pts[pts.length - 1].lon });
+        }
+        if (pts.length < 2) return { filas: filas, kmTotal: kmTotal, minTotal: minTotal, salidas: salidas, traza: traza };
         let ancla = 0;                                  // indice donde arranca el tramo actual
         let qIni = -1, qUlt = -1, qLat = 0, qLon = 0, qN = 0; // grupo quieto abierto
         let estabaDentro = !!dentro(pts[0]);
+        let salio = false;                              // ya salio del origen alguna vez
         const cerrar = () => {
             if (qIni < 0) return;
             const dur = pts[qUlt].t - pts[qIni].t;
@@ -95,7 +106,26 @@
         for (let i = 1; i < pts.length; i++) {
             const p = pts[i];
             const ahoraDentro = !!dentro(p);
-            if (estabaDentro && !ahoraDentro) { salidas++; ancla = i; }
+            // Regreso al origen: el origen tambien es el destino. Al volver a
+            // entrar se cierra el tramo desde la ultima salida o parada,
+            // aunque la unidad no se detenga (el viaje de vuelta cuenta).
+            if (!estabaDentro && ahoraDentro && salio) {
+                let m = 0;
+                for (let k = ancla; k < i; k++) {
+                    const d = rxDistM(pts[k].lat, pts[k].lon, pts[k + 1].lat, pts[k + 1].lon);
+                    if (d <= salto) m += d;
+                }
+                const km = m / 1000;
+                const minMov = Math.max(0, (p.t - pts[ancla].t) / 60);
+                filas.push({
+                    n: filas.length + 1,
+                    llegada: p.t, salida: p.t, paradaSeg: 0,
+                    km: km, minMov: minMov, lat: p.lat, lon: p.lon, regreso: true
+                });
+                kmTotal += km; minTotal += minMov;
+                ancla = i;
+            }
+            if (estabaDentro && !ahoraDentro) { salidas++; ancla = i; salio = true; }
             estabaDentro = ahoraDentro;
             if (p.s == null || +p.s <= vel) {
                 if (qIni < 0) { qIni = i; qLat = 0; qLon = 0; qN = 0; }
@@ -105,7 +135,7 @@
             }
         }
         cerrar();
-        return { filas: filas, kmTotal: kmTotal, minTotal: minTotal, salidas: salidas };
+        return { filas: filas, kmTotal: kmTotal, minTotal: minTotal, salidas: salidas, traza: traza };
     }
     // Predicado de origen segun la pantalla: circulo (punto + radio) o
     // geocerca (geometria normalizada una vez, como hace rxGeoInfZonaSel).
@@ -149,8 +179,10 @@
     function rxRendCSV(eco, res) {
         const cols = ['#', 'Llegada', 'Salida', 'Parada', 'km', 'Min en movimiento', 'Ubicacion', 'Lat', 'Lon'];
         const filas = (res && res.filas ? res.filas : []).map((f) => [
-            f.n, rxFechaHora(f.llegada), rxFechaHora(f.salida), rxInfFmtDur(f.paradaSeg),
-            rxInfFmt(f.km), rxInfFmt(f.minMov), rxRendLugar(f.lat, f.lon),
+            f.n, rxFechaHora(f.llegada), rxFechaHora(f.salida),
+            f.regreso ? '-' : rxInfFmtDur(f.paradaSeg),
+            rxInfFmt(f.km), rxInfFmt(f.minMov),
+            f.regreso ? 'Regreso al origen' : rxRendLugar(f.lat, f.lon),
             (f.lat != null ? (+f.lat).toFixed(5) : ''), (f.lon != null ? (+f.lon).toFixed(5) : '')
         ]);
         return rxInfCSVTexto(cols, filas, [
@@ -159,6 +191,67 @@
             'km totales: ' + rxInfFmt(res ? res.kmTotal : 0),
             'Minutos en movimiento: ' + rxInfFmt(res ? res.minTotal : 0)
         ]);
+    }
+    // Coordenadas del origen elegido (geocerca o punto), para el mapa del PDF.
+    function rxRendOrigen() {
+        if (RX_REND.modo === 'punto') {
+            const lat = +RX_REND.lat, lon = +RX_REND.lon;
+            if (!isFinite(lat) || !isFinite(lon)) return null;
+            return { lat: lat, lon: lon, txt: 'Punto de partida' };
+        }
+        const z = (APP.zonas || []).find((x) => rxGeoInfNombre(x) === RX_REND.zona);
+        if (!z) return null;
+        let c = null;
+        try { c = centroDeZona(z); } catch (_) { c = null; }
+        if (!c) {
+            const b = z.b || {};
+            if (b.cen_x != null && b.cen_y != null) c = { lat: +b.cen_y, lon: +b.cen_x };
+        }
+        return c ? { lat: +c.lat, lon: +c.lon, txt: RX_REND.zona } : null;
+    }
+    // Documento imprimible (PDF): KPIs, mapa con la traza y las paradas (el
+    // origen va marcado como partida y regreso) y la tabla del detalle.
+    function rxRendHTML(eco, res, origen) {
+        const o = origen || null;
+        const cab = ['#', 'Llegada', 'Salida', 'Parada', 'km', 'Min mov.', 'Ubicaci\u00f3n'];
+        const filas = (res.filas || []).slice(0, 400).map((f) => [
+            esc(String(f.n)), esc(rxFechaHora(f.llegada)), esc(rxFechaHora(f.salida)),
+            esc(f.regreso ? '-' : rxInfFmtDur(f.paradaSeg)),
+            esc(rxInfFmt(f.km)), esc(rxInfFmt(f.minMov)),
+            esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-'))
+        ]);
+        const kpi = (n, t) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(t) + '</span></div>';
+        const lineas = [];
+        if (res.traza && res.traza.length > 1) {
+            lineas.push({ pts: res.traza, color: '#850D22', width: 3, opacity: 0.9, glow: true });
+        }
+        const marcas = [];
+        if (o) marcas.push({ lat: o.lat, lon: o.lon, color: '#2e7d32', radio: 7, txt: 'Origen / Regreso' });
+        (res.filas || []).slice(0, 120).forEach((f) => {
+            marcas.push({
+                lat: f.lat, lon: f.lon,
+                color: f.regreso ? '#f9a825' : '#1565c0', radio: 5,
+                txt: f.regreso ? 'Regreso al origen' : ('Parada ' + f.n)
+            });
+        });
+        const mapa = (lineas.length || marcas.length)
+            ? '<h2 class="seccion">1. Mapa</h2>' + rxMiniMapaHTML({ lineas: lineas, marcas: marcas }, 680, 300)
+            : '';
+        const mas = (res.filas || []).length > 400
+            ? '<p class="muted">Se listan las primeras 400 paradas; el CSV lleva todas.</p>' : '';
+        return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Rendimientos ' +
+            esc(eco) + '</title><style>' + rxInfEstilo() + '</style></head><body>' +
+            rxInfCabecera('Rondo', 'Rendimientos entre paradas',
+                'Unidad ' + esc(eco) + ' \u00b7 ' + esc(RX_REND.desde || '') + ' a ' + esc(RX_REND.hasta || '') +
+                (o ? '<br>Punto de partida y regreso: ' + esc(o.txt) : '')) +
+            '<div class="kpis">' +
+            kpi((res.filas || []).length, 'Paradas') +
+            kpi(rxInfFmt(res.kmTotal), 'km entre paradas') +
+            kpi(rxInfFmt(res.minTotal), 'min en movimiento') +
+            kpi(res.salidas, 'Salidas del origen') +
+            '</div>' + mapa +
+            '<h2 class="seccion">' + (mapa ? '2' : '1') + '. Detalle</h2>' + mas +
+            rxInfTabla(cab, filas) + rxInfPie() + '</body></html>';
     }
     // ── Dialogo ─────────────────────────────────────────────────────────
     function abrirRendimientos() {
@@ -177,6 +270,13 @@
             html: '<div class="rgi-tool"><div id="rrnd-box"></div></div>',
             onOpen: (el) => {
                 const box = el.querySelector('#rrnd-box');
+                // El memo de setHtml es por id: al reabrir, el nodo es NUEVO y
+                // el mismo HTML no se reescribiria (cuerpo vacio). Se invalida
+                // y se cancela cualquier corrida anterior que siguiera viva.
+                try { invalidarHtml('rrnd-box'); } catch (_) { /* noop */ }
+                if (RX_REND._token) RX_REND._token.cancelado = true;
+                RX_REND._busy = false;
+                RX_REND._token = null;
                 const unidades = () => (APP.unidades || [])
                     .filter((u) => u && u.id != null)
                     .map((u) => {
@@ -306,12 +406,16 @@
                         '</tr></thead><tbody>';
                     for (const f of r.filas.slice(0, 500)) {
                         h += '<tr><td>' + f.n + '</td><td>' + esc(rxFechaHora(f.llegada)) + '</td><td>' + esc(rxFechaHora(f.salida)) + '</td>' +
-                            '<td>' + esc(rxInfFmtDur(f.paradaSeg)) + '</td><td class="num">' + esc(rxInfFmt(f.km)) + '</td>' +
-                            '<td class="num">' + esc(rxInfFmt(f.minMov)) + '</td><td>' + esc(rxRendLugar(f.lat, f.lon) || '-') + '</td></tr>';
+                            '<td>' + esc(f.regreso ? '-' : rxInfFmtDur(f.paradaSeg)) + '</td><td class="num">' + esc(rxInfFmt(f.km)) + '</td>' +
+                            '<td class="num">' + esc(rxInfFmt(f.minMov)) + '</td><td>' +
+                            esc(f.regreso ? 'Regreso al origen' : (rxRendLugar(f.lat, f.lon) || '-')) + '</td></tr>';
                     }
                     h += '</tbody></table>' +
                         (r.filas.length > 500 ? '<p class="rgi-more">Primeras 500 paradas de ' + r.filas.length + '. El CSV lleva todas.</p>' : '') + '</div>';
-                    h += '<div class="rgi-io"><button type="button" class="rgi-btn primary" id="rrnd-csv">' +
+                    h += '<div class="rgi-io">' +
+                        '<button type="button" class="rgi-btn primary" id="rrnd-pdf" title="Reporte imprimible con mapa (Guardar como PDF)">' +
+                        '<span class="rondo-usym">' + UIS.export + '</span><b>PDF</b><i>mapa y paradas</i></button>' +
+                        '<button type="button" class="rgi-btn" id="rrnd-csv" title="Una fila por parada">' +
                         '<span class="rondo-usym">' + UIS.csv + '</span><b>CSV</b><i>una fila por parada</i></button></div>';
                     return h;
                 };
@@ -356,6 +460,7 @@
                         const res = rxRendCalcula(pts, dentroDe, { paradaMin: RX_REND.paradaMin, vel: RX_REND.vel });
                         RX_REND.res = res;
                         RX_REND.eco = eco;
+                        RX_REND.origen = rxRendOrigen();
                         setProg(100, 'Listo: ' + res.filas.length + ' paradas');
                         setTimeout(() => setProg(null), 800);
                         pinta();
@@ -378,6 +483,18 @@
                     if (b.id === 'rrnd-cancel') {
                         if (RX_REND._token) RX_REND._token.cancelado = true;
                         setProg(99, 'Cancelando…');
+                        return;
+                    }
+                    if (b.id === 'rrnd-pdf') {
+                        if (RX_REND.res && RX_REND.res.filas.length) {
+                            try {
+                                rxImprimirHTML(rxRendHTML(RX_REND.eco, RX_REND.res,
+                                    RX_REND.origen || rxRendOrigen()));
+                                advice('Reporte listo', 'Elige "Guardar como PDF" en el dialogo de impresion.');
+                            } catch (e) {
+                                adviceErr('Rendimientos', 'No se pudo preparar el PDF: ' + ((e && e.message) || e));
+                            }
+                        }
                         return;
                     }
                     if (b.id === 'rrnd-csv') {

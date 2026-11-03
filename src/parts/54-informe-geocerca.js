@@ -1520,6 +1520,9 @@ const ETIQUETA = { historial: 'Plataforma', rastreo: 'Rastreo', bitacora: 'Aviso
             '</div>',
         onOpen: (el) => {
             const box = el.querySelector('#rgi-box');
+            // El memo de setHtml es por id: al reabrir el nodo es nuevo y el mismo
+            // HTML no se reescribiria (cuerpo vacio). Se invalida la entrada.
+            try { invalidarHtml('rgi-box'); } catch (_) { /* noop */ }
             if (!box) return;
             const carga = el.querySelector('#rgi-carga');
             const barra = el.querySelector('#rgi-barra');

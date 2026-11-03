@@ -54,11 +54,20 @@ const stubs = [
         ' focus:function(){}, click:function(){}, closest:function(){ return null; } }; }',
     'function byId(id){ return id ? (nodos[id]||(nodos[id]=fakeEl(id))) : null; }',
     'function setHtml(el, html){ if(!el) return false; if(el.innerHTML===html) return false; el.innerHTML=html; return true; }',
-    'function abrirDialogo(o){ global.__rrendDlg = o; }'
+    'function abrirDialogo(o){ global.__rrendDlg = o; }',
+    'function advice(){} function adviceOk(){} function adviceWarn(){} function adviceErr(){}',
+    // Maquetado del PDF: basta con comprobar que se arma y que lleva mapa.
+    'function rxInfEstilo(){ return ""; }',
+    'function rxInfCabecera(a,b,c){ return "<header>"+a+b+c+"</header>"; }',
+    'function rxInfPie(){ return "<footer></footer>"; }',
+    'function rxInfTabla(cab, filas){ return "<table>" + (cab||[]).join("|") +' +
+        ' (filas||[]).map(function(f){ return "<tr>"+f.join("|")+"</tr>"; }).join("") + "</table>"; }',
+    'function rxMiniMapaHTML(cfg){ return "<div class=\\"m-mapa\\">" + (((cfg||{}).marcas||[]).length) + " marcas</div>"; }',
+    'function rxImprimirHTML(html){ global.__rrendPrints.push(html); }'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
-    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV, abrirRendimientos, fakeEl, APP, nodos };';
+    '\nreturn { RX_REND, rxRendFechaSeg, rxRendPuntos, rxRendCalcula, rxRendNombreArchivo, rxRendCSV, rxRendHTML, abrirRendimientos, fakeEl, APP, nodos };';
 const mod = new Function(code)();
 global.document = {
     body: { appendChild() {}, removeChild() {} },
@@ -196,10 +205,31 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
         moviendo(960, 0.015, 0)
     ];
     const r3 = mod.rxRendCalcula(dosVueltas, dentroOrigen, OPTS);
-    ok('calculo: dos salidas, dos paradas', r3.salidas === 2 && r3.filas.length === 2,
+    // El origen tambien es el regreso: el tramo de vuelta se registra.
+    ok('calculo: dos salidas, dos paradas y un regreso',
+        r3.salidas === 2 && r3.filas.length === 3,
         'salidas=' + r3.salidas + ' filas=' + r3.filas.length);
+    ok('calculo: el regreso al origen se marca', r3.filas[1] && r3.filas[1].regreso === true);
     ok('calculo: la segunda vuelta mide desde su propia salida',
-        r3.filas[1] && r3.filas[1].km > 0.3 && r3.filas[1].km < 0.8, r3.filas[1] && r3.filas[1].km);
+        r3.filas[2] && r3.filas[2].km > 0.3 && r3.filas[2].km < 0.8, r3.filas[2] && r3.filas[2].km);
+    // La vuelta cuenta km y tiempo aunque la unidad NO se detenga al llegar.
+    const vuelta = [
+        quieto(0, 0, 0),
+        moviendo(60, 0.005, 0),
+        moviendo(120, 0.010, 0),
+        quieto(180, 0.010, 0), quieto(300, 0.010, 0),           // parada 1
+        moviendo(360, 0.005, 0),
+        moviendo(420, 0, 0)                                     // entra al origen sin parar
+    ];
+    const rv = mod.rxRendCalcula(vuelta, dentroOrigen, OPTS);
+    ok('calculo: el regreso sin parada tambien cuenta',
+        rv.filas.length === 2 && rv.filas[1].regreso === true && rv.filas[1].km > 0.5,
+        'filas=' + rv.filas.length + ' km=' + (rv.filas[1] && rv.filas[1].km));
+    ok('calculo: el regreso suma a los totales',
+        rv.kmTotal > rv.filas[0].km && Math.round(rv.minTotal) >= 3);
+    // Traza simplificada para el mapa del PDF.
+    ok('calculo: traza para el mapa', Array.isArray(r3.traza) && r3.traza.length >= 2 &&
+        r3.traza.length <= 501 && r3.traza[0].lat != null);
 }
 
 // ── Salidas ─────────────────────────────────────────────────────────────
@@ -267,6 +297,26 @@ const moviendo = (t, lat, lon) => ({ t: t, lat: lat, lon: lon, s: 50 });
     for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => chip } });
     ok('ui: el origen por punto muestra lat/lon/radio',
         /id="rrnd-lat"/.test(box.innerHTML) && /id="rrnd-lon"/.test(box.innerHTML) && /class="rgi-num"/.test(box.innerHTML));
+    // Reabrir: el memo de setHtml se invalida (si no, el cuerpo sale vacio).
+    ok('ui: el dialogo invalida el memo al abrir', /invalidarHtml\('rrnd-box'\)/.test(src));
+    // PDF: se arma el documento con mapa y con el regreso al origen.
+    global.__rrendPrints = [];
+    mod.RX_REND.eco = '105';
+    mod.RX_REND.origen = { lat: 0, lon: 0, txt: 'PATIO' };
+    mod.RX_REND.res = {
+        filas: [
+            { n: 1, llegada: 100, salida: 200, paradaSeg: 60, km: 1.2, minMov: 2, lat: 0.01, lon: 0 },
+            { n: 2, llegada: 300, salida: 300, paradaSeg: 0, km: 1.1, minMov: 2, lat: 0, lon: 0, regreso: true }
+        ],
+        kmTotal: 2.3, minTotal: 4, salidas: 1,
+        traza: [{ lat: 0, lon: 0 }, { lat: 0.01, lon: 0 }]
+    };
+    const pdfb = global.document.createElement('rrnd-pdf');
+    for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => pdfb } });
+    const doc = global.__rrendPrints[0] || '';
+    ok('ui: el PDF incluye el mapa de paradas', /m-mapa/.test(doc) && /3 marcas/.test(doc));
+    ok('ui: el PDF marca el regreso al origen', /Regreso al origen/.test(doc) && /partida y regreso/i.test(doc));
+    ok('ui: el PDF trae la tabla de detalle', /Llegada/.test(doc) && /Min mov/.test(doc));
 }
 
 console.log(fallos ? ('FALLO - ' + fallos + ' checks') : 'Todos los tests pasaron');

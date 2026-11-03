@@ -3086,6 +3086,9 @@ function abrirInformesPlantilla(origen) {
         html: html,
         onOpen: (el) => {
             const box = el.querySelector('#rgi-box');
+            // El memo de setHtml es por id: al reabrir el nodo es nuevo y el mismo
+            // HTML no se reescribiria (cuerpo vacio). Se invalida la entrada.
+            try { invalidarHtml('rgi-box'); } catch (_) { /* noop */ }
             if (!box) return;
             // El progreso se pinta DENTRO del cuerpo (#rgi-prog): asi se ve
             // aunque el dialogo este desplazado.

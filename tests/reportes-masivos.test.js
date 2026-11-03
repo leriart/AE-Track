@@ -48,11 +48,17 @@ const stubs = [
     'function rxInfPlantillas(){ return Promise.resolve([{rid:7,id:3,nombre:"Recorridos diarios"}]); }',
     'function rxInfClave(t){ return (t&&t.rid!=null) ? (t.rid+":"+t.id) : ""; }',
     'function rxInfTplDeClave(v){ var p=String(v||"").split(":"); return p.length===2?{rid:p[0],id:p[1],nombre:"Plantilla "+p[1]}:null; }',
-    'function rxInfExplicaError(m){ return String(m||""); }'
+    'function rxInfExplicaError(m){ return String(m||""); }',
+    // Exportacion nativa: base de la API, sesion y descarga binaria.
+    'function rxPlatApiUrl(){ return "https://hst-api.example.com"; }',
+    'const PAGE = { location: { origin: "https://app.example.com" } };',
+    'function session(){ return { getId: function(){ return "SID123"; } }; }',
+    'function gmXhr(){ return null; }'
 ].join('\n');
 
 const code = stubs + '\n' + src.slice(ini, fin) +
-    '\nreturn { RX_MAS, RX_MAS_ESPERA_DESCARGA, rxMasUnidades, rxMasNombreArchivo, rxMasCSV, rxMasCorre, abrirReportesMasivos, fakeEl,' +
+    '\nreturn { RX_MAS, RX_MAS_ESPERA_DESCARGA, rxMasUnidades, rxMasNombreArchivo, rxMasCSV, rxMasCorre,' +
+    ' rxMasExportUrl, rxMasApiBase, rxMasSid, abrirReportesMasivos, fakeEl,' +
     ' setUnidades:function(l){ APP.unidades = l; } };';
 const mod = new Function(code)();
 global.document = {
@@ -82,6 +88,20 @@ const csv = mod.rxMasCSV(TPL, '105', ['Unidad', 'km'], [['105', '12.5'], ['105',
 ok('csv: metadatos de plantilla, unidad y periodo',
     csv.indexOf('Recorridos diarios') >= 0 && csv.indexOf('105') >= 0 && csv.indexOf('2026-11-01') >= 0);
 ok('csv: cabecera y dos filas', csv.split('\n').length === 4, csv.split('\n').length);
+ok('nombre: extension PDF', /\.pdf$/.test(mod.rxMasNombreArchivo(TPL, '105', '2026-11-01', '2026-11-03', '.pdf')));
+
+// ── Exportacion nativa (PDF de la plataforma) ──────────────────────────
+ok('export: base de la API con /wialon/ajax.html',
+    mod.rxMasApiBase() === 'https://hst-api.example.com/wialon/ajax.html', mod.rxMasApiBase());
+ok('export: toma el sid de la sesion actual', mod.rxMasSid() === 'SID123', mod.rxMasSid());
+const url = mod.rxMasExportUrl('rondo_recorridos_x_105.pdf');
+ok('export: URL con el servicio, sid y formato PDF',
+    url.indexOf('svc=report/export_result') > 0 && url.indexOf('sid=SID123') > 0 &&
+    url.indexOf(encodeURIComponent('"format":2')) > 0);
+ok('export: pide mapa y nombre de archivo',
+    url.indexOf(encodeURIComponent('"attachMap":1')) > 0 &&
+    url.indexOf(encodeURIComponent('"outputFileName":"rondo_recorridos_x_105"')) > 0);
+ok('export: sin nombre sigue armando la URL', /svc=report\/export_result/.test(mod.rxMasExportUrl('')));
 
 // ── Lista de unidades ───────────────────────────────────────────────────
 mod.setUnidades([
@@ -169,6 +189,31 @@ ok('unidades: {id, eco} ordenadas por economico',
         ok('lote: una descarga fallida no detiene el lote', res.length === 2 && res.every((x) => x.filas === 1));
     }
 
+    // PDF nativo: ejecuta y espera la descarga asincrona (sin filas).
+    {
+        const descargas = [];
+        const ejecuta = () => Promise.resolve({ nativo: true, filas: [] });
+        const descarga = (u) => new Promise((r) => { descargas.push(u.eco); r(true); });
+        const res = await mod.rxMasCorre(
+            [{ id: '1', eco: 'A' }, { id: '2', eco: 'B' }],
+            null, null, ejecuta, descarga);
+        ok('lote PDF: descarga nativa por unidad', descargas.join(',') === 'A,B', descargas.join(','));
+        ok('lote PDF: resumen nativo sin errores',
+            res.length === 2 && res.every((x) => x.nativo && !x.error));
+    }
+    // Una descarga nativa que falla se marca y el lote continua.
+    {
+        const ejecuta = () => Promise.resolve({ nativo: true, filas: [] });
+        const descarga = (u) => Promise.reject(new Error('sin PDF'));
+        const res = await mod.rxMasCorre(
+            [{ id: '1', eco: 'A' }, { id: '2', eco: 'B' }],
+            null, null, ejecuta, descarga);
+        ok('lote PDF: la descarga fallida no tira el lote',
+            res.length === 2 && /sin PDF/.test(res[0].error) && res[0].nativo === false);
+    }
+    // Reabrir: el memo de setHtml se invalida (si no, el cuerpo sale vacio).
+    ok('ui: el dialogo invalida el memo al abrir', /invalidarHtml\('rmas-box'\)/.test(src));
+
     // ── Montaje del dialogo: maquetado con las clases de Rondo ──────────
     {
         mod.abrirReportesMasivos();
@@ -191,6 +236,19 @@ ok('unidades: {id, eco} ordenadas por economico',
         ok('ui: aviso de descargas multiples', /class="rgi-aviso"/.test(h));
         ok('ui: boton generar pulsable', /class="rgi-btn gen pulsa" id="rmas-generar"/.test(h));
         ok('ui: no quedan clases fuera de estilo', !/rgi-btn pri/.test(h) && !/rgi-chip on/.test(h));
+        ok('ui: formato PDF nativo por defecto',
+            /class="rgi-chip activo" data-fmt="pdf"/.test(h) && /data-fmt="csv"/.test(h) &&
+            /PDF nativo/.test(h));
+        // Cambiar a CSV mueve el chip activo.
+        const fmt = global.document.createElement('fmt');
+        fmt.dataset = { fmt: 'csv' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => fmt } });
+        ok('ui: el formato CSV queda activo', /class="rgi-chip activo" data-fmt="csv"/.test(box.innerHTML));
+        // Vuelve a PDF para el resto del montaje.
+        const fmtPdf = global.document.createElement('fmtpdf');
+        fmtPdf.dataset = { fmt: 'pdf' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => fmtPdf } });
+        h = box.innerHTML;
         // Elegir plantilla marca el elemento y actualiza el hero.
         const btn = global.document.createElement('btn');
         btn.dataset = { tpl: '7:3' };
