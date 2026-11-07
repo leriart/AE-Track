@@ -68,7 +68,7 @@
             "  transition:transform .3s var(--rondo-easing),opacity .2s ease,border-color .2s}\n" +
             "#rondo-panel.visible{opacity:1}\n" +
             "#rondo-panel.lateral{left:auto;right:0;top:0;bottom:0;height:100vh;max-height:100vh;border-radius:0;resize:none;\n" +
-            "  box-shadow:-14px 0 34px rgba(0,0,0,.35);border-top:none;border-bottom:none;border-right:none;will-change:transform}\n" +
+            "  box-shadow:-14px 0 34px rgba(0,0,0,.35);border-top:none;border-bottom:none;border-right:none}\n" +
             "#rondo-panel.lateral.izquierda{left:0;right:auto;box-shadow:14px 0 34px rgba(0,0,0,.35);border-left:none;border-right:1px solid var(--rondo-border)}\n" +
             "#rondo-panel.lateral header{cursor:default}\n" +
             "#rondo-panel.lateral.oculto{transform:translateX(100%);opacity:0;pointer-events:none}\n" +
@@ -3752,8 +3752,9 @@
             APP.config.loadZones = true;
             APP.zonas = await fetchZones();
             // v6.13: Recargar solo repone las de la plataforma; las dibujadas
-            // en Rondo se vuelven a fusionar (glocSincroniza las separa).
-            glocSincroniza();
+            // en Rondo se vuelven a fusionar (glocSincroniza las separa). Se
+            // le pasa la lista para no vaciarlas al recargar.
+            glocSincroniza(glocLista());
             paintGeocercas();
             if (APP.tab === 'zonas') paintRiesgo();
             if (APP.zonas.length) adviceOk('Geocercas recargadas', APP.zonas.length + ' geocercas');
@@ -4341,7 +4342,10 @@
     setInterval(() => {
         // Ventanas ocultas: oculta tambien las que se abran despues.
         try { if (typeof rxVentanasSync === 'function') rxVentanasSync(); } catch (_) { /* noop */ }
-        if (panelEl.style.display === 'none' || document.hidden) return;
+        // La barra lateral oculta sigue con display:flex (se desplaza fuera de
+        // pantalla), asi que el estado real es APP.panelHidden. Sin esto el
+        // reloj y los repintados de 1 s seguian trabajando sin verse.
+        if (!panelEl || APP.panelHidden || document.hidden) return;
         // Reloj: lo unico que cambia de verdad cada segundo.
         byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();
@@ -6981,15 +6985,32 @@
         if (el && el.classList.contains('abierto')) cerrarCarga();
     });
     /* ====================== INIT ====================== */
+    // v8.14: si la plataforma embebe su propio panel en un iframe del mismo
+    // origen, evita una segunda instancia de Rondo dentro del marco (doble
+    // polling, doble UI y dos MutationObserver). Si el marco superior no es
+    // Wialon/AE-Track (integracion externa), se permite.
+    function rxEsMarcoDuplicado() {
+        try {
+            if (!window.top || window.top === window.self) return false;
+            const w = window.top.wialon;
+            return !!(w && w.core && w.core.Session);
+        } catch (_) { return false; }
+    }
     async function init() {
         // Idempotente: en modo hibrido el chunk ui y el bootstrap pueden
         // llamarla; evita construir la interfaz dos veces (dos UI superpuestas,
         // la de arriba sin listeners = botones muertos).
         if (APP._iniciado) return;
         APP._iniciado = true;
+        if (rxEsMarcoDuplicado()) return;
         const primerUso = !localStorage.getItem(LS.cfg);
         // v6.19.7: adelanta DNS/TLS a los origenes que se van a usar.
         try { precargarOrigenes(); } catch (_) { /* noop */ }
+        // La capa de rendimiento no necesita sesion: se aplica antes de
+        // construir la UI y de que la plataforma termine de montar el panel,
+        // que es justo cuando mas pesa (login, primeras listas y mapa).
+        try { rxAplicarRendimientoPagina(); } catch (_) { /* noop */ }
+        try { if (APP.config && APP.config.estiloPagina) rxAplicarEstiloPagina(); } catch (_) { /* noop */ }
         injectCSS();
         buildUI();
         try { rxBarridoAutofill(); } catch (_) { /* noop */ }
@@ -7005,29 +7026,39 @@
         try { rxBindLogoRevelar(); } catch (_) { /* noop */ }
         try { rxPintaReveal(); } catch (_) { /* noop */ }
         try { rxDiagBind(); } catch (_) { /* noop */ }
+        // El panel abierto se pinta ya con los datos persistidos (rutas,
+        // avisos, configuracion) mientras la API responde: deja de verse vacio
+        // durante el primer fetch. Si esta oculto no se gasta nada.
+        if (!APP.panelHidden) { try { paintPanel(); } catch (_) { /* noop */ } }
 
-        const ok = await wialonReady();
-        if (!ok) {
-            // v6.0.14: en la pantalla de login es normal que la API aun no
-            // exista, asi que se pide iniciar sesion en vez de avisar de que
-            // falta la API.
-            avisoEl.textContent = rxEnLogin()
-                ? 'Inicia sesión en la plataforma para que Rondo pueda monitorear.'
-                : 'No se encontró la API de Wialon (wialon.core) en esta página.';
-            avisoEl.style.display = 'block';
-            APP.unlocked = true;
-            return;
+        const apiOk = await wialonReady();
+        if (apiOk) log('API de Wialon detectada. Esperando sesion...');
+        // v8.14: no se abandona a los 120 s. Si el operador tarda en iniciar
+        // sesion (o la SPA monta la API mas tarde), Rondo quedaba muerto hasta
+        // recargar; ahora espera con backoff y arranca en cuanto hay sesion.
+        let espera = 1000;
+        while (!currentUser()) {
+            if (!wialonListo()) {
+                avisoEl.textContent = rxEnLogin()
+                    ? 'Inicia sesión en la plataforma para que Rondo pueda monitorear.'
+                    : 'No se encontró la API de Wialon (wialon.core) en esta página.';
+                avisoEl.style.display = 'block';
+                // Si la API aun no esta, se espera activamente un momento antes
+                // de volver al bucle (la SPA puede estar reconstruyendo).
+                try { await wialonReady(3000); } catch (_) { /* noop */ }
+            } else {
+                avisoEl.textContent = 'Sesión de Wialon no iniciada. Inicia sesión para monitorear.';
+                avisoEl.style.display = 'block';
+            }
+            await sleep(espera);
+            espera = Math.min(5000, espera + 500);
         }
-        log('API de Wialon detectada. Esperando sesion...');
-        let intentos = 0;
-        while (!currentUser() && intentos < 120) { await sleep(1000); intentos++; }
-        if (!currentUser()) {
-            avisoEl.textContent = 'Sesión de Wialon no iniciada. Inicia sesión para monitorear.';
-            avisoEl.style.display = 'block';
-            APP.unlocked = true;
-            return;
-        }
+        avisoEl.style.display = 'none';
         APP.unlocked = true;
+        // Con document-end el objeto de metadatos de la plataforma puede no
+        // existir en el primer intento. Ya con la API lista, se completa el
+        // preconnect (incluida la URL real de la API) antes del primer fetch.
+        try { precargarOrigenes(); } catch (_) { /* noop */ }
         // Migracion de voz: en Linux la Web Speech API suele existir pero no
         // sonar. Si el motor guardado es 'web' y estamos en Linux, pasamos a
         // 'online' (StreamElements) una sola vez. El user puede volver a

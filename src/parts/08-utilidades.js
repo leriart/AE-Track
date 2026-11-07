@@ -113,6 +113,35 @@
 
     function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
 
+    // Ejecuta `fn` sobre `items` con un maximo de `limite` tareas a la vez y
+    // devuelve los resultados en el orden original. El refresco lo usa para
+    // una flota grande: antes evaluaba las unidades en serie y una sola
+    // geocodificacion (1,1 s por la cuota de Nominatim) o una consulta de
+    // historial detenia a todas las demas. Los errores se aislan por elemento
+    // (se avisan por `onError` y el lote continua con el siguiente).
+    async function rxEnLotes(items, limite, fn, onError) {
+        const lista = Array.isArray(items) ? items : [];
+        const total = lista.length;
+        const n = Math.max(1, Math.min(total || 1, parseInt(limite, 10) || 1));
+        const out = new Array(total);
+        let siguiente = 0;
+        const obrero = async () => {
+            while (true) {
+                const i = siguiente++;
+                if (i >= total) return;
+                try {
+                    out[i] = await fn(lista[i], i);
+                } catch (e) {
+                    if (typeof onError === 'function') onError(e, lista[i], i);
+                }
+            }
+        };
+        const tareas = [];
+        for (let k = 0; k < n; k++) tareas.push(obrero());
+        await Promise.all(tareas);
+        return out;
+    }
+
     function isoNum(v, d) {
         const n = parseInt(v, 10);
         return Number.isFinite(n) ? n : d;

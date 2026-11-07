@@ -159,28 +159,41 @@
         }
         return '';
     }
+    // Nominatim pide como maximo 1 peticion por segundo. Con el refresco en
+    // paralelo varias unidades pueden necesitar geocodificacion a la vez; una
+    // cola encadenada respeta el espaciado y evita lanzarlas todas juntas
+    // (lo que antes ocurria y hacia que el servicio devolviera 429).
+    let _rxGeoCola = Promise.resolve();
     async function reverseGeocode(lat, lon) {
         if (!APP.config.geocode || lat == null || lon == null) return null;
         const y = Number(lat), x = Number(lon);
         if (!isFinite(y) || !isFinite(x)) return null;
         const key = y.toFixed(3) + ',' + x.toFixed(3);
         if (APP.geoCache[key]) return APP.geoCache[key];
-        const espera = 1100 - (Date.now() - APP.geoLast);
-        if (espera > 0) await sleep(espera);
-        APP.geoLast = Date.now();
-        try {
-            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + y + '&lon=' + x, {}, 15000);
-            const a = (d && d.address) || {};
-            const detalle = a.road || a.pedestrian || a.suburb || a.village || a.hamlet || '';
-            const ciudad = a.city || a.town || a.municipality || a.county || a.state || '';
-            const info = { texto: [detalle, ciudad].filter(Boolean).join(', '), ciudad };
-            // No cachear direcciones vacias: una respuesta rara o un fallo
-            // puntual del servicio no debe fijar "sin direccion" en la sesion.
-            if (info.texto) {
-                APP.geoCache[key] = info;
-                writeSession(SS.geo, APP.geoCache);
-            }
-            return info;
-        } catch (_) { return null; }
+        const ejecutar = async () => {
+            // Otra unidad pudo resolver la misma coordenada mientras estaba
+            // en la cola: se reutiliza en vez de repetir la peticion.
+            if (APP.geoCache[key]) return APP.geoCache[key];
+            const espera = 1100 - (Date.now() - APP.geoLast);
+            if (espera > 0) await sleep(espera);
+            APP.geoLast = Date.now();
+            try {
+                const d = await _rxFetchJson('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + y + '&lon=' + x, {}, 15000);
+                const a = (d && d.address) || {};
+                const detalle = a.road || a.pedestrian || a.suburb || a.village || a.hamlet || '';
+                const ciudad = a.city || a.town || a.municipality || a.county || a.state || '';
+                const info = { texto: [detalle, ciudad].filter(Boolean).join(', '), ciudad };
+                // No cachear direcciones vacias: una respuesta rara o un fallo
+                // puntual del servicio no debe fijar "sin direccion" en la sesion.
+                if (info.texto) {
+                    APP.geoCache[key] = info;
+                    writeSession(SS.geo, APP.geoCache);
+                }
+                return info;
+            } catch (_) { return null; }
+        };
+        const p = _rxGeoCola.then(ejecutar, ejecutar);
+        _rxGeoCola = p.then(() => null, () => null);
+        return p;
     }
 

@@ -1,13 +1,30 @@
     /* ====================== INIT ====================== */
+    // v8.14: si la plataforma embebe su propio panel en un iframe del mismo
+    // origen, evita una segunda instancia de Rondo dentro del marco (doble
+    // polling, doble UI y dos MutationObserver). Si el marco superior no es
+    // Wialon/AE-Track (integracion externa), se permite.
+    function rxEsMarcoDuplicado() {
+        try {
+            if (!window.top || window.top === window.self) return false;
+            const w = window.top.wialon;
+            return !!(w && w.core && w.core.Session);
+        } catch (_) { return false; }
+    }
     async function init() {
         // Idempotente: en modo hibrido el chunk ui y el bootstrap pueden
         // llamarla; evita construir la interfaz dos veces (dos UI superpuestas,
         // la de arriba sin listeners = botones muertos).
         if (APP._iniciado) return;
         APP._iniciado = true;
+        if (rxEsMarcoDuplicado()) return;
         const primerUso = !localStorage.getItem(LS.cfg);
         // v6.19.7: adelanta DNS/TLS a los origenes que se van a usar.
         try { precargarOrigenes(); } catch (_) { /* noop */ }
+        // La capa de rendimiento no necesita sesion: se aplica antes de
+        // construir la UI y de que la plataforma termine de montar el panel,
+        // que es justo cuando mas pesa (login, primeras listas y mapa).
+        try { rxAplicarRendimientoPagina(); } catch (_) { /* noop */ }
+        try { if (APP.config && APP.config.estiloPagina) rxAplicarEstiloPagina(); } catch (_) { /* noop */ }
         injectCSS();
         buildUI();
         try { rxBarridoAutofill(); } catch (_) { /* noop */ }
@@ -23,29 +40,39 @@
         try { rxBindLogoRevelar(); } catch (_) { /* noop */ }
         try { rxPintaReveal(); } catch (_) { /* noop */ }
         try { rxDiagBind(); } catch (_) { /* noop */ }
+        // El panel abierto se pinta ya con los datos persistidos (rutas,
+        // avisos, configuracion) mientras la API responde: deja de verse vacio
+        // durante el primer fetch. Si esta oculto no se gasta nada.
+        if (!APP.panelHidden) { try { paintPanel(); } catch (_) { /* noop */ } }
 
-        const ok = await wialonReady();
-        if (!ok) {
-            // v6.0.14: en la pantalla de login es normal que la API aun no
-            // exista, asi que se pide iniciar sesion en vez de avisar de que
-            // falta la API.
-            avisoEl.textContent = rxEnLogin()
-                ? 'Inicia sesión en la plataforma para que Rondo pueda monitorear.'
-                : 'No se encontró la API de Wialon (wialon.core) en esta página.';
-            avisoEl.style.display = 'block';
-            APP.unlocked = true;
-            return;
+        const apiOk = await wialonReady();
+        if (apiOk) log('API de Wialon detectada. Esperando sesion...');
+        // v8.14: no se abandona a los 120 s. Si el operador tarda en iniciar
+        // sesion (o la SPA monta la API mas tarde), Rondo quedaba muerto hasta
+        // recargar; ahora espera con backoff y arranca en cuanto hay sesion.
+        let espera = 1000;
+        while (!currentUser()) {
+            if (!wialonListo()) {
+                avisoEl.textContent = rxEnLogin()
+                    ? 'Inicia sesión en la plataforma para que Rondo pueda monitorear.'
+                    : 'No se encontró la API de Wialon (wialon.core) en esta página.';
+                avisoEl.style.display = 'block';
+                // Si la API aun no esta, se espera activamente un momento antes
+                // de volver al bucle (la SPA puede estar reconstruyendo).
+                try { await wialonReady(3000); } catch (_) { /* noop */ }
+            } else {
+                avisoEl.textContent = 'Sesión de Wialon no iniciada. Inicia sesión para monitorear.';
+                avisoEl.style.display = 'block';
+            }
+            await sleep(espera);
+            espera = Math.min(5000, espera + 500);
         }
-        log('API de Wialon detectada. Esperando sesion...');
-        let intentos = 0;
-        while (!currentUser() && intentos < 120) { await sleep(1000); intentos++; }
-        if (!currentUser()) {
-            avisoEl.textContent = 'Sesión de Wialon no iniciada. Inicia sesión para monitorear.';
-            avisoEl.style.display = 'block';
-            APP.unlocked = true;
-            return;
-        }
+        avisoEl.style.display = 'none';
         APP.unlocked = true;
+        // Con document-end el objeto de metadatos de la plataforma puede no
+        // existir en el primer intento. Ya con la API lista, se completa el
+        // preconnect (incluida la URL real de la API) antes del primer fetch.
+        try { precargarOrigenes(); } catch (_) { /* noop */ }
         // Migracion de voz: en Linux la Web Speech API suele existir pero no
         // sonar. Si el motor guardado es 'web' y estamos en Linux, pasamos a
         // 'online' (StreamElements) una sola vez. El user puede volver a

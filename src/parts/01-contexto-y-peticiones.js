@@ -24,8 +24,11 @@
     // heredar la identidad visual de la plataforma.
     let _rxMeta = null;
     function rxPlataformaMeta() {
-        if (_rxMeta !== null) return _rxMeta || null;
-        _rxMeta = false;
+        // No se cachea el fallo: con @run-at document-end la plataforma puede
+        // publicar su objeto global un instante despues. Antes se guardaba
+        // "no existe" para siempre y se perdian skin, acento, idioma y API
+        // hasta recargar la pagina.
+        if (_rxMeta) return _rxMeta;
         try {
             const claves = Object.keys(PAGE);
             for (let i = 0; i < claves.length; i++) {

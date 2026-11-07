@@ -3541,20 +3541,41 @@ ta.value = '';
     }
 
     /* ====================== REFRESH ====================== */
+    // Unidades evaluadas a la vez. Antes se hacia una por una: una consulta
+    // de historial o una geocodificacion detenia al resto de la flota y el
+    // primer refresco de una flota grande podia tardar decenas de segundos.
+    // Se acota para no saturar la API de Wialon ni el hilo principal.
+    const RX_REFRESH_CONC = 6;
+    // Si la plataforma no devuelve geocercas (o la busqueda falla), no se
+    // reintenta en cada refresco: eran 4 busquedas + get_zone_data cada 10 s.
+    // Se reintenta cada 5 minutos sin dejar de refrescar unidades.
+    const RX_ZONAS_REINTENTO_MS = 5 * 60000;
+    let _rxZonasProximo = 0;
     async function refresh() {
         if (APP.refBusy || !currentUser()) return;
         // v6.19.7: en modo rendimiento no se refresca con la pestana oculta.
         if (APP.config.rendimientoPagina && document.hidden) return;
         APP.refBusy = true;
         try {
+            // Unidades y geocercas se piden a la vez: la primera pintura ya no
+            // espera dos viajes de red consecutivos. Las geocercas no se
+            // reintentan en cada ciclo si no hay o si fallaron.
+            const necesitaZonas = APP.config.loadZones && APP.zonas.length === 0 &&
+                Date.now() >= _rxZonasProximo;
+            const zonasP = necesitaZonas ? fetchZones().catch(() => []) : null;
             const unidades = await fetchUnits();
             APP.unidades = unidades;
-            if (APP.config.loadZones && APP.zonas.length === 0) {
-                try { APP.zonas = await fetchZones(); } catch (_) { APP.zonas = []; }
+            if (zonasP) {
+                let zs = [];
+                try { zs = (await zonasP) || []; } catch (_) { zs = []; }
+                APP.zonas = zs;
+                _rxZonasProximo = zs.length ? 0 : (Date.now() + RX_ZONAS_REINTENTO_MS);
                 // v6.13: las geocercas dibujadas en Rondo se anaden DESPUES
                 // de consultar la plataforma (si se metieran antes, APP.zonas
-                // dejaria de estar vacia y las nativas no se cargarian).
-                try { glocSincroniza(); } catch (e) { if (APP.unlocked) console.warn('[Rondo] gloc', e && e.message); }
+                // dejaria de estar vacia y las nativas no se cargarian). Se
+                // pasa la lista vigente: sin argumento, glocSincroniza la
+                // vaciaba y las geocercas de la app desaparecian al refrescar.
+                try { glocSincroniza(glocLista()); } catch (e) { if (APP.unlocked) console.warn('[Rondo] gloc', e && e.message); }
             }
             APP.consultaRestante = 40;
             // Presupuesto de geocodificacion inversa por refresco: los avisos
@@ -3570,25 +3591,28 @@ ta.value = '';
             for (let i = 0; i < unidades.length; i++) {
                 const u = unidades[i];
                 if (!shouldWatch(u)) continue;
-                watched.push(u);
                 const info = parseUnitName(u);
                 const st = unitState(u);
                 if (st.online) onNow++;
                 registrarTraza(info, st);
-                const prev = APP.memo[info.clave];
-                const ctx = {
-                    ubicaciones: ubicaciones,
-                    quotaOk: APP.config.historico,
-                    quotaGeo: APP.config.geocode
-                };
-                try {
-                    const R = await evaluateUnit(u, info, st, prev, ctx);
-                    nuevas[info.clave] = R;
-                    actualizarOdometro(info, st, prev);
-                } catch (e) {
-                    if (APP.unlocked) { try { console.warn('[Rondo] reg', info.clave, e && e.message); } catch (_) { /* noop */ } }
-                }
+                watched.push({ u, info, st, prev: APP.memo[info.clave] });
             }
+            // Mismo contexto para todas: los presupuestos son compartidos y se
+            // descuentan antes de cada await, asi que no se duplican.
+            const ctx = {
+                ubicaciones: ubicaciones,
+                quotaOk: APP.config.historico,
+                quotaGeo: APP.config.geocode
+            };
+            await rxEnLotes(watched, RX_REFRESH_CONC, async (w) => {
+                try {
+                    const R = await evaluateUnit(w.u, w.info, w.st, w.prev, ctx);
+                    nuevas[w.info.clave] = R;
+                    actualizarOdometro(w.info, w.st, w.prev);
+                } catch (e) {
+                    if (APP.unlocked) { try { console.warn('[Rondo] reg', w.info.clave, e && e.message); } catch (_) { /* noop */ } }
+                }
+            });
             APP.memo = nuevas;
             writeSession(SS.memo, APP.memo);
             // v6.12: la alerta de geocercas puede vigilar TODA la flota. El
@@ -3603,7 +3627,10 @@ ta.value = '';
             // Sello de version de los datos: el intervalo de 1 s repinta la
             // pestaña solo cuando cambia, no en cada tic (ver 39).
             APP.rev = (APP.rev || 0) + 1;
-            paintPanel();
+            // Panel oculto: no se pinta nada (el reloj de 1 s tambien se
+            // detiene). Al abrirlo, _paintRev = 0 fuerza el primer repintado.
+            if (!APP.panelHidden) paintPanel();
+            else APP._paintRev = 0;
             revalidarContornos();
         } catch (e) {
             if (APP.unlocked) { try { console.warn('[Rondo] refresh', e && e.message); } catch (_) { /* noop */ } }
@@ -5459,7 +5486,7 @@ ta.value = '';
     const RX_PERF_MAPA_SEL = '.leaflet-container,.leaflet-pane,.MicrosoftMap,.wln-map,#map,.map,.map-container';
     // A partir de cuantos hijos una lista se considera "grande".
     const RX_PERF_MIN_HIJOS = 40;
-    let _rxPerfObs = null, _rxPerfUltimo = 0, _rxPerfDatos = null;
+    let _rxPerfObs = null, _rxPerfUltimo = 0;
     function rxPerfEsRondo(el) {
         try { return !!(el && el.closest && el.closest(RX_PERF_RONDO_SEL)); } catch (_) { return false; }
     }
@@ -5514,13 +5541,13 @@ ta.value = '';
             }
         } catch (_) { /* noop */ }
     }
-    // Una pasada (en reposo) sobre el documento.
+    // Una pasada (en reposo) sobre el documento. Solo imagenes y listas: el
+    // resumen completo del DOM (recorrer TODOS los nodos) se calcula bajo
+    // demanda en Diagnostico, no en cada lote de mutaciones.
     function rxPerfOptimizaDom() {
         if (!(APP.config && APP.config.rendimientoPagina) || !document.body) return;
-        const imgs = rxPerfLazyImgs(document.body);
-        const listas = rxPerfMarcaListas(document.body);
-        _rxPerfDatos = rxPerfResumen();
-        if (_rxPerfDatos) { _rxPerfDatos.imgsNuevas = imgs; _rxPerfDatos.listasNuevas = listas; }
+        rxPerfLazyImgs(document.body);
+        rxPerfMarcaListas(document.body);
     }
     // Analisis del "peso" de la pagina. Lo muestra Diagnostico: nodos,
     // imagenes (y cuantas quedan diferidas), canvas, iframes y svg son los
@@ -5556,8 +5583,13 @@ ta.value = '';
             }
             if (_rxPerfObs || typeof MutationObserver !== 'function' || !document.body) return;
             _rxPerfObs = new MutationObserver(() => {
+                // Con la pestana oculta no se pinta nada: tampoco se optimiza.
+                // Y 3 s de margen bastan para que listas/mapas terminen de
+                // cambiar sin recorrer el DOM en cada lote de mutaciones.
+                if (document.hidden) return;
+                if (!(APP.config && APP.config.rendimientoPagina)) return;
                 const t = Date.now();
-                if (t - _rxPerfUltimo < 1500) return;
+                if (t - _rxPerfUltimo < 3000) return;
                 _rxPerfUltimo = t;
                 rxPerfIdle(rxPerfOptimizaDom);
             });
@@ -5599,12 +5631,22 @@ ta.value = '';
             // plataforma, no solo las clases conocidas).
             '.rondo-perf-lista>li,.rondo-perf-lista>[role="listitem"],.rondo-perf-lista>*{' +
                 'content-visibility:auto;contain-intrinsic-size:auto 34px;contain:layout style paint;}',
+            // Listas largas del propio Rondo (Unidades, Avisos): con cientos
+            // de tarjetas solo se pintan las visibles. La animacion de entrada
+            // se desactiva para que no se repita al hacer scroll.
+            '#rondo-panel .rondo-uni-card,#rondo-panel .rondo-cv-card{' +
+                'content-visibility:auto;contain-intrinsic-size:auto 64px;contain:layout style paint;animation:none;}',
+            '#rondo-panel .alerta{content-visibility:auto;contain-intrinsic-size:auto 56px;contain:layout style paint;}',
             // Transiciones cortas y solo de propiedades que no repintan.
             '.wui-button,.wui-icon,.ant-btn,.wui2-button{transition:background-color .1s,color .1s,border-color .1s,opacity .1s !important;}',
             // Respeta "reducir movimiento" del sistema.
             '@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}'
         ].join('\n');
-        el.textContent = reglas + '\n';
+        const cssPerf = reglas + '\n';
+        // applyTheme se llama al guardar ajustes y al cambiar de tema; escribir
+        // el mismo CSS otra vez obliga al navegador a reparsearlo. Solo cambia
+        // si de verdad cambio (tema/claro-oscuro).
+        if (el.textContent !== cssPerf) el.textContent = cssPerf;
         try { rxPerfVigilar(true); rxPerfIdle(rxPerfOptimizaDom); } catch (_) { /* noop */ }
     }
     /* --- Remapeo de colores literales (v6.19.6) -------------------------

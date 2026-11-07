@@ -76,6 +76,18 @@ if (a) {
 const b = conPagina({ foo: 1, _bar: { api_url: 'x' } });
 ok('sin _skin_data no lo confunde', b && b.meta() === null && b.acento() === '' && b.nombre() === '');
 
+// v8.14: con @run-at document-end el objeto de metadatos puede publicarse
+// despues de cargar el DOM. No se cachea el fallo: el siguiente intento lo
+// encuentra (antes devolvia null para siempre y se perdian skin, acento y API).
+globalThis.__PAGE._cLate = {
+    api_url: 'https://hst-api.wialon.com',
+    _skin_data: { major: { data: { variables: {
+        'horizontal-bar-item-active-background': '#B30B27'
+    } } } }
+};
+ok('reintenta y encuentra el objeto si aparece despues',
+    !!(b && b.meta() && b.meta().api_url === 'https://hst-api.wialon.com' && b.acento() === '#B30B27'));
+
 // Acento invalido (no hex) -> cae al siguiente candidato valido.
 const c = conPagina({
     _x: {

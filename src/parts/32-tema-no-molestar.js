@@ -589,7 +589,7 @@
     const RX_PERF_MAPA_SEL = '.leaflet-container,.leaflet-pane,.MicrosoftMap,.wln-map,#map,.map,.map-container';
     // A partir de cuantos hijos una lista se considera "grande".
     const RX_PERF_MIN_HIJOS = 40;
-    let _rxPerfObs = null, _rxPerfUltimo = 0, _rxPerfDatos = null;
+    let _rxPerfObs = null, _rxPerfUltimo = 0;
     function rxPerfEsRondo(el) {
         try { return !!(el && el.closest && el.closest(RX_PERF_RONDO_SEL)); } catch (_) { return false; }
     }
@@ -644,13 +644,13 @@
             }
         } catch (_) { /* noop */ }
     }
-    // Una pasada (en reposo) sobre el documento.
+    // Una pasada (en reposo) sobre el documento. Solo imagenes y listas: el
+    // resumen completo del DOM (recorrer TODOS los nodos) se calcula bajo
+    // demanda en Diagnostico, no en cada lote de mutaciones.
     function rxPerfOptimizaDom() {
         if (!(APP.config && APP.config.rendimientoPagina) || !document.body) return;
-        const imgs = rxPerfLazyImgs(document.body);
-        const listas = rxPerfMarcaListas(document.body);
-        _rxPerfDatos = rxPerfResumen();
-        if (_rxPerfDatos) { _rxPerfDatos.imgsNuevas = imgs; _rxPerfDatos.listasNuevas = listas; }
+        rxPerfLazyImgs(document.body);
+        rxPerfMarcaListas(document.body);
     }
     // Analisis del "peso" de la pagina. Lo muestra Diagnostico: nodos,
     // imagenes (y cuantas quedan diferidas), canvas, iframes y svg son los
@@ -686,8 +686,13 @@
             }
             if (_rxPerfObs || typeof MutationObserver !== 'function' || !document.body) return;
             _rxPerfObs = new MutationObserver(() => {
+                // Con la pestana oculta no se pinta nada: tampoco se optimiza.
+                // Y 3 s de margen bastan para que listas/mapas terminen de
+                // cambiar sin recorrer el DOM en cada lote de mutaciones.
+                if (document.hidden) return;
+                if (!(APP.config && APP.config.rendimientoPagina)) return;
                 const t = Date.now();
-                if (t - _rxPerfUltimo < 1500) return;
+                if (t - _rxPerfUltimo < 3000) return;
                 _rxPerfUltimo = t;
                 rxPerfIdle(rxPerfOptimizaDom);
             });
@@ -729,12 +734,22 @@
             // plataforma, no solo las clases conocidas).
             '.rondo-perf-lista>li,.rondo-perf-lista>[role="listitem"],.rondo-perf-lista>*{' +
                 'content-visibility:auto;contain-intrinsic-size:auto 34px;contain:layout style paint;}',
+            // Listas largas del propio Rondo (Unidades, Avisos): con cientos
+            // de tarjetas solo se pintan las visibles. La animacion de entrada
+            // se desactiva para que no se repita al hacer scroll.
+            '#rondo-panel .rondo-uni-card,#rondo-panel .rondo-cv-card{' +
+                'content-visibility:auto;contain-intrinsic-size:auto 64px;contain:layout style paint;animation:none;}',
+            '#rondo-panel .alerta{content-visibility:auto;contain-intrinsic-size:auto 56px;contain:layout style paint;}',
             // Transiciones cortas y solo de propiedades que no repintan.
             '.wui-button,.wui-icon,.ant-btn,.wui2-button{transition:background-color .1s,color .1s,border-color .1s,opacity .1s !important;}',
             // Respeta "reducir movimiento" del sistema.
             '@media (prefers-reduced-motion: reduce){*{animation:none !important;transition:none !important;}}'
         ].join('\n');
-        el.textContent = reglas + '\n';
+        const cssPerf = reglas + '\n';
+        // applyTheme se llama al guardar ajustes y al cambiar de tema; escribir
+        // el mismo CSS otra vez obliga al navegador a reparsearlo. Solo cambia
+        // si de verdad cambio (tema/claro-oscuro).
+        if (el.textContent !== cssPerf) el.textContent = cssPerf;
         try { rxPerfVigilar(true); rxPerfIdle(rxPerfOptimizaDom); } catch (_) { /* noop */ }
     }
     /* --- Remapeo de colores literales (v6.19.6) -------------------------

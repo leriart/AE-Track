@@ -1,12 +1,18 @@
 /* ====================== API WIALON ====================== */
+    // Comprobacion instantanea: la API puede aparecer o desaparecer cuando la
+    // plataforma reconstruye la SPA. El init la consulta para no quedarse
+    // esperando una sesion que aun no puede existir.
+    function wialonListo() {
+        // `PAGE` resuelve el window real de la pagina (unsafeWindow con
+        // grants, o window si corremos en contexto de pagina).
+        const w = PAGE.wialon;
+        return !!(w && w.core && w.core.Session);
+    }
     async function wialonReady(timeout) {
-        const ms = timeout || 60000;
+        const ms = (timeout == null) ? 60000 : Math.max(0, Number(timeout) || 0);
         const t0 = Date.now();
         while (true) {
-            // `PAGE` resuelve el window real de la pagina (unsafeWindow con
-            // grants, o window si corremos en contexto de pagina).
-            const w = PAGE.wialon;
-            if (w && w.core && w.core.Session) return true;
+            if (wialonListo()) return true;
             if (Date.now() - t0 > ms) return false;
             await sleep(400);
         }
@@ -146,7 +152,12 @@ function _extraerZonasDe(items) {
             if (!porRecurso.has(z._rid)) porRecurso.set(z._rid, []);
             porRecurso.get(z._rid).push(z);
         });
-        for (const [rid, zs] of porRecurso) {
+        // Varios recursos se completan a la vez (con un tope para no saturar
+        // la API): antes cada get_zone_data esperaba al anterior y la primera
+        // carga de geocercas se hacia eterna con muchos recursos.
+        const recursos = Array.from(porRecurso.entries());
+        await rxEnLotes(recursos, 4, async (par) => {
+            const rid = par[0], zs = par[1];
             let datos = null;
             try {
                 const col = zs.map((z) => z.id).filter((x) => x != null);
@@ -157,7 +168,7 @@ function _extraerZonasDe(items) {
                 if (Array.isArray(crudo)) datos = crudo;
                 else if (crudo && typeof crudo === 'object') datos = Object.keys(crudo).map((k) => crudo[k]);
             } catch (_) { datos = null; }
-            if (!datos) continue;
+            if (!datos) return;
             const porId = new Map();
             datos.forEach((dz) => { if (dz && dz.id != null) porId.set(dz.id, dz); });
             zs.forEach((z) => {
@@ -168,7 +179,7 @@ function _extraerZonasDe(items) {
                 if (dz.t != null) z.t = dz.t;
                 if (dz.w != null) z.w = dz.w;
             });
-        }
+        });
         return zonas;
     }
     async function fetchLastMotion(uid, minutos) {

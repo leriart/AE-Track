@@ -302,7 +302,10 @@
     setInterval(() => {
         // Ventanas ocultas: oculta tambien las que se abran despues.
         try { if (typeof rxVentanasSync === 'function') rxVentanasSync(); } catch (_) { /* noop */ }
-        if (panelEl.style.display === 'none' || document.hidden) return;
+        // La barra lateral oculta sigue con display:flex (se desplaza fuera de
+        // pantalla), asi que el estado real es APP.panelHidden. Sin esto el
+        // reloj y los repintados de 1 s seguian trabajando sin verse.
+        if (!panelEl || APP.panelHidden || document.hidden) return;
         // Reloj: lo unico que cambia de verdad cada segundo.
         byId('rondo-upd').innerHTML = '<span class="rondo-usym sm">' + UIS.clock + '</span> ' + new Date().toLocaleTimeString();
         if (nmActivo()) updateNoMolestar();

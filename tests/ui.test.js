@@ -605,8 +605,8 @@ ok('las geocercas de la app se guardan en la sesion',
     /readArray\(SS\.geolocal, \[\]\)/.test(src));
 ok('se fusionan con APP.zonas reasignando (indice espacial)', /APP\.zonas = nativas\.concat\(validas\)/.test(src) &&
     /APP\.zonasIndex = null/.test(src));
-ok('no se pierden al recargar las de la plataforma', /glocSincroniza\(\);[\s\S]{0,40}paintGeocercas\(\)/.test(src));
-ok('refresh fusiona tras cargar la plataforma', /glocSincroniza\(\); \/\/ no/i.test(src) || /try \{ glocSincroniza\(\); \}/.test(src));
+ok('no se pierden al recargar las de la plataforma', /glocSincroniza\(glocLista\(\)\);[\s\S]{0,40}paintGeocercas\(\)/.test(src));
+ok('refresh fusiona tras cargar la plataforma', /try \{ glocSincroniza\(glocLista\(\)\); \}/.test(src));
 ok('Escape cierra el editor de geocercas', /glocM\.classList\.contains\('abierto'\)\) \{ cerrarGeocercaApp\(\); return; \}/.test(src));
 ok('esUIPropia incluye el modal nuevo', /#rondo-geocerca-modal/.test(src));
 ok('el modal define sus propios estilos de boton (mini)',
@@ -1313,7 +1313,7 @@ ok('rendimiento: el refresco marca APP.rev', /APP\.rev = \(APP\.rev \|\| 0\) \+ 
 ok('rendimiento: el intervalo de 1 s repinta por cambio de datos',
     /RX_PAINT_EDAD_MS/.test(src) && /APP\._paintRev === rev/.test(src) && /document\.hidden/.test(src));
 ok('rendimiento: no se pinta la pestaña si el panel esta oculto',
-    /panelEl\.style\.display === 'none' \|\| document\.hidden/.test(src));
+    /!panelEl \|\| APP\.panelHidden \|\| document\.hidden/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);

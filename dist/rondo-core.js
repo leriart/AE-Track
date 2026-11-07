@@ -45,8 +45,11 @@
     // heredar la identidad visual de la plataforma.
     let _rxMeta = null;
     function rxPlataformaMeta() {
-        if (_rxMeta !== null) return _rxMeta || null;
-        _rxMeta = false;
+        // No se cachea el fallo: con @run-at document-end la plataforma puede
+        // publicar su objeto global un instante despues. Antes se guardaba
+        // "no existe" para siempre y se perdian skin, acento, idioma y API
+        // hasta recargar la pagina.
+        if (_rxMeta) return _rxMeta;
         try {
             const claves = Object.keys(PAGE);
             for (let i = 0; i < claves.length; i++) {
@@ -1007,6 +1010,35 @@
 
     function clamp(v, lo, hi) { return Math.min(Math.max(v, lo), hi); }
 
+    // Ejecuta `fn` sobre `items` con un maximo de `limite` tareas a la vez y
+    // devuelve los resultados en el orden original. El refresco lo usa para
+    // una flota grande: antes evaluaba las unidades en serie y una sola
+    // geocodificacion (1,1 s por la cuota de Nominatim) o una consulta de
+    // historial detenia a todas las demas. Los errores se aislan por elemento
+    // (se avisan por `onError` y el lote continua con el siguiente).
+    async function rxEnLotes(items, limite, fn, onError) {
+        const lista = Array.isArray(items) ? items : [];
+        const total = lista.length;
+        const n = Math.max(1, Math.min(total || 1, parseInt(limite, 10) || 1));
+        const out = new Array(total);
+        let siguiente = 0;
+        const obrero = async () => {
+            while (true) {
+                const i = siguiente++;
+                if (i >= total) return;
+                try {
+                    out[i] = await fn(lista[i], i);
+                } catch (e) {
+                    if (typeof onError === 'function') onError(e, lista[i], i);
+                }
+            }
+        };
+        const tareas = [];
+        for (let k = 0; k < n; k++) tareas.push(obrero());
+        await Promise.all(tareas);
+        return out;
+    }
+
     function isoNum(v, d) {
         const n = parseInt(v, 10);
         return Number.isFinite(n) ? n : d;
@@ -1192,14 +1224,20 @@
     }
 
 /* ====================== API WIALON ====================== */
+    // Comprobacion instantanea: la API puede aparecer o desaparecer cuando la
+    // plataforma reconstruye la SPA. El init la consulta para no quedarse
+    // esperando una sesion que aun no puede existir.
+    function wialonListo() {
+        // `PAGE` resuelve el window real de la pagina (unsafeWindow con
+        // grants, o window si corremos en contexto de pagina).
+        const w = PAGE.wialon;
+        return !!(w && w.core && w.core.Session);
+    }
     async function wialonReady(timeout) {
-        const ms = timeout || 60000;
+        const ms = (timeout == null) ? 60000 : Math.max(0, Number(timeout) || 0);
         const t0 = Date.now();
         while (true) {
-            // `PAGE` resuelve el window real de la pagina (unsafeWindow con
-            // grants, o window si corremos en contexto de pagina).
-            const w = PAGE.wialon;
-            if (w && w.core && w.core.Session) return true;
+            if (wialonListo()) return true;
             if (Date.now() - t0 > ms) return false;
             await sleep(400);
         }
@@ -1339,7 +1377,12 @@ function _extraerZonasDe(items) {
             if (!porRecurso.has(z._rid)) porRecurso.set(z._rid, []);
             porRecurso.get(z._rid).push(z);
         });
-        for (const [rid, zs] of porRecurso) {
+        // Varios recursos se completan a la vez (con un tope para no saturar
+        // la API): antes cada get_zone_data esperaba al anterior y la primera
+        // carga de geocercas se hacia eterna con muchos recursos.
+        const recursos = Array.from(porRecurso.entries());
+        await rxEnLotes(recursos, 4, async (par) => {
+            const rid = par[0], zs = par[1];
             let datos = null;
             try {
                 const col = zs.map((z) => z.id).filter((x) => x != null);
@@ -1350,7 +1393,7 @@ function _extraerZonasDe(items) {
                 if (Array.isArray(crudo)) datos = crudo;
                 else if (crudo && typeof crudo === 'object') datos = Object.keys(crudo).map((k) => crudo[k]);
             } catch (_) { datos = null; }
-            if (!datos) continue;
+            if (!datos) return;
             const porId = new Map();
             datos.forEach((dz) => { if (dz && dz.id != null) porId.set(dz.id, dz); });
             zs.forEach((z) => {
@@ -1361,7 +1404,7 @@ function _extraerZonasDe(items) {
                 if (dz.t != null) z.t = dz.t;
                 if (dz.w != null) z.w = dz.w;
             });
-        }
+        });
         return zonas;
     }
     async function fetchLastMotion(uid, minutos) {
@@ -1693,29 +1736,42 @@ function _extraerZonasDe(items) {
         }
         return '';
     }
+    // Nominatim pide como maximo 1 peticion por segundo. Con el refresco en
+    // paralelo varias unidades pueden necesitar geocodificacion a la vez; una
+    // cola encadenada respeta el espaciado y evita lanzarlas todas juntas
+    // (lo que antes ocurria y hacia que el servicio devolviera 429).
+    let _rxGeoCola = Promise.resolve();
     async function reverseGeocode(lat, lon) {
         if (!APP.config.geocode || lat == null || lon == null) return null;
         const y = Number(lat), x = Number(lon);
         if (!isFinite(y) || !isFinite(x)) return null;
         const key = y.toFixed(3) + ',' + x.toFixed(3);
         if (APP.geoCache[key]) return APP.geoCache[key];
-        const espera = 1100 - (Date.now() - APP.geoLast);
-        if (espera > 0) await sleep(espera);
-        APP.geoLast = Date.now();
-        try {
-            const d = await _rxFetchJson('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + y + '&lon=' + x, {}, 15000);
-            const a = (d && d.address) || {};
-            const detalle = a.road || a.pedestrian || a.suburb || a.village || a.hamlet || '';
-            const ciudad = a.city || a.town || a.municipality || a.county || a.state || '';
-            const info = { texto: [detalle, ciudad].filter(Boolean).join(', '), ciudad };
-            // No cachear direcciones vacias: una respuesta rara o un fallo
-            // puntual del servicio no debe fijar "sin direccion" en la sesion.
-            if (info.texto) {
-                APP.geoCache[key] = info;
-                writeSession(SS.geo, APP.geoCache);
-            }
-            return info;
-        } catch (_) { return null; }
+        const ejecutar = async () => {
+            // Otra unidad pudo resolver la misma coordenada mientras estaba
+            // en la cola: se reutiliza en vez de repetir la peticion.
+            if (APP.geoCache[key]) return APP.geoCache[key];
+            const espera = 1100 - (Date.now() - APP.geoLast);
+            if (espera > 0) await sleep(espera);
+            APP.geoLast = Date.now();
+            try {
+                const d = await _rxFetchJson('https://nominatim.openstreetmap.org/reverse?format=json&zoom=16&accept-language=es&lat=' + y + '&lon=' + x, {}, 15000);
+                const a = (d && d.address) || {};
+                const detalle = a.road || a.pedestrian || a.suburb || a.village || a.hamlet || '';
+                const ciudad = a.city || a.town || a.municipality || a.county || a.state || '';
+                const info = { texto: [detalle, ciudad].filter(Boolean).join(', '), ciudad };
+                // No cachear direcciones vacias: una respuesta rara o un fallo
+                // puntual del servicio no debe fijar "sin direccion" en la sesion.
+                if (info.texto) {
+                    APP.geoCache[key] = info;
+                    writeSession(SS.geo, APP.geoCache);
+                }
+                return info;
+            } catch (_) { return null; }
+        };
+        const p = _rxGeoCola.then(ejecutar, ejecutar);
+        _rxGeoCola = p.then(() => null, () => null);
+        return p;
     }
 
     /* ====================== ALGORITMOS GEO / RUTAS (OSM + A*) ====================== */

@@ -14,7 +14,7 @@
 // @match        *://ae-track.com/*
 // @match        *://*.wialon.com/*
 // @match        *://wialon.com/*
-// @run-at       document-idle
+// @run-at       document-end
 // @grant        GM_xmlhttpRequest
 // @connect      api.deepseek.com
 // @connect      integrate.api.nvidia.com

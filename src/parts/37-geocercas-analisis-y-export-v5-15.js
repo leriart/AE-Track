@@ -327,8 +327,9 @@
             APP.config.loadZones = true;
             APP.zonas = await fetchZones();
             // v6.13: Recargar solo repone las de la plataforma; las dibujadas
-            // en Rondo se vuelven a fusionar (glocSincroniza las separa).
-            glocSincroniza();
+            // en Rondo se vuelven a fusionar (glocSincroniza las separa). Se
+            // le pasa la lista para no vaciarlas al recargar.
+            glocSincroniza(glocLista());
             paintGeocercas();
             if (APP.tab === 'zonas') paintRiesgo();
             if (APP.zonas.length) adviceOk('Geocercas recargadas', APP.zonas.length + ' geocercas');
