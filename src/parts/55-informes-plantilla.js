@@ -1730,7 +1730,9 @@ function rxInfDescarga(txt, nombre, mime) {
 function rxInfHTML(t) {
     // rxInfTabla (50-informe.js) espera las columnas y las filas como arrays y
     // YA monta <thead>/<tr>/<td>: aqui se le pasa el valor ya escapado.
-    const cab = (t.cols || []).slice(0, 14).map((c) => esc(c));
+    // El PDF lleva TODAS las columnas visibles: la vista previa muestra 14
+    // por comodidad, pero recortar el documento ocultaba datos sin avisar.
+    const cab = (t.cols || []).map((c) => esc(c));
     const filas = (t.filas || []).slice(0, 400).map((f) => {
         const out = [];
         for (let i = 0; i < cab.length; i++) {
@@ -1743,8 +1745,17 @@ function rxInfHTML(t) {
     const kpi = (n, s) => '<div class="kpi"><b>' + esc(String(n)) + '</b><span>' + esc(s) + '</span></div>';
     const mas = ((t.filas || []).length > 400)
         ? '<div class="callout">Se listan las primeras 400 filas; el CSV lleva todas.</div>' : '';
+    // Muchas columnas: A4 horizontal y texto que pueda partirse. Sin esto la
+    // tabla se sale del ancho del papel y el lado derecho se pierde al imprimir.
+    const nCols = cab.length;
+    const extra = nCols > 8
+        ? '@page{size:A4 landscape;margin:9mm 7mm 11mm}' +
+          'table{font-size:' + (nCols > 18 ? '7.2px' : (nCols > 12 ? '7.9px' : '8.6px')) + '}' +
+          'th,td{padding:2.5px 3px;word-break:break-word;overflow-wrap:anywhere}' +
+          'thead th{white-space:normal}'
+        : '';
     return '<!doctype html><html lang="es"><head><meta charset="utf-8"><title>' +
-        esc(t.titulo || 'Informe') + '</title><style>' + rxInfEstilo() + '</style></head><body>' +
+        esc(t.titulo || 'Informe') + '</title><style>' + rxInfEstilo() + extra + '</style></head><body>' +
         rxInfCabecera('Rondo', t.titulo || 'Informe de la plataforma',
             esc(t.subtitulo || '') + '<br>Documento de solo lectura') +
         '<div class="kpis">' +
@@ -3561,7 +3572,9 @@ function abrirInformesPlantilla(origen) {
                     '</div>' : '';
                 const tabla = hay
                     ? '<div class="rgi-prev">' + rxInfTablaHTML(v.cols, v.filas, 60) +
-                      (v.total > 60 ? '<p class="rgi-more">Primeras 60 filas de ' + v.total + '. El CSV lleva todas.</p>' : '') + '</div>'
+                      (v.total > 60 ? '<p class="rgi-more">Primeras 60 filas de ' + v.total + '. El CSV lleva todas.</p>' : '') +
+                      (v.cols.length > 14 ? '<p class="rgi-more">La vista previa muestra 14 de ' + v.cols.length +
+                          ' columnas; el PDF y el CSV llevan todas las visibles.</p>' : '') + '</div>'
                     : '<p class="rgi-more">Sin resultados todav\u00eda. Elige plantilla y p\u00e9riodo y pulsa "Ejecutar informe".</p>';
                 const resumen = hay ? '<p class="rgi-res">' + esc(rxInfResumenLinea(v)) + '</p>' : '';
                 const salidas = hay ? '<div class="rgi-io">' +
@@ -3603,7 +3616,9 @@ function abrirInformesPlantilla(origen) {
                     (v.iUni >= 0 ? '<div class="rgi-kpi"><b>' + v.unidades + '</b><span>Unidades</span></div>' : '') +
                     (v.iZona >= 0 ? '<div class="rgi-kpi"><b>' + v.zonas + '</b><span>Geocercas</span></div>' : '') +
                     '</div><p class="rgi-res">' + esc(rxInfResumenLinea(v)) + '</p>' +
-                    '<div class="rgi-prev">' + rxInfTablaHTML(v.cols, v.filas, 60) + '</div>';
+                    '<div class="rgi-prev">' + rxInfTablaHTML(v.cols, v.filas, 60) +
+                    (v.cols.length > 14 ? '<p class="rgi-more">La vista previa muestra 14 de ' + v.cols.length +
+                        ' columnas; el PDF y el CSV llevan todas las visibles.</p>' : '') + '</div>';
                 try { rxInfPintaMapa(v); } catch (_) { /* noop */ }
             };
             const cargarTpl = async () => {

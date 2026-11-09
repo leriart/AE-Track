@@ -102,6 +102,18 @@ ok('export: pide mapa, sin comprimir y nombre de archivo',
     url.indexOf(encodeURIComponent('"attachMap":1')) > 0 &&
     url.indexOf(encodeURIComponent('"compress":0')) > 0 &&
     url.indexOf(encodeURIComponent('"outputFileName":"rondo_recorridos_x_105"')) > 0);
+// El PDF nativo sale en A4 fijo por defecto: con compacto/sin ajuste la
+// pagina se ensancha y al imprimir se corta el lado derecho.
+ok('export: ancho de pagina fijo (A4) por defecto',
+    url.indexOf(encodeURIComponent('"pageWidth":0')) > 0 &&
+    url.indexOf(encodeURIComponent('"pageWidth":1')) < 0);
+mod.RX_MAS.pdfAncho = 2;
+ok('export: respeta el ancho compacto/sin ajuste elegido',
+    mod.rxMasExportUrl('x.pdf').indexOf(encodeURIComponent('"pageWidth":2')) > 0);
+mod.RX_MAS.pdfAncho = 9;
+ok('export: un ancho invalido vuelve a fijo',
+    mod.rxMasExportUrl('x.pdf').indexOf(encodeURIComponent('"pageWidth":0')) > 0);
+mod.RX_MAS.pdfAncho = 0;
 ok('export: sin nombre sigue armando la URL', /svc=report\/export_result/.test(mod.rxMasExportUrl('')));
 
 // ── Validacion del archivo nativo ──────────────────────────────────────
@@ -263,6 +275,17 @@ ok('unidades: {id, eco} ordenadas por economico',
         ok('ui: formato PDF nativo por defecto',
             /class="rgi-chip activo" data-fmt="pdf"/.test(h) && /data-fmt="csv"/.test(h) &&
             /PDF nativo/.test(h));
+        ok('ui: ancho PDF fijo por defecto con opciones compacto/sin ajuste',
+            /class="rgi-chip activo" data-pdfancho="0"/.test(h) &&
+            /data-pdfancho="1"/.test(h) && /data-pdfancho="2"/.test(h));
+        const ancho2 = global.document.createElement('ancho2');
+        ancho2.dataset = { pdfancho: '2' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => ancho2 } });
+        ok('ui: elegir ancho PDF sin ajuste lo marca',
+            mod.RX_MAS.pdfAncho === 2 && /class="rgi-chip activo" data-pdfancho="2"/.test(box.innerHTML));
+        const ancho0 = global.document.createElement('ancho0');
+        ancho0.dataset = { pdfancho: '0' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => ancho0 } });
         // Cambiar a CSV mueve el chip activo.
         const fmt = global.document.createElement('fmt');
         fmt.dataset = { fmt: 'csv' };

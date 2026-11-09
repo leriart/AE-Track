@@ -252,6 +252,21 @@ function chipEn(que, v) {
         R.prints.length === 1 && /<table>/.test(R.prints[0]) && /CDOS\.1/.test(R.prints[0]) && /Hora de entrada/.test(R.prints[0]),
         'prints=' + R.prints.length);
 
+    // El PDF NO se recorta a 14 columnas (la vista previa si las limita por
+    // comodidad). Con muchas columnas pasa a A4 horizontal y parte el texto.
+    mod.RX_INF.cols = Array.from({ length: 16 }, (_, i) => 'Columna ' + (i + 1));
+    mod.RX_INF.filas = [Array.from({ length: 16 }, (_, i) => 'valor ' + (i + 1))];
+    R.prints.length = 0;
+    clickEn('rgi-pdf');
+    await new Promise((r) => setTimeout(r, 20));
+    const html16 = R.prints[0] || '';
+    ok('PDF: incluye las 16 columnas (no se recorta a 14)',
+        /Columna 16/.test(html16) && /valor 16/.test(html16), 'prints=' + R.prints.length);
+    ok('PDF: muchas columnas -> A4 horizontal y texto partible',
+        /@page\{size:A4 landscape/.test(html16) && /word-break:break-word/.test(html16));
+    mod.RX_INF.cols = ['Unidad', 'Hora de entrada', 'Duración en'];
+    mod.RX_INF.filas = [['CDOS.1', '14.09.2026 15:13:41', '0:08:01']];
+
     // 9) Filtros de plantilla (sin los ajustes de formato) y controles tipo
     //    Excel: lista de unidades y columnas que se pueden ocultar.
     const hF = byId('rgi-box').innerHTML;

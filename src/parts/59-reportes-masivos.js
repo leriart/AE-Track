@@ -25,6 +25,11 @@
         // 'pdf' = archivo nativo de la plataforma (report/export_result, con
         // su mapa); 'csv' = tabla del informe en un archivo por unidad.
         formato: 'pdf',
+        // Ancho del PDF nativo: 0 fijo (A4), 1 compacto, 2 sin ajuste.
+        // Fijo evita que la pagina salga mas ancha que A4 y se recorte al
+        // imprimir; compacto/sin ajuste quedan disponibles para informes con
+        // muchas columnas (ver el aviso del dialogo).
+        pdfAncho: 0,
         prog: { activo: false, hechas: 0, total: 0, txt: '', pct: 0 },
         res: null,                         // [{eco, filas, error, nativo}] del ultimo lote
         _token: null, _busy: false, _cargadas: false
@@ -83,15 +88,18 @@
     // URL de exportacion. format 2 = PDF (1 HTML, 32 CSV, 4 XLS, 8 XLSX).
     // compress 0: el PDF viaja tal cual (con compresion llegaba un archivo
     // comprimido que el visor no puede abrir). attachMap = mapa nativo.
+    // pageWidth 0 (fijo) mantiene la pagina en A4: con 1/2 la plataforma
+    // ensancha la pagina al contenido y al imprimir se corta el lado derecho.
     function rxMasExportUrl(nombre) {
         const base = rxMasApiBase();
         const sid = rxMasSid();
         if (!base || !sid) return '';
+        const ancho = [0, 1, 2].indexOf(+RX_MAS.pdfAncho) >= 0 ? +RX_MAS.pdfAncho : 0;
         const params = {
             format: 2,
             pageOrientation: 'landscape',
             pageSize: 'a4',
-            pageWidth: 1,
+            pageWidth: ancho,
             attachMap: 1,
             extendBounds: 1,
             hideMapBasis: 0,
@@ -413,6 +421,9 @@
                     const fmtChip = (v, txt, tit) => '<button type="button" class="rgi-chip' +
                         (RX_MAS.formato === v ? ' activo' : '') + '" data-fmt="' + v + '"' + dis +
                         (tit ? ' title="' + esc(tit) + '"' : '') + '>' + esc(txt) + '</button>';
+                    const anchoChip = (v, txt, tit) => '<button type="button" class="rgi-chip' +
+                        (RX_MAS.pdfAncho === v ? ' activo' : '') + '" data-pdfancho="' + v + '"' + dis +
+                        (tit ? ' title="' + esc(tit) + '"' : '') + '>' + esc(txt) + '</button>';
                     const paso3 = paso(3, 'Periodo y formato',
                         '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
                         '<input type="date" id="rmas-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_MAS.desde) + '"' + dis + '>' +
@@ -422,7 +433,14 @@
                         '<div class="rgi-row"><span class="rgi-lb">Formato</span><div class="rgi-chips">' +
                         fmtChip('pdf', 'PDF nativo (plataforma)', 'report/export_result: el mismo PDF de la plataforma, con mapa') +
                         fmtChip('csv', 'CSV', 'Las filas del informe en un archivo por unidad') +
-                        '</div></div>');
+                        '</div></div>' +
+                        (RX_MAS.formato === 'pdf'
+                            ? '<div class="rgi-row"><span class="rgi-lb">Ancho PDF</span><div class="rgi-chips">' +
+                              anchoChip(0, 'Fijo (A4)', 'Pagina A4 horizontal. Evita que el PDF se recorte al imprimir; si una tabla no cabe, la plataforma muestra solo su titulo.') +
+                              anchoChip(1, 'Compacto', 'La pagina se ensancha al contenido. Util para informes con muchas columnas; al imprimir hay que ajustar a la hoja.') +
+                              anchoChip(2, 'Sin ajuste', 'La pagina se ensancha a la fila mas larga. Para revisar en pantalla; al imprimir hay que ajustar a la hoja.') +
+                              '</div></div>'
+                            : ''));
                     const aviso = '<div class="rgi-aviso">Se descarga <b>un ' +
                         (RX_MAS.formato === 'csv' ? 'CSV' : 'PDF') + ' por unidad</b>. ' +
                         'El navegador puede pedir permiso para descargas m\u00faltiples: conc\u00e9delo para no perder ninguno.</div>';
@@ -563,6 +581,12 @@
                     }
                     if (b.dataset && b.dataset.fmt) {
                         RX_MAS.formato = (b.dataset.fmt === 'csv') ? 'csv' : 'pdf';
+                        pinta();
+                        return;
+                    }
+                    if (b.dataset && b.dataset.pdfancho != null) {
+                        const v = parseInt(b.dataset.pdfancho, 10);
+                        RX_MAS.pdfAncho = (v === 1 || v === 2) ? v : 0;
                         pinta();
                         return;
                     }
