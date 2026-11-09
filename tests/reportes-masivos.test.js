@@ -102,11 +102,20 @@ ok('export: pide mapa, sin comprimir y nombre de archivo',
     url.indexOf(encodeURIComponent('"attachMap":1')) > 0 &&
     url.indexOf(encodeURIComponent('"compress":0')) > 0 &&
     url.indexOf(encodeURIComponent('"outputFileName":"rondo_recorridos_x_105"')) > 0);
-// El PDF nativo sale en A4 fijo por defecto: con compacto/sin ajuste la
-// pagina se ensancha y al imprimir se corta el lado derecho.
-ok('export: ancho de pagina fijo (A4) por defecto',
+// La plataforma ignora la orientacion en varias versiones y arma A4
+// vertical: el PDF se pide en A3 para que las tablas anchas no se corten.
+ok('export: papel A3 por defecto (mas ancho que A4)',
+    url.indexOf(encodeURIComponent('"pageSize":"a3"')) > 0);
+ok('export: ancho de pagina fijo por defecto',
     url.indexOf(encodeURIComponent('"pageWidth":0')) > 0 &&
     url.indexOf(encodeURIComponent('"pageWidth":1')) < 0);
+mod.RX_MAS.pdfPapel = 'a4';
+ok('export: permite volver a A4',
+    mod.rxMasExportUrl('x.pdf').indexOf(encodeURIComponent('"pageSize":"a4"')) > 0);
+mod.RX_MAS.pdfPapel = 'carta';
+ok('export: un papel invalido vuelve a A3',
+    mod.rxMasExportUrl('x.pdf').indexOf(encodeURIComponent('"pageSize":"a3"')) > 0);
+mod.RX_MAS.pdfPapel = 'a3';
 mod.RX_MAS.pdfAncho = 2;
 ok('export: respeta el ancho compacto/sin ajuste elegido',
     mod.rxMasExportUrl('x.pdf').indexOf(encodeURIComponent('"pageWidth":2')) > 0);
@@ -275,6 +284,19 @@ ok('unidades: {id, eco} ordenadas por economico',
         ok('ui: formato PDF nativo por defecto',
             /class="rgi-chip activo" data-fmt="pdf"/.test(h) && /data-fmt="csv"/.test(h) &&
             /PDF nativo/.test(h));
+        ok('ui: papel A3 por defecto con opcion A4',
+            /class="rgi-chip activo" data-pdfpapel="a3"/.test(h) &&
+            /data-pdfpapel="a4"/.test(h));
+        const papelA4 = global.document.createElement('papela4');
+        papelA4.dataset = { pdfpapel: 'a4' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => papelA4 } });
+        ok('ui: elegir A4 lo marca',
+            mod.RX_MAS.pdfPapel === 'a4' && /class="rgi-chip activo" data-pdfpapel="a4"/.test(box.innerHTML));
+        const papelA3 = global.document.createElement('papela3');
+        papelA3.dataset = { pdfpapel: 'a3' };
+        for (const fn of (box.handlers.click || [])) fn({ target: { closest: () => papelA3 } });
+        ok('ui: volver a A3 lo marca',
+            mod.RX_MAS.pdfPapel === 'a3' && /class="rgi-chip activo" data-pdfpapel="a3"/.test(box.innerHTML));
         ok('ui: ancho PDF fijo por defecto con opciones compacto/sin ajuste',
             /class="rgi-chip activo" data-pdfancho="0"/.test(h) &&
             /data-pdfancho="1"/.test(h) && /data-pdfancho="2"/.test(h));

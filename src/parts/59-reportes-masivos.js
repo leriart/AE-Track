@@ -25,10 +25,14 @@
         // 'pdf' = archivo nativo de la plataforma (report/export_result, con
         // su mapa); 'csv' = tabla del informe en un archivo por unidad.
         formato: 'pdf',
-        // Ancho del PDF nativo: 0 fijo (A4), 1 compacto, 2 sin ajuste.
-        // Fijo evita que la pagina salga mas ancha que A4 y se recorte al
-        // imprimir; compacto/sin ajuste quedan disponibles para informes con
-        // muchas columnas (ver el aviso del dialogo).
+        // Tamano del PDF nativo: a3 por defecto. La plataforma ignora la
+        // orientacion horizontal en varias versiones y siempre arma A4
+        // vertical, donde las tablas anchas se cortan por la derecha. A3 da
+        // 41% mas de ancho; al imprimir se elige "Ajustar a la hoja".
+        pdfPapel: 'a3',
+        // Ancho del PDF nativo: 0 fijo, 1 compacto, 2 sin ajuste. En las
+        // versiones que lo respetan, compacto/sin ajuste ensanchan la pagina
+        // al contenido; fijo la mantiene en el papel elegido.
         pdfAncho: 0,
         prog: { activo: false, hechas: 0, total: 0, txt: '', pct: 0 },
         res: null,                         // [{eco, filas, error, nativo}] del ultimo lote
@@ -88,17 +92,19 @@
     // URL de exportacion. format 2 = PDF (1 HTML, 32 CSV, 4 XLS, 8 XLSX).
     // compress 0: el PDF viaja tal cual (con compresion llegaba un archivo
     // comprimido que el visor no puede abrir). attachMap = mapa nativo.
-    // pageWidth 0 (fijo) mantiene la pagina en A4: con 1/2 la plataforma
-    // ensancha la pagina al contenido y al imprimir se corta el lado derecho.
+    // pageSize a3 por defecto: varias versiones de la plataforma ignoran
+    // pageOrientation y generan A4 vertical, que recorta las tablas anchas.
+    // pageWidth 0 (fijo) mantiene la pagina en el tamano elegido.
     function rxMasExportUrl(nombre) {
         const base = rxMasApiBase();
         const sid = rxMasSid();
         if (!base || !sid) return '';
+        const papel = (RX_MAS.pdfPapel === 'a4') ? 'a4' : 'a3';
         const ancho = [0, 1, 2].indexOf(+RX_MAS.pdfAncho) >= 0 ? +RX_MAS.pdfAncho : 0;
         const params = {
             format: 2,
             pageOrientation: 'landscape',
-            pageSize: 'a4',
+            pageSize: papel,
             pageWidth: ancho,
             attachMap: 1,
             extendBounds: 1,
@@ -424,6 +430,9 @@
                     const anchoChip = (v, txt, tit) => '<button type="button" class="rgi-chip' +
                         (RX_MAS.pdfAncho === v ? ' activo' : '') + '" data-pdfancho="' + v + '"' + dis +
                         (tit ? ' title="' + esc(tit) + '"' : '') + '>' + esc(txt) + '</button>';
+                    const papelChip = (v, txt, tit) => '<button type="button" class="rgi-chip' +
+                        (RX_MAS.pdfPapel === v ? ' activo' : '') + '" data-pdfpapel="' + v + '"' + dis +
+                        (tit ? ' title="' + esc(tit) + '"' : '') + '>' + esc(txt) + '</button>';
                     const paso3 = paso(3, 'Periodo y formato',
                         '<div class="rgi-row"><span class="rgi-lb">Fechas</span><span class="rgi-rango">' +
                         '<input type="date" id="rmas-desde" class="filtro" title="Dia inicial (incluido)" value="' + esc(RX_MAS.desde) + '"' + dis + '>' +
@@ -435,15 +444,22 @@
                         fmtChip('csv', 'CSV', 'Las filas del informe en un archivo por unidad') +
                         '</div></div>' +
                         (RX_MAS.formato === 'pdf'
-                            ? '<div class="rgi-row"><span class="rgi-lb">Ancho PDF</span><div class="rgi-chips">' +
-                              anchoChip(0, 'Fijo (A4)', 'Pagina A4 horizontal. Evita que el PDF se recorte al imprimir; si una tabla no cabe, la plataforma muestra solo su titulo.') +
-                              anchoChip(1, 'Compacto', 'La pagina se ensancha al contenido. Util para informes con muchas columnas; al imprimir hay que ajustar a la hoja.') +
-                              anchoChip(2, 'Sin ajuste', 'La pagina se ensancha a la fila mas larga. Para revisar en pantalla; al imprimir hay que ajustar a la hoja.') +
+                            ? '<div class="rgi-row"><span class="rgi-lb">Papel PDF</span><div class="rgi-chips">' +
+                              papelChip('a3', 'A3 (recomendado)', 'A3 vertical da 41% mas de ancho que A4. Evita que las tablas anchas se corten por la derecha; al imprimir en A4 elige Ajustar a la hoja.') +
+                              papelChip('a4', 'A4', 'Tamano carta/oficio estandar. Si el informe tiene muchas columnas, la plataforma puede recortar el lado derecho.') +
+                              '</div></div>' +
+                              '<div class="rgi-row"><span class="rgi-lb">Ancho PDF</span><div class="rgi-chips">' +
+                              anchoChip(0, 'Fijo', 'La pagina se queda en el tamano de papel elegido. Evita que el PDF se recorte al imprimir.') +
+                              anchoChip(1, 'Compacto', 'La pagina se ensancha al contenido (en las versiones que respetan esta opcion). Util para informes con muchas columnas.') +
+                              anchoChip(2, 'Sin ajuste', 'La pagina se ensancha a la fila mas larga (en las versiones que respetan esta opcion). Para revisar en pantalla.') +
                               '</div></div>'
                             : ''));
                     const aviso = '<div class="rgi-aviso">Se descarga <b>un ' +
                         (RX_MAS.formato === 'csv' ? 'CSV' : 'PDF') + ' por unidad</b>. ' +
-                        'El navegador puede pedir permiso para descargas m\u00faltiples: conc\u00e9delo para no perder ninguno.</div>';
+                        'El navegador puede pedir permiso para descargas m\u00faltiples: conc\u00e9delo para no perder ninguno.' +
+                        (RX_MAS.formato === 'pdf'
+                            ? ' El PDF nativo se pide en <b>A3</b> para que no se corten las tablas; si lo imprimes en A4 elige <b>Ajustar a la hoja</b>.'
+                            : '') + '</div>';
                     const ejecutar = RX_MAS._busy
                         ? '<button type="button" class="rgi-btn gen busy" id="rmas-cancel">' +
                           '<span class="rondo-usym">' + UIS.close + '</span><b>Cancelar</b><i>lo descargado se conserva</i></button>'
@@ -587,6 +603,11 @@
                     if (b.dataset && b.dataset.pdfancho != null) {
                         const v = parseInt(b.dataset.pdfancho, 10);
                         RX_MAS.pdfAncho = (v === 1 || v === 2) ? v : 0;
+                        pinta();
+                        return;
+                    }
+                    if (b.dataset && b.dataset.pdfpapel != null) {
+                        RX_MAS.pdfPapel = (b.dataset.pdfpapel === 'a4') ? 'a4' : 'a3';
                         pinta();
                         return;
                     }
