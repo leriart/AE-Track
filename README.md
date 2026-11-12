@@ -15,7 +15,7 @@ datos que ya carga tu sesion y te avisa de todo lo importante.
 <div align="center">
 
 [![version](https://img.shields.io/badge/version-8.13.4-850D22?style=for-the-badge&labelColor=1f2330)](./changelogs/8.13.4.md)
-[![tests](https://img.shields.io/badge/tests-2380%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
+[![tests](https://img.shields.io/badge/tests-2434%20checks%20OK-43a047?style=for-the-badge&labelColor=1f2330)](./tests)
 [![tampermonkey](https://img.shields.io/badge/Tampermonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://www.tampermonkey.net/)
 [![violentmonkey](https://img.shields.io/badge/Violentmonkey-compatible-f57c00?style=for-the-badge&labelColor=1f2330)](https://violentmonkey.github.io/)
 [![license](https://img.shields.io/badge/license-MIT-313849?style=for-the-badge&labelColor=1f2330)](./LICENSE)
@@ -166,7 +166,9 @@ Todo se guarda en tu navegador. No se envia nada a servidores propios.
 - **Reportes**: **reporte operativo PDF** (portada, indice, KPIs y tablas de
   unidades, avisos, rutas, sin senal, geocercas y zonas de riesgo) y **reporte
   del recorrido PDF**; **fecha, hora y coordenadas por dato**. Ademas informe
-  **Markdown** y **CSV** con fecha/hora y coordenadas.
+  **Markdown** y **CSV** con fecha/hora y coordenadas, y **velocidad promedio
+  por unidad** (pega economicos, elige los dias y descarga CSV/PDF con km,
+  horas en movimiento y media del periodo).
 - **Dialogos y confirmaciones** coherentes con el estilo del panel, y
   **estado vacio util** con pista y accion en cada pestana.
 - **Ajustes con buscador**: filtra las opciones de todas las secciones a la
@@ -417,7 +419,7 @@ node tests/syntax.test.js
 node tests/extraer_patrones.test.js
 ```
 
-**29 suites, ~2380 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
+**30 suites, ~2434 checks** que verifican geodesica, Douglas-Peucker, DBSCAN,
 A* ponderado, deteccion de punto de partida, paradas con jitter GPS,
 odometro, orden de la tabla, escala de UI, parseo de version, trazado
 automatico de rutas, calculo de ETA, estado de ruta, modo caravana

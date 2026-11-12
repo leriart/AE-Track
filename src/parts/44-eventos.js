@@ -206,6 +206,8 @@
         if (informeGeo) informeGeo.addEventListener('click', () => abrirInformesPlantilla());
         const rendBtn = byId('rondo-rendimientos');
         if (rendBtn) rendBtn.addEventListener('click', () => abrirRendimientos());
+        const velBtn = byId('rondo-velocidad');
+        if (velBtn) velBtn.addEventListener('click', () => abrirVelocidadPromedio());
         const masivoBtn = byId('rondo-masivo');
         if (masivoBtn) masivoBtn.addEventListener('click', () => abrirReportesMasivos());
         const listaRutasEl = byId('rondo-lista-rutas');

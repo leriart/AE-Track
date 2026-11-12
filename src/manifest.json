@@ -239,6 +239,10 @@
     {
       "file": "59-reportes-masivos.js",
       "chunk": "ui"
+    },
+    {
+      "file": "60-velocidad-promedio.js",
+      "chunk": "ui"
     }
   ]
 }

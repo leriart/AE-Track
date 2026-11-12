@@ -75,7 +75,7 @@ Lee `ARCHITECTURE.md` para el mapa completo y `CONTRIBUTING.md` para el flujo.
 | `scripts/bump-readme.mjs` | Actualiza el badge de version del README | Si |
 | `scripts/test-all.mjs` | Runner de las suites (Node puro) + total de checks | Si |
 | `scripts/check-docs.mjs` | Verifica/sincroniza cifras y enlaces de la documentacion | Si |
-| `tests/*.test.js` | 29 suites; `tests/_source.js` es el cargador comun | Si |
+| `tests/*.test.js` | 30 suites; `tests/_source.js` es el cargador comun | Si |
 | `rondo.user.js` | **Generado**: bootstrap hibrido (o bundle) | **Nunca** |
 | `dist/*.js` | **Generado**: `rondo-core/engine/ui.js` (se commitean) | **Nunca** |
 | `build/` | Bundle temporal para tests (gitignored) | Nunca |
@@ -109,7 +109,7 @@ node scripts/build.mjs --mode=require --channel=dev --version 6.7.0-dev.1 --out 
 
 | Workflow | Disparo | Que hace |
 | --- | --- | --- |
-| `ci.yml` | push/PR a `main`/`dev` | build bundle + 29 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/` |
+| `ci.yml` | push/PR a `main`/`dev` | build bundle + 30 suites; en `main` verifica que `dist/` y el bootstrap commiteados coinciden con `src/` |
 | `release.yml` | push a `main` (o manual) | version, changelog, build, tests, badge, commit, tag, release y push |
 | `dev.yml` | push a `dev` | build con `X.Y.Z-dev.N`, tests y commit de `dist/` + bootstrap en `dev` |
 
@@ -135,7 +135,7 @@ commitear, asi que la doc no se desfasa sola.
   node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
   node scripts/test-all.mjs
   ```
-  Las 29 suites (~2380 checks) deben quedar en verde. Si añades logica nueva,
+  Las 30 suites (~2434 checks) deben quedar en verde. Si añades logica nueva,
   añade o amplia una suite.
 - La version se calcula **automaticamente** al hacer push a `main` (workflow
   Release, segun commits convencionales). No cambies `@version` a mano: usa
@@ -194,7 +194,7 @@ node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js
 node scripts/test-all.mjs
 ```
 
-- **29 suites, ~2380 checks**. Ninguna usa red ni navegador: las suites extraen
+- **30 suites, ~2434 checks**. Ninguna usa red ni navegador: las suites extraen
   funciones del bundle con stubs de DOM/localStorage.
 - `tests/_source.js` reconstruye `build/rondo.bundle.js` solo si `src/`,
   `VERSION` o `build.mjs` estan mas nuevos, y expone `src` a cada suite.
@@ -223,6 +223,7 @@ node scripts/test-all.mjs
 | `informes-plantilla-ui.test.js` | UI de informes por plantilla: montaje del dialogo, lectura de plantillas, filtros por geocerca/unidad y salidas (cubre el fallo de cuerpo en blanco) |
 | `rendimientos.test.js` | rendimiento entre paradas: km y tiempo en movimiento desde una geocerca o punto de partida, saltos de GPS y paradas de origen |
 | `reportes-masivos.test.js` | lote de recorridos por unidad: ejecucion nativa por unidad, descarga automatica (una por unidad), errores aislados, cancelacion y nombres/CSV |
+| `velocidad-promedio.test.js` | velocidad media por unidad: lista pegada de economicos, coincidencia por economico/placa, calculo de km y tiempo en movimiento, detalle diario y salidas CSV/PDF |
 | `ui.test.js` | orden de tabla, escala de UI, iconos SVG, voz, IA y dialogo |
 | `version.test.js` | parseo de `@version`/`VER` y sincronia |
 | `syntax.test.js` | el bundle compila sin errores de sintaxis |
@@ -244,7 +245,7 @@ fragmento; la tabla siguiente es una guia rapida por dominio.
 | geo-rutas | 12–20 | geodesia, Douglas-Peucker, OSM/OSRM/A*, municipios, busqueda difusa, paradas, rutas, caravana, analisis de viaje |
 | notif-ia | 21–24 | nombre/estado de unidades, notificaciones, IA de razonamiento, dialogos |
 | engine | 25–32 | motor de reglas, zonas de riesgo, refresh, ventanas, lista vigilada, editor de paradas, verificacion, tema |
-| ui | 33–59 | CSS, build de UI, drag, paint, geocercas, caravana, export, actualizaciones, menu, teclas, eventos, bindings, init, mapa, replay, informe PDF, motor de geocercas, **informes por plantilla (report/exec_report por trozos)**, diagnostico (incluye el export de estilos), alerta de geocercas, geocercas de la app, deteccion propia de combustible (56), convergencia con carnada (57), **rendimientos entre paradas (58) y reportes masivos de recorridos por unidad (59)** |
+| ui | 33–60 | CSS, build de UI, drag, paint, geocercas, caravana, export, actualizaciones, menu, teclas, eventos, bindings, init, mapa, replay, informe PDF, motor de geocercas, **informes por plantilla (report/exec_report por trozos)**, diagnostico (incluye el export de estilos), alerta de geocercas, geocercas de la app, deteccion propia de combustible (56), convergencia con carnada (57), **rendimientos entre paradas (58), reportes masivos de recorridos por unidad (59) y velocidad promedio por unidad (60)** |
 
 ## Definicion de "mejora"
 
@@ -308,7 +309,7 @@ Evita refactors masivos o cambios de estilo globales que dificulten la revision.
 
 - [ ] Los cambios estan en `src/` (y `manifest.json` si se añadieron partes).
 - [ ] `node scripts/build.mjs --mode=bundle --out build/rondo.bundle.js` sin errores.
-- [ ] Las 29 suites pasan (rojo = no cerrar el cambio).
+- [ ] Las 30 suites pasan (rojo = no cerrar el cambio).
 - [ ] Si hay logica nueva, hay suite nueva o ampliada.
 - [ ] El comportamiento por defecto no cambia (o la mejora es evidente y segura).
 - [ ] Sin dependencias, sin emojis, sin fugas a `window`, sin `eval` remoto.

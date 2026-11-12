@@ -1629,7 +1629,29 @@
             "#rondo-dialog .rgi-filtro input{flex:1;min-width:60px}\n" +
             // Tarjeta de geocerca de la app: distintivo violeta/acento.
             "#rondo-panel .rondo-geo-card .rondo-geo-app{display:inline-block;margin-left:6px;vertical-align:1px;font:700 8px var(--rondo-font);letter-spacing:.6px;padding:1px 5px;border-radius:7px;background:var(--rondo-accent-grad);color:var(--rondo-accent-fg)}\n" +
-            "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n";
+            "#rondo-panel .rondo-geo-card.de-la-app{box-shadow:inset 0 0 0 1px var(--rondo-accent-2)}\n" +
+            // ── v8.14: velocidad promedio por unidad ───────────────────
+            // La lista pegada y su resolucion contra la flota, con el mismo
+            // lenguaje visual de los demas reportes (chips, KPIs y tabla).
+            "#rondo-dialog .rxvel-area{width:100%;min-height:76px;max-height:160px;resize:vertical;box-sizing:border-box;background:var(--rondo-bg);color:var(--rondo-fg);border:1px solid var(--rondo-border);border-radius:8px;padding:7px 9px;font:11.5px/1.5 Consolas,monospace;outline:none}\n" +
+            "#rondo-dialog .rxvel-area:focus{border-color:var(--rondo-accent-2);box-shadow:0 0 0 2px rgba(var(--rondo-accent-rgb),.18)}\n" +
+            "#rondo-dialog .rxvel-tools{display:flex;gap:5px;flex-wrap:wrap;margin-left:auto}\n" +
+            "#rondo-dialog .rxvel-tools .mini{padding:3px 9px;background:var(--rondo-bg-strong);border:1px solid var(--rondo-border-soft);border-radius:7px;cursor:pointer;color:var(--rondo-fg-dim);font:600 10px var(--rondo-font)}\n" +
+            "#rondo-dialog .rxvel-tools .mini:hover:not(:disabled){color:var(--rondo-fg);border-color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rxvel-match{display:flex;align-items:center;gap:4px;flex-wrap:wrap;min-height:18px;font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute)}\n" +
+            "#rondo-dialog .rxvel-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;border:1px solid var(--rondo-border-soft);background:var(--rondo-bg);font:700 9.5px var(--rondo-font);color:var(--rondo-fg-dim)}\n" +
+            "#rondo-dialog .rxvel-tag.ok{background:var(--rondo-ok-bg);border-color:rgba(67,160,71,.35);color:var(--rondo-ok-fg)}\n" +
+            "#rondo-dialog .rxvel-tag.no{background:var(--rondo-warn-bg);border-color:rgba(249,168,37,.4);color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rxvel-tag.amb{background:var(--rondo-accent-bg);border-color:rgba(var(--rondo-accent-rgb),.35);color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rxvel-chip{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;border:1px solid var(--rondo-border-soft);background:var(--rondo-bg);font:600 9.5px var(--rondo-font);color:var(--rondo-fg-dim);white-space:nowrap}\n" +
+            "#rondo-dialog .rxvel-hint{font:500 10.5px var(--rondo-font);color:var(--rondo-fg-mute);line-height:1.4}\n" +
+            "#rondo-dialog .rxvel-nm{display:block;font:500 9px var(--rondo-font);font-style:normal;color:var(--rondo-fg-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:190px}\n" +
+            "#rondo-dialog .rxvel-rowbad .rxvel-nm{color:var(--rondo-warn-fg)}\n" +
+            "#rondo-dialog .rxvel-rowerr .rxvel-nm{color:var(--rondo-bad-fg)}\n" +
+            "#rondo-dialog .rxvel-v{font-variant-numeric:tabular-nums}\n" +
+            "#rondo-dialog .rxvel-ordo{font-size:9px;margin-left:2px;vertical-align:-1px;color:var(--rondo-accent-2)}\n" +
+            "#rondo-dialog .rxvel-b{display:block;height:4px;min-width:44px;margin-top:2px;border-radius:999px;background:rgba(var(--rondo-accent-rgb),.16);overflow:hidden}\n" +
+            "#rondo-dialog .rxvel-b i{display:block;height:100%;border-radius:999px;background:var(--rondo-accent-grad)}\n";
 
         const style = makeEl('style');
         style.textContent = css;

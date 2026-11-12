@@ -1216,6 +1216,14 @@ te pedirá confirmación.
   secciones aparecen se elige con las casillas de **Opciones del reporte** en la
   propia pestana. Ver
   [Reproducir el recorrido](#reproducir-el-recorrido-replay).
+- **Velocidad promedio por unidad**: el boton **Velocidad promedio** abre un
+  reporte donde pegas una **lista de numeros economicos** (tambien acepta
+  placas y nombres; uno por linea, con comas o espacios), eliges el periodo y
+  calculas por unidad los **km recorridos**, las **horas en movimiento**, la
+  **velocidad media en movimiento**, la **media del periodo** y el **detalle
+  por dia**. Descarga **CSV** (resumen y detalle diario) o **PDF** con grafica
+  de barras. Los numeros que no existen o son ambiguos se listan para
+  corregirlos antes de calcular.
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y
   prueba; descarga un JSON con toda tu configuracion, listas, limites y rutas.
 - **Importar** configuracion: en la misma seccion; restaura ese JSON.
