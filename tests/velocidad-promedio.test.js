@@ -149,8 +149,20 @@ function cerca(a, b, tol) { return Math.abs(a - b) <= (tol == null ? 0.001 : tol
     ok('calculo: dos horas en movimiento', cerca(r.minMov, 120, 0.001), r.minMov);
     ok('calculo: velocidad media en movimiento', cerca(r.velMov, 11.054, 0.02), r.velMov);
     ok('calculo: velocidad media del periodo', cerca(r.velPeriodo, r.velMov, 0.02), r.velPeriodo);
-    ok('calculo: velocidad maxima observada', r.velMax === 80, r.velMax);
+    ok('calculo: velocidad maxima sostenida (no el pico del GPS)', cerca(r.velMax, 11.054, 0.02), r.velMax);
     ok('calculo: muestras contadas', r.muestras === 3, r.muestras);
+    const pico = mod.rxVelCalcula([
+        { t: 0, lat: 20.0, lon: -103.0, s: 0 },
+        { t: 60, lat: 20.001, lon: -103.0, s: 230 },
+        { t: 120, lat: 20.002, lon: -103.0, s: 40 }
+    ], { velMin: 5, saltoKm: 3, huecoMin: 240 });
+    ok('calculo: ignora el pico instantaneo de pos.s', pico.velMax != null && pico.velMax < 10, pico.velMax);
+    const micro = mod.rxVelCalcula([
+        { t: 0, lat: 20.0, lon: -103.0, s: 0 },
+        { t: 2, lat: 20.0012, lon: -103.0, s: 220 }
+    ], { velMin: 5, saltoKm: 3, huecoMin: 240 });
+    ok('calculo: descarta un micro-salto de mas de 200 km/h', micro.saltos === 1 && micro.km === 0,
+        JSON.stringify({ saltos: micro.saltos, km: micro.km }));
 
     // Bajo el umbral: la unidad se movio, pero no cuenta como movimiento.
     const lento = mod.rxVelCalcula([
@@ -177,6 +189,8 @@ function cerca(a, b, tol) { return Math.abs(a - b) <= (tol == null ? 0.001 : tol
     ], { velMin: 5, saltoKm: 3, huecoMin: 240 });
     ok('calculo: un tramo largo a 130 km/h no es salto', largo.km > 5 && largo.saltos === 0,
         JSON.stringify({ km: largo.km, saltos: largo.saltos }));
+    ok('calculo: la maxima sostenida conserva un tramo real de 130 km/h',
+        largo.velMax != null && cerca(largo.velMax, 130, 0.5), largo.velMax);
     const saltoGrande = mod.rxVelCalcula([
         { t: 0, lat: 20.0, lon: -103.0, s: 0 },
         { t: 60, lat: 20.0317, lon: -103.0, s: 210 }
@@ -206,6 +220,30 @@ function cerca(a, b, tol) { return Math.abs(a - b) <= (tol == null ? 0.001 : tol
     ok('calculo: separa el detalle por dia', porDia.dias.length === 2, porDia.dias.length);
     ok('calculo: cada dia lleva su velocidad', porDia.dias.every((d) => d.velMov > 10),
         JSON.stringify(porDia.dias.map((d) => d.velMov)));
+    // Un tramo que cruza medianoche se reparte entre los dos dias: ninguno
+    // puede acumular mas de 24 h con reportes.
+    const tn = Math.floor(new Date(2026, 10, 10, 23, 30, 0).getTime() / 1000);
+    const cruce = mod.rxVelCalcula([
+        { t: tn, lat: 20.0, lon: -103.0, s: 0 },
+        { t: tn + 3600, lat: 20.05, lon: -103.0, s: 60 }
+    ], { velMin: 5, saltoKm: 3, huecoMin: 240 });
+    const sumaCruce = cruce.dias.reduce((x, d) => x + d.minCubierto, 0);
+    ok('calculo: reparte el tramo de medianoche sin pasar de 24 h',
+        cruce.dias.length === 2 && cruce.dias.every((d) => d.minCubierto <= 720.5) &&
+        Math.abs(sumaCruce - 60) < 0.01, JSON.stringify(cruce.dias));
+    // Dos dias completos con reportes cada hora: ningun dia puede acumular
+    // mas de 24 h y la suma diaria debe cuadrar con el total de la unidad.
+    const tBase = Math.floor(new Date(2026, 10, 10, 0, 0, 0).getTime() / 1000);
+    const dosDiasPts = [];
+    for (let h = 0; h <= 48; h++) {
+        dosDiasPts.push({ t: tBase + h * 3600, lat: 20 + h * 0.0001, lon: -103.0, s: 50 });
+    }
+    const dosDias = mod.rxVelCalcula(dosDiasPts, { velMin: 5, saltoKm: 3, huecoMin: 240 });
+    const sumaDosDias = dosDias.dias.reduce((x, d) => x + d.minCubierto, 0);
+    ok('calculo: ningun dia supera 24 h con reportes', dosDias.dias.every((d) => d.minCubierto <= 1440.01),
+        JSON.stringify(dosDias.dias.map((d) => d.minCubierto)));
+    ok('calculo: las horas diarias cuadran con el total', Math.abs(sumaDosDias - dosDias.minCubierto) < 0.01,
+        JSON.stringify({ suma: sumaDosDias, total: dosDias.minCubierto }));
 }
 
 // ── Totales y orden ──────────────────────────────────────────────────────

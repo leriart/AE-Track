@@ -1220,8 +1220,9 @@ te pedirá confirmación.
   reporte donde pegas una **lista de numeros economicos** (tambien acepta
   placas y nombres; uno por linea, con comas o espacios), eliges el periodo y
   calculas por unidad los **km recorridos**, las **horas en movimiento**, la
-  **velocidad media en movimiento**, la **media del periodo** y el **detalle
-  por dia**. Descarga **CSV** (resumen y detalle diario) o **PDF** con grafica
+  **velocidad media en movimiento**, la **media del periodo**, la **velocidad
+  maxima sostenida** (descarta picos aislados del GPS) y el **detalle por
+  dia**. Descarga **CSV** (resumen y detalle diario) o **PDF** con grafica
   de barras. Los numeros que no existen o son ambiguos se listan para
   corregirlos antes de calcular.
 - **Exportar** configuracion: en Ajustes, pestana Avanzado, seccion Datos y

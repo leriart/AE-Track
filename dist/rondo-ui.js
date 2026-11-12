@@ -19974,12 +19974,15 @@ function carnHTML(r) {
     // Periodo maximo: mas dias son mas mensajes por unidad y una espera que el
     // operador no puede justificar en un reporte operativo.
     const RX_VEL_MAX_DIAS = 92;
-    // Velocidad por encima de la cual un tramo es un salto del GPS, no un
-    // desplazamiento real. El segundo umbral solo aplica cuando ademas se
-    // supera la distancia configurada: asi un viaje largo a 130 km/h cuenta y
-    // un salto de 4 km en un minuto no.
-    const RX_VEL_SALTO_KMH = 250;
+    // Techo plausible para una unidad de flota. Por encima de esto el tramo
+    // es un salto del GPS, no un desplazamiento real; tambien evita que un
+    // micro-salto de 100 m en 2 s infle la velocidad.
+    const RX_VEL_MAX_KMH = 200;
     const RX_VEL_SALTO_GRANDE_KMH = 180;
+    // Ventana minima de la velocidad maxima SOSTENIDA: la mayor media de un
+    // tramo de al menos 30 s y 100 m. Asi un pico aislado de pos.s no cuenta.
+    const RX_VEL_MAX_VENTANA_S = 30;
+    const RX_VEL_MAX_VENTANA_M = 100;
     // Estado de la pantalla (dialog-local, como RX_REND/RX_MAS): los
     // parametros de una consulta puntual no se persisten.
     const RX_VEL = {
@@ -20172,14 +20175,11 @@ function carnHTML(r) {
         const saltoM = ((o.saltoKm != null && isFinite(+o.saltoKm)) ? Math.max(0, +o.saltoKm) : 3) * 1000;
         const huecoSeg = ((o.huecoMin != null && isFinite(+o.huecoMin)) ? Math.max(0, +o.huecoMin) : 240) * 60;
         const pts = (puntos || []).filter((p) => p && isFinite(+p.t) && isFinite(+p.lat) && isFinite(+p.lon))
-            .map((p) => ({
-                t: +p.t, lat: +p.lat, lon: +p.lon,
-                s: (p.s != null && isFinite(+p.s)) ? +p.s : null
-            }))
+            .map((p) => ({ t: +p.t, lat: +p.lat, lon: +p.lon }))
             .sort((a, b) => a.t - b.t);
         const res = {
             muestras: pts.length, km: 0, minMov: 0, minCubierto: 0,
-            velMov: 0, velPeriodo: 0, velMax: 0, saltos: 0, huecos: 0,
+            velMov: 0, velPeriodo: 0, velMax: null, saltos: 0, huecos: 0,
             tIni: pts.length ? pts[0].t : 0, tFin: pts.length ? pts[0].t : 0,
             dias: []
         };
@@ -20188,47 +20188,84 @@ function carnHTML(r) {
         const bucket = (fecha) => {
             let b = dias.get(fecha);
             if (!b) {
-                b = { fecha: fecha, km: 0, minMov: 0, minCubierto: 0, muestras: 0, velMax: 0 };
+                b = { fecha: fecha, km: 0, minMov: 0, minCubierto: 0, muestras: 0 };
                 dias.set(fecha, b);
             }
             return b;
         };
-        let maxSeg = 0;
+        // Distancia acumulada y marcas de tramos malos (hueco/salto). Sirven
+        // para calcular la velocidad maxima sostenida sin cruzar un hueco.
+        const cumKm = new Array(pts.length).fill(0);
+        const malos = new Array(pts.length).fill(0);
+        // Reparte un tramo entre los dias locales que toca, partiendo a
+        // medianoche. Antes un tramo 23:58-00:02 sumaba todo al dia final y
+        // podia mostrar 24,8 h con reportes en un solo dia.
+        const sumarDia = (t0, t1, km, esMov) => {
+            const total = t1 - t0;
+            if (!(total > 0)) return;
+            let a = t0;
+            while (a < t1) {
+                const d = new Date(a * 1000);
+                const fin = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).getTime() / 1000;
+                const b = Math.min(t1, fin);
+                const frac = (b - a) / total;
+                const bb = bucket(rxVelFechaDe(a));
+                bb.km += km * frac;
+                bb.minCubierto += (b - a) / 60;
+                if (esMov) bb.minMov += (b - a) / 60;
+                a = b;
+            }
+        };
         for (let i = 1; i < pts.length; i++) {
             const a = pts[i - 1], b = pts[i];
             const dt = b.t - a.t;
             if (!(dt > 0)) continue;
             res.tFin = b.t;
+            cumKm[i] = cumKm[i - 1];
+            malos[i] = malos[i - 1];
             const bb = bucket(rxVelFechaDe(b.t));
             bb.muestras++;
-            if (b.s != null && b.s > bb.velMax) bb.velMax = b.s;
-            if (b.s != null && b.s > res.velMax) res.velMax = b.s;
             // Hueco de reporte: no suma tiempo ni distancia, pero si queda
             // como dia con muestras para que el detalle diario sea honesto.
-            if (huecoSeg > 0 && dt > huecoSeg) { res.huecos++; continue; }
+            if (huecoSeg > 0 && dt > huecoSeg) { res.huecos++; malos[i]++; continue; }
             res.minCubierto += dt / 60;
-            bb.minCubierto += dt / 60;
             const d = rxDistM(a.lat, a.lon, b.lat, b.lon);
-            if (!isFinite(+d) || d < 0) { res.saltos++; continue; }
+            if (!isFinite(+d) || d < 0) {
+                res.saltos++; malos[i]++; sumarDia(a.t, b.t, 0, false); continue;
+            }
             const kmh0 = (d / 1000) / (dt / 3600);
             // Un salto de GPS no es solo "mucha distancia": con reportes
             // espaciados un tramo largo puede ser un viaje real. Se descarta
             // cuando la velocidad implicita es imposible o cuando supera el
             // umbral de distancia Y sigue siendo demasiado rapido.
-            const esSalto = (kmh0 > RX_VEL_SALTO_KMH) ||
+            const esSalto = (kmh0 > RX_VEL_MAX_KMH) ||
                 (saltoM > 0 && d > saltoM && kmh0 > RX_VEL_SALTO_GRANDE_KMH);
-            if (esSalto) { res.saltos++; continue; }
+            if (esSalto) { res.saltos++; malos[i]++; sumarDia(a.t, b.t, 0, false); continue; }
             const km = d / 1000;
             const kmh = km / (dt / 3600);
             res.km += km;
-            bb.km += km;
-            if (kmh > maxSeg) maxSeg = kmh;
-            if (kmh >= velMin) {
-                res.minMov += dt / 60;
-                bb.minMov += dt / 60;
-            }
+            cumKm[i] = cumKm[i - 1] + km;
+            sumarDia(a.t, b.t, km, kmh >= velMin);
+            if (kmh >= velMin) res.minMov += dt / 60;
         }
-        if (maxSeg > res.velMax) res.velMax = maxSeg;
+        // Velocidad maxima sostenida: la mayor media en una ventana de al
+        // menos 30 s y 100 m. No se usa pos.s (el pico instantaneo del
+        // receptor, que dispara 200+ km/h sin que el vehiculo se mueva).
+        let velMax = null;
+        let j = 1;
+        for (let i = 0; i < pts.length - 1; i++) {
+            if (j <= i) j = i + 1;
+            while (j < pts.length && pts[j].t - pts[i].t < RX_VEL_MAX_VENTANA_S) j++;
+            if (j >= pts.length) break;
+            if (malos[j] !== malos[i]) continue;
+            const dt = pts[j].t - pts[i].t;
+            const km = cumKm[j] - cumKm[i];
+            if (dt <= 0 || km * 1000 < RX_VEL_MAX_VENTANA_M) continue;
+            const kmh = km / (dt / 3600);
+            if (kmh > RX_VEL_MAX_KMH) continue;
+            if (velMax == null || kmh > velMax) velMax = kmh;
+        }
+        res.velMax = velMax;
         res.velMov = res.minMov > 0 ? (res.km / (res.minMov / 60)) : 0;
         res.velPeriodo = res.minCubierto > 0 ? (res.km / (res.minCubierto / 60)) : 0;
         res.dias = Array.from(dias.values()).map((b) => Object.assign(b, {
@@ -20303,7 +20340,7 @@ function carnHTML(r) {
         const tot = r.resumen || rxVelTotales(r.filas);
         const cols = ['Econ\u00f3mico', 'Unidad', 'Estado', 'D\u00edas con datos', 'Distancia km',
             'Horas en movimiento', 'Vel. media en movimiento km/h',
-            'Vel. media del periodo km/h', 'Vel. m\u00e1xima km/h', 'Muestras', 'Detalle'];
+            'Vel. media del periodo km/h', 'Vel. m\u00e1xima sostenida km/h', 'Muestras', 'Detalle'];
         const filas = (r.filas || []).map((f) => [
             f.eco, f.nombre,
             f.estado === 'error' ? 'Error' : (f.estado === 'sin_datos' ? 'Sin datos' : (f.truncado ? 'Truncado' : 'OK')),
@@ -20323,7 +20360,8 @@ function carnHTML(r) {
             'Unidades con datos: ' + tot.conDatos + ' de ' + tot.total,
             'Distancia total: ' + rxVelNum(tot.km, 2) + ' km',
             'Velocidad media en movimiento: ' + rxVelNum(tot.velMov, 1) + ' km/h',
-            'Velocidad media del periodo: ' + rxVelNum(tot.velPeriodo, 1) + ' km/h'
+            'Velocidad media del periodo: ' + rxVelNum(tot.velPeriodo, 1) + ' km/h',
+            'Velocidad m\u00e1xima: media sostenida de tramos de al menos 30 s (no el pico del GPS)'
         ];
         if (tot.truncadas) meta.push('Unidades con historial truncado: ' + tot.truncadas);
         if (tot.saltos || tot.huecos) meta.push('Tramos descartados: ' + tot.saltos + ' saltos de GPS, ' + tot.huecos + ' huecos');
@@ -20421,13 +20459,14 @@ function carnHTML(r) {
             'recorridos entre las horas con el veh\u00edculo en movimiento (tramos por encima de ' +
             esc(rxVelNum(r.velMin, 1)) + ' km/h). La media del periodo reparte esos mismos kil\u00f3metros entre ' +
             'todo el tiempo con reportes. No suman los saltos de GPS (distancia mayor a ' + esc(rxVelNum(r.saltoKm, 1)) +
-            ' km con velocidad anormal) ni los huecos de reporte mayores a ' + esc(rxVelNum(r.huecoMin, 0)) + ' minutos.' +
+            ' km con velocidad anormal) ni los huecos de reporte mayores a ' + esc(rxVelNum(r.huecoMin, 0)) + ' minutos. ' +
+            'La velocidad m\u00e1xima es la mayor media sostenida en 30 s; los picos aislados del GPS no cuentan.' +
             ((tot.saltos || tot.huecos)
                 ? (' Se descartaron ' + tot.saltos + ' saltos y ' + tot.huecos + ' huecos.')
                 : '') + '</div>' +
             (barras ? '<h2 class="seccion">1. Velocidades medias</h2><div class="rxv-bars">' + barras + '</div>' : '') +
             '<h2 class="seccion">' + (barras ? '2' : '1') + '. Detalle por unidad</h2>' +
-            rxInfTabla(['Unidad', 'Estado', 'D\u00edas', 'km', 'Horas mov.', 'Vel. media km/h', 'Vel. periodo km/h', 'Vel. m\u00e1xima km/h', 'Muestras'], filas) +
+            rxInfTabla(['Unidad', 'Estado', 'D\u00edas', 'km', 'Horas mov.', 'Vel. media km/h', 'Vel. periodo km/h', 'Vel. m\u00e1x. sost. km/h', 'Muestras'], filas) +
             (dias.length
                 ? '<h2 class="seccion">' + (barras ? '3' : '2') + '. Detalle por d\u00eda</h2>' + avisoDias +
                   rxInfTabla(['Unidad', 'Fecha', 'km', 'Horas mov.', 'Horas con reportes', 'Vel. media km/h', 'Vel. periodo km/h', 'Muestras'], dias.slice(0, 600))
@@ -20451,7 +20490,7 @@ function carnHTML(r) {
                 const fila = {
                     eco: u.eco || u.id || '', nombre: u.nombre || u.eco || '',
                     estado: 'sin_datos', error: '', km: 0, minMov: 0, minCubierto: 0,
-                    velMov: 0, velPeriodo: 0, velMax: 0, muestras: 0, dias: [], truncado: false
+                    velMov: 0, velPeriodo: 0, velMax: null, muestras: 0, dias: [], truncado: false
                 };
                 if (onProg) onProg(hechas, lista.length, u.eco || String(u.id || ''));
                 try {
@@ -20644,9 +20683,9 @@ function carnHTML(r) {
                     h += '<div class="rgi-prev"><table><thead><tr>' +
                         th('eco', 'Unidad') + th('dias', 'D\u00edas') + th('km', 'km') +
                         th('mov', 'h mov.') + th('vel', 'Vel. media') +
-                        th('periodo', 'Vel. periodo') + th('max', 'Vel. m\u00e1x.') +
+                        th('periodo', 'Vel. periodo') + th('max', 'Vel. m\u00e1x. sost.') +
                         '</tr></thead><tbody>' + tb + '</tbody></table></div>' +
-                        '<p class="rgi-more">Pulsa los encabezados para ordenar. La barra compara la velocidad media de cada unidad con la m\u00e1s alta del resultado.</p>';
+                        '<p class="rgi-more">Pulsa los encabezados para ordenar. La barra compara la velocidad media de cada unidad con la m\u00e1s alta del resultado. La m\u00e1xima es la mayor media sostenida en 30 s, no el pico del GPS.</p>';
                     h += '<div class="rgi-io">' +
                         '<button type="button" class="rgi-btn primary" id="rxvel-pdf" title="Reporte imprimible con gr\u00e1fica y tablas">' +
                         '<span class="rondo-usym">' + UIS.export + '</span><b>PDF</b><i>gr\u00e1fica y detalle</i></button>' +
