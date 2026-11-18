@@ -248,11 +248,11 @@
         }
         return rxMouse(tipo, x, y, det);
     }
-    function doubleClick(el) {
+    function doubleClick(el, px, py) {
         if (!el) return;
         const r = el.getBoundingClientRect();
-        const x = r.left + Math.min(20, r.width / 2);
-        const y = r.top + Math.max(4, r.height / 2);
+        const x = (px != null) ? px : r.left + Math.min(20, r.width / 2);
+        const y = (py != null) ? py : r.top + Math.max(4, r.height / 2);
         const enviar = (ev) => { try { el.dispatchEvent(ev); } catch (_) { /* noop */ } };
         ['mouseover', 'mouseenter', 'mousemove'].forEach((t) => enviar(rxMouse(t, x, y)));
         ['pointerover', 'pointerenter', 'pointermove'].forEach((t) => enviar(rxPointer(t, x, y)));
@@ -334,14 +334,81 @@
     function rxCuentaVentanas() {
         try { return document.querySelectorAll('[id$="_pursuit_win_title_id"]').length; } catch (_) { return 0; }
     }
-    function rxObjetivoFila(fila) {
-        if (!fila) return null;
+    // Recorre los nodos de texto de la fila buscando el economico. Se usa un
+    // recorrido manual (no TreeWalker) para no depender de NodeFilter.
+    function rxNodosTexto(el, re, out) {
+        if (!el) return;
+        for (let n = el.firstChild; n; n = n.nextSibling) {
+            if (n.nodeType === 3) {
+                const m = String(n.nodeValue || '').match(re);
+                if (m) out.push({ nodo: n, m: m });
+            } else if (n.nodeType === 1) {
+                rxNodosTexto(n, re, out);
+            }
+        }
+    }
+    // Punto exacto (x,y) del texto del economico dentro de la fila. Asi el
+    // doble clic cae sobre el eco y no sobre el nombre completo o la fila.
+    function rxPuntoEco(fila, eco) {
+        const plano = normEco(eco);
+        if (!fila || !plano) return null;
+        const e = escRegex(plano);
+        const reParte = new RegExp('0*' + e + '(?!\\d)');
+        const busquedas = [
+            new RegExp('\\.\\s*0*' + e + '(?!\\d)'),
+            new RegExp('(^|\\D)0*' + e + '(?!\\d)')
+        ];
         try {
-            return fila.querySelector('.name-container')
+            const fr = fila.getBoundingClientRect();
+            if (fr.width <= 0 || fr.height <= 0) return null;
+            if (fr.bottom < 0 || fr.top > window.innerHeight) {
+                fila.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
+        } catch (_) { /* noop */ }
+        for (let k = 0; k < busquedas.length; k++) {
+            const nodos = [];
+            rxNodosTexto(fila, busquedas[k], nodos);
+            for (let i = 0; i < nodos.length; i++) {
+                const n = nodos[i];
+                const parte = n.m[0].match(reParte);
+                if (!parte) continue;
+                const ini = n.m.index + parte.index;
+                let rr = null;
+                try {
+                    const rango = document.createRange();
+                    rango.setStart(n.nodo, ini);
+                    rango.setEnd(n.nodo, ini + parte[0].length);
+                    const rects = rango.getClientRects();
+                    rr = (rects && rects.length) ? rects[0] : rango.getBoundingClientRect();
+                } catch (_) { rr = null; }
+                if (!rr || rr.height <= 0 || rr.width < 0) continue;
+                const x = rr.left + rr.width / 2;
+                const y = rr.top + rr.height / 2;
+                if (x < 0 || y < 0 || x > window.innerWidth || y > window.innerHeight) continue;
+                return { x: x, y: y };
+            }
+        }
+        return null;
+    }
+    // Objetivo del doble clic: el eco si se localiza; si no, el nombre de la
+    // unidad y, como ultimo recurso, la fila completa.
+    function rxObjetivoFila(fila, eco) {
+        if (!fila) return { el: null, x: null, y: null };
+        const punto = rxPuntoEco(fila, eco);
+        if (punto) {
+            let el = null;
+            try { el = document.elementFromPoint(punto.x, punto.y); } catch (_) { el = null; }
+            if (!el || esUIPropia(el) || !fila.contains(el)) el = null;
+            return { el: el || fila, x: punto.x, y: punto.y };
+        }
+        let el = null;
+        try {
+            el = fila.querySelector('.name-container')
                 || fila.querySelector('.monitoring-unit-name-cell')
                 || fila.querySelector('[class*="name" i]')
                 || fila;
-        } catch (_) { return fila; }
+        } catch (_) { el = fila; }
+        return { el: el, x: null, y: null };
     }
     function cabecerade(el) {
         let best = null, bestAncho = 0;
@@ -477,7 +544,8 @@
         if (!campos.length) {
             const fila = pickRow(eco, null, false);
             if (fila) {
-                doubleClick(rxObjetivoFila(fila));
+                const obj = rxObjetivoFila(fila, eco);
+                doubleClick(obj.el, obj.x, obj.y);
                 if (await waitForWindow(eco, 4000)) { revalidarContornos(); return true; }
             }
             rxAvisoNoAbrio('buscador', eco);
@@ -501,12 +569,12 @@
                 await sleep(100); wait += 100;
             }
             if (fila) {
-                const objetivo = rxObjetivoFila(fila);
-                doubleClick(objetivo);
+                const objetivo = rxObjetivoFila(fila, eco);
+                doubleClick(objetivo.el, objetivo.x, objetivo.y);
                 if (await waitForWindow(eco, 4200) || rxCuentaVentanas() > antes) { revalidarContornos(); return true; }
                 // Segundo intento sobre la fila completa (algunas skins
-                // enganchan el doble clic a la fila y no al nombre).
-                if (objetivo !== fila) {
+                // enganchan el doble clic a la fila y no al nombre/eco).
+                if (objetivo.el !== fila) {
                     doubleClick(fila);
                     if (await waitForWindow(eco, 2200) || rxCuentaVentanas() > antes) { revalidarContornos(); return true; }
                 }

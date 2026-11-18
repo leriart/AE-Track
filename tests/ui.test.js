@@ -1329,6 +1329,10 @@ ok('ventanas: fila con respaldo generico y shadow roots',
 ok('ventanas: doble clic simula PointerEvent y dblclick',
     /function rxPointer/.test(src) && /rxPointer\('pointerdown', x, y, \{ buttons: 1 \}\)/.test(src) &&
     /rxMouse\('dblclick', x, y, \{ buttons: 0, detail: 2 \}\)/.test(src));
+ok('ventanas: el doble clic cae sobre el eco de la fila',
+    /function rxPuntoEco/.test(src) && /function rxNodosTexto/.test(src) &&
+    /elementFromPoint\(punto\.x, punto\.y\)/.test(src) &&
+    /doubleClick\(objetivo\.el, objetivo\.x, objetivo\.y\)/.test(src));
 ok('ventanas: un doble clic sobre la tarjeta no lanza dos aperturas',
     /const _rxAbriendo = new Set\(\)/.test(src) && /if \(_rxAbriendo\.has\(clave\)\) return Promise\.resolve\(true\)/.test(src));
 ok('ventanas: avisa cuando no encuentra el buscador o la ventana',
