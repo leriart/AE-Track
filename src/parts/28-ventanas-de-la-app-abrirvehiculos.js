@@ -1,11 +1,21 @@
     /* ====================== VENTANAS DE LA APP (AbrirVehiculos++) ====================== */
     const escRegex = (s) => String(s || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const RE_TITULO = /[A-Z0-9]{2,}\.\s?\d{3,5}\s*-\s*[A-Z0-9]{5,}/;
+    // Prototipo correcto segun el campo (la plataforma usa input y, en
+    // algunas versiones, textarea para el buscador de unidades).
+    function rxProtoValor(input) {
+        try {
+            if (input && String(input.tagName || '').toUpperCase() === 'TEXTAREA' && PAGE.HTMLTextAreaElement) {
+                return PAGE.HTMLTextAreaElement.prototype;
+            }
+        } catch (_) { /* noop */ }
+        return PAGE.HTMLInputElement.prototype;
+    }
     function setValueReact(input, texto) {
         // Eventos y prototype del REALM DE LA PAGINA (PAGE): en el sandbox de
         // Tampermonkey los constructores propios no los reconoce React y la
         // automatizacion de ventanas deja de funcionar.
-        const d = Object.getOwnPropertyDescriptor(PAGE.HTMLInputElement.prototype, 'value');
+        const d = Object.getOwnPropertyDescriptor(rxProtoValor(input), 'value');
         if (d && d.set) d.set.call(input, texto); else input.value = texto;
         input.dispatchEvent(new PAGE.Event('input', { bubbles: true }));
         input.dispatchEvent(new PAGE.Event('change', { bubbles: true }));
@@ -14,75 +24,249 @@
         });
     }
     function clearInput(input) {
-        const d = Object.getOwnPropertyDescriptor(PAGE.HTMLInputElement.prototype, 'value');
+        const d = Object.getOwnPropertyDescriptor(rxProtoValor(input), 'value');
         if (d && d.set) d.set.call(input, ''); else input.value = '';
         input.dispatchEvent(new PAGE.Event('input', { bubbles: true }));
         input.dispatchEvent(new PAGE.Event('change', { bubbles: true }));
     }
     // Devuelve true si el elemento pertenece a la UI del propio script (panel,
     // barra, modales, etc.), para no confundirlo con el DOM nativo de Wialon.
+    // El selector generico [id^="rondo-"] cubre tambien las ventanas nuevas
+    // (replay, dialogos propios, diagnostico...) sin tener que listarlas.
     function esUIPropia(el) {
         try {
-            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog,#rondo-plan-modal,#rondo-carga-modal,#rondo-geocerca-modal'));
+            return !!(el && el.closest && el.closest('#rondo-panel,#rondo-barra,#rondo-modal,#rondo-config,#rondo-ayuda,#rondo-contexto,#rondo-toasts,#rondo-aviso,#rondo-rail,#rondo-dialog,#rondo-plan-modal,#rondo-carga-modal,#rondo-geocerca-modal,[id^="rondo-"]'));
         } catch (_) { return false; }
     }
-    function findSearchInput() {
-        const inputs = Array.prototype.slice.call(document.querySelectorAll('input'))
-            .filter((i) => i.type !== 'hidden' && i.offsetParent && !i.disabled && !esUIPropia(i));
-        const byPh = inputs.find((i) => {
-            const t = ((i.placeholder || '') + ' ' + (i.getAttribute('aria-label') || '') + ' ' + (i.title || '')).toLowerCase();
-            return /buscar|search/.test(t);
-        });
-        return byPh
-            || inputs.find((i) => i.type === 'search')
-            || inputs.find((i) => {
-                const t = ((i.placeholder || '') + ' ' + (i.getAttribute('aria-label') || '') + ' ' + (i.title || '')).toLowerCase();
-                return /filtr|filtro/.test(t);
-            })
-            || inputs[0]
-            || null;
+    // Recorre shadow roots (componentes web). Algunas versiones de la
+    // plataforma montan la lista dentro de un shadow root y un
+    // querySelectorAll normal no la ve.
+    function rxEnSombras(raiz, sel, out, limite) {
+        const tope = limite || 300;
+        let nodos = [];
+        try { nodos = Array.prototype.slice.call(raiz.querySelectorAll('*')); } catch (_) { nodos = []; }
+        for (let i = 0; i < nodos.length && out.length < tope; i++) {
+            const sr = nodos[i].shadowRoot;
+            if (!sr) continue;
+            try {
+                const hallados = sr.querySelectorAll(sel);
+                for (let j = 0; j < hallados.length && out.length < tope; j++) out.push(hallados[j]);
+            } catch (_) { /* noop */ }
+            rxEnSombras(sr, sel, out, tope);
+        }
+        return out;
     }
-    function pickRow(eco) {
+    function rxTextoCampo(i) {
+        try {
+            return String((i.placeholder || '') + ' ' + (i.getAttribute('aria-label') || '') + ' ' +
+                (i.title || '') + ' ' + (i.name || '') + ' ' + (i.id || '')).toLowerCase();
+        } catch (_) { return ''; }
+    }
+    // Solo campos donde tenga sentido escribir el economico (no checkbox,
+    // fechas, colores, botones...). Un textarea tambien vale.
+    function rxTipoTexto(i) {
+        try {
+            if (!i || String(i.tagName || '').toUpperCase() !== 'INPUT') return true;
+            const t = String(i.type || 'text').toLowerCase();
+            return t === 'text' || t === 'search' || t === 'tel' || t === 'url';
+        } catch (_) { return false; }
+    }
+    function rxCampoVisible(i) {
+        try {
+            if (!i || i.disabled || !rxTipoTexto(i)) return false;
+            if (esUIPropia(i)) return false;
+            const r = i.getBoundingClientRect();
+            if (r.width > 1 && r.height > 1) return true;
+            // Respaldo: algunos skins dejan el campo con tamano 0 y aun asi
+            // enfocable (offsetParent no es null si esta en el arbol visible).
+            return !!i.offsetParent;
+        } catch (_) { return false; }
+    }
+    // Filas conocidas de la lista de unidades (varias generaciones de la
+    // plataforma). Sirve para preferir SU buscador y para encontrar la fila.
+    function rxFilasDeLista() {
+        const sels = [
+            'tr[id*="monitoring_units_custom_row_"]:not(.monitoring-units-custom-row-group-row)',
+            'tr[id*="monitoring_units"][id*="row"]:not([id*="group"])',
+            '[id*="monitoring" i] tr',
+            '[class*="monitoring" i] tr'
+        ];
+        for (let i = 0; i < sels.length; i++) {
+            let lista = [];
+            try { lista = document.querySelectorAll(sels[i]); } catch (_) { lista = []; }
+            if (lista.length) return Array.prototype.slice.call(lista);
+        }
+        return [];
+    }
+    function rxContenedorUnidades() {
+        const filas = rxFilasDeLista();
+        for (let i = 0; i < filas.length && i < 4; i++) {
+            let p = filas[i].parentElement, n = 0;
+            while (p && p !== document.body && n < 8) {
+                const idc = String(p.id || '') + ' ' + (typeof p.className === 'string' ? p.className : '');
+                if (/monitoring|unit|unidad|flota|lista/i.test(idc)) return p;
+                p = p.parentElement; n++;
+            }
+        }
+        return null;
+    }
+    function rxAmbitoBuscador(inp) {
+        let p = inp && inp.parentElement, n = 0;
+        while (p && p !== document.body && n < 10) {
+            try { if (p.querySelector('tr,[role="row"],.wui2-list_row,.wui-list_item')) return p; } catch (_) { /* noop */ }
+            p = p.parentElement; n++;
+        }
+        return null;
+    }
+    // Candidatos a buscador de unidades, ordenados por probabilidad. Se
+    // prueban TODOS hasta que uno filtre la lista: si la plataforma añade
+    // otro campo "Buscar" (global, de mensajes...), el primero ya no bloquea
+    // la automatizacion como pasaba antes.
+    function rxCandidatosBuscador() {
+        let inputs = [];
+        try { inputs = Array.prototype.slice.call(document.querySelectorAll('input:not([type="hidden"]),textarea')); } catch (_) { inputs = []; }
+        const cand = [];
+        const contUnidades = rxContenedorUnidades();
+        for (let i = 0; i < inputs.length; i++) {
+            const el = inputs[i];
+            if (!rxCampoVisible(el)) continue;
+            const t = rxTextoCampo(el);
+            if (/password|passwd|correo|email|login|usuario|user/.test(t)) continue;
+            let s = 0;
+            if (/unidad|vehiculo|veh\u00edculo|economico|econ\u00f3mico|(^|\\W)eco(\\W|$)|placa|nombre|flota|monitor/.test(t)) s += 8;
+            if (/buscar|search|filtr|filtro/.test(t)) s += 4;
+            if (el.type === 'search') s += 2;
+            try { if (contUnidades && contUnidades.contains(el)) s += 16; } catch (_) { /* noop */ }
+            try { if (el.closest && el.closest('[id*="monitoring" i],[class*="monitoring" i]')) s += 12; } catch (_) { /* noop */ }
+            cand.push({ el: el, s: s });
+        }
+        // Si el DOM normal no ofrece un candidato claro, se busca tambien
+        // dentro de shadow roots (componentes web). No se hace siempre para
+        // no recorrer todo el documento en cada clic.
+        const fuerte = cand.some((o) => o.s >= 8);
+        if (!fuerte) {
+            const sombras = rxEnSombras(document, 'input:not([type="hidden"]),textarea', [], 120);
+            for (let i = 0; i < sombras.length; i++) {
+                const el = sombras[i];
+                if (!rxCampoVisible(el)) continue;
+                const t = rxTextoCampo(el);
+                if (/password|passwd|correo|email|login|usuario|user/.test(t)) continue;
+                let s = 0;
+                if (/unidad|vehiculo|veh\u00edculo|economico|econ\u00f3mico|(^|\\W)eco(\\W|$)|placa|nombre|flota|monitor/.test(t)) s += 8;
+                if (/buscar|search|filtr|filtro/.test(t)) s += 4;
+                if (el.type === 'search') s += 2;
+                try {
+                    const host = el.getRootNode ? el.getRootNode().host : null;
+                    if (host && host.closest && host.closest('[id*="monitoring" i],[class*="monitoring" i]')) s += 12;
+                } catch (_) { /* noop */ }
+                cand.push({ el: el, s: s });
+            }
+        }
+        // Orden estable: a igual puntaje se respeta el orden del DOM.
+        cand.sort((a, b) => b.s - a.s);
+        return cand.map((o) => o.el).slice(0, 5);
+    }
+    // Ultimo campo que se uso con exito: al terminar un lote se limpia ESE y
+    // no el primero de la lista (que podria ser otro buscador de la pagina).
+    let _rxCampoUsado = null;
+    function findSearchInput() {
+        if (_rxCampoUsado && _rxCampoUsado.isConnected && rxCampoVisible(_rxCampoUsado)) return _rxCampoUsado;
+        return rxCandidatosBuscador()[0] || null;
+    }
+    function pickRow(eco, ambito, soloRapido) {
         const plano = normEco(eco);
+        if (!plano) return null;
         const e = escRegex(plano);
         const reEco = new RegExp('\\.\\s*0*' + e + '(?!\\d)');
         const reNum = new RegExp('(^|\\D)0*' + e + '(?!\\d)');
-        const filas = document.querySelectorAll('tr[id*="monitoring_units_custom_row_"]:not(.monitoring-units-custom-row-group-row)');
         let best = null, bestScore = -1, bestLen = 1e9;
-        for (let i = 0; i < filas.length; i++) {
-            const f = filas[i];
-            if (f.getBoundingClientRect().width <= 0) continue;
-            const t = (f.innerText || '').trim();
-            if (t.indexOf(plano) < 0 || t.length > 200) continue;
-            const puntaje = reEco.test(t) ? 3 : (reNum.test(t) ? 2 : 1);
-            if (puntaje > bestScore || (puntaje === bestScore && t.length < bestLen)) {
-                best = f; bestScore = puntaje; bestLen = t.length;
-            }
+        const puntuar = (f) => {
+            try {
+                if (!f || f.nodeType !== 1 || esUIPropia(f)) return -1;
+                let t = '';
+                try { t = String(f.textContent || '').replace(/\s+/g, ' ').trim(); } catch (_) { t = ''; }
+                if (!t || t.indexOf(plano) < 0 || t.length > 260) return -1;
+                // Las filas de menus, tooltips y ventanas flotantes no cuentan.
+                try {
+                    if (f.closest('.tippy-box,.wui-tooltip,#tooltip,#tooltip2,[class*="_messageBox_"],[class*="_contentWrapper_"],[class*="dropdown" i],[class*="menu" i]')) return -1;
+                } catch (_) { /* noop */ }
+                // Rect despues del texto: evita lecturas de layout en cada fila.
+                const r = f.getBoundingClientRect();
+                if (r.width <= 0 || r.height <= 0) return -1;
+                let s = 1;
+                if (reEco.test(t)) s = 4;
+                else if (reNum.test(t)) s = 3;
+                try { if (f.closest('[id*="monitoring" i],[class*="monitoring" i]')) s += 6; } catch (_) { /* noop */ }
+                if (s > bestScore || (s === bestScore && t.length < bestLen)) {
+                    best = f; bestScore = s; bestLen = t.length;
+                }
+                return s;
+            } catch (_) { return -1; }
+        };
+        const barrer = (lista) => { for (let i = 0; i < lista.length; i++) puntuar(lista[i]); };
+        barrer(rxFilasDeLista());
+        if (bestScore >= 3) return best;
+        if (soloRapido) return null;
+        // La plataforma pudo renombrar las filas: se busca en cualquier fila
+        // visible, primero cerca del buscador y luego en el panel de unidades
+        // (nunca en desplegables de busqueda: esas filas no son la lista).
+        if (ambito) {
+            try { barrer(ambito.querySelectorAll('tr,[role="row"],.wui2-list_row,.wui-list_item')); } catch (_) { /* noop */ }
         }
+        if (bestScore >= 3) return best;
+        const cont = rxContenedorUnidades();
+        if (cont) {
+            try { barrer(cont.querySelectorAll('tr,[role="row"],.wui2-list_row,.wui-list_item')); } catch (_) { /* noop */ }
+        }
+        if (bestScore >= 3) return best;
+        let genericas = [];
+        try { genericas = Array.prototype.slice.call(document.querySelectorAll('tr,[role="row"],.wui2-list_row,.wui-list_item')); } catch (_) { genericas = []; }
+        barrer(genericas);
+        if (best) return best;
+        barrer(rxEnSombras(document, 'tr,[role="row"],.wui2-list_row', [], 400));
         return best;
     }
+    // Eventos sinteticos: MouseEvent y PointerEvent del realm de la pagina
+    // (PAGE) para que React los acepte, con `buttons` coherente en down/up.
+    function rxMouse(tipo, x, y, det) {
+        const C = PAGE.MouseEvent || MouseEvent;
+        return new C(tipo, Object.assign({
+            bubbles: true, cancelable: true, view: PAGE, detail: 0,
+            clientX: x, clientY: y, screenX: x, screenY: y, button: 0, buttons: 0
+        }, det || {}));
+    }
+    function rxPointer(tipo, x, y, det) {
+        const C = PAGE.PointerEvent || (typeof PointerEvent !== 'undefined' ? PointerEvent : null);
+        if (C) {
+            try {
+                return new C(tipo, Object.assign({
+                    bubbles: true, cancelable: true, view: PAGE,
+                    clientX: x, clientY: y, button: 0, buttons: 0,
+                    pointerId: 1, pointerType: 'mouse', isPrimary: true
+                }, det || {}));
+            } catch (_) { /* cae a MouseEvent */ }
+        }
+        return rxMouse(tipo, x, y, det);
+    }
     function doubleClick(el) {
+        if (!el) return;
         const r = el.getBoundingClientRect();
         const x = r.left + Math.min(20, r.width / 2);
         const y = r.top + Math.max(4, r.height / 2);
-        function mk(tipo, det) {
-            // MouseEvent del realm de la pagina (PAGE) para que React lo acepte.
-            return new PAGE.MouseEvent(tipo, Object.assign({
-                bubbles: true, cancelable: true, view: PAGE,
-                clientX: x, clientY: y, button: 0
-            }, det || {}));
-        }
-        ['mouseover', 'mouseenter', 'mousemove'].forEach((t) => {
-            try { el.dispatchEvent(mk(t)); } catch (_) { /* noop */ }
-        });
-        el.dispatchEvent(mk('pointerdown')); el.dispatchEvent(mk('mousedown'));
-        el.dispatchEvent(mk('pointerup')); el.dispatchEvent(mk('mouseup'));
-        el.dispatchEvent(mk('click', { detail: 1 }));
+        const enviar = (ev) => { try { el.dispatchEvent(ev); } catch (_) { /* noop */ } };
+        ['mouseover', 'mouseenter', 'mousemove'].forEach((t) => enviar(rxMouse(t, x, y)));
+        ['pointerover', 'pointerenter', 'pointermove'].forEach((t) => enviar(rxPointer(t, x, y)));
+        const pulsar = (det) => {
+            enviar(rxPointer('pointerdown', x, y, { buttons: 1 }));
+            enviar(rxMouse('mousedown', x, y, { buttons: 1, detail: det }));
+            enviar(rxPointer('pointerup', x, y));
+            enviar(rxMouse('mouseup', x, y, { buttons: 0, detail: det }));
+            enviar(rxMouse('click', x, y, { buttons: 0, detail: det }));
+        };
+        pulsar(1);
         setTimeout(() => {
-            el.dispatchEvent(mk('mousedown'));
-            el.dispatchEvent(mk('mouseup'));
-            el.dispatchEvent(mk('click', { detail: 2 }));
-            el.dispatchEvent(mk('dblclick', { detail: 2 }));
+            pulsar(2);
+            enviar(rxMouse('dblclick', x, y, { buttons: 0, detail: 2 }));
         }, 40);
     }
     function contFromCell(td) {
@@ -144,6 +328,20 @@
             await sleep(200);
         }
         return false;
+    }
+    // Si la plataforma cambio el titulo de la ventana y findUnitWindow ya no
+    // la reconoce, al menos se detecta que se abrio UNA ventana nueva.
+    function rxCuentaVentanas() {
+        try { return document.querySelectorAll('[id$="_pursuit_win_title_id"]').length; } catch (_) { return 0; }
+    }
+    function rxObjetivoFila(fila) {
+        if (!fila) return null;
+        try {
+            return fila.querySelector('.name-container')
+                || fila.querySelector('.monitoring-unit-name-cell')
+                || fila.querySelector('[class*="name" i]')
+                || fila;
+        } catch (_) { return fila; }
     }
     function cabecerade(el) {
         let best = null, bestAncho = 0;
@@ -243,27 +441,99 @@
             win.style.top = (ta + dy) + 'px';
         }
     }
-    async function openUnitWindow(eco) {
-        if (!eco) return false;
-        const inp = findSearchInput();
-        if (!inp) return false;
-        inp.click(); inp.focus();
-        await sleep(40);
-        clearInput(inp);
-        await sleep(120);
-        setValueReact(inp, eco);
-        let fila = null, wait = 0;
-        while (wait < 3000) {
-            fila = pickRow(eco);
-            if (fila) break;
-            await sleep(100); wait += 100;
+    // Un doble clic sobre la tarjeta dispara dos llamadas seguidas: la segunda
+    // limpiaba el buscador mientras la primera ya estaba escribiendo y ninguna
+    // abria la ventana. Se descarta la repetida mientras la primera trabaja.
+    const _rxAbriendo = new Set();
+    let _rxUltimoAvisoAbrir = 0;
+    function rxAvisoNoAbrio(motivo, eco) {
+        const t = Date.now();
+        if (t - _rxUltimoAvisoAbrir < 6000) return;
+        _rxUltimoAvisoAbrir = t;
+        try {
+            if (motivo === 'buscador') {
+                adviceWarn('No encontre el buscador', 'Rondo no localizo el buscador de unidades. Abre la lista de unidades de la plataforma e intenta de nuevo.');
+            } else {
+                adviceWarn('No se abrio la ventana', 'No pude abrir ' + eco + '. Comprueba que la unidad aparece en la lista y que el doble clic manual abre su ventana.');
+            }
+            log('abrir ventana ' + eco + ': ' + motivo);
+        } catch (_) { /* noop */ }
+    }
+    async function rxAbrirUnaUnidad(eco) {
+        // Ya abierta: no hace falta tocar el buscador (y no se cierra).
+        const ya = findUnitWindow(eco);
+        if (ya) {
+            const rr = ya.getBoundingClientRect();
+            if (rr.width > 0 && rr.height > 0) { revalidarContornos(); return true; }
+            // La oculto el boton "Ocultar": mostrarla sin cerrarla.
+            if (ya.dataset && ya.dataset.rondoOculta) {
+                ya.style.display = '';
+                delete ya.dataset.rondoOculta;
+            }
+            revalidarContornos();
+            return true;
         }
-        if (!fila) return false;
-        const target = fila.querySelector('.name-container') || fila.querySelector('.monitoring-unit-name-cell') || fila;
-        doubleClick(target);
-        await waitForWindow(eco, 6000);
-        revalidarContornos();
-        return true;
+        const campos = rxCandidatosBuscador();
+        if (!campos.length) {
+            const fila = pickRow(eco, null, false);
+            if (fila) {
+                doubleClick(rxObjetivoFila(fila));
+                if (await waitForWindow(eco, 4000)) { revalidarContornos(); return true; }
+            }
+            rxAvisoNoAbrio('buscador', eco);
+            return false;
+        }
+        for (let c = 0; c < campos.length; c++) {
+            const inp = campos[c];
+            _rxCampoUsado = inp;
+            const ambito = rxAmbitoBuscador(inp);
+            const antes = rxCuentaVentanas();
+            try { inp.click(); inp.focus(); } catch (_) { /* noop */ }
+            await sleep(30);
+            try { clearInput(inp); } catch (_) { /* noop */ }
+            await sleep(90);
+            try { setValueReact(inp, eco); } catch (_) { /* noop */ }
+            let fila = null, wait = 0;
+            const espera = c < 2 ? 2000 : 1200;
+            while (wait < espera) {
+                fila = pickRow(eco, ambito, wait < 900);
+                if (fila) break;
+                await sleep(100); wait += 100;
+            }
+            if (fila) {
+                const objetivo = rxObjetivoFila(fila);
+                doubleClick(objetivo);
+                if (await waitForWindow(eco, 4200) || rxCuentaVentanas() > antes) { revalidarContornos(); return true; }
+                // Segundo intento sobre la fila completa (algunas skins
+                // enganchan el doble clic a la fila y no al nombre).
+                if (objetivo !== fila) {
+                    doubleClick(fila);
+                    if (await waitForWindow(eco, 2200) || rxCuentaVentanas() > antes) { revalidarContornos(); return true; }
+                }
+                // La fila SI aparecio: este era el buscador correcto. Probar
+                // otros campos solo alargaria la espera sin abrir nada.
+                rxAvisoNoAbrio('ventana', eco);
+                return false;
+            }
+            try { clearInput(inp); } catch (_) { /* noop */ }
+            await sleep(80);
+        }
+        rxAvisoNoAbrio('ventana', eco);
+        return false;
+    }
+    function openUnitWindow(eco) {
+        const clave = normEco(eco);
+        if (!clave) return Promise.resolve(false);
+        if (_rxAbriendo.has(clave)) return Promise.resolve(true);
+        _rxAbriendo.add(clave);
+        return rxAbrirUnaUnidad(clave).then(
+            (ok) => { _rxAbriendo.delete(clave); return ok; },
+            (err) => {
+                _rxAbriendo.delete(clave);
+                try { log('abrir ventana ' + clave + ': ' + ((err && err.message) || err)); } catch (_) { /* noop */ }
+                return false;
+            }
+        );
     }
     function closeContainer(cont) {
         if (!cont) return false;

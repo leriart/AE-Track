@@ -361,7 +361,7 @@ ok('sin fetch directo al endpoint de IA', !/await fetch\(endpoint/.test(src));
 // necesarios para que React (Wialon) y las APIs del navegador funcionen.
 ok('eventos via PAGE.Event', /new PAGE\.Event\('input'/.test(src));
 ok('KeyboardEvent via PAGE', /new PAGE\.KeyboardEvent\(/.test(src));
-ok('MouseEvent via PAGE (doubleClick)', /new PAGE\.MouseEvent\(tipo/.test(src));
+ok('MouseEvent via PAGE (doubleClick)', /PAGE\.MouseEvent \|\| MouseEvent/.test(src) && /new C\(tipo/.test(src));
 ok('MouseEvent via PAGE (cerrar ventanas)', /new PAGE\.MouseEvent\('click'/.test(src));
 ok('HTMLInputElement via PAGE', /PAGE\.HTMLInputElement\.prototype/.test(src));
 ok('sin new MouseEvent crudo', !/new MouseEvent\(/.test(src));
@@ -1314,6 +1314,25 @@ ok('rendimiento: el intervalo de 1 s repinta por cambio de datos',
     /RX_PAINT_EDAD_MS/.test(src) && /APP\._paintRev === rev/.test(src) && /document\.hidden/.test(src));
 ok('rendimiento: no se pinta la pestaña si el panel esta oculto',
     /!panelEl \|\| APP\.panelHidden \|\| document\.hidden/.test(src));
+
+// Apertura de ventanas: la automatizacion prueba TODOS los buscadores
+// visibles y cae a filas genericas, para sobrevivir a un cambio de la
+// plataforma (otro campo "Buscar", ids de fila renombrados, shadow DOM).
+ok('ventanas: prueba varios buscadores hasta que uno filtra la lista',
+    /function rxCandidatosBuscador/.test(src) && /for \(let c = 0; c < campos\.length; c\+\+\)/.test(src) &&
+    /const espera = c < 2 \? 2000 : 1200/.test(src));
+ok('ventanas: descarta la UI propia tambien por prefijo rondo-',
+    /\[id\^="rondo-"\]/.test(src));
+ok('ventanas: fila con respaldo generico y shadow roots',
+    /function rxFilasDeLista/.test(src) && /querySelectorAll\('tr,\[role="row"\],\.wui2-list_row,\.wui-list_item'\)/.test(src) &&
+    /rxEnSombras\(document, 'tr,\[role="row"\],\.wui2-list_row'/.test(src));
+ok('ventanas: doble clic simula PointerEvent y dblclick',
+    /function rxPointer/.test(src) && /rxPointer\('pointerdown', x, y, \{ buttons: 1 \}\)/.test(src) &&
+    /rxMouse\('dblclick', x, y, \{ buttons: 0, detail: 2 \}\)/.test(src));
+ok('ventanas: un doble clic sobre la tarjeta no lanza dos aperturas',
+    /const _rxAbriendo = new Set\(\)/.test(src) && /if \(_rxAbriendo\.has\(clave\)\) return Promise\.resolve\(true\)/.test(src));
+ok('ventanas: avisa cuando no encuentra el buscador o la ventana',
+    /function rxAvisoNoAbrio/.test(src) && /No encontre el buscador/.test(src) && /No se abrio la ventana/.test(src));
 
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
