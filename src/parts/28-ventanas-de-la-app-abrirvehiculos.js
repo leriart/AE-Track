@@ -269,14 +269,32 @@
             enviar(rxMouse('dblclick', x, y, { buttons: 0, detail: 2 }));
         }, 40);
     }
+    // Contenedor flotante de la ventana. No basta con el primer ancestro
+    // absoluto (su z-index puede ser "auto" y ser un envoltorio compartido por
+    // varias ventanas): eso hacia que se acomodara/cerrara el envoltorio en vez
+    // de cada ventana. Se prefiere el ancestro con boton de cierre y una sola
+    // ventana dentro.
     function contFromCell(td) {
-        let cur = td;
+        if (!td) return null;
+        let cur = td, primero = null, conCierre = null;
         while (cur && cur !== document.body) {
             const s = getComputedStyle(cur);
-            if (s.position === 'absolute' && s.zIndex) return cur;
+            if (s.position === 'absolute' || s.position === 'fixed') {
+                if (!primero) primero = cur;
+                const numZ = s.zIndex && s.zIndex !== 'auto' && s.zIndex !== '0';
+                let titulos = 0, cierre = false;
+                try { titulos = cur.querySelectorAll('td[id$="_pursuit_win_title_id"]').length; } catch (_) { titulos = 0; }
+                try { cierre = !!cur.querySelector('[id$="_pursuit_win_close_id"],button[class*="close" i]'); } catch (_) { cierre = false; }
+                if (titulos <= 1 && cierre) {
+                    if (!conCierre) conCierre = cur;
+                    if (numZ) return cur;
+                } else if (titulos <= 1 && numZ) {
+                    return cur;
+                }
+            }
             cur = cur.parentElement;
         }
-        return null;
+        return conCierre || primero;
     }
     function areaOf(el) { const r = el.getBoundingClientRect(); return r.width * r.height; }
     function ecoFromText(txt) {
@@ -285,6 +303,19 @@
         if (m) return m[1];
         const m2 = s.match(/\b0*(\d{3,5})\b/);
         return m2 ? m2[1] : '';
+    }
+    // La placa va tras el guion del titulo: "ABC123. 04381 - PLACA".
+    function placaFromText(txt) {
+        const s = String(txt || '');
+        const m = s.match(/-\s*([A-Z0-9]{5,})/i);
+        if (m) return m[1].toUpperCase();
+        const m2 = s.match(/\b([A-Z]{2,4}[-\s]?\d{2,4}[A-Z]{0,3})\b/i);
+        return m2 ? m2[1].toUpperCase() : '';
+    }
+    // Clave comparable para economicos/placas: mayusculas y solo
+    // alfanumericos (quita guiones, espacios y acentos de placa).
+    function rxClaveSel(s) {
+        return String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
     }
     function windowFromEcoGeneric(eco) {
         if (!eco) return null;
@@ -313,7 +344,7 @@
         const plano = normEco(eco);
         for (let i = 0; i < cells.length; i++) {
             const td = cells[i];
-            const txt = td.innerText || '';
+            const txt = td.innerText || td.textContent || '';
             if (ecoFromText(txt) === plano || txt.indexOf(eco) >= 0 || txt.indexOf(plano) >= 0) {
                 const cont = contFromCell(td);
                 if (cont) return cont;
@@ -459,12 +490,26 @@
             const cont = contFromCell(td);
             if (!cont || seen.has(cont)) continue;
             seen.add(cont);
-            list.push({ eco: ecoFromText(td.innerText || ''), texto: (td.innerText || '').trim(), cont });
+            const texto = String(td.innerText || td.textContent || '').trim();
+            list.push({ eco: ecoFromText(texto), placa: placaFromText(texto), texto: texto, cont });
         }
         return list;
     }
     async function organizeWindows() {
-        const abiertas = openWindows();
+        let abiertas = openWindows();
+        // La ultima ventana puede tardar un frame en tener tamano: sin esto la
+        // rejilla se calculaba con 0 y quedaba sin acomodar.
+        for (let intento = 0; intento < 8; intento++) {
+            if (!abiertas.length) return;
+            let visibles = 0;
+            for (let i = 0; i < abiertas.length; i++) {
+                const rr = abiertas[i].cont.getBoundingClientRect();
+                if (rr.width > 40 && rr.height > 40) visibles++;
+            }
+            if (visibles) break;
+            await sleep(120);
+            abiertas = openWindows();
+        }
         if (!abiertas.length) return;
         // Ordena las ventanas segun la lista (orden configurado/arrastrado).
         const list = ordenarPorLista(abiertas, (v) => v.eco);
@@ -472,9 +517,15 @@
         // gap=15 y tamaño de celda tomado de la primera ventana. Coloca en filas
         // de izquierda a derecha y baja por filas hasta agotar el ancho.
         const startX = 380, startY = 60, gap = 15;
-        const r0 = list[0].cont.getBoundingClientRect();
-        const cellW = r0.width || list[0].cont.offsetWidth || 400;
-        const cellH = r0.height || list[0].cont.offsetHeight || 300;
+        let base = null;
+        for (let i = 0; i < list.length; i++) {
+            const rr = list[i].cont.getBoundingClientRect();
+            if (rr.width > 0 && rr.height > 0) { base = list[i]; break; }
+        }
+        if (!base) base = list[0];
+        const r0 = base.cont.getBoundingClientRect();
+        const cellW = r0.width || base.cont.offsetWidth || 400;
+        const cellH = r0.height || base.cont.offsetHeight || 300;
         let cols = Math.floor((window.innerWidth - startX) / (cellW + gap));
         if (cols < 1) cols = 1;
         for (let i = 0; i < list.length; i++) {

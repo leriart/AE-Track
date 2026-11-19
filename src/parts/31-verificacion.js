@@ -45,6 +45,36 @@
         paintInfo();
         paintTabla();
     }
+    // Decide si una ventana abierta pertenece a la seleccion. Antes bastaba
+    // con que el eco no coincidiera para cerrarla; si el titulo venia en otro
+    // formato (o sin eco legible) se cerraban ventanas validas al terminar de
+    // abrirlas. Ahora se comprueba eco, placa y el texto completo, y ante la
+    // duda NO se cierra.
+    function rxVentanaSeleccionada(v, sel) {
+        if (!v || !sel) return true;
+        const eco = String(v.eco || '');
+        const placa = String(v.placa || '');
+        const texto = String(v.texto || '');
+        if (eco && (sel.has(eco) || sel.has(normEco(eco)))) return true;
+        if (placa && (sel.has(placa) || sel.has(rxClaveSel(placa)))) return true;
+        const tn = rxClaveSel(texto);
+        if (!tn) return true;
+        let it;
+        try { it = sel.values ? sel.values() : sel[Symbol.iterator](); } catch (_) { return true; }
+        for (const k of it) {
+            const kn = rxClaveSel(k);
+            if (!kn) continue;
+            if (/^\d+$/.test(kn)) {
+                try {
+                    if (new RegExp('(^|\\D)0*' + escRegex(kn) + '(?!\\d)').test(texto)) return true;
+                } catch (_) { /* noop */ }
+            } else if (tn.indexOf(kn) >= 0) {
+                return true;
+            }
+        }
+        if (eco || placa) return false;
+        return true;
+    }
     async function verifyWindows(silent) {
         if (APP.timerVerifBusy) return 0;
         if (!APP.seleccion.size) {
@@ -56,7 +86,7 @@
             let cerradas = 0;
             const list = openWindows();
             for (let i = 0; i < list.length; i++) {
-                if (list[i].eco && APP.seleccion.has(list[i].eco)) continue;
+                if (rxVentanaSeleccionada(list[i], APP.seleccion)) continue;
                 if (closeContainer(list[i].cont)) { cerradas++; await sleep(120); }
             }
             if (cerradas) {

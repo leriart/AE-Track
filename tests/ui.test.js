@@ -1338,5 +1338,31 @@ ok('ventanas: un doble clic sobre la tarjeta no lanza dos aperturas',
 ok('ventanas: avisa cuando no encuentra el buscador o la ventana',
     /function rxAvisoNoAbrio/.test(src) && /No encontre el buscador/.test(src) && /No se abrio la ventana/.test(src));
 
+// Verificacion: una ventana solo se cierra si se sabe que es ajena. El eco,
+// la placa y el texto completo cuentan; sin identificacion fiable no se toca.
+const codeSel =
+    'function escRegex(s){return String(s||"");}\n' +
+    'function normEco(s){return String(s||"").replace(/^0+/,"")||String(s||"");}\n' +
+    bloque('function rxClaveSel', 'function windowFromEcoGeneric') + '\n' +
+    bloque('function rxVentanaSeleccionada', 'async function verifyWindows') + '\nreturn {rxVentanaSeleccionada};';
+const modSel = new Function(codeSel)();
+const sel4381 = new Set(['4381']);
+const v4381 = { eco: '4381', placa: 'ABC123', texto: 'ABC123. 04381 - PLACA' };
+ok('verificacion: conserva la ventana por eco',
+    modSel.rxVentanaSeleccionada(v4381, sel4381) === true);
+ok('verificacion: conserva la ventana por placa',
+    modSel.rxVentanaSeleccionada({ eco: '4381', placa: 'ABC123', texto: 'ABC123. 04381 - PLACA' },
+        new Set(['ABC123'])) === true);
+ok('verificacion: cierra una ventana de otra unidad',
+    modSel.rxVentanaSeleccionada({ eco: '9999', placa: 'ZZZ999', texto: 'ZZZ999. 09999 - OTRA' }, sel4381) === false);
+ok('verificacion: sin identificacion fiable no cierra',
+    modSel.rxVentanaSeleccionada({ eco: '', placa: '', texto: 'ventana rara' }, sel4381) === true);
+ok('verificacion: reconoce el eco dentro del titulo completo',
+    modSel.rxVentanaSeleccionada({ eco: '', placa: '', texto: 'ABC. 04381 - PLACA' }, sel4381) === true);
+ok('ventanas: el contenedor prefiere la ventana con cierre y un solo titulo',
+    /titulos <= 1 && cierre/.test(src) && /conCierre \|\| primero/.test(src));
+ok('ventanas: la rejilla espera a que la ventana tenga tamano',
+    /intento < 8/.test(src) && /visibles\+\+/.test(src));
+
 console.log(fallos ? ('\n' + fallos + ' fallo(s)') : '\nTodos los tests pasaron');
 process.exit(fallos ? 1 : 0);
